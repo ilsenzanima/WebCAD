@@ -78,8 +78,8 @@ export async function createMaterial(
     return { message: "Errore durante il salvataggio del materiale." };
   }
 
-  revalidatePath("/dashboard/catalog");
-  redirect("/dashboard/catalog");
+  revalidatePath("/catalog");
+  redirect("/catalog");
 }
 
 export async function deleteMaterial(id: string) {
@@ -89,5 +89,5 @@ export async function deleteMaterial(id: string) {
     console.error("Errore cancellazione materiale:", error);
     throw new Error("Impossibile eliminare il materiale.");
   }
-  revalidatePath("/dashboard/catalog");
+  revalidatePath("/catalog");
 }

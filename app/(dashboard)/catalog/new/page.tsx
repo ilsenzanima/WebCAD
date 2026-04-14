@@ -14,7 +14,7 @@ export default function NewMaterialPage() {
     <div className="p-8 max-w-3xl animate-fade-in">
       <div className="mb-6">
         <Link
-          href="/dashboard/catalog"
+          href="/catalog"
           className="text-sm transition-colors"
           style={{ color: "hsl(215 20% 65%)" }}
         >
@@ -179,7 +179,7 @@ export default function NewMaterialPage() {
 
         <div className="flex items-center justify-end gap-3">
           <Link
-            href="/dashboard/catalog"
+            href="/catalog"
             className="px-5 py-3 rounded-xl text-sm font-semibold transition-colors"
             style={{ color: "hsl(215 20% 75%)", background: "hsl(220 20% 22%)" }}
           >

@@ -23,7 +23,7 @@ export default async function CatalogPage() {
           </p>
         </div>
         <Link
-          href="/dashboard/catalog/new"
+          href="/catalog/new"
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200"
           style={{
             background: "linear-gradient(135deg, hsl(16 100% 58%), hsl(0 84% 50%))",
