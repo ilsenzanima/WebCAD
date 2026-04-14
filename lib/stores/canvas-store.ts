@@ -13,8 +13,8 @@ export type CanvasTool =
   | "pan"
   | "line"
   | "wall"
-  | "duct"
-  | "measure";
+  | "measure"
+  | "calibrate";
 
 interface CanvasState {
   // Viewport
@@ -28,17 +28,26 @@ interface CanvasState {
   // Selezione
   selectedElementIds: string[];
 
-  // Rapporto di scala calibrato (pixel -> mm)
-  calibrationRatio: number | null;
+  // Planimetria (Background)
+  backgroundImageDataUrl: string | null;
 
-  // Azioni
+  // Calibrazione
+  calibrationRatio: number | null; // Rapporto di scala (pixel -> mm)
+  calibrationPoints: { x: number; y: number }[]; // Max 2 punti
+
+  // Azioni Base
   setStagePosition: (x: number, y: number) => void;
   setScale: (scale: number) => void;
   setActiveTool: (tool: CanvasTool) => void;
   setSelectedElements: (ids: string[]) => void;
   toggleElementSelection: (id: string) => void;
-  setCalibrationRatio: (ratio: number | null) => void;
   resetViewport: () => void;
+
+  // Azioni Immagine & Calibrazione
+  setBackgroundImage: (url: string | null) => void;
+  setCalibrationRatio: (ratio: number | null) => void;
+  addCalibrationPoint: (point: { x: number; y: number }) => void;
+  resetCalibrationPoints: () => void;
 }
 
 export const useCanvasStore = create<CanvasState>((set) => ({
@@ -47,11 +56,13 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   scale: 1,
   activeTool: "select",
   selectedElementIds: [],
+  backgroundImageDataUrl: null,
   calibrationRatio: null,
+  calibrationPoints: [],
 
   setStagePosition: (x, y) => set({ stageX: x, stageY: y }),
   setScale: (scale) => set({ scale }),
-  setActiveTool: (tool) => set({ activeTool: tool, selectedElementIds: [] }),
+  setActiveTool: (tool) => set({ activeTool: tool, selectedElementIds: [], calibrationPoints: [] }),
   setSelectedElements: (ids) => set({ selectedElementIds: ids }),
   toggleElementSelection: (id) =>
     set((state) => ({
@@ -59,6 +70,15 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         ? state.selectedElementIds.filter((eid) => eid !== id)
         : [...state.selectedElementIds, id],
     })),
-  setCalibrationRatio: (ratio) => set({ calibrationRatio: ratio }),
   resetViewport: () => set({ stageX: 0, stageY: 0, scale: 1 }),
+
+  setBackgroundImage: (url) => set({ backgroundImageDataUrl: url }),
+  setCalibrationRatio: (ratio) => set({ calibrationRatio: ratio, calibrationPoints: [], activeTool: "select" }),
+  addCalibrationPoint: (point) =>
+    set((state) => {
+      // Se abbiamo già 2 punti, ignora. L'UI gestirà il modal.
+      if (state.calibrationPoints.length >= 2) return state;
+      return { calibrationPoints: [...state.calibrationPoints, point] };
+    }),
+  resetCalibrationPoints: () => set({ calibrationPoints: [] }),
 }));
