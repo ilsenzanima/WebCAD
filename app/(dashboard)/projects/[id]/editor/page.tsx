@@ -1,14 +1,7 @@
-import dynamic from "next/dynamic";
+import CanvasWrapper from "@/app/ui/canvas/CanvasWrapper";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import Toolbar from "@/app/ui/canvas/Toolbar";
-
-// Disabilitiamo il Server Side Rendering per il componente Canvas,
-// poiché react-konva e HTML5 Canvas dipendono da "window"
-const CanvasWorkspace = dynamic(
-  () => import("@/app/ui/canvas/CanvasWorkspace"),
-  { ssr: false }
-);
 
 export default async function EditorPage({
   params,
@@ -56,7 +49,7 @@ export default async function EditorPage({
 
       {/* Area del Canvas (Dynamic no-SSR) */}
       <div className="flex-1 w-full h-full relative cursor-crosshair">
-        <CanvasWorkspace />
+        <CanvasWrapper />
       </div>
 
       {/* Toolbar Comandi Flottante */}
