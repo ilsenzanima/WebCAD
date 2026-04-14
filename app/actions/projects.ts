@@ -23,7 +23,7 @@ export async function createProject(formData: FormData) {
       name: projectName,
       user_id: user.id,
       client_info: {},
-    })
+    } as any)
     .select("id")
     .single();
 
@@ -38,7 +38,7 @@ export async function createProject(formData: FormData) {
     elevation_z: 0,
     scale_ratio: null,
     plan_image_url: null,
-  });
+  } as any);
 
   if (levelError) {
     console.error("Errore creazione level 0:", levelError);
