@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
+import { createProject } from "@/app/actions/projects";
 
 /**
  * Dashboard principale — lista dei progetti dell'utente.
@@ -32,17 +33,20 @@ export default async function DashboardPage() {
             Gestisci i tuoi progetti antincendio
           </p>
         </div>
-        <button
-          id="btn-new-project"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200"
-          style={{
-            background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-            boxShadow: "0 4px 16px hsl(220 90% 56% / 0.3)",
-          }}
-        >
-          <span className="text-base">+</span>
-          Nuovo Progetto
-        </button>
+        <form action={createProject}>
+          <button
+            type="submit"
+            id="btn-new-project"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200"
+            style={{
+              background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+              boxShadow: "0 4px 16px hsl(220 90% 56% / 0.3)",
+            }}
+          >
+            <span className="text-base">+</span>
+            Nuovo Progetto
+          </button>
+        </form>
       </div>
 
       {/* Stats rapide */}
@@ -87,9 +91,10 @@ export default async function DashboardPage() {
         {projects && projects.length > 0 ? (
           <div className="grid gap-3">
             {projects.map((project) => (
-              <div
+              <Link
                 key={project.id}
-                className="flex items-center justify-between p-5 rounded-2xl transition-all duration-200 cursor-pointer group"
+                href={`/projects/${project.id}/editor`}
+                className="flex items-center justify-between p-5 rounded-2xl transition-all duration-200 cursor-pointer hover:bg-[hsl(220_26%_18%)] group"
                 style={{
                   background: "hsl(220 26% 14%)",
                   border: "1px solid hsl(220 20% 20%)",
@@ -111,14 +116,14 @@ export default async function DashboardPage() {
                     </div>
                   </div>
                 </div>
-                <span className="text-xs px-3 py-1 rounded-full"
+                <span className="text-xs px-3 py-1 rounded-full group-hover:bg-[hsl(220_32%_25%)] transition-colors"
                   style={{
                     background: "hsl(220 32% 20%)",
                     color: "hsl(215 20% 65%)",
                   }}>
                   Apri →
                 </span>
-              </div>
+              </Link>
             ))}
           </div>
         ) : (
@@ -135,14 +140,17 @@ export default async function DashboardPage() {
             <p className="text-sm text-center max-w-xs" style={{ color: "hsl(215 15% 50%)" }}>
               Crea il tuo primo progetto antincendio e inizia a disegnare.
             </p>
-            <button
-              className="mt-6 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
-              style={{
-                background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-              }}
-            >
-              + Crea il primo progetto
-            </button>
+            <form action={createProject} className="mt-6">
+              <button
+                type="submit"
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
+                style={{
+                  background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+                }}
+              >
+                + Crea il primo progetto
+              </button>
+            </form>
           </div>
         )}
       </div>
