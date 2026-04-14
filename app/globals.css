@@ -1,26 +1,120 @@
 @import "tailwindcss";
 
+/* ============================================
+   Design System - WebCAD Antincendio
+   ============================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand Colors */
+  --brand-primary: 220 90% 56%;       /* Blu tecnico */
+  --brand-accent: 16 100% 58%;        /* Arancio antincendio */
+  --brand-success: 142 71% 45%;       /* Verde OK */
+  --brand-warning: 38 92% 50%;        /* Giallo warning */
+  --brand-danger: 0 84% 60%;          /* Rosso errore */
+
+  /* Surface palette (dark mode first — app professionale) */
+  --surface-bg: 222 47% 6%;           /* Background principale */
+  --surface-panel: 220 32% 10%;       /* Panel/sidebar */
+  --surface-card: 220 26% 14%;        /* Card */
+  --surface-elevated: 220 22% 18%;    /* Dropdown, popup */
+  --surface-border: 220 20% 22%;      /* Bordi */
+  --surface-muted: 220 15% 35%;       /* Testo muted */
+  --surface-text: 210 40% 96%;        /* Testo principale */
+  --surface-text-dim: 215 20% 65%;    /* Testo secondario */
+
+  /* Canvas */
+  --canvas-bg: 228 39% 8%;
+  --canvas-grid: 220 20% 14%;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --color-brand: hsl(var(--brand-primary));
+  --color-accent: hsl(var(--brand-accent));
+  --color-bg: hsl(var(--surface-bg));
+  --color-panel: hsl(var(--surface-panel));
+  --color-card: hsl(var(--surface-card));
+  --color-border: hsl(var(--surface-border));
+  --color-muted: hsl(var(--surface-muted));
+  --color-text: hsl(var(--surface-text));
+  --color-text-dim: hsl(var(--surface-text-dim));
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Base */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: hsl(var(--surface-bg));
+  color: hsl(var(--surface-text));
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* ============================================
+   Scrollbar personalizzata
+   ============================================ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--surface-panel));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--surface-border));
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--surface-muted));
+}
+
+/* ============================================
+   Input base
+   ============================================ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px hsl(var(--surface-elevated)) inset;
+  -webkit-text-fill-color: hsl(var(--surface-text));
+  caret-color: hsl(var(--surface-text));
+}
+
+/* ============================================
+   Focus ring globale
+   ============================================ */
+:focus-visible {
+  outline: 2px solid hsl(var(--brand-primary));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ============================================
+   Animazioni utility
+   ============================================ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-ring {
+  0%   { transform: scale(0.95); box-shadow: 0 0 0 0 hsla(var(--brand-primary), 0.4); }
+  70%  { transform: scale(1);    box-shadow: 0 0 0 10px hsla(var(--brand-primary), 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 hsla(var(--brand-primary), 0); }
+}
+
+.animate-fade-in    { animation: fadeIn 0.3s ease-out forwards; }
+.animate-slide-left { animation: slideInLeft 0.3s ease-out forwards; }
+.animate-pulse-ring { animation: pulse-ring 2s ease-in-out infinite; }

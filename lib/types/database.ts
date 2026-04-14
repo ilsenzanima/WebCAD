@@ -74,6 +74,25 @@ export interface StructuralPoint {
   is_manual: boolean;
 }
 
+export interface Material {
+  id: string; // UUID
+  user_id: string; // UUID
+  name: string;
+  description: string | null;
+  category: string | null;
+  length_mm: number | null;
+  width_mm: number | null;
+  thickness_mm: number | null;
+  unit_cost: number | null;
+  unit: string | null;
+  stock_qty: number | null;
+  supplier: string | null;
+  sku: string | null;
+  is_active: boolean | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // ----- Database Schema (per Supabase Client tipizzato) -----
 
 export interface Database {
@@ -110,6 +129,14 @@ export interface Database {
         Row: StructuralPoint;
         Insert: Omit<StructuralPoint, "id"> & { id?: string };
         Update: Partial<Omit<StructuralPoint, "id">>;
+      };
+      materials: {
+        Row: Material;
+        Insert: Omit<Material, "id" | "user_id" | "created_at" | "updated_at"> & {
+          id?: string;
+          user_id?: string;
+        };
+        Update: Partial<Omit<Material, "id" | "user_id">>;
       };
     };
     Views: Record<string, never>;
