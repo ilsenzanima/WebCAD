@@ -10,10 +10,12 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: projects } = await supabase
+  const { data } = await supabase
     .from("projects")
     .select("id, name, client_info, created_at")
     .order("created_at", { ascending: false });
+
+  const projects = data as any[] | null;
 
   const userName =
     user?.user_metadata?.full_name ?? user?.email?.split("@")[0] ?? "Utente";

@@ -2,11 +2,11 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Middleware di protezione route per Next.js 16.
+ * Middleware di protezione route per Next.js 16 (ora chiamato proxy).
  * Gestisce il refresh automatico della sessione Supabase e
  * reindirizza gli utenti non autenticati verso la login.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   });

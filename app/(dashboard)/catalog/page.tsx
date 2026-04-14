@@ -4,10 +4,13 @@ import { deleteMaterial } from "@/app/actions/materials";
 
 export default async function CatalogPage() {
   const supabase = await createClient();
-  const { data: materials, error } = await supabase
+  const { data, error } = await supabase
     .from("materials")
     .select("*")
     .order("created_at", { ascending: false });
+
+  // Add cast to help TypeScript since Supabase TS generation isn't strictly mapping here
+  const materials = data as any[] | null;
 
   return (
     <div className="p-8 space-y-8 animate-fade-in">

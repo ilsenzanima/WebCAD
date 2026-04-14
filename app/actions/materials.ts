@@ -71,7 +71,7 @@ export async function createMaterial(
     sku: parsed.data.sku || null,
     stock_qty: 0,
     is_active: true,
-  });
+  } as any);
 
   if (error) {
     console.error("Errore inserimento materiale:", error);
