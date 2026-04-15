@@ -34,6 +34,7 @@ interface CanvasState {
   // Calibrazione
   calibrationRatio: number | null; // Rapporto di scala (pixel -> mm)
   calibrationPoints: { x: number; y: number }[]; // Max 2 punti
+  isProcessingFile: boolean;
 
   // Azioni Base
   setStagePosition: (x: number, y: number) => void;
@@ -42,6 +43,7 @@ interface CanvasState {
   setSelectedElements: (ids: string[]) => void;
   toggleElementSelection: (id: string) => void;
   resetViewport: () => void;
+  setIsProcessingFile: (isProcessing: boolean) => void;
 
   // Azioni Immagine & Calibrazione
   setBackgroundImage: (url: string | null) => void;
@@ -71,6 +73,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         : [...state.selectedElementIds, id],
     })),
   resetViewport: () => set({ stageX: 0, stageY: 0, scale: 1 }),
+  setIsProcessingFile: (isProcessing) => set({ isProcessingFile: isProcessing }),
 
   setBackgroundImage: (url) => set({ backgroundImageDataUrl: url }),
   setCalibrationRatio: (ratio) => set({ calibrationRatio: ratio, calibrationPoints: [], activeTool: "select" }),

@@ -16,6 +16,7 @@
     "@tanstack/react-query": "^5.99.0",
     "konva": "^10.2.5",
     "next": "16.2.3",
+    "pdfjs-dist": "^5.6.205",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-konva": "^19.2.3",
@@ -27,6 +28,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pdfjs-dist": "^2.10.377",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.183.1",

@@ -2,6 +2,13 @@
 
 import { useCanvasStore } from "@/lib/stores/canvas-store";
 import { useEffect, useState } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+
+// Configuriamo il worker per viaggiare tramite CDN in modo da evitare problemi di bundling
+// con Next.js e Turbopack. MVP friendly.
+if (typeof window !== "undefined") {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+}
 
 export default function Toolbar() {
   const {
@@ -12,20 +19,84 @@ export default function Toolbar() {
     resetCalibrationPoints,
     calibrationRatio,
     setCalibrationRatio,
+    isProcessingFile,
+    setIsProcessingFile,
   } = useCanvasStore();
 
   const [realDistanceMm, setRealDistanceMm] = useState<string>("");
+  const [pendingPdf, setPendingPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  const [selectedPdfPage, setSelectedPdfPage] = useState<number>(1);
 
-  // Handle Image Upload (Local FileReader to Base64 per prestazioni MVP)
+  const renderPdfPageToCanvas = async (pdf: pdfjsLib.PDFDocumentProxy, pageNumber: number) => {
+    try {
+      setIsProcessingFile(true);
+      const page = await pdf.getPage(pageNumber);
+
+      const scale = 4.0;
+      const viewport = page.getViewport({ scale });
+
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("2D Context not found");
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+
+      await page.render({ canvasContext: context, viewport }).promise;
+
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      setBackgroundImage(dataUrl);
+      resetCalibrationPoints();
+      setPendingPdf(null);
+    } catch (error) {
+      console.error("Errore render PDF:", error);
+      alert("Impossibile generare la pagina del PDF.");
+    } finally {
+      setIsProcessingFile(false);
+    }
+  };
+
+  // Handle Image Upload (Supporta PNG, JPG ed estrazione in canvas offline per i PDF ad Altissima Risoluzione)
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.type === "application/pdf") {
+      setIsProcessingFile(true);
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const typedarray = new Uint8Array(event.target?.result as ArrayBuffer);
+          const pdf = await pdfjsLib.getDocument(typedarray).promise;
+          
+          if (pdf.numPages > 1) {
+            setPendingPdf(pdf);
+            setSelectedPdfPage(1);
+            setIsProcessingFile(false);
+            if (e.target) e.target.value = "";
+            return;
+          }
+
+          await renderPdfPageToCanvas(pdf, 1);
+        } catch (error) {
+          console.error("Errore parser PDF:", error);
+          alert("Impossibile elaborare il PDF.");
+          setIsProcessingFile(false);
+        }
+        if (e.target) e.target.value = "";
+      };
+      reader.readAsArrayBuffer(file);
+      return;
+    }
+
+    // Se è immagine standard (PNG/JPG)
+    setIsProcessingFile(true);
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
       setBackgroundImage(dataUrl);
-      resetCalibrationPoints(); // se carico nuova immagine, resetto punti di calibrazione pregressi
+      resetCalibrationPoints();
+      setIsProcessingFile(false);
+      e.target.value = ""; // resettiamo l'input
     };
     reader.readAsDataURL(file);
   };
@@ -64,15 +135,19 @@ export default function Toolbar() {
         <div className="relative group">
           <label
             htmlFor="upload-plan"
-            className="flex items-center justify-center w-10 h-10 rounded-xl cursor-pointer hover:bg-[hsl(220_20%_22%)] transition-colors text-white"
-            title="Carica Planimetria (PNG/JPG)"
+            className="flex items-center justify-center w-10 h-10 rounded-xl cursor-pointer hover:bg-[hsl(220_20%_22%)] transition-colors text-white relative overflow-hidden"
+            title="Carica Planimetria (PDF/PNG/JPG)"
           >
-            🗺️
+            {isProcessingFile ? (
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              "🗺️"
+            )}
           </label>
           <input
             id="upload-plan"
             type="file"
-            accept="image/png, image/jpeg"
+            accept="image/png, image/jpeg, application/pdf"
             className="hidden"
             onChange={handleImageUpload}
           />
@@ -156,6 +231,49 @@ export default function Toolbar() {
               className="flex-1 py-2 text-sm font-semibold text-white bg-gradient-to-br from-[hsl(16_100%_58%)] to-[hsl(0_84%_60%)] rounded-xl opacity-90 hover:opacity-100 transition-opacity"
             >
               Calibra
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Multi-Pagina PDF */}
+      {pendingPdf && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[320px] p-6 rounded-2xl bg-[hsl(220_26%_14%)] border border-[hsl(220_20%_22%)] shadow-2xl z-50 animate-fade-in">
+          <h3 className="text-lg font-bold text-white mb-2">PDF Multi-pagina</h3>
+          <p className="text-sm text-[hsl(215_20%_65%)] mb-5">
+            Questo documento contiene {pendingPdf.numPages} pagine. Quale desideri caricare?
+          </p>
+          
+          <input
+            autoFocus
+            type="number"
+            min={1}
+            max={pendingPdf.numPages}
+            value={selectedPdfPage}
+            onChange={(e) => {
+              let val = parseInt(e.target.value);
+              if (isNaN(val)) val = 1;
+              if (val < 1) val = 1;
+              if (val > pendingPdf.numPages) val = pendingPdf.numPages;
+              setSelectedPdfPage(val);
+            }}
+            className="w-full px-4 py-3 bg-[hsl(228_39%_8%)] border border-[hsl(220_20%_22%)] rounded-xl text-white mb-5 focus:outline-none focus:border-[hsl(220_90%_65%)]"
+          />
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setPendingPdf(null);
+              }}
+              className="flex-1 py-2 text-sm font-medium text-[hsl(215_20%_65%)] hover:bg-[hsl(220_20%_22%)] rounded-xl transition-colors"
+            >
+              Annulla
+            </button>
+            <button
+              onClick={() => renderPdfPageToCanvas(pendingPdf, selectedPdfPage)}
+              className="flex-1 py-2 text-sm font-semibold text-white bg-gradient-to-br from-[hsl(220_90%_56%)] to-[hsl(220_90%_65%)] rounded-xl opacity-90 hover:opacity-100 transition-opacity"
+            >
+              Carica
             </button>
           </div>
         </div>
