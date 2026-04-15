@@ -14,8 +14,15 @@ export async function createProject(formData: FormData) {
     throw new Error("Devi essere autenticato per creare un progetto.");
   }
 
-  // Nome predefinito incrementale o fisso per MVP
-  const projectName = "Nuovo Progetto Antincendio";
+  // Conteggio progetti dell'utente per nome incrementale
+  const { count } = await supabase
+    .from("projects")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
+
+  const projectName = count && count > 0 
+    ? `Nuovo Progetto Antincendio #${count + 1}` 
+    : "Nuovo Progetto Antincendio";
 
   const { data, error } = (await supabase
     .from("projects")

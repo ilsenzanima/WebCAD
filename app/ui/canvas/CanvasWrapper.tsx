@@ -10,6 +10,16 @@ const CanvasWorkspace = dynamic(
   { ssr: false }
 );
 
-export default function CanvasWrapper() {
+import { useEffect } from "react";
+import { useCanvasStore } from "@/lib/stores/canvas-store";
+
+export default function CanvasWrapper({ projectId }: { projectId: string }) {
+  const clearProjectState = useCanvasStore((state) => state.clearProjectState);
+
+  useEffect(() => {
+    clearProjectState();
+    // In future epics, here we will trigger DB fetch using this projectId
+  }, [projectId, clearProjectState]);
+
   return <CanvasWorkspace />;
 }

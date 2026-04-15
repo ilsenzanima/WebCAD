@@ -50,6 +50,7 @@ interface CanvasState {
   setCalibrationRatio: (ratio: number | null) => void;
   addCalibrationPoint: (point: { x: number; y: number }) => void;
   resetCalibrationPoints: () => void;
+  clearProjectState: () => void;
 }
 
 export const useCanvasStore = create<CanvasState>((set) => ({
@@ -85,4 +86,15 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       return { calibrationPoints: [...state.calibrationPoints, point] };
     }),
   resetCalibrationPoints: () => set({ calibrationPoints: [] }),
+  clearProjectState: () => set({
+    stageX: 0,
+    stageY: 0,
+    scale: 1,
+    activeTool: "select",
+    selectedElementIds: [],
+    backgroundImageDataUrl: null,
+    calibrationRatio: null,
+    calibrationPoints: [],
+    isProcessingFile: false,
+  }),
 }));

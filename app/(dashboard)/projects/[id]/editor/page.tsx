@@ -49,7 +49,7 @@ export default async function EditorPage({
 
       {/* Area del Canvas (Dynamic no-SSR) */}
       <div className="flex-1 w-full h-full relative cursor-crosshair">
-        <CanvasWrapper />
+        <CanvasWrapper projectId={id} />
       </div>
 
       {/* Toolbar Comandi Flottante */}
