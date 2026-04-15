@@ -61,6 +61,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   backgroundImageDataUrl: null,
   calibrationRatio: null,
   calibrationPoints: [],
+  isProcessingFile: false,
 
   setStagePosition: (x, y) => set({ stageX: x, stageY: y }),
   setScale: (scale) => set({ scale }),

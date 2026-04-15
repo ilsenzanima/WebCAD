@@ -41,6 +41,7 @@ export default function Toolbar() {
       canvas.height = viewport.height;
       canvas.width = viewport.width;
 
+      // @ts-expect-error Type definitions per la versione 5 in @types discordano su canvas/canvasContext
       await page.render({ canvasContext: context, viewport }).promise;
 
       const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
