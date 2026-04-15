@@ -7,7 +7,7 @@ import * as pdfjsLib from "pdfjs-dist";
 // Configuriamo il worker per viaggiare tramite CDN in modo da evitare problemi di bundling
 // con Next.js e Turbopack. MVP friendly.
 if (typeof window !== "undefined") {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 }
 
 export default function Toolbar() {
