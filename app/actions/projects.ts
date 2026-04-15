@@ -17,7 +17,7 @@ export async function createProject(formData: FormData) {
   // Nome predefinito incrementale o fisso per MVP
   const projectName = "Nuovo Progetto Antincendio";
 
-  const { data, error } = await supabase
+  const { data, error } = (await supabase
     .from("projects")
     .insert({
       name: projectName,
@@ -25,7 +25,7 @@ export async function createProject(formData: FormData) {
       client_info: {},
     } as any)
     .select("id")
-    .single();
+    .single()) as any;
 
   if (error || !data) {
     console.error("Errore creazione progetto:", error);
