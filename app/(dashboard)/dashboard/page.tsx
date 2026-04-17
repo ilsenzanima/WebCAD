@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { createProject } from "@/app/actions/projects";
+import ProjectActionsMenu from "@/app/ui/dashboard/ProjectActionsMenu";
 
 /**
  * Dashboard principale — lista dei progetti dell'utente.
@@ -39,7 +40,8 @@ export default async function DashboardPage() {
             id="btn-new-project"
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200"
             style={{
-              background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+              background:
+                "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
               boxShadow: "0 4px 16px hsl(220 90% 56% / 0.3)",
             }}
           >
@@ -52,9 +54,24 @@ export default async function DashboardPage() {
       {/* Stats rapide */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: "Progetti totali", value: projects?.length ?? 0, icon: "📁", color: "hsl(220 90% 56%)" },
-          { label: "Materiali catalogo", value: "—", icon: "📦", color: "hsl(16 100% 58%)" },
-          { label: "Elementi disegnati", value: "—", icon: "✏️", color: "hsl(142 71% 45%)" },
+          {
+            label: "Progetti totali",
+            value: projects?.length ?? 0,
+            icon: "📁",
+            color: "hsl(220 90% 56%)",
+          },
+          {
+            label: "Materiali catalogo",
+            value: "—",
+            icon: "📦",
+            color: "hsl(16 100% 58%)",
+          },
+          {
+            label: "Elementi disegnati",
+            value: "—",
+            icon: "✏️",
+            color: "hsl(142 71% 45%)",
+          },
         ].map((stat) => (
           <div
             key={stat.label}
@@ -73,7 +90,10 @@ export default async function DashboardPage() {
             </div>
             <div>
               <div className="text-2xl font-bold text-white">{stat.value}</div>
-              <div className="text-xs mt-0.5" style={{ color: "hsl(215 15% 50%)" }}>
+              <div
+                className="text-xs mt-0.5"
+                style={{ color: "hsl(215 15% 50%)" }}
+              >
                 {stat.label}
               </div>
             </div>
@@ -83,47 +103,78 @@ export default async function DashboardPage() {
 
       {/* Lista progetti */}
       <div className="space-y-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider"
-          style={{ color: "hsl(215 15% 45%)" }}>
+        <h2
+          className="text-sm font-semibold uppercase tracking-wider"
+          style={{ color: "hsl(215 15% 45%)" }}
+        >
           Progetti recenti
         </h2>
 
         {projects && projects.length > 0 ? (
           <div className="grid gap-3">
             {projects.map((project) => (
-              <Link
+              <div
                 key={project.id}
-                href={`/projects/${project.id}/editor`}
-                className="flex items-center justify-between p-5 rounded-2xl transition-all duration-200 cursor-pointer hover:bg-[hsl(220_26%_18%)] group"
+                className="relative flex items-center justify-between p-5 rounded-2xl transition-all duration-200 group"
                 style={{
                   background: "hsl(220 26% 14%)",
                   border: "1px solid hsl(220 20% 20%)",
                 }}
               >
-                <div className="flex items-center gap-4">
+                {/* Area cliccabile per aprire il progetto */}
+                <Link
+                  href={`/projects/${project.id}/editor`}
+                  className="flex items-center gap-4 flex-1 min-w-0 hover:opacity-90 transition-opacity"
+                >
                   <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
                     style={{ background: "hsl(220 32% 20%)" }}
                   >
                     🏗️
                   </div>
-                  <div>
-                    <div className="text-white font-medium text-sm">{project.name}</div>
-                    <div className="text-xs mt-0.5" style={{ color: "hsl(215 15% 45%)" }}>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-white font-medium text-sm truncate">
+                      {project.name}
+                    </div>
+                    <div
+                      className="text-xs mt-0.5"
+                      style={{ color: "hsl(215 15% 45%)" }}
+                    >
                       {project.created_at
-                        ? new Date(project.created_at).toLocaleDateString("it-IT")
+                        ? new Date(project.created_at).toLocaleDateString(
+                            "it-IT"
+                          )
                         : "—"}
                     </div>
                   </div>
+                </Link>
+
+                {/* Azioni destra: Apri + menu ⋮ */}
+                <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                  <Link
+                    href={`/projects/${project.id}/editor`}
+                    className="text-xs px-3 py-1 rounded-full transition-colors"
+                    style={{
+                      background: "hsl(220 32% 20%)",
+                      color: "hsl(215 20% 65%)",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background = "hsl(220 32% 26%)")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = "hsl(220 32% 20%)")
+                    }
+                  >
+                    Apri →
+                  </Link>
+
+                  {/* Menu contestuale */}
+                  <ProjectActionsMenu
+                    projectId={project.id}
+                    projectName={project.name}
+                  />
                 </div>
-                <span className="text-xs px-3 py-1 rounded-full group-hover:bg-[hsl(220_32%_25%)] transition-colors"
-                  style={{
-                    background: "hsl(220 32% 20%)",
-                    color: "hsl(215 20% 65%)",
-                  }}>
-                  Apri →
-                </span>
-              </Link>
+              </div>
             ))}
           </div>
         ) : (
@@ -136,8 +187,13 @@ export default async function DashboardPage() {
             }}
           >
             <div className="text-5xl mb-4">📐</div>
-            <h3 className="text-white font-medium mb-2">Nessun progetto ancora</h3>
-            <p className="text-sm text-center max-w-xs" style={{ color: "hsl(215 15% 50%)" }}>
+            <h3 className="text-white font-medium mb-2">
+              Nessun progetto ancora
+            </h3>
+            <p
+              className="text-sm text-center max-w-xs"
+              style={{ color: "hsl(215 15% 50%)" }}
+            >
               Crea il tuo primo progetto antincendio e inizia a disegnare.
             </p>
             <form action={createProject} className="mt-6">
@@ -145,7 +201,8 @@ export default async function DashboardPage() {
                 type="submit"
                 className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
                 style={{
-                  background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+                  background:
+                    "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
                 }}
               >
                 + Crea il primo progetto

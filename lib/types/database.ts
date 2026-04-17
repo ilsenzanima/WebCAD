@@ -26,7 +26,7 @@ export interface Project {
 export interface Level {
   id: string; // UUID
   project_id: string; // FK -> projects.id
-  name?: string;
+  name: string;
   elevation_z: number; // Z-index per attraversamento multi-piano
   scale_ratio: number | null; // Rapporto pixel -> mm (calibrazione)
   plan_image_url: string | null;
