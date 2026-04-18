@@ -35,7 +35,7 @@ export default async function DashboardPage() {
       console.error("Errore recupero progetti:", dbError);
     }
 
-    const projects = data || [];
+    const projects: any[] = data || [];
 
     const userName =
       user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Utente";
