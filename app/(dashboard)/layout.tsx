@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { redirect, isRedirectError } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/actions/auth";
@@ -121,7 +121,7 @@ export default async function DashboardLayout({
       </div>
     );
   } catch (err: any) {
-    if (err?.message === "NEXT_REDIRECT") throw err;
+    if (isRedirectError(err)) throw err;
 
     return (
       <div className="flex h-screen items-center justify-center bg-gray-950 p-8">
