@@ -72,9 +72,31 @@ export async function createProject(customName?: string) {
     console.error("Errore creazione level 0:", levelError);
   }
 
-  // Redirigi subito all'editor
+  // Redirigi alla pagina di dettaglio del progetto
   revalidatePath("/projects");
-  redirect(`/projects/${data.id}/editor`);
+  redirect(`/projects/${data.id}`);
+}
+
+// ============================================================
+// ACTION: Aggiorna note del progetto
+// ============================================================
+
+export async function updateProjectNotes(projectId: string, notes: string) {
+  const { supabase, user } = await getAuthUser();
+  if (!user) throw new Error("Non autenticato.");
+
+  const { error } = await supabase
+    .from("projects")
+    .update({ notes, updated_at: new Date().toISOString() })
+    .eq("id", projectId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("Errore salvataggio note progetto:", error);
+    return { error: "Impossibile salvare le note." };
+  }
+
+  return { success: true };
 }
 
 // ============================================================
@@ -105,6 +127,7 @@ export async function renameProject(projectId: string, newName: string) {
   }
 
   revalidatePath("/projects");
+  revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/editor`);
   return { success: true };
 }

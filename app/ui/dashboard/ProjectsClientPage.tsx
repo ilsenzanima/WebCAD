@@ -179,7 +179,7 @@ function ProjectCard({ project }: { project: Project }) {
     >
       {/* Area cliccabile — tutta la card */}
       <Link
-        href={`/projects/${project.id}/editor`}
+        href={`/projects/${project.id}`}
         className="block p-5 pb-4 focus:outline-none"
         aria-label={`Apri progetto ${project.name}`}
       >
@@ -211,7 +211,7 @@ function ProjectCard({ project }: { project: Project }) {
         style={{ borderTop: "1px solid hsl(220 20% 18%)" }}
       >
         <Link
-          href={`/projects/${project.id}/editor`}
+          href={`/projects/${project.id}`}
           className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
           style={{
             background: "hsl(220 32% 20%)",
