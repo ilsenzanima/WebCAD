@@ -35,23 +35,21 @@ export default function CanvasWrapper({ projectId }: { projectId: string }) {
   }, [hasUnsavedChanges]);
 
   useEffect(() => {
-    // Inizializziamo il progetto nello store se non già presente
-    setActiveProject(projectId);
-    
-    // Puliamo lo stato precedente
-    clearProjectState();
-
-    // Se abbiamo dati per il livello attivo, carichiamoli nello store del canvas
-    if (activeLevelId) {
-       const currentLevel = levels.find(l => l.id === activeLevelId);
-       if (currentLevel) {
-          loadProjectData({
-            plan_image_url: currentLevel.plan_image_url,
-            scale_ratio: currentLevel.scale_ratio
-          });
-       }
+    // Synchronize canvas store with active project level data
+    // We only clear if there is no activeLevelId (project init)
+    if (!activeLevelId) {
+      clearProjectState();
+      return;
     }
-  }, [projectId, activeLevelId, levels, clearProjectState, loadProjectData, setActiveProject]);
+
+    const currentLevel = levels.find((l) => l.id === activeLevelId);
+    if (currentLevel) {
+      loadProjectData({
+        plan_image_url: currentLevel.plan_image_url,
+        scale_ratio: currentLevel.scale_ratio,
+      });
+    }
+  }, [activeLevelId, levels, clearProjectState, loadProjectData]);
 
   return <CanvasWorkspace />;
 }

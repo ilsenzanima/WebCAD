@@ -33,6 +33,7 @@ export default function EditorHeader({
   // ── Store init ────────────────────────────────────────────
   const {
     activeProjectId,
+    setActiveProject,
     projectName,
     setProjectName,
     levels,
@@ -52,11 +53,14 @@ export default function EditorHeader({
   } = useCanvasStore();
 
   useEffect(() => {
+    if (activeProjectId !== projectId) {
+      setActiveProject(projectId);
+    }
     setProjectName(initialName);
     setLevels(initialLevels);
     setActiveLevel(initialLevelId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [projectId]);
 
   const displayName = projectName ?? initialName;
   const displayLevels = levels.length > 0 ? levels : initialLevels;
