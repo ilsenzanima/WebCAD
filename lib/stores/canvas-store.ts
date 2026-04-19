@@ -35,6 +35,7 @@ interface CanvasState {
   calibrationRatio: number | null; // Rapporto di scala (pixel -> mm)
   calibrationPoints: { x: number; y: number }[]; // Max 2 punti
   isProcessingFile: boolean;
+  hasUnsavedChanges: boolean;
 
   // Azioni Base
   setStagePosition: (x: number, y: number) => void;
@@ -44,6 +45,7 @@ interface CanvasState {
   toggleElementSelection: (id: string) => void;
   resetViewport: () => void;
   setIsProcessingFile: (isProcessing: boolean) => void;
+  setHasUnsavedChanges: (dirty: boolean) => void;
 
   // Azioni Immagine & Calibrazione
   setBackgroundImage: (url: string | null) => void;
@@ -64,6 +66,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   calibrationRatio: null,
   calibrationPoints: [],
   isProcessingFile: false,
+  hasUnsavedChanges: false,
 
   setStagePosition: (x, y) => set({ stageX: x, stageY: y }),
   setScale: (scale) => set({ scale }),
@@ -77,9 +80,10 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     })),
   resetViewport: () => set({ stageX: 0, stageY: 0, scale: 1 }),
   setIsProcessingFile: (isProcessing) => set({ isProcessingFile: isProcessing }),
+  setHasUnsavedChanges: (dirty) => set({ hasUnsavedChanges: dirty }),
 
-  setBackgroundImage: (url) => set({ backgroundImageDataUrl: url }),
-  setCalibrationRatio: (ratio) => set({ calibrationRatio: ratio, calibrationPoints: [], activeTool: "select" }),
+  setBackgroundImage: (url) => set({ backgroundImageDataUrl: url, hasUnsavedChanges: true }),
+  setCalibrationRatio: (ratio) => set({ calibrationRatio: ratio, calibrationPoints: [], activeTool: "select", hasUnsavedChanges: true }),
   addCalibrationPoint: (point) =>
     set((state) => {
       // Se abbiamo già 2 punti, ignora. L'UI gestirà il modal.

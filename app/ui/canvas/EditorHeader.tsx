@@ -4,11 +4,13 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useProjectStore } from "@/lib/stores/project-store";
+import { useCanvasStore } from "@/lib/stores/canvas-store";
 import {
   renameProject,
   addLevel,
   renameLevel,
   deleteLevel,
+  updateLevelMetadata,
 } from "@/app/actions/projects";
 import type { Level } from "@/lib/types/database";
 
@@ -30,6 +32,7 @@ export default function EditorHeader({
 
   // ── Store init ────────────────────────────────────────────
   const {
+    activeProjectId,
     projectName,
     setProjectName,
     levels,
@@ -40,6 +43,13 @@ export default function EditorHeader({
     updateLevel,
     removeLevel,
   } = useProjectStore();
+
+  const {
+    hasUnsavedChanges,
+    setHasUnsavedChanges,
+    backgroundImageDataUrl,
+    calibrationRatio
+  } = useCanvasStore();
 
   useEffect(() => {
     setProjectName(initialName);
@@ -127,6 +137,37 @@ export default function EditorHeader({
     });
   };
 
+  // ── Salvataggio Manuale ───────────────────────────────────
+  const handleSaveAll = () => {
+    if (!activeLevelId || !activeProjectId) return;
+    
+    startTransition(async () => {
+      const res = await updateLevelMetadata(activeLevelId, activeProjectId, {
+        plan_image_url: backgroundImageDataUrl ?? undefined,
+        scale_ratio: calibrationRatio ?? undefined,
+      });
+
+      if (res.success) {
+        setHasUnsavedChanges(false);
+        alert("Progetto salvato con successo!");
+      } else {
+        alert("Errore durante il salvataggio.");
+      }
+    });
+  };
+
+  // ── Guardia Navigazione ───────────────────────────────────
+  const handleBackWithWarning = (e: React.MouseEvent) => {
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm(
+        "Hai delle modifiche non salvate (planimetria o scala). Sei sicuro di voler uscire? Le modifiche andranno perse."
+      );
+      if (!confirmed) {
+        e.preventDefault();
+      }
+    }
+  };
+
   const activeLevel = displayLevels.find((l) => l.id === displayActiveId);
 
   return (
@@ -142,6 +183,7 @@ export default function EditorHeader({
         <div className="flex items-center gap-3 min-w-0">
           <Link
             href={`/projects/${projectId}`}
+            onClick={handleBackWithWarning}
             className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors flex-shrink-0"
             style={{ color: "hsl(215 20% 65%)" }}
             onMouseEnter={(e) =>
@@ -222,16 +264,17 @@ export default function EditorHeader({
         <div className="flex items-center gap-2">
           <button
             id="btn-editor-save"
-            className="px-4 py-1.5 rounded-lg text-sm font-medium text-white transition-colors"
-            style={{ background: "hsl(220 26% 22%)" }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "hsl(220 26% 28%)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "hsl(220 26% 22%)")
-            }
+            onClick={handleSaveAll}
+            disabled={isPending || (!hasUnsavedChanges && !isRenamingProject)}
+            className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            style={{ 
+              background: hasUnsavedChanges 
+                ? "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" 
+                : "hsl(220 26% 20%)",
+              boxShadow: hasUnsavedChanges ? "0 4px 12px hsl(220 90% 56% / 0.3)" : "none"
+            }}
           >
-            Salva
+            {isPending ? "Salvataggio..." : hasUnsavedChanges ? "Salva Modifiche" : "Salvato"}
           </button>
         </div>
       </header>

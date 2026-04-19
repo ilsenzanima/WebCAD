@@ -83,7 +83,7 @@ export default function Toolbar() {
       resetCalibrationPoints();
       setPendingPdf(null);
 
-      // Persistenza automatica se abbiamo un livello attivo
+      // Persistenza Immagine (Solo Upload su Storage, il DB verrà aggiornato al Salva manuale)
       if (activeLevelId && activeProjectId) {
          startTransition(async () => {
             try {
@@ -91,11 +91,10 @@ export default function Toolbar() {
               const fileName = `plans/${activeLevelId}_${Date.now()}.jpg`;
               const publicUrl = await uploadToStorage(blob, fileName);
               
-              await updateLevelMetadata(activeLevelId, activeProjectId, {
-                plan_image_url: publicUrl
-              });
+              // Impostiamo l'URL nello store (che ora segnerà come dirty)
+              setBackgroundImage(publicUrl);
             } catch (err) {
-              console.error("Errore persistenza planimetria:", err);
+              console.error("Errore upload planimetria:", err);
             }
          });
       }
@@ -149,18 +148,17 @@ export default function Toolbar() {
       setBackgroundImage(dataUrl);
       resetCalibrationPoints();
 
-      // Persistenza
+      // Persistenza (Solo Upload)
       if (activeLevelId && activeProjectId) {
          startTransition(async () => {
             try {
               const fileName = `plans/${activeLevelId}_${Date.now()}_${file.name}`;
               const publicUrl = await uploadToStorage(file, fileName);
               
-              await updateLevelMetadata(activeLevelId, activeProjectId, {
-                plan_image_url: publicUrl
-              });
+              // Aggiorniamo lo store locale
+              setBackgroundImage(publicUrl);
             } catch (err) {
-              console.error("Errore persistenza immagine:", err);
+              console.error("Errore upload immagine:", err);
             }
          });
       }
@@ -194,21 +192,8 @@ export default function Toolbar() {
     setCalibrationRatio(ratio);
     setRealDistanceMm("");
 
-    // Persistenza
-    if (activeLevelId && activeProjectId) {
-      startTransition(async () => {
-        const res = await updateLevelMetadata(activeLevelId, activeProjectId, {
-          scale_ratio: ratio
-        });
-        if (res.success) {
-          alert(`Calibrazione completata e salvata! (Ratio: ${ratio.toFixed(4)} mm/px)`);
-        } else {
-          alert("Calibrazione applicata localmente, ma errore nel salvataggio sul database.");
-        }
-      });
-    } else {
-      alert(`Calibrazione completata! (Ratio: ${ratio.toFixed(4)} mm/px)`);
-    }
+    // La calibrazione viene salvata solo localmente nello store per ora
+    alert(`Calibrazione completata! Ricordati di salvare per confermare le modifiche. (Ratio: ${ratio.toFixed(4)} mm/px)`);
   };
 
   return (

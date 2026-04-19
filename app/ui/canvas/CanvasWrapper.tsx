@@ -17,7 +17,22 @@ import { useProjectStore } from "@/lib/stores/project-store";
 export default function CanvasWrapper({ projectId }: { projectId: string }) {
   const clearProjectState = useCanvasStore((state) => state.clearProjectState);
   const loadProjectData = useCanvasStore((state) => state.loadProjectData);
+  const hasUnsavedChanges = useCanvasStore((state) => state.hasUnsavedChanges);
+  const setHasUnsavedChanges = useCanvasStore((state) => state.setHasUnsavedChanges);
   const { levels, activeLevelId, setActiveProject } = useProjectStore();
+
+  // Gestione avviso chiusura tab browser
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = ""; // Mostra il dialog standard del browser
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   useEffect(() => {
     // Inizializziamo il progetto nello store se non già presente
