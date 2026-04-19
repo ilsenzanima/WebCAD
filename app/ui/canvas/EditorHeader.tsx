@@ -141,7 +141,7 @@ export default function EditorHeader({
         {/* ── Sinistra: back + nome progetto ── */}
         <div className="flex items-center gap-3 min-w-0">
           <Link
-            href="/dashboard"
+            href={`/projects/${projectId}`}
             className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors flex-shrink-0"
             style={{ color: "hsl(215 20% 65%)" }}
             onMouseEnter={(e) =>

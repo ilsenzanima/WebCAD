@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import NewProjectModal from "./NewProjectModal";
-import ProjectActionsMenu from "./ProjectActionsMenu";
 
 interface Project {
   id: string;
@@ -227,10 +226,7 @@ function ProjectCard({ project }: { project: Project }) {
           Apri →
         </Link>
 
-        <ProjectActionsMenu
-          projectId={project.id}
-          projectName={project.name}
-        />
+
       </div>
     </div>
   );

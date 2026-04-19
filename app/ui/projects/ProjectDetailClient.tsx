@@ -4,6 +4,7 @@ import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { addLevel, updateProjectNotes, renameProject } from "@/app/actions/projects";
+import ProjectActionsMenu from "@/app/ui/dashboard/ProjectActionsMenu";
 
 // ============================================
 // Tipizzazione e utility
@@ -242,7 +243,8 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
              style={{
                background: "hsl(220 26% 14%)",
                border: "1px solid hsl(220 20% 22%)",
-               boxShadow: "0 10px 25px rgba(0,0,0,0.5)"
+               boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
+               zIndex: 50
              }}
           >
             <button 
@@ -264,6 +266,11 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
               <span className="text-xs bg-white/10 px-1.5 py-0.5 rounded">Presto</span>
             </button>
           </div>
+        </div>
+
+        {/* Menu Azioni Progetto */}
+        <div className="relative flex items-center justify-center p-1">
+          <ProjectActionsMenu projectId={project.id} projectName={project.name} />
         </div>
       </div>
 

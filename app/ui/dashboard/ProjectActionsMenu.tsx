@@ -52,6 +52,8 @@ export default function ProjectActionsMenu({
     setIsDeleteOpen(false);
     startTransition(async () => {
       await deleteProject(projectId);
+      // Dopo aver eliminato il progetto torniamo alla dashboard/projects
+      router.push("/projects");
       router.refresh();
     });
   };
@@ -137,28 +139,69 @@ export default function ProjectActionsMenu({
         )}
       </div>
 
-      {/* Input rinomina inline — reso in modo portale manuale via parent */}
+      {/* Modale Rinomina */}
       {isRenaming && (
         <div
-          className="absolute inset-0 z-30 flex items-center px-5 rounded-2xl"
-          style={{ background: "hsl(220 26% 16%)" }}
-          onClick={(e) => e.preventDefault()}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 cursor-default"
+          style={{ background: "hsl(228 39% 4% / 0.85)" }}
+          onClick={(e) => {
+             e.preventDefault();
+             if(e.target === e.currentTarget) {
+                 setIsRenaming(false);
+                 setLocalName(projectName);
+             }
+          }}
         >
-          <input
-            ref={inputRef}
-            id={`input-rename-${projectId}`}
-            className="flex-1 bg-transparent text-white text-sm font-medium outline-none border-b"
-            style={{ borderColor: "hsl(220 90% 56%)" }}
-            value={localName}
-            onChange={(e) => setLocalName(e.target.value)}
-            onBlur={commitRename}
-            onKeyDown={handleRenameKeyDown}
-            disabled={isPending}
-            maxLength={120}
-          />
-          <span className="text-xs ml-3" style={{ color: "hsl(215 15% 45%)" }}>
-            Invio per salvare
-          </span>
+          <div
+            className="rounded-2xl p-6 w-full max-w-sm shadow-2xl"
+            style={{
+              background: "hsl(220 32% 12%)",
+              border: "1px solid hsl(220 20% 22%)",
+            }}
+          >
+            <h3 className="text-white font-semibold text-lg mb-4">
+              Rinomina progetto
+            </h3>
+            <input
+              ref={inputRef}
+              id={`input-rename-${projectId}`}
+              className="w-full bg-transparent text-white text-sm font-medium outline-none border-b pb-2 mb-6"
+              style={{ borderColor: "hsl(220 90% 56%)" }}
+              value={localName}
+              onChange={(e) => setLocalName(e.target.value)}
+              onKeyDown={handleRenameKeyDown}
+              disabled={isPending}
+              maxLength={120}
+              placeholder="Nome del progetto"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setIsRenaming(false);
+                  setLocalName(projectName);
+                }}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                style={{
+                  background: "hsl(220 26% 20%)",
+                  color: "hsl(215 20% 75%)",
+                }}
+              >
+                Annulla
+              </button>
+              <button
+                onClick={commitRename}
+                disabled={isPending}
+                className="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all"
+                style={{
+                  background: isPending
+                    ? "hsl(220 50% 35%)"
+                    : "hsl(220 90% 56%)",
+                }}
+              >
+                {isPending ? "Salvataggio…" : "Salva"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
