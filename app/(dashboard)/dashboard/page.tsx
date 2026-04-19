@@ -14,8 +14,7 @@ function safeFormatDate(dateStr: any) {
 }
 
 export default async function DashboardPage() {
-  try {
-    const supabase = await createClient();
+  const supabase = await createClient();
     
     // Sicurezza aggiuntiva per il recupero dati utente
     const { data: userData, error: authError } = await supabase.auth.getUser();
@@ -218,19 +217,6 @@ export default async function DashboardPage() {
           )}
         </div>
       </div>
-    );
-  } catch (err: any) {
-    if (err?.digest?.startsWith("NEXT_REDIRECT") || err?.digest?.includes("DYNAMIC_SERVER_USAGE")) throw err;
-    console.error("ERRORE IN DASHBOARD PAGE:", err);
-    // Intercetta qualunque crash critico imprevisto e lo renderizza per bypassare Next.js digest su Vercel
-    return (
-      <div className="p-8">
-        <div style={{ background: 'hsl(0 60% 15%)', border: '1px solid hsl(0 60% 50%)', padding: '2rem', borderRadius: '1rem', color: 'white' }}>
-          <h2 className="text-xl font-bold text-red-500 mb-4">Errore Interno DashboardPage</h2>
-          <pre className="text-sm overflow-auto mb-4">{err?.message}</pre>
-          <pre className="text-xs opacity-70 overflow-auto">{err?.stack}</pre>
-        </div>
       </div>
     );
-  }
 }

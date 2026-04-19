@@ -18,8 +18,7 @@ export default async function DashboardLayout({
 }: {
   children: ReactNode;
 }) {
-  try {
-    const supabase = await createClient();
+  const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     // Se l'utente non c'e', o c'è un errore grave, redirigiamo al log in
@@ -116,17 +115,4 @@ export default async function DashboardLayout({
         </main>
       </div>
     );
-  } catch (err: any) {
-    if (err?.digest?.startsWith("NEXT_REDIRECT") || err?.digest?.includes("DYNAMIC_SERVER_USAGE")) throw err;
-
-    return (
-      <div className="flex h-screen items-center justify-center bg-gray-950 p-8">
-        <div style={{ background: 'hsl(0 60% 15%)', border: '1px solid hsl(0 60% 50%)', padding: '2rem', borderRadius: '1rem', color: 'white' }}>
-          <h2 className="text-xl font-bold text-red-500 mb-4">Errore Interno DashboardLayout</h2>
-          <pre className="text-sm overflow-auto mb-4">{err?.message}</pre>
-          <pre className="text-xs opacity-70 overflow-auto max-w-2xl max-h-64">{err?.stack}</pre>
-        </div>
-      </div>
-    );
-  }
 }

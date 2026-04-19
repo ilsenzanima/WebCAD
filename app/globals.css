@@ -81,10 +81,12 @@ body {
    ============================================ */
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
-input:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0 1000px hsl(var(--surface-elevated)) inset;
-  -webkit-text-fill-color: hsl(var(--surface-text));
-  caret-color: hsl(var(--surface-text));
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #1e293b inset !important;
+  -webkit-text-fill-color: white !important;
+  caret-color: white !important;
+  transition: background-color 5000s ease-in-out 0s;
 }
 
 /* ============================================
