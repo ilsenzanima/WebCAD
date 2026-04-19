@@ -22,23 +22,27 @@ async function getAuthUser() {
 // ACTION: Crea un nuovo progetto e redirige all'editor
 // ============================================================
 
-export async function createProject() {
+export async function createProject(customName?: string) {
   const { supabase, user } = await getAuthUser();
 
   if (!user) {
     throw new Error("Devi essere autenticato per creare un progetto.");
   }
 
-  // Conteggio progetti dell'utente per nome incrementale
-  const { count } = await supabase
-    .from("projects")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id);
+  let projectName = customName?.trim() || "";
 
-  const projectName =
-    count && count > 0
-      ? `Nuovo Progetto Antincendio #${count + 1}`
-      : "Nuovo Progetto Antincendio";
+  if (!projectName) {
+    // Conteggio progetti dell'utente per nome incrementale
+    const { count } = await supabase
+      .from("projects")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id);
+
+    projectName =
+      count && count > 0
+        ? `Nuovo Progetto Antincendio #${count + 1}`
+        : "Nuovo Progetto Antincendio";
+  }
 
   const { data, error } = (await supabase
     .from("projects")
@@ -70,6 +74,7 @@ export async function createProject() {
 
   // Redirigi subito all'editor
   revalidatePath("/dashboard");
+  revalidatePath("/projects");
   redirect(`/projects/${data.id}/editor`);
 }
 
@@ -101,6 +106,7 @@ export async function renameProject(projectId: string, newName: string) {
   }
 
   revalidatePath("/dashboard");
+  revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}/editor`);
   return { success: true };
 }
@@ -125,6 +131,7 @@ export async function deleteProject(projectId: string) {
   }
 
   revalidatePath("/dashboard");
+  revalidatePath("/projects");
   return { success: true };
 }
 
