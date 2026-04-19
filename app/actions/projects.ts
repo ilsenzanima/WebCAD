@@ -253,8 +253,35 @@ export async function renameLevel(
 }
 
 // ============================================================
-// ACTION: Elimina un livello (solo se ne rimane almeno 1)
+// ACTION: Aggiorna metadati di un livello (scala, immagine)
 // ============================================================
+
+export async function updateLevelMetadata(
+  levelId: string,
+  projectId: string,
+  data: { scale_ratio?: number; plan_image_url?: string }
+) {
+  const { supabase, user } = await getAuthUser();
+  if (!user) throw new Error("Non autenticato.");
+
+  const { error } = await supabase
+    .from("levels")
+    .update(data as any)
+    .eq("id", levelId)
+    .eq("project_id", projectId);
+
+  if (error) {
+    console.error("Errore aggiornamento metadati livello:", error);
+    return { error: "Impossibile salvare i dati del livello." };
+  }
+
+  revalidatePath(`/projects/${projectId}/editor`);
+  return { success: true };
+}
+
+// ============================================================
+// ACTION: Elimina un livello (solo se ne rimane almeno 1)
+// =======================================================================================================================
 
 export async function deleteLevel(levelId: string, projectId: string) {
   const { supabase, user } = await getAuthUser();

@@ -51,6 +51,7 @@ interface CanvasState {
   addCalibrationPoint: (point: { x: number; y: number }) => void;
   resetCalibrationPoints: () => void;
   clearProjectState: () => void;
+  loadProjectData: (data: { plan_image_url?: string | null; scale_ratio?: number | null }) => void;
 }
 
 export const useCanvasStore = create<CanvasState>((set) => ({
@@ -96,5 +97,9 @@ export const useCanvasStore = create<CanvasState>((set) => ({
     calibrationRatio: null,
     calibrationPoints: [],
     isProcessingFile: false,
+  }),
+  loadProjectData: (data) => set({
+    backgroundImageDataUrl: data.plan_image_url ?? null,
+    calibrationRatio: data.scale_ratio ?? null,
   }),
 }));

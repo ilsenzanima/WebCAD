@@ -1,8 +1,11 @@
 "use client";
 
 import { useCanvasStore } from "@/lib/stores/canvas-store";
-import { useEffect, useState } from "react";
+import { useProjectStore } from "@/lib/stores/project-store";
+import { useEffect, useState, useTransition } from "react";
 import * as pdfjsLib from "pdfjs-dist";
+import { updateLevelMetadata } from "@/app/actions/projects";
+import { createClient } from "@/lib/supabase/client";
 
 // Configuriamo il worker per viaggiare tramite CDN in modo da evitare problemi di bundling
 // con Next.js e Turbopack. MVP friendly.
@@ -11,6 +14,8 @@ if (typeof window !== "undefined") {
 }
 
 export default function Toolbar() {
+  const [isPending, startTransition] = useTransition();
+  const { activeProjectId, activeLevelId } = useProjectStore();
   const {
     activeTool,
     setActiveTool,
@@ -26,6 +31,35 @@ export default function Toolbar() {
   const [realDistanceMm, setRealDistanceMm] = useState<string>("");
   const [pendingPdf, setPendingPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
   const [selectedPdfPage, setSelectedPdfPage] = useState<number>(1);
+
+  // Helper per caricamento su Storage
+  const uploadToStorage = async (file: Blob, fileName: string) => {
+    const supabase = createClient();
+    const { data, error } = await supabase.storage
+      .from("plans")
+      .upload(fileName, file, { upsert: true });
+
+    if (error) {
+      console.error("Errore upload storage:", error);
+      throw error;
+    }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from("plans")
+      .getPublicUrl(data.path);
+
+    return publicUrl;
+  };
+
+  const dataUrlToBlob = (dataUrl: string) => {
+    const arr = dataUrl.split(",");
+    const mime = arr[0].match(/:(.*?);/)?.[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) u8arr[n] = bstr.charCodeAt(n);
+    return new Blob([u8arr], { type: mime });
+  };
 
   const renderPdfPageToCanvas = async (pdf: pdfjsLib.PDFDocumentProxy, pageNumber: number) => {
     try {
@@ -48,6 +82,24 @@ export default function Toolbar() {
       setBackgroundImage(dataUrl);
       resetCalibrationPoints();
       setPendingPdf(null);
+
+      // Persistenza automatica se abbiamo un livello attivo
+      if (activeLevelId && activeProjectId) {
+         startTransition(async () => {
+            try {
+              const blob = dataUrlToBlob(dataUrl);
+              const fileName = `plans/${activeLevelId}_${Date.now()}.jpg`;
+              const publicUrl = await uploadToStorage(blob, fileName);
+              
+              await updateLevelMetadata(activeLevelId, activeProjectId, {
+                plan_image_url: publicUrl
+              });
+            } catch (err) {
+              console.error("Errore persistenza planimetria:", err);
+            }
+         });
+      }
+
     } catch (error) {
       console.error("Errore render PDF:", error);
       alert("Impossibile generare la pagina del PDF.");
@@ -92,10 +144,27 @@ export default function Toolbar() {
     // Se è immagine standard (PNG/JPG)
     setIsProcessingFile(true);
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       const dataUrl = event.target?.result as string;
       setBackgroundImage(dataUrl);
       resetCalibrationPoints();
+
+      // Persistenza
+      if (activeLevelId && activeProjectId) {
+         startTransition(async () => {
+            try {
+              const fileName = `plans/${activeLevelId}_${Date.now()}_${file.name}`;
+              const publicUrl = await uploadToStorage(file, fileName);
+              
+              await updateLevelMetadata(activeLevelId, activeProjectId, {
+                plan_image_url: publicUrl
+              });
+            } catch (err) {
+              console.error("Errore persistenza immagine:", err);
+            }
+         });
+      }
+
       setIsProcessingFile(false);
       e.target.value = ""; // resettiamo l'input
     };
@@ -124,7 +193,22 @@ export default function Toolbar() {
     const ratio = distanceMm / distancePx;
     setCalibrationRatio(ratio);
     setRealDistanceMm("");
-    alert(`Calibrazione completata! (Ratio: ${ratio.toFixed(4)} mm/px)`);
+
+    // Persistenza
+    if (activeLevelId && activeProjectId) {
+      startTransition(async () => {
+        const res = await updateLevelMetadata(activeLevelId, activeProjectId, {
+          scale_ratio: ratio
+        });
+        if (res.success) {
+          alert(`Calibrazione completata e salvata! (Ratio: ${ratio.toFixed(4)} mm/px)`);
+        } else {
+          alert("Calibrazione applicata localmente, ma errore nel salvataggio sul database.");
+        }
+      });
+    } else {
+      alert(`Calibrazione completata! (Ratio: ${ratio.toFixed(4)} mm/px)`);
+    }
   };
 
   return (
