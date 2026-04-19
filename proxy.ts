@@ -52,8 +52,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Se l'utente è autenticato e cerca di accedere a login/register → dashboard
-  if (user && (pathname === "/login" || pathname === "/register")) {
+  // Se l'utente è autenticato e accede a route di ingresso (/, /login, /register) → dashboard
+  if (user && (pathname === "/" || pathname === "/login" || pathname === "/register")) {
     const dashboardUrl = request.nextUrl.clone();
     dashboardUrl.pathname = "/dashboard";
     return NextResponse.redirect(dashboardUrl);
