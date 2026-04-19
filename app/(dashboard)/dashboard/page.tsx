@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { createProject } from "@/app/actions/projects";
+import CreateProjectButton from "@/app/ui/dashboard/CreateProjectButton";
 import ProjectActionsMenu from "@/app/ui/dashboard/ProjectActionsMenu";
 
 function safeFormatDate(dateStr: any) {
@@ -53,21 +53,16 @@ export default async function DashboardPage() {
               Gestisci i tuoi progetti antincendio
             </p>
           </div>
-          <form action={createProject}>
-            <button
-              type="submit"
-              id="btn-new-project"
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200"
-              style={{
-                background:
-                  "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-                boxShadow: "0 4px 16px hsl(220 90% 56% / 0.3)",
-              }}
-            >
-              <span className="text-base">+</span>
-              Nuovo Progetto
-            </button>
-          </form>
+          <CreateProjectButton
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200"
+            style={{
+              background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+              boxShadow: "0 4px 16px hsl(220 90% 56% / 0.3)",
+            }}
+          >
+            <span className="text-base">+</span>
+            Nuovo Progetto
+          </CreateProjectButton>
         </div>
 
         {/* Stats rapide */}
@@ -133,7 +128,7 @@ export default async function DashboardPage() {
             <div className="grid gap-3">
               {projects.map((project) => (
                 <div
-                  key={project.id || Math.random().toString()}
+                  key={project.id || `fallback-proj-${Math.random()}`}
                   className="relative flex items-center justify-between p-5 rounded-2xl transition-all duration-200 group"
                   style={{
                     background: "hsl(220 26% 14%)",
@@ -211,24 +206,22 @@ export default async function DashboardPage() {
               >
                 Crea il tuo primo progetto antincendio e inizia a disegnare.
               </p>
-              <form action={createProject} className="mt-6">
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-                  }}
-                >
-                  + Crea il primo progetto
-                </button>
-              </form>
+              <CreateProjectButton
+                className="mt-6 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all"
+                style={{
+                  background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+                }}
+              >
+                + Crea il primo progetto
+              </CreateProjectButton>
             </div>
           )}
         </div>
       </div>
     );
   } catch (err: any) {
+    if (err?.digest?.startsWith("NEXT_REDIRECT") || err?.digest?.includes("DYNAMIC_SERVER_USAGE")) throw err;
+    console.error("ERRORE IN DASHBOARD PAGE:", err);
     // Intercetta qualunque crash critico imprevisto e lo renderizza per bypassare Next.js digest su Vercel
     return (
       <div className="p-8">

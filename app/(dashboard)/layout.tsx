@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { logout } from "@/app/actions/auth";
+import LogoutButton from "@/app/ui/dashboard/LogoutButton";
 import type { ReactNode } from "react";
 
 const navItems = [
@@ -99,18 +99,14 @@ export default async function DashboardLayout({
               </div>
             </div>
 
-            {/* Logout form */}
-            <form action={logout}>
-              <button
-                type="submit"
-                id="btn-logout"
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-150"
-                style={{ color: "hsl(215 20% 55%)" }}
-              >
-                <span className="text-base">↩</span>
-                <span>Esci</span>
-              </button>
-            </form>
+            {/* Logout button client side */}
+            <LogoutButton
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-150"
+              style={{ color: "hsl(215 20% 55%)" }}
+            >
+              <span className="text-base">↩</span>
+              <span>Esci</span>
+            </LogoutButton>
           </div>
         </aside>
 
@@ -121,7 +117,7 @@ export default async function DashboardLayout({
       </div>
     );
   } catch (err: any) {
-    if (err?.digest?.startsWith("NEXT_REDIRECT")) throw err;
+    if (err?.digest?.startsWith("NEXT_REDIRECT") || err?.digest?.includes("DYNAMIC_SERVER_USAGE")) throw err;
 
     return (
       <div className="flex h-screen items-center justify-center bg-gray-950 p-8">
