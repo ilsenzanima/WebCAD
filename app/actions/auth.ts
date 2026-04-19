@@ -71,7 +71,7 @@ export async function login(
     };
   }
 
-  redirect("/dashboard");
+  redirect("/projects");
 }
 
 // ============================================
@@ -112,7 +112,7 @@ export async function register(
     };
   }
 
-  redirect("/dashboard");
+  redirect("/projects");
 }
 
 // ============================================

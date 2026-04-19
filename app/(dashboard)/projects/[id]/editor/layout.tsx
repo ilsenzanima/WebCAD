@@ -24,7 +24,7 @@ export default async function EditorLayout({
     .eq("id", id)
     .single();
 
-  if (!project) redirect("/dashboard");
+  if (!project) redirect("/projects");
 
   return (
     <div

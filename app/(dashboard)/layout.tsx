@@ -5,7 +5,6 @@ import LogoutButton from "@/app/ui/dashboard/LogoutButton";
 import type { ReactNode } from "react";
 
 const navItems = [
-  { href: "/dashboard", icon: "⊞", label: "Dashboard" },
   { href: "/projects", icon: "📐", label: "Progetti" },
   { href: "/catalog", icon: "📦", label: "Catalogo" },
 ];

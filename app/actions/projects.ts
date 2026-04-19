@@ -73,7 +73,6 @@ export async function createProject(customName?: string) {
   }
 
   // Redirigi subito all'editor
-  revalidatePath("/dashboard");
   revalidatePath("/projects");
   redirect(`/projects/${data.id}/editor`);
 }
@@ -105,7 +104,6 @@ export async function renameProject(projectId: string, newName: string) {
     return { error: "Impossibile rinominare il progetto." };
   }
 
-  revalidatePath("/dashboard");
   revalidatePath("/projects");
   revalidatePath(`/projects/${projectId}/editor`);
   return { success: true };
@@ -130,7 +128,6 @@ export async function deleteProject(projectId: string) {
     return { error: "Impossibile eliminare il progetto." };
   }
 
-  revalidatePath("/dashboard");
   revalidatePath("/projects");
   return { success: true };
 }
