@@ -30,9 +30,9 @@ export default async function FieldNotesPage({
   const notes = await getFieldNotes(id);
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto w-full animate-fade-in pb-16">
+    <div className="flex flex-col h-full overflow-y-auto w-full animate-fade-in pb-4">
       {/* ── Header ───────────────────────────── */}
-      <div className="px-8 py-6 space-y-4">
+      <div className="px-4 sm:px-8 py-4 sm:py-6 space-y-3 sm:space-y-4">
         {/* Breadcrumb */}
         <div
           className="flex items-center gap-2 text-sm font-medium"
@@ -52,19 +52,19 @@ export default async function FieldNotesPage({
           <span className="text-white">Appunti Cantiere</span>
         </div>
 
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              📋 Appunti Cantiere
+        <div className="flex items-start sm:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+              📋 Appunti
             </h1>
-            <p className="mt-1 text-sm" style={{ color: "hsl(215 15% 50%)" }}>
+            <p className="mt-0.5 text-xs sm:text-sm truncate" style={{ color: "hsl(215 15% 50%)" }}>
               {project.name} — {notes.length} appunt{notes.length === 1 ? "o" : "i"}
             </p>
           </div>
 
           <Link
             href={`/projects/${id}/appunti/nuovo`}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200"
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white transition-all duration-200"
             style={{
               background:
                 "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
@@ -72,7 +72,8 @@ export default async function FieldNotesPage({
             }}
           >
             <span className="text-base leading-none">＋</span>
-            Nuovo Appunto
+            <span className="hidden sm:inline">Nuovo Appunto</span>
+            <span className="sm:hidden">Nuovo</span>
           </Link>
         </div>
       </div>
@@ -87,7 +88,7 @@ export default async function FieldNotesPage({
       />
 
       {/* ── Lista Appunti ───────────────────────── */}
-      <div className="px-8 py-6">
+      <div className="px-4 sm:px-8 py-4 sm:py-6">
         <FieldNotesList notes={notes} />
       </div>
     </div>

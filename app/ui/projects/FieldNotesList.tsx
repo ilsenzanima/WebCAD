@@ -1,16 +1,29 @@
 "use client";
 
-import type { FieldNote } from "@/app/actions/field-notes";
+import { useState } from "react";
+import type { FieldNote, FieldNoteItem } from "@/app/actions/field-notes";
 
 interface Props {
   notes: FieldNote[];
 }
 
+const ITEM_LABELS: Record<FieldNoteItem["item_type"], string> = {
+  base: "Base",
+  altezza: "Altezza",
+  spessore: "Spessore",
+  lana_interna: "Lana interna",
+  dipintura: "Dipintura",
+  nota: "Nota",
+};
+
+const MEASURE_TYPES = ["base", "altezza", "spessore"] as const;
+const BOOL_TYPES = ["lana_interna", "dipintura"] as const;
+
 export default function FieldNotesList({ notes }: Props) {
   if (notes.length === 0) {
     return (
       <div
-        className="p-16 text-center rounded-2xl"
+        className="p-12 text-center rounded-2xl"
         style={{
           border: "1px dashed hsl(220 20% 24%)",
           background: "hsl(220 26% 14%)",
@@ -21,7 +34,7 @@ export default function FieldNotesList({ notes }: Props) {
           Nessun appunto ancora.
         </p>
         <p className="text-xs mt-1" style={{ color: "hsl(215 15% 40%)" }}>
-          Clicca "Nuovo Appunto" per iniziare.
+          Clicca "＋ Nuovo Appunto" per iniziare.
         </p>
       </div>
     );
@@ -36,27 +49,35 @@ export default function FieldNotesList({ notes }: Props) {
   );
 }
 
+// ============================================
+// Singola riga espandibile
+// ============================================
+
 function NoteRow({ note }: { note: FieldNote }) {
+  const [open, setOpen] = useState(false);
+  const items = note.field_note_items ?? [];
+  const hasItems = items.length > 0;
+
   return (
-    <li>
-      <div
-        className="flex items-center gap-4 px-5 py-4 rounded-2xl transition-all duration-200 cursor-default"
-        style={{
-          background: "hsl(220 26% 14%)",
-          border: "1px solid hsl(220 20% 20%)",
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLDivElement).style.borderColor = "hsl(220 90% 56%)";
-          (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.3)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLDivElement).style.borderColor = "hsl(220 20% 20%)";
-          (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
-        }}
+    <li
+      className="rounded-2xl overflow-hidden transition-all duration-200"
+      style={{
+        background: "hsl(220 26% 14%)",
+        border: `1px solid ${open ? "hsl(220 90% 56%)" : "hsl(220 20% 20%)"}`,
+        boxShadow: open ? "0 4px 20px rgba(0,0,0,0.35)" : "none",
+      }}
+    >
+      {/* ── Intestazione (sempre visibile) ── */}
+      <button
+        type="button"
+        onClick={() => setOpen((p) => !p)}
+        className="w-full flex items-center gap-4 px-4 py-4 sm:px-5 text-left transition-colors"
+        style={{ cursor: hasItems ? "pointer" : "default" }}
+        aria-expanded={open}
       >
         {/* Badge numero */}
         <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-white font-bold text-xs sm:text-sm flex-shrink-0"
           style={{
             background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
           }}
@@ -66,7 +87,7 @@ function NoteRow({ note }: { note: FieldNote }) {
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <div className="text-white font-semibold text-sm">
+          <div className="text-white font-semibold text-sm truncate">
             {note.type_name ?? (
               <span className="italic" style={{ color: "hsl(215 15% 45%)" }}>
                 Tipo non specificato
@@ -81,22 +102,104 @@ function NoteRow({ note }: { note: FieldNote }) {
               hour: "2-digit",
               minute: "2-digit",
             })}
+            {hasItems && (
+              <span className="ml-2" style={{ color: "hsl(220 70% 60%)" }}>
+                · {items.length} {items.length === 1 ? "voce" : "voci"}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Badge tipo */}
-        {note.type_name && (
+        {/* Chevron */}
+        {hasItems && (
           <span
-            className="text-xs px-2.5 py-1 rounded-lg font-medium flex-shrink-0"
+            className="flex-shrink-0 text-xs transition-transform duration-300"
             style={{
-              background: "hsl(220 32% 20%)",
-              color: "hsl(215 20% 65%)",
+              color: "hsl(215 15% 50%)",
+              transform: open ? "rotate(180deg)" : "rotate(0deg)",
+              display: "inline-block",
             }}
           >
-            {note.type_name}
+            ▼
           </span>
         )}
-      </div>
+      </button>
+
+      {/* ── Dettaglio (espandibile) ── */}
+      {open && hasItems && (
+        <div
+          className="px-4 pb-4 sm:px-5 sm:pb-5 space-y-2"
+          style={{ borderTop: "1px solid hsl(220 20% 18%)" }}
+        >
+          <div className="pt-3 space-y-2">
+            {items
+              .slice()
+              .sort((a, b) => a.sort_order - b.sort_order)
+              .map((item) => (
+                <ItemDetail key={item.id} item={item} />
+              ))}
+          </div>
+        </div>
+      )}
+
+      {/* Messaggio se nessuna voce ma aperto */}
+      {open && !hasItems && (
+        <div
+          className="px-5 pb-4 text-xs italic"
+          style={{ color: "hsl(215 15% 40%)", borderTop: "1px solid hsl(220 20% 18%)", paddingTop: "0.75rem" }}
+        >
+          Nessuna voce aggiunta per questo appunto.
+        </div>
+      )}
     </li>
+  );
+}
+
+// ============================================
+// Singola voce dettaglio
+// ============================================
+
+function ItemDetail({ item }: { item: FieldNoteItem }) {
+  const label = ITEM_LABELS[item.item_type];
+  const isMeasure = (MEASURE_TYPES as readonly string[]).includes(item.item_type);
+  const isBool = (BOOL_TYPES as readonly string[]).includes(item.item_type);
+
+  return (
+    <div
+      className="flex items-center justify-between px-3 py-2.5 rounded-xl"
+      style={{
+        background: "hsl(220 32% 10%)",
+        border: "1px solid hsl(220 20% 18%)",
+      }}
+    >
+      <span className="text-xs font-medium" style={{ color: "hsl(215 20% 55%)" }}>
+        {label}
+      </span>
+
+      <span className="text-sm font-semibold" style={{ color: "hsl(210 40% 90%)" }}>
+        {isMeasure && item.value_num != null && (
+          <>{item.value_num} {item.value_unit ?? "cm"}</>
+        )}
+        {isMeasure && item.value_num == null && (
+          <span className="italic text-xs" style={{ color: "hsl(215 15% 40%)" }}>—</span>
+        )}
+        {isBool && (
+          <span
+            className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-lg"
+            style={{
+              background: item.value_bool ? "hsl(142 60% 15%)" : "hsl(220 26% 18%)",
+              color: item.value_bool ? "hsl(142 60% 55%)" : "hsl(215 15% 45%)",
+            }}
+          >
+            {item.value_bool ? "✓ Presente" : "✗ Non presente"}
+          </span>
+        )}
+        {item.item_type === "nota" && (
+          <span className="text-xs leading-relaxed" style={{ color: "hsl(210 30% 80%)" }}>
+            {item.value_text ?? "—"}
+          </span>
+        )}
+      </span>
+    </div>
   );
 }

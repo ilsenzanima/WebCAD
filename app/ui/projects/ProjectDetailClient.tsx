@@ -141,21 +141,21 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
   }, [debouncedNotes, project.id, project.notes]);
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto w-full animate-fade-in pb-16">
+    <div className="flex flex-col h-full overflow-y-auto w-full animate-fade-in pb-4">
       
-      {/* ── Breadcrumb e Header (non sticky) ───────────────────────────── */}
-      <div className="px-8 py-6 space-y-4">
+      {/* ── Breadcrumb e Header ───────────────────────────── */}
+      <div className="px-4 sm:px-8 py-4 sm:py-6 space-y-3 sm:space-y-4">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "hsl(215 15% 55%)" }}>
+        <div className="flex items-center gap-2 text-xs sm:text-sm font-medium" style={{ color: "hsl(215 15% 55%)" }}>
           <Link href="/projects" className="hover:text-white transition-colors">Progetti</Link>
           <span>/</span>
-          <span className="text-white">{project.name}</span>
+          <span className="text-white truncate max-w-[180px] sm:max-w-none">{project.name}</span>
         </div>
 
         {/* Titolo Progetto */}
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="group flex items-center gap-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="group flex items-center gap-2 sm:gap-3">
               {isEditingTitle ? (
                 <input 
                   autoFocus
@@ -164,15 +164,15 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
                   onChange={(e) => setEditTitle(e.target.value)}
                   onBlur={handleSaveTitle}
                   onKeyDown={(e) => e.key === "Enter" && handleSaveTitle()}
-                  className="text-2xl font-bold bg-transparent border-b border-white outline-none focus:border-brand-primary"
+                  className="text-xl sm:text-2xl font-bold bg-transparent border-b border-white outline-none w-full"
                   style={{ color: "hsl(210 40% 96%)" }}
                 />
               ) : (
-                <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                  {project.name}
+                <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 truncate">
+                  <span className="truncate">{project.name}</span>
                   <button 
                     onClick={() => setIsEditingTitle(true)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-sm p-1 rounded-md bg-white/5 hover:bg-white/10"
+                    className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-sm p-1 rounded-md bg-white/5 hover:bg-white/10"
                     title="Rinomina progetto"
                   >
                     ✏️
@@ -180,7 +180,7 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
                 </h1>
               )}
             </div>
-            <p className="mt-1 text-sm" style={{ color: "hsl(215 15% 50%)" }}>
+            <p className="mt-1 text-xs sm:text-sm" style={{ color: "hsl(215 15% 50%)" }}>
               Ultima modifica: {safeFormatDate(project.updated_at)}
             </p>
           </div>
@@ -189,14 +189,14 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
 
       {/* ── Barra Controlli (Search + Add) ───────────────────────────── */}
       <div 
-        className="px-8 py-4 flex items-center gap-4 sticky top-0 z-10"
+        className="px-4 sm:px-8 py-3 sm:py-4 flex items-center gap-2 sm:gap-4 sticky top-0 z-10"
         style={{
           background: "hsl(222 47% 6%)",
           borderBottom: "1px solid hsl(220 20% 14%)",
           borderTop: "1px solid hsl(220 20% 14%)",
         }}
       >
-        <div className="relative flex-1 max-w-lg">
+        <div className="relative flex-1">
           <span
             className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm pointer-events-none"
             style={{ color: "hsl(215 15% 45%)" }}
@@ -227,14 +227,16 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
         <div className="relative group">
            <button
             disabled={isPending}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 disabled:opacity-50"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white transition-all duration-200 disabled:opacity-50 whitespace-nowrap"
             style={{
               background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
               boxShadow: "0 4px 16px hsl(220 90% 56% / 0.3)",
             }}
           >
             <span className="text-base leading-none">＋</span>
-            Crea Disegno ▾
+            <span className="hidden sm:inline">Crea Disegno</span>
+            <span className="sm:hidden">Nuovo</span>
+            ▾
           </button>
           
           {/* Dropdown Menu */}
@@ -275,13 +277,13 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
       </div>
 
       {/* ── Disegni Grid ─────────────────────────────────── */}
-      <div className="px-8 py-6">
-        <h2 className="text-sm border-b pb-2 mb-4 font-semibold uppercase tracking-wider" style={{ color: "hsl(215 15% 45%)", borderColor: "hsl(220 20% 16%)" }}>
+      <div className="px-4 sm:px-8 py-4 sm:py-6">
+        <h2 className="text-xs sm:text-sm border-b pb-2 mb-4 font-semibold uppercase tracking-wider" style={{ color: "hsl(215 15% 45%)", borderColor: "hsl(220 20% 16%)" }}>
           Disegni del progetto ({filteredDrawings.length})
         </h2>
         
         {filteredDrawings.length > 0 ? (
-           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {filteredDrawings.map((draw) => {
                 const gradient = avatarGradient(draw.id);
                 return (
@@ -350,7 +352,7 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
       </div>
 
       {/* ── Appunti (Note Editor) ─────────────────────────────────── */}
-      <div className="px-8 mt-auto pt-6 border-t" style={{ borderColor: "hsl(220 20% 16%)" }}>
+      <div className="px-4 sm:px-8 mt-auto pt-4 sm:pt-6 border-t" style={{ borderColor: "hsl(220 20% 16%)" }}>
          <div className="flex items-center justify-between mb-3">
            <h2 className="text-sm font-semibold uppercase tracking-wider" style={{ color: "hsl(215 15% 45%)" }}>
              Appunti / Note

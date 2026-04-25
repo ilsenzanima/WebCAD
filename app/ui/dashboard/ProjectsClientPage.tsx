@@ -64,15 +64,15 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
       <div className="flex flex-col h-full">
         {/* ── Barra superiore fissa ───────────────────────────── */}
         <div
-          className="sticky top-0 z-10 px-8 py-5 flex items-center gap-4"
+          className="sticky top-0 z-10 px-4 sm:px-8 py-3 sm:py-5 flex items-center gap-2 sm:gap-4"
           style={{
             background: "hsl(222 47% 6%)",
             borderBottom: "1px solid hsl(220 20% 14%)",
           }}
         >
           {/* Titolo + contatore */}
-          <div className="flex items-baseline gap-2 mr-2 flex-shrink-0">
-            <h1 className="text-lg font-bold text-white">Progetti</h1>
+          <div className="flex items-baseline gap-2 mr-1 sm:mr-2 flex-shrink-0">
+            <h1 className="text-base sm:text-lg font-bold text-white">Progetti</h1>
             <span
               className="text-xs font-semibold px-2 py-0.5 rounded-full"
               style={{
@@ -117,7 +117,7 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
           <button
             id="btn-new-project"
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white flex-shrink-0 transition-all duration-200"
+            className="flex items-center gap-1.5 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white flex-shrink-0 transition-all duration-200 whitespace-nowrap"
             style={{
               background:
                 "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
@@ -125,14 +125,15 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
             }}
           >
             <span className="text-base leading-none">+</span>
-            Nuovo Progetto
+            <span className="hidden sm:inline">Nuovo Progetto</span>
+            <span className="sm:hidden">Nuovo</span>
           </button>
         </div>
 
         {/* ── Griglia progetti ─────────────────────────────────── */}
-        <div className="flex-1 overflow-y-auto px-8 py-6">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-4 sm:py-6">
           {filtered.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-fade-in">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 animate-fade-in">
               {filtered.map((project) => (
                 <ProjectCard
                   key={project.id}
@@ -179,12 +180,12 @@ function ProjectCard({ project }: { project: Project }) {
       {/* Area cliccabile — tutta la card */}
       <Link
         href={`/projects/${project.id}`}
-        className="block p-5 pb-4 focus:outline-none"
+        className="block p-3 sm:p-5 pb-3 sm:pb-4 focus:outline-none"
         aria-label={`Apri progetto ${project.name}`}
       >
         {/* Avatar */}
         <div
-          className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-base mb-4"
+          className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white font-bold text-sm sm:text-base mb-3 sm:mb-4"
           style={{ background: gradient }}
         >
           {initials || "🏗️"}
@@ -192,21 +193,21 @@ function ProjectCard({ project }: { project: Project }) {
 
         {/* Nome progetto */}
         <div
-          className="text-white font-semibold text-sm leading-snug line-clamp-2 mb-1"
-          style={{ minHeight: "2.5rem" }}
+          className="text-white font-semibold text-xs sm:text-sm leading-snug line-clamp-2 mb-1"
+          style={{ minHeight: "2rem" }}
         >
           {project.name}
         </div>
 
         {/* Data */}
-        <div className="text-xs" style={{ color: "hsl(215 15% 45%)" }}>
-          Modificato il {date}
+        <div className="text-[10px] sm:text-xs" style={{ color: "hsl(215 15% 45%)" }}>
+          Mod. {date}
         </div>
       </Link>
 
       {/* Footer con azioni */}
       <div
-        className="px-5 py-3 flex items-center justify-between"
+        className="px-3 sm:px-5 py-2 sm:py-3 flex items-center justify-between"
         style={{ borderTop: "1px solid hsl(220 20% 18%)" }}
       >
         <Link

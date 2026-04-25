@@ -105,7 +105,7 @@ export async function getFieldNotes(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("field_notes")
-    .select("id, project_id, note_number, type_id, type_name, created_at, updated_at")
+    .select("id, project_id, note_number, type_id, type_name, created_at, updated_at, field_note_items(id, item_type, value_num, value_unit, value_bool, value_text, sort_order)")
     .eq("project_id", projectId)
     .order("note_number", { ascending: true });
 

@@ -29,9 +29,9 @@ export default async function NewFieldNotePage({
   const noteTypes = await getNoteTypes();
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto w-full animate-fade-in pb-16">
+    <div className="flex flex-col h-full overflow-y-auto w-full animate-fade-in pb-4">
       {/* ── Header ───────────────────────────── */}
-      <div className="px-8 py-6 space-y-4">
+      <div className="px-4 sm:px-8 py-4 sm:py-6 space-y-3 sm:space-y-4">
         {/* Breadcrumb */}
         <div
           className="flex items-center gap-2 text-sm font-medium"
@@ -77,7 +77,7 @@ export default async function NewFieldNotePage({
       />
 
       {/* ── Form ───────────────────────────── */}
-      <div className="px-8">
+      <div className="px-4 sm:px-8">
         <NewNoteForm projectId={id} noteTypes={noteTypes} />
       </div>
     </div>

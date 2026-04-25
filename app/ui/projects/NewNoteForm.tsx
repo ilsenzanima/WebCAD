@@ -328,7 +328,7 @@ export default function NewNoteForm({ projectId, noteTypes }: Props) {
       </div>
 
       {/* ── Pulsanti ── */}
-      <div className="flex items-center gap-3 justify-end pb-8">
+      <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-3 sm:justify-end pb-8">
         <button
           type="button"
           onClick={() => router.back()}
