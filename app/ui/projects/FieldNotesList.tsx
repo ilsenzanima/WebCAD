@@ -225,9 +225,21 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
           </span>
         )}
         {item.item_type === "foto" && (
-          <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>
-            [Immagine allegata]
-          </span>
+          <div className="mt-2">
+            {item.value_text ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img 
+                src={item.value_text} 
+                alt="Foto" 
+                className="max-h-48 w-auto rounded-lg object-contain"
+                style={{ border: "1px solid hsl(220 20% 18%)" }}
+              />
+            ) : (
+              <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>
+                [Nessuna immagine]
+              </span>
+            )}
+          </div>
         )}
       </span>
     </div>

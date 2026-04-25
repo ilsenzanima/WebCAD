@@ -512,15 +512,51 @@ function ItemRow({
 
       {/* Foto */}
       {isFoto && (
-        <div className="flex-1">
-          <input
-            type="file"
-            accept="image/*"
-            className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500 cursor-pointer"
-          />
-          <div className="mt-1 text-[10px] text-slate-500">
-            Il caricamento verrà implementato prossimamente
-          </div>
+        <div className="flex-1 space-y-2">
+          {item.value_text ? (
+            <div className="relative inline-block">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img 
+                src={item.value_text} 
+                alt="Anteprima foto" 
+                className="h-24 w-auto rounded-lg object-cover" 
+                style={{ border: "1px solid hsl(220 20% 22%)" }}
+              />
+              <button
+                type="button"
+                onClick={() => onChange({ value_text: undefined })}
+                className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs shadow-md transition-all"
+                style={{ background: "hsl(0 70% 50%)", color: "white" }}
+                title="Rimuovi foto"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (evt) => {
+                    onChange({ value_text: evt.target?.result as string });
+                  };
+                  reader.readAsDataURL(file);
+                }}
+                className="w-full text-xs file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:text-white file:cursor-pointer cursor-pointer"
+                style={{ color: "hsl(215 15% 50%)" }}
+              />
+              {/* Iniettiamo un po' di stile per il bottone file via classi inline dato che non possiamo usare tailwind complex qui */}
+              <style dangerouslySetInnerHTML={{__html: `
+                input[type=file]::file-selector-button {
+                  background: linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%));
+                }
+              `}} />
+            </div>
+          )}
         </div>
       )}
 
