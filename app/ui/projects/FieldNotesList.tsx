@@ -185,9 +185,66 @@ function NoteRow({ note }: { note: FieldNote }) {
 // ============================================
 
 function ItemDetail({ item }: { item: FieldNoteItem }) {
+  const [isZoomed, setIsZoomed] = useState(false);
+  
   const label = ITEM_LABELS[item.item_type];
   const isMeasure = (MEASURE_TYPES as readonly string[]).includes(item.item_type);
   const isBool = (BOOL_TYPES as readonly string[]).includes(item.item_type);
+
+  // Layout diverso se è una foto
+  if (item.item_type === "foto") {
+    return (
+      <div
+        className="flex flex-col gap-2 px-3 py-2.5 rounded-xl"
+        style={{
+          background: "hsl(220 32% 10%)",
+          border: "1px solid hsl(220 20% 18%)",
+        }}
+      >
+        <span className="text-xs font-medium" style={{ color: "hsl(215 20% 55%)" }}>
+          {label}
+        </span>
+        {item.value_text ? (
+          <>
+            {/* Thumbnail */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img 
+              src={item.value_text} 
+              alt="Foto allegata" 
+              onClick={() => setIsZoomed(true)}
+              className="h-16 w-16 object-cover rounded-lg cursor-pointer border hover:opacity-80 transition-opacity"
+              style={{ borderColor: "hsl(220 20% 24%)" }}
+            />
+
+            {/* Modal Zoom */}
+            {isZoomed && (
+              <div 
+                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+                onClick={() => setIsZoomed(false)}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img 
+                  src={item.value_text} 
+                  alt="Foto ingrandita" 
+                  className="max-w-full max-h-full rounded-lg object-contain animate-scale-in"
+                />
+                <button 
+                  className="absolute top-4 right-4 w-10 h-10 bg-white/10 text-white rounded-full flex items-center justify-center text-xl hover:bg-white/20 transition-all"
+                  onClick={() => setIsZoomed(false)}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>
+            [Nessuna immagine]
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -223,23 +280,6 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
           <span className="text-xs leading-relaxed" style={{ color: "hsl(210 30% 80%)" }}>
             {item.value_text ?? "—"}
           </span>
-        )}
-        {item.item_type === "foto" && (
-          <div className="mt-2">
-            {item.value_text ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img 
-                src={item.value_text} 
-                alt="Foto" 
-                className="max-h-48 w-auto rounded-lg object-contain"
-                style={{ border: "1px solid hsl(220 20% 18%)" }}
-              />
-            ) : (
-              <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>
-                [Nessuna immagine]
-              </span>
-            )}
-          </div>
         )}
       </span>
     </div>
