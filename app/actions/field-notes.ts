@@ -142,7 +142,7 @@ export async function getFieldNote(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("field_notes")
-    .select("id, project_id, note_number, type_id, type_name, created_at, updated_at, field_note_items(*)")
+    .select("id, project_id, level_id, note_number, type_id, type_name, created_at, updated_at, field_note_items(*)")
     .eq("id", noteId)
     .single();
 

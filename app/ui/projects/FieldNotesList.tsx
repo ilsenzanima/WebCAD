@@ -152,17 +152,27 @@ function NoteRow({ note }: { note: FieldNote }) {
 
           {/* Azioni: Modifica */}
           <div className="pt-4 flex justify-end">
-             <a
-               href={`/projects/${note.project_id}/levels/${note.level_id}/appunti/${note.id}/modifica`}
-               className="px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
-               style={{
-                 background: "hsl(220 26% 20%)",
-                 color: "hsl(210 40% 90%)",
-                 border: "1px solid hsl(220 20% 26%)",
-               }}
-             >
-               ✏️ Modifica Appunto
-             </a>
+            {note.level_id ? (
+               <a
+                 href={`/projects/${note.project_id}/levels/${note.level_id}/appunti/${note.id}/modifica`}
+                 className="px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
+                 style={{
+                   background: "hsl(220 26% 20%)",
+                   color: "hsl(210 40% 90%)",
+                   border: "1px solid hsl(220 20% 26%)",
+                 }}
+               >
+                 ✏️ Modifica Appunto
+               </a>
+            ) : (
+               <span 
+                 className="px-4 py-2 rounded-xl text-xs font-semibold"
+                 style={{ color: "hsl(215 15% 45%)", background: "hsl(220 26% 14%)" }}
+                 title="Questo appunto non è associato a un livello (vecchio formato) e non può essere modificato qui."
+               >
+                 ⚠️ Modifica non disponibile
+               </span>
+            )}
           </div>
         </div>
       )}
