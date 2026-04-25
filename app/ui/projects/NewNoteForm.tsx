@@ -179,25 +179,31 @@ export default function NewNoteForm({ projectId, levelId, noteTypes }: Props) {
         </label>
 
         <div className="relative">
-          <input
-            ref={typeInputRef}
-            type="text"
-            value={typeFilter}
-            onChange={(e) => {
-              setTypeFilter(e.target.value);
-              setSelectedType(null);
-              setShowTypeDropdown(true);
-            }}
-            onFocus={() => setShowTypeDropdown(true)}
-            onBlur={() => setTimeout(() => setShowTypeDropdown(false), 180)}
-            placeholder="Cerca o digita un tipo..."
-            className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
-            style={{
-              background: "hsl(220 32% 10%)",
-              border: "1px solid hsl(220 20% 22%)",
-              color: "hsl(210 40% 96%)",
-            }}
-          />
+          {/* Wrapper per evitare crash con estensioni di autofill */}
+          <div className="w-full relative">
+            <input
+              ref={typeInputRef}
+              type="text"
+              value={typeFilter}
+              onChange={(e) => {
+                setTypeFilter(e.target.value);
+                setSelectedType(null);
+                setShowTypeDropdown(true);
+              }}
+              onFocus={() => setShowTypeDropdown(true)}
+              onBlur={() => setTimeout(() => setShowTypeDropdown(false), 180)}
+              placeholder="Cerca o digita un tipo..."
+              className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
+              style={{
+                background: "hsl(220 32% 10%)",
+                border: "1px solid hsl(220 20% 22%)",
+                color: "hsl(210 40% 96%)",
+              }}
+              data-1p-ignore
+              autoComplete="off"
+              name={`typeFilter_${Date.now()}`}
+            />
+          </div>
 
           {showTypeDropdown && (
             <div
@@ -399,22 +405,27 @@ function ItemRow({
       {/* Input misura */}
       {isMeasure && (
         <div className="flex flex-1 items-center gap-2">
-          <input
-            type="number"
-            min="0"
-            step="0.1"
-            value={item.value_num ?? ""}
-            onChange={(e) =>
-              onChange({ value_num: e.target.value ? parseFloat(e.target.value) : null })
-            }
-            placeholder="0"
-            className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
-            style={{
-              background: "hsl(220 26% 14%)",
-              border: "1px solid hsl(220 20% 22%)",
-              color: "hsl(210 40% 96%)",
-            }}
-          />
+          {/* Wrapper per evitare crash con estensioni */}
+          <div className="flex-1 relative">
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={item.value_num ?? ""}
+              onChange={(e) =>
+                onChange({ value_num: e.target.value ? parseFloat(e.target.value) : null })
+              }
+              placeholder="0"
+              className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+              style={{
+                background: "hsl(220 26% 14%)",
+                border: "1px solid hsl(220 20% 22%)",
+                color: "hsl(210 40% 96%)",
+              }}
+              data-1p-ignore
+              autoComplete="off"
+            />
+          </div>
           <select
             value={item.value_unit ?? "cm"}
             onChange={(e) =>
