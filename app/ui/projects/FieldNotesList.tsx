@@ -14,6 +14,7 @@ const ITEM_LABELS: Record<FieldNoteItem["item_type"], string> = {
   lana_interna: "Lana interna",
   dipintura: "Dipintura",
   nota: "Nota",
+  foto: "Foto",
 };
 
 const MEASURE_TYPES = ["base", "altezza", "spessore"] as const;
@@ -126,29 +127,43 @@ function NoteRow({ note }: { note: FieldNote }) {
       </button>
 
       {/* ── Dettaglio (espandibile) ── */}
-      {open && hasItems && (
+      {open && (
         <div
           className="px-4 pb-4 sm:px-5 sm:pb-5 space-y-2"
           style={{ borderTop: "1px solid hsl(220 20% 18%)" }}
         >
-          <div className="pt-3 space-y-2">
-            {items
-              .slice()
-              .sort((a, b) => a.sort_order - b.sort_order)
-              .map((item) => (
-                <ItemDetail key={item.id} item={item} />
-              ))}
-          </div>
-        </div>
-      )}
+          {hasItems ? (
+            <div className="pt-3 space-y-2">
+              {items
+                .slice()
+                .sort((a, b) => a.sort_order - b.sort_order)
+                .map((item) => (
+                  <ItemDetail key={item.id} item={item} />
+                ))}
+            </div>
+          ) : (
+            <div
+              className="text-xs italic pt-3"
+              style={{ color: "hsl(215 15% 40%)" }}
+            >
+              Nessuna voce aggiunta per questo appunto.
+            </div>
+          )}
 
-      {/* Messaggio se nessuna voce ma aperto */}
-      {open && !hasItems && (
-        <div
-          className="px-5 pb-4 text-xs italic"
-          style={{ color: "hsl(215 15% 40%)", borderTop: "1px solid hsl(220 20% 18%)", paddingTop: "0.75rem" }}
-        >
-          Nessuna voce aggiunta per questo appunto.
+          {/* Azioni: Modifica */}
+          <div className="pt-4 flex justify-end">
+             <a
+               href={`/projects/${note.project_id}/levels/${note.level_id}/appunti/${note.id}/modifica`}
+               className="px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
+               style={{
+                 background: "hsl(220 26% 20%)",
+                 color: "hsl(210 40% 90%)",
+                 border: "1px solid hsl(220 20% 26%)",
+               }}
+             >
+               ✏️ Modifica Appunto
+             </a>
+          </div>
         </div>
       )}
     </li>
@@ -197,6 +212,11 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
         {item.item_type === "nota" && (
           <span className="text-xs leading-relaxed" style={{ color: "hsl(210 30% 80%)" }}>
             {item.value_text ?? "—"}
+          </span>
+        )}
+        {item.item_type === "foto" && (
+          <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>
+            [Immagine allegata]
           </span>
         )}
       </span>

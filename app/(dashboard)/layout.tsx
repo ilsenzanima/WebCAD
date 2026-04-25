@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import LogoutButton from "@/app/ui/dashboard/LogoutButton";
+import MobileMenu from "@/app/ui/dashboard/MobileMenu";
 import type { ReactNode } from "react";
 
 const navItems = [
@@ -182,13 +183,7 @@ export default async function DashboardLayout({
                 <span className="text-[10px] font-medium leading-none">{item.label}</span>
               </Link>
             ))}
-            <LogoutButton
-              className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all"
-              style={{ color: "hsl(215 20% 55%)" }}
-            >
-              <span className="text-xl leading-none">↩</span>
-              <span className="text-[10px] font-medium leading-none">Esci</span>
-            </LogoutButton>
+            <MobileMenu />
           </nav>
         </div>
       </div>

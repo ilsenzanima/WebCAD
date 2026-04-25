@@ -15,7 +15,7 @@ export interface FieldNoteType {
 
 export interface FieldNoteItem {
   id: string;
-  item_type: "base" | "altezza" | "spessore" | "lana_interna" | "dipintura" | "nota";
+  item_type: "base" | "altezza" | "spessore" | "lana_interna" | "dipintura" | "nota" | "foto";
   value_num?: number | null;
   value_unit?: string | null;
   value_bool?: boolean | null;
@@ -148,6 +148,62 @@ export async function getFieldNote(
 
   if (error) return null;
   return data;
+}
+
+export async function updateFieldNote(noteId: string, formData: {
+  project_id: string;
+  level_id: string;
+  type_id?: string | null;
+  type_name?: string | null;
+  items: Array<{
+    item_type: FieldNoteItem["item_type"];
+    value_num?: number | null;
+    value_unit?: string | null;
+    value_bool?: boolean | null;
+    value_text?: string | null;
+    sort_order: number;
+  }>;
+}): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autenticato" };
+
+  // Aggiorna l'appunto
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: noteError } = await (supabase as any)
+    .from("field_notes")
+    .update({
+      type_id: formData.type_id ?? null,
+      type_name: formData.type_name ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", noteId)
+    .eq("user_id", user.id);
+
+  if (noteError) return { success: false, error: noteError.message };
+
+  // Sostituisci tutte le voci (cancella vecchie, inserisci nuove)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any)
+    .from("field_note_items")
+    .delete()
+    .eq("note_id", noteId);
+
+  if (formData.items.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: itemsError } = await (supabase as any)
+      .from("field_note_items")
+      .insert(
+        formData.items.map((item) => ({
+          note_id: noteId,
+          ...item,
+        }))
+      );
+    if (itemsError) return { success: false, error: itemsError.message };
+  }
+
+  revalidatePath(`/projects/${formData.project_id}/levels/${formData.level_id}/appunti`);
+  return { success: true };
 }
 
 export async function createFieldNote(formData: {

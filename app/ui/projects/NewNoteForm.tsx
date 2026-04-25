@@ -4,9 +4,11 @@ import { useState, useEffect, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   createFieldNote,
+  updateFieldNote,
   createNoteType,
   type FieldNoteType,
   type FieldNoteItem,
+  type FieldNote,
 } from "@/app/actions/field-notes";
 
 // ============================================
@@ -31,6 +33,7 @@ const ITEM_LABELS: Record<ItemType, string> = {
   lana_interna: "Lana interna",
   dipintura: "Dipintura",
   nota: "Nota libera",
+  foto: "Foto",
 };
 
 const MEASURE_TYPES: ItemType[] = ["base", "altezza", "spessore"];
@@ -44,19 +47,22 @@ interface Props {
   projectId: string;
   levelId: string;       // livello (piano 2D/3D) a cui appartiene l'appunto
   noteTypes: FieldNoteType[];
+  initialNote?: FieldNote; // se presente, siamo in modalità modifica
 }
 
 // ============================================
 // Componente principale
 // ============================================
 
-export default function NewNoteForm({ projectId, levelId, noteTypes }: Props) {
+export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   // --- Tipo appunto ---
-  const [typeFilter, setTypeFilter] = useState("");
-  const [selectedType, setSelectedType] = useState<FieldNoteType | null>(null);
+  const [typeFilter, setTypeFilter] = useState(initialNote?.type_name ?? "");
+  const [selectedType, setSelectedType] = useState<FieldNoteType | null>(
+    initialNote?.type_id ? noteTypes.find((t) => t.id === initialNote.type_id) ?? null : null
+  );
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [allTypes, setAllTypes] = useState<FieldNoteType[]>(noteTypes);
   const [isCreatingType, setIsCreatingType] = useState(false);
@@ -68,7 +74,16 @@ export default function NewNoteForm({ projectId, levelId, noteTypes }: Props) {
   const noMatch = typeFilter.trim() !== "" && filteredTypes.length === 0;
 
   // --- Voci misure ---
-  const [items, setItems] = useState<NoteItemDraft[]>([]);
+  const [items, setItems] = useState<NoteItemDraft[]>(
+    initialNote?.field_note_items?.map((item) => ({
+      id: item.id,
+      item_type: item.item_type,
+      value_num: item.value_num,
+      value_unit: (item.value_unit as "mm" | "cm") ?? "cm",
+      value_bool: item.value_bool ?? true,
+      value_text: item.value_text ?? undefined,
+    })) ?? []
+  );
   const [showItemDropdown, setShowItemDropdown] = useState(false);
 
   // --- Errori ---
@@ -130,7 +145,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes }: Props) {
   function handleSave() {
     setError(null);
     startTransition(async () => {
-      const res = await createFieldNote({
+      const payload = {
         project_id: projectId,
         level_id: levelId,
         type_id: selectedType?.id ?? null,
@@ -143,7 +158,11 @@ export default function NewNoteForm({ projectId, levelId, noteTypes }: Props) {
           value_text: item.item_type === "nota" ? (item.value_text ?? null) : null,
           sort_order: idx,
         })),
-      });
+      };
+
+      const res = initialNote 
+        ? await updateFieldNote(initialNote.id, payload)
+        : await createFieldNote(payload);
 
       if (res.success) {
         router.push(`/projects/${projectId}/levels/${levelId}/appunti`);
@@ -235,7 +254,14 @@ export default function NewNoteForm({ projectId, levelId, noteTypes }: Props) {
                   </p>
                   <button
                     type="button"
-                    onMouseDown={handleQuickCreateType}
+                    onMouseDown={(e) => {
+                      e.preventDefault(); // Previene onBlur dell'input!
+                      handleQuickCreateType();
+                    }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleQuickCreateType();
+                    }}
                     disabled={isCreatingType}
                     className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
                     style={{
@@ -385,6 +411,7 @@ function ItemRow({
   const isMeasure = MEASURE_TYPES.includes(item.item_type);
   const isBool = BOOL_TYPES.includes(item.item_type);
   const isNote = item.item_type === "nota";
+  const isFoto = item.item_type === "foto";
 
   return (
     <div
@@ -481,6 +508,20 @@ function ItemRow({
             color: "hsl(210 40% 96%)",
           }}
         />
+      )}
+
+      {/* Foto */}
+      {isFoto && (
+        <div className="flex-1">
+          <input
+            type="file"
+            accept="image/*"
+            className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500 cursor-pointer"
+          />
+          <div className="mt-1 text-[10px] text-slate-500">
+            Il caricamento verrà implementato prossimamente
+          </div>
+        </div>
       )}
 
       {/* Rimuovi */}

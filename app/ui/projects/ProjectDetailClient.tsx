@@ -227,7 +227,7 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
         <div className="relative group">
            <button
             disabled={isPending}
-            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white transition-all duration-200 disabled:opacity-50 whitespace-nowrap"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white transition-all duration-200 disabled:opacity-50 whitespace-nowrap peer focus:outline-none"
             style={{
               background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
               boxShadow: "0 4px 16px hsl(220 90% 56% / 0.3)",
@@ -241,7 +241,7 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
           
           {/* Dropdown Menu */}
           <div 
-             className="absolute right-0 mt-2 w-48 rounded-xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top translate-y-1 group-hover:translate-y-0"
+             className="absolute right-0 mt-2 w-48 rounded-xl overflow-hidden opacity-0 invisible group-hover:opacity-100 group-hover:visible peer-focus:opacity-100 peer-focus:visible hover:opacity-100 hover:visible transition-all duration-200 transform origin-top translate-y-1 group-hover:translate-y-0 peer-focus:translate-y-0"
              style={{
                background: "hsl(220 26% 14%)",
                border: "1px solid hsl(220 20% 22%)",
