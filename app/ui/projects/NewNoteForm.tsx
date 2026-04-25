@@ -42,6 +42,7 @@ const BOOL_TYPES: ItemType[] = ["lana_interna", "dipintura"];
 
 interface Props {
   projectId: string;
+  levelId: string;       // livello (piano 2D/3D) a cui appartiene l'appunto
   noteTypes: FieldNoteType[];
 }
 
@@ -49,7 +50,7 @@ interface Props {
 // Componente principale
 // ============================================
 
-export default function NewNoteForm({ projectId, noteTypes }: Props) {
+export default function NewNoteForm({ projectId, levelId, noteTypes }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -131,6 +132,7 @@ export default function NewNoteForm({ projectId, noteTypes }: Props) {
     startTransition(async () => {
       const res = await createFieldNote({
         project_id: projectId,
+        level_id: levelId,
         type_id: selectedType?.id ?? null,
         type_name: selectedType?.name ?? null,
         items: items.map((item, idx) => ({
@@ -144,7 +146,7 @@ export default function NewNoteForm({ projectId, noteTypes }: Props) {
       });
 
       if (res.success) {
-        router.push(`/projects/${projectId}/appunti`);
+        router.push(`/projects/${projectId}/levels/${levelId}/appunti`);
       } else {
         setError(res.error ?? "Errore durante il salvataggio");
       }

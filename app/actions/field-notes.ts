@@ -26,6 +26,7 @@ export interface FieldNoteItem {
 export interface FieldNote {
   id: string;
   project_id: string;
+  level_id: string | null;
   note_number: number;
   type_id: string | null;
   type_name: string | null;
@@ -98,14 +99,35 @@ export async function deleteNoteType(
 // APPUNTI
 // ============================================
 
+/**
+ * Restituisce gli appunti di un LIVELLO specifico (piano 2D/3D).
+ */
 export async function getFieldNotes(
+  levelId: string
+): Promise<FieldNote[]> {
+  const supabase = await createClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("field_notes")
+    .select("id, project_id, level_id, note_number, type_id, type_name, created_at, updated_at, field_note_items(id, item_type, value_num, value_unit, value_bool, value_text, sort_order)")
+    .eq("level_id", levelId)
+    .order("note_number", { ascending: true });
+
+  if (error) return [];
+  return data ?? [];
+}
+
+/**
+ * Restituisce TUTTI gli appunti di un progetto (panoramica, tutti i livelli).
+ */
+export async function getAllProjectFieldNotes(
   projectId: string
 ): Promise<FieldNote[]> {
   const supabase = await createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("field_notes")
-    .select("id, project_id, note_number, type_id, type_name, created_at, updated_at, field_note_items(id, item_type, value_num, value_unit, value_bool, value_text, sort_order)")
+    .select("id, project_id, level_id, note_number, type_id, type_name, created_at, updated_at, field_note_items(id, item_type, value_num, value_unit, value_bool, value_text, sort_order)")
     .eq("project_id", projectId)
     .order("note_number", { ascending: true });
 
@@ -130,6 +152,7 @@ export async function getFieldNote(
 
 export async function createFieldNote(formData: {
   project_id: string;
+  level_id: string;          // livello (piano 2D/3D) obbligatorio
   type_id?: string | null;
   type_name?: string | null;
   items: Array<{
@@ -160,6 +183,7 @@ export async function createFieldNote(formData: {
     .from("field_notes")
     .insert({
       project_id: formData.project_id,
+      level_id: formData.level_id,
       user_id: user.id,
       note_number,
       type_id: formData.type_id ?? null,
@@ -184,7 +208,7 @@ export async function createFieldNote(formData: {
     if (itemsError) return { success: false, error: itemsError.message };
   }
 
-  revalidatePath(`/projects/${formData.project_id}/appunti`);
+  revalidatePath(`/projects/${formData.project_id}/levels/${formData.level_id}/appunti`);
   return { success: true, note };
 }
 

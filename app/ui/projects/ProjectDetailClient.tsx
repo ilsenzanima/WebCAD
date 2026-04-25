@@ -328,8 +328,8 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
                           📐 Editor
                         </Link>
                         <Link
-                          href={`/projects/${project.id}/appunti`}
-                          title="Appunti Cantiere"
+                          href={`/projects/${project.id}/levels/${draw.id}/appunti`}
+                          title="Appunti Cantiere di questo piano"
                           className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-150"
                           style={{
                             background: "hsl(220 32% 20%)",
