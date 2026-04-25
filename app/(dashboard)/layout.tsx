@@ -9,6 +9,10 @@ const navItems = [
   { href: "/catalog", icon: "📦", label: "Catalogo" },
 ];
 
+const bottomNavItems = [
+  { href: "/catalog/tipi-appunto", icon: "🏷️", label: "Tipi Appunto" },
+];
+
 /**
  * Layout principale della dashboard con sidebar.
  * Verifica la sessione server-side e reindirizza se non autenticato.
@@ -79,6 +83,25 @@ export default async function DashboardLayout({
               </Link>
             ))}
           </nav>
+
+          {/* Bottom Nav (prima del profilo) */}
+          <div className="px-3 pb-2 space-y-1" style={{ borderTop: "1px solid hsl(220 20% 16%)", paddingTop: "0.75rem" }}>
+            <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider"
+              style={{ color: "hsl(215 15% 40%)" }}>
+              Configurazione
+            </p>
+            {bottomNavItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
+                style={{ color: "hsl(215 20% 65%)" }}
+              >
+                <span className="text-base w-5 text-center">{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            ))}
+          </div>
 
           {/* User & Logout */}
           <div className="p-3 space-y-1" style={{ borderTop: "1px solid hsl(220 20% 16%)" }}>

@@ -285,22 +285,20 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
               {filteredDrawings.map((draw) => {
                 const gradient = avatarGradient(draw.id);
                 return (
-                  <Link
+                  <div
                     key={draw.id}
-                    // Adatteremo l'editor per ricevere levelId
-                    href={`/projects/${project.id}/editor`}
-                    className="relative block rounded-2xl p-5 hover:translate-y-[-2px] transition-all duration-200 group"
+                    className="relative rounded-2xl p-5 transition-all duration-200 group"
                     style={{
                       background: "hsl(220 26% 14%)",
                       border: "1px solid hsl(220 20% 20%)",
                     }}
                     onMouseEnter={e => {
-                      (e.currentTarget as HTMLAnchorElement).style.borderColor = "hsl(220 90% 56%)";
-                      (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)";
+                      (e.currentTarget as HTMLDivElement).style.borderColor = "hsl(220 90% 56%)";
+                      (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)";
                     }}
                     onMouseLeave={e => {
-                      (e.currentTarget as HTMLAnchorElement).style.borderColor = "hsl(220 20% 20%)";
-                      (e.currentTarget as HTMLAnchorElement).style.boxShadow = "none";
+                      (e.currentTarget as HTMLDivElement).style.borderColor = "hsl(220 20% 20%)";
+                      (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
                     }}
                   >
                      <div
@@ -313,13 +311,34 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
                       <div className="text-xs mt-1" style={{ color: "hsl(215 15% 45%)" }}>
                         Creato il {safeFormatDate(draw.created_at)}
                       </div>
-                      
-                      <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <span className="text-xs font-semibold px-2 py-1 rounded" style={{ background: "hsl(220 32% 20%)", color: "hsl(215 20% 65%)" }}>
-                           Apri
-                         </span>
+
+                      {/* Azioni: Editor + Appunti */}
+                      <div className="flex items-center gap-2 mt-4">
+                        <Link
+                          href={`/projects/${project.id}/editor`}
+                          title="Apri Editor 2D"
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-150"
+                          style={{
+                            background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+                            color: "white",
+                          }}
+                        >
+                          📐 Editor
+                        </Link>
+                        <Link
+                          href={`/projects/${project.id}/appunti`}
+                          title="Appunti Cantiere"
+                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-150"
+                          style={{
+                            background: "hsl(220 32% 20%)",
+                            color: "hsl(215 20% 75%)",
+                            border: "1px solid hsl(220 20% 26%)",
+                          }}
+                        >
+                          📋 Appunti
+                        </Link>
                       </div>
-                  </Link>
+                  </div>
                 );
               })}
            </div>
