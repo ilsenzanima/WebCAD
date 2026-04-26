@@ -8,13 +8,15 @@ interface Props {
 }
 
 const ITEM_LABELS: Record<FieldNoteItem["item_type"], string> = {
-  base: "Base",
-  altezza: "Altezza",
+  base: "Misura orizzontale",
+  altezza: "Misura verticale",
   spessore: "Spessore",
   lana_interna: "Lana interna",
   dipintura: "Dipintura",
   nota: "Nota",
   foto: "Foto",
+  dim_quadrata: "◻ Dimensioni",
+  dim_cubica: "⬛ Dim. cubiche",
 };
 
 const MEASURE_TYPES = ["base", "altezza", "spessore"] as const;
@@ -281,6 +283,16 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
             {item.value_text ?? "—"}
           </span>
         )}
+        {(item.item_type === "dim_quadrata" || item.item_type === "dim_cubica") && (() => {
+          try {
+            const cv = item.value_text ? JSON.parse(item.value_text) : {};
+            const u = cv.unit ?? "cm";
+            if (item.item_type === "dim_quadrata") {
+              return <span className="text-xs font-mono">{cv.b ?? "—"}{u} × {cv.h ?? "—"}{u}</span>;
+            }
+            return <span className="text-xs font-mono">{cv.b ?? "—"}{u} × {cv.h ?? "—"}{u} × {cv.d ?? "—"}{u}</span>;
+          } catch { return <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>—</span>; }
+        })()}
       </span>
     </div>
   );

@@ -15,11 +15,13 @@ export interface FieldNoteType {
 
 export interface FieldNoteItem {
   id: string;
-  item_type: "base" | "altezza" | "spessore" | "lana_interna" | "dipintura" | "nota" | "foto";
+  item_type: "base" | "altezza" | "spessore" | "lana_interna" | "dipintura" | "nota" | "foto" | "dim_quadrata" | "dim_cubica";
+  // misura singola (base, altezza, spessore)
   value_num?: number | null;
   value_unit?: string | null;
-  value_bool?: boolean | null;
+  // misure composite JSON: { b, h, d?, unit }
   value_text?: string | null;
+  value_bool?: boolean | null;
   sort_order: number;
 }
 

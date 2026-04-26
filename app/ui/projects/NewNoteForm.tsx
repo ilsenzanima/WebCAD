@@ -23,21 +23,33 @@ interface NoteItemDraft {
   value_num?: number | null;
   value_unit?: "mm" | "cm";
   value_bool?: boolean;
-  value_text?: string;
+  value_text?: string;       // nota/foto: testo/base64; composite: JSON
+  composite?: CompositeValue; // solo per dim_quadrata / dim_cubica (live, non salvato raw)
 }
 
 const ITEM_LABELS: Record<ItemType, string> = {
-  base: "Base",
-  altezza: "Altezza",
+  base: "Misura orizzontale",
+  altezza: "Misura verticale",
   spessore: "Spessore",
   lana_interna: "Lana interna",
   dipintura: "Dipintura",
   nota: "Nota libera",
   foto: "Foto",
+  dim_quadrata: "◻ Dimensioni quadrate",
+  dim_cubica: "⬛ Dimensioni cubiche",
 };
 
 const MEASURE_TYPES: ItemType[] = ["base", "altezza", "spessore"];
 const BOOL_TYPES: ItemType[] = ["lana_interna", "dipintura"];
+const COMPOSITE_TYPES: ItemType[] = ["dim_quadrata", "dim_cubica"];
+
+// Struttura JSON per misure composite
+interface CompositeValue {
+  b?: number | null;
+  h?: number | null;
+  d?: number | null;
+  unit: "mm" | "cm";
+}
 
 // ============================================
 // Props
@@ -75,14 +87,22 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
 
   // --- Voci misure ---
   const [items, setItems] = useState<NoteItemDraft[]>(
-    initialNote?.field_note_items?.map((item) => ({
-      id: item.id,
-      item_type: item.item_type,
-      value_num: item.value_num,
-      value_unit: (item.value_unit as "mm" | "cm") ?? "cm",
-      value_bool: item.value_bool ?? true,
-      value_text: item.value_text ?? undefined,
-    })) ?? []
+    initialNote?.field_note_items?.map((item) => {
+      const isComposite = item.item_type === "dim_quadrata" || item.item_type === "dim_cubica";
+      let composite: CompositeValue | undefined;
+      if (isComposite && item.value_text) {
+        try { composite = JSON.parse(item.value_text); } catch { composite = { unit: "cm" }; }
+      }
+      return {
+        id: item.id,
+        item_type: item.item_type,
+        value_num: item.value_num,
+        value_unit: (item.value_unit as "mm" | "cm") ?? "cm",
+        value_bool: item.value_bool ?? true,
+        value_text: isComposite ? undefined : (item.value_text ?? undefined),
+        composite,
+      };
+    }) ?? []
   );
   const [showItemDropdown, setShowItemDropdown] = useState(false);
 
@@ -123,6 +143,10 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
       item_type: itemType,
       value_unit: "cm",
       value_bool: true,
+      // per dimensioni composite inizializziamo subito il composite
+      composite: COMPOSITE_TYPES.includes(itemType)
+        ? { b: null, h: null, d: null, unit: "cm" }
+        : undefined,
     };
     setItems((prev) => [...prev, draft]);
     setShowItemDropdown(false);
@@ -155,7 +179,13 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
           value_num: MEASURE_TYPES.includes(item.item_type) ? (item.value_num ?? null) : null,
           value_unit: MEASURE_TYPES.includes(item.item_type) ? (item.value_unit ?? "cm") : null,
           value_bool: BOOL_TYPES.includes(item.item_type) ? (item.value_bool ?? true) : null,
-          value_text: (item.item_type === "nota" || item.item_type === "foto") ? (item.value_text ?? null) : null,
+          // nota e foto usano value_text; composite salvano JSON in value_text
+          value_text:
+            (item.item_type === "nota" || item.item_type === "foto")
+              ? (item.value_text ?? null)
+              : COMPOSITE_TYPES.includes(item.item_type)
+              ? JSON.stringify(item.composite ?? {})
+              : null,
           sort_order: idx,
         })),
       };
@@ -412,6 +442,64 @@ function ItemRow({
   const isBool = BOOL_TYPES.includes(item.item_type);
   const isNote = item.item_type === "nota";
   const isFoto = item.item_type === "foto";
+  const isComposite = COMPOSITE_TYPES.includes(item.item_type);
+  const isDim3D = item.item_type === "dim_cubica";
+
+  // Helper per aggiornare il composite
+  const updateComposite = (patch: Partial<CompositeValue>) => {
+    onChange({ composite: { ...{ unit: "cm" }, ...item.composite, ...patch } });
+  };
+
+  // Layout verticale per i tipi compositi (hanno più campi)
+  if (isComposite) {
+    const cv = item.composite ?? { unit: "cm" };
+    const unitSel = (
+      <select
+        value={cv.unit ?? "cm"}
+        onChange={(e) => updateComposite({ unit: e.target.value as "mm" | "cm" })}
+        className="px-2 py-2 rounded-lg text-sm outline-none cursor-pointer flex-shrink-0"
+        style={{ background: "hsl(220 26% 18%)", border: "1px solid hsl(220 20% 24%)", color: "hsl(210 40% 85%)" }}
+      >
+        <option value="mm">mm</option>
+        <option value="cm">cm</option>
+      </select>
+    );
+    const numInput = (placeholder: string, val: number | null | undefined, key: "b" | "h" | "d") => (
+      <div className="flex items-center gap-1.5 flex-1">
+        <span className="text-xs flex-shrink-0" style={{ color: "hsl(215 15% 45%)", minWidth: 16 }}>
+          {key === "b" ? "↔" : key === "h" ? "↕" : "↗"}
+        </span>
+        <input
+          type="number" min="0" step="0.1"
+          value={val ?? ""}
+          onChange={(e) => updateComposite({ [key]: e.target.value ? parseFloat(e.target.value) : null })}
+          placeholder={placeholder}
+          className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+          style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
+          data-1p-ignore autoComplete="off"
+        />
+      </div>
+    );
+    return (
+      <div className="p-4 rounded-xl space-y-3" style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 18%)" }}>
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium" style={{ color: "hsl(215 20% 65%)" }}>{label}</span>
+          <div className="flex items-center gap-2">
+            {unitSel}
+            <button type="button" onClick={onRemove}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-all"
+              style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
+              title="Rimuovi voce">✕</button>
+          </div>
+        </div>
+        <div className={`flex gap-2 ${isDim3D ? "flex-col sm:flex-row" : ""}`}>
+          {numInput("Larghezza", cv.b, "b")}
+          {numInput("Altezza", cv.h, "h")}
+          {isDim3D && numInput("Profondità", cv.d, "d")}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
