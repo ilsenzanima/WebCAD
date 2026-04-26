@@ -39,6 +39,7 @@ const ITEM_LABELS: Record<ItemType, string> = {
   dim_quadrata: "◻ Dimensioni quadrate",
   dim_cubica: "⬛ Dimensioni cubiche",
   posizione: "📍 Segna posizione",
+  materiale: "📦 Materiale",
 };
 
 const MEASURE_TYPES: ItemType[] = ["base", "altezza", "spessore"];
@@ -68,13 +69,15 @@ interface Props {
   nextNoteNumber?: number;
   /** Note già salvate del livello (per mostrare i punti esistenti) */
   levelNotes?: FieldNote[];
+  /** Catalogo dei materiali */
+  catalogMaterials?: any[];
 }
 
 // ============================================
 // Componente principale
 // ============================================
 
-export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote, planImageUrl, nextNoteNumber, levelNotes }: Props) {
+export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote, planImageUrl, nextNoteNumber, levelNotes, catalogMaterials = [] }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -450,6 +453,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                 item={item}
                 onChange={(changes) => updateItem(item.id, changes)}
                 onRemove={() => removeItem(item.id)}
+                catalogMaterials={catalogMaterials}
               />
             );
           })}
@@ -497,10 +501,12 @@ function ItemRow({
   item,
   onChange,
   onRemove,
+  catalogMaterials = [],
 }: {
   item: NoteItemDraft;
   onChange: (changes: Partial<NoteItemDraft>) => void;
   onRemove: () => void;
+  catalogMaterials?: any[];
 }) {
   const label = ITEM_LABELS[item.item_type];
   const isMeasure = MEASURE_TYPES.includes(item.item_type);
@@ -509,6 +515,7 @@ function ItemRow({
   const isFoto = item.item_type === "foto";
   const isComposite = COMPOSITE_TYPES.includes(item.item_type);
   const isDim3D = item.item_type === "dim_cubica";
+  const isMateriale = item.item_type === "materiale";
 
   // Helper per aggiornare il composite
   const updateComposite = (patch: Partial<CompositeValue>) => {
@@ -661,6 +668,27 @@ function ItemRow({
             color: "hsl(210 40% 96%)",
           }}
         />
+      )}
+
+      {/* Materiale */}
+      {isMateriale && (
+        <select
+          value={item.value_text ?? ""}
+          onChange={(e) => onChange({ value_text: e.target.value })}
+          className="flex-1 px-3 py-2 rounded-lg text-sm outline-none cursor-pointer"
+          style={{
+            background: "hsl(220 26% 14%)",
+            border: "1px solid hsl(220 20% 22%)",
+            color: "hsl(210 40% 96%)",
+          }}
+        >
+          <option value="">Seleziona un materiale...</option>
+          {catalogMaterials.map((mat) => (
+            <option key={mat.id} value={mat.name}>
+              {mat.name} {mat.sku ? `(${mat.sku})` : ""}
+            </option>
+          ))}
+        </select>
       )}
 
       {/* Foto */}

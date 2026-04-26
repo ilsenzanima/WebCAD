@@ -15,7 +15,7 @@ export interface FieldNoteType {
 
 export interface FieldNoteItem {
   id: string;
-  item_type: "base" | "altezza" | "spessore" | "lana_interna" | "dipintura" | "nota" | "foto" | "dim_quadrata" | "dim_cubica" | "posizione";
+  item_type: "base" | "altezza" | "spessore" | "lana_interna" | "dipintura" | "nota" | "foto" | "dim_quadrata" | "dim_cubica" | "posizione" | "materiale";
   // misura singola (base, altezza, spessore)
   value_num?: number | null;
   value_unit?: string | null;

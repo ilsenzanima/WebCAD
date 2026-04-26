@@ -75,11 +75,20 @@ export async function createMaterial(
 
   if (error) {
     console.error("Errore inserimento materiale:", error);
-    return { message: "Errore durante il salvataggio del materiale." };
+    return { message: `Errore durante il salvataggio: ${error.message}` };
   }
 
   revalidatePath("/catalog");
   redirect("/catalog");
+}
+
+export async function getMaterials() {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("materials")
+    .select("id, name, sku, unit_cost, unit")
+    .order("name");
+  return data || [];
 }
 
 export async function deleteMaterial(id: string) {

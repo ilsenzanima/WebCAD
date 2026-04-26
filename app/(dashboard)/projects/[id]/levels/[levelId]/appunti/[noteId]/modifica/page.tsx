@@ -37,11 +37,13 @@ export default async function EditFieldNotePage({
   if (!level) return notFound();
 
   const { getFieldNotes } = await import("@/app/actions/field-notes");
+  const { getMaterials } = await import("@/app/actions/materials");
 
-  const [noteTypes, note, levelNotes] = await Promise.all([
+  const [noteTypes, note, levelNotes, catalogMaterials] = await Promise.all([
     getNoteTypes(),
     getFieldNote(noteId),
     getFieldNotes(levelId),
+    getMaterials(),
   ]);
 
   if (!note || note.level_id !== levelId) return notFound();
@@ -99,6 +101,7 @@ export default async function EditFieldNotePage({
           initialNote={note}
           planImageUrl={level.plan_image_url}
           levelNotes={levelNotes}
+          catalogMaterials={catalogMaterials}
         />
       </div>
     </div>

@@ -36,9 +36,11 @@ export default async function LevelNewFieldNotePage({
 
   if (!level) return notFound();
 
-  const [noteTypes, levelNotes] = await Promise.all([
+  const { getMaterials } = await import("@/app/actions/materials");
+  const [noteTypes, levelNotes, catalogMaterials] = await Promise.all([
     getNoteTypes(),
     getFieldNotes(levelId),
+    getMaterials(),
   ]);
 
   // Calcola il prossimo numero di nota (massimo + 1 tra le note del livello, o 1 se nessuna)
@@ -117,6 +119,7 @@ export default async function LevelNewFieldNotePage({
           planImageUrl={level.plan_image_url}
           nextNoteNumber={nextNoteNumber}
           levelNotes={levelNotes}
+          catalogMaterials={catalogMaterials}
         />
       </div>
     </div>

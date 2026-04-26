@@ -19,6 +19,7 @@ const ITEM_LABELS: Record<FieldNoteItem["item_type"], string> = {
   dim_quadrata: "◻ Dimensioni",
   dim_cubica: "⬛ Dim. cubiche",
   posizione: "📍 Posizione",
+  materiale: "📦 Materiale",
 };
 
 const MEASURE_TYPES = ["base", "altezza", "spessore"] as const;
@@ -216,7 +217,7 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
               src={item.value_text} 
               alt="Foto allegata" 
               onClick={() => setIsZoomed(true)}
-              className="h-16 w-16 object-cover rounded-lg cursor-pointer border hover:opacity-80 transition-opacity"
+              className="h-20 w-20 object-cover rounded-lg cursor-pointer border hover:opacity-80 transition-opacity self-start flex-shrink-0"
               style={{ borderColor: "hsl(220 20% 24%)" }}
             />
 
@@ -270,6 +271,11 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
         )}
         {item.item_type === "nota" && (
           <span className="text-xs leading-relaxed" style={{ color: "hsl(210 30% 80%)" }}>
+            {item.value_text ?? "—"}
+          </span>
+        )}
+        {item.item_type === "materiale" && (
+          <span className="text-xs font-semibold" style={{ color: "hsl(210 40% 90%)" }}>
             {item.value_text ?? "—"}
           </span>
         )}

@@ -56,7 +56,7 @@ export default function PlanimetriaMappa({
   const isSelecting = !!onPositionSelected;
 
   // Renderizza i punti
-  const renderPunti = (isModal: boolean = false) => (
+  const renderPunti = (isModal: boolean = false, scale: number = 1) => (
     <>
       {punti.map((p) => (
         <div
@@ -65,7 +65,8 @@ export default function PlanimetriaMappa({
           style={{
             left: `${p.x}%`,
             top: `${p.y}%`,
-            transform: "translate(-50%, -50%)",
+            transform: `translate(-50%, -50%) scale(${1 / scale})`,
+            transformOrigin: "center center",
           }}
         >
           <div
@@ -84,7 +85,8 @@ export default function PlanimetriaMappa({
           style={{
             left: `${pendingPosition.x}%`,
             top: `${pendingPosition.y}%`,
-            transform: "translate(-50%, -50%)",
+            transform: `translate(-50%, -50%) scale(${1 / scale})`,
+            transformOrigin: "center center",
           }}
         >
           <div
@@ -142,22 +144,24 @@ export default function PlanimetriaMappa({
           doubleClick={{ disabled: true }}
           panning={{ velocityDisabled: true }}
         >
-          <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
-            <div 
-              ref={containerRef}
-              className="relative w-full flex items-center justify-center" 
-              onClick={handleClick}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={planImageUrl}
-                alt="Planimetria"
-                className="w-full h-full object-contain"
-                draggable={false}
-              />
-              {renderPunti()}
-            </div>
-          </TransformComponent>
+          {(utils) => (
+            <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+              <div 
+                ref={containerRef}
+                className="relative w-full flex items-center justify-center" 
+                onClick={handleClick}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={planImageUrl}
+                  alt="Planimetria"
+                  className="w-full h-full object-contain"
+                  draggable={false}
+                />
+                {renderPunti(false, utils.state.scale)}
+              </div>
+            </TransformComponent>
+          )}
         </TransformWrapper>
 
         {isSelecting && (
@@ -213,18 +217,20 @@ export default function PlanimetriaMappa({
               centerOnInit
               wheel={{ step: 0.1 }}
             >
-              <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
-                <div className="relative flex items-center justify-center w-full h-full">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={planImageUrl}
-                    alt="Planimetria ingrandita"
-                    className="max-w-full max-h-full object-contain"
-                    draggable={false}
-                  />
-                  {renderPunti(true)}
-                </div>
-              </TransformComponent>
+              {(utils) => (
+                <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+                  <div className="relative flex items-center justify-center w-full h-full">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={planImageUrl}
+                      alt="Planimetria ingrandita"
+                      className="max-w-full max-h-full object-contain"
+                      draggable={false}
+                    />
+                    {renderPunti(true, utils.state.scale)}
+                  </div>
+                </TransformComponent>
+              )}
             </TransformWrapper>
           </div>
 
