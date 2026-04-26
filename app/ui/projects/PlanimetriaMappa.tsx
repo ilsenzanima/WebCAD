@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import type { FieldNote } from "@/app/actions/field-notes";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 interface Punto {
   noteNumber: number;
@@ -10,19 +11,13 @@ interface Punto {
 }
 
 interface Props {
-  /** Data URL della planimetria (plan_image_url del livello) */
   planImageUrl: string;
-  /** Note del livello — da queste estraiamo le posizioni già salvate */
   notes: FieldNote[];
-  /** Se fornito, il prossimo numero di nota da posizionare (modalità selezione) */
   onPositionSelected?: (x: number, y: number) => void;
-  /** Numero della nota corrente da mostrare come "in attesa di conferma" */
   pendingNoteNumber?: number | null;
-  /** Posizione in attesa di conferma */
   pendingPosition?: { x: number; y: number } | null;
 }
 
-/** Estrae i punti posizione da tutte le note del livello */
 function estraiPunti(notes: FieldNote[]): Punto[] {
   const punti: Punto[] = [];
   for (const note of notes) {
@@ -34,7 +29,7 @@ function estraiPunti(notes: FieldNote[]): Punto[] {
           if (typeof x === "number" && typeof y === "number") {
             punti.push({ noteNumber: note.note_number, x, y });
           }
-        } catch { /* ignora JSON malformato */ }
+        } catch { /* ignora */ }
       }
     }
   }
@@ -54,6 +49,49 @@ export default function PlanimetriaMappa({
   const punti = estraiPunti(notes);
   const isSelecting = !!onPositionSelected;
 
+  // Renderizza i punti
+  const renderPunti = (isModal: boolean = false) => (
+    <>
+      {punti.map((p) => (
+        <div
+          key={`${p.noteNumber}-${p.x}-${p.y}`}
+          className="absolute flex items-center justify-center pointer-events-none"
+          style={{
+            left: `${p.x}%`,
+            top: `${p.y}%`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <div
+            className={`rounded-full flex items-center justify-center font-bold text-white shadow-lg border-2 border-white ${isModal ? 'w-8 h-8 text-xs' : 'w-6 h-6 text-[10px]'}`}
+            style={{
+              background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+            }}
+          >
+            {p.noteNumber}
+          </div>
+        </div>
+      ))}
+      {pendingPosition && (
+        <div
+          className="absolute flex items-center justify-center pointer-events-none"
+          style={{
+            left: `${pendingPosition.x}%`,
+            top: `${pendingPosition.y}%`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <div
+            className={`rounded-full flex items-center justify-center font-bold text-white shadow-lg border-2 border-yellow-300 animate-pulse ${isModal ? 'w-8 h-8 text-xs' : 'w-6 h-6 text-[10px]'}`}
+            style={{ background: "hsl(40 100% 50%)" }}
+          >
+            {pendingNoteNumber ?? "?"}
+          </div>
+        </div>
+      )}
+    </>
+  );
+
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!isSelecting) return;
@@ -65,92 +103,74 @@ export default function PlanimetriaMappa({
     [isSelecting, onPositionSelected]
   );
 
+  // Blocca lo scroll del body quando il modal è aperto
+  useEffect(() => {
+    if (zoomed) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [zoomed]);
+
   return (
     <>
-      {/* ─── Mappa principale ─── */}
+      {/* ─── Mappa in pagina (con TransformWrapper per Zoom) ─── */}
       <div
-        ref={containerRef}
-        className="relative w-full rounded-xl overflow-hidden select-none"
+        className="relative w-full rounded-xl overflow-hidden select-none bg-black border"
         style={{
           cursor: isSelecting ? "crosshair" : "default",
-          aspectRatio: "16/9",
-          background: "hsl(220 26% 8%)",
-          border: `1px solid ${isSelecting ? "hsl(220 90% 56%)" : "hsl(220 20% 18%)"}`,
-          maxHeight: "320px",
+          height: isSelecting ? "50vh" : "auto", // Più alta se in selezione
+          maxHeight: isSelecting ? "none" : "320px",
+          borderColor: isSelecting ? "hsl(220 90% 56%)" : "hsl(220 20% 18%)",
         }}
-        onClick={handleClick}
       >
-        {/* Planimetria */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={planImageUrl}
-          alt="Planimetria"
-          className="w-full h-full object-contain"
-          draggable={false}
-        />
+        <TransformWrapper
+          initialScale={1}
+          minScale={0.8}
+          maxScale={5}
+          disabled={!isSelecting && !zoomed} // Disabilita lo zoom inline se non è in selezione per non rubare lo scroll di pagina
+          wheel={{ step: 0.1 }}
+          doubleClick={{ disabled: true }}
+          panning={{ velocityDisabled: true }}
+        >
+          <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+            <div 
+              ref={containerRef}
+              className="relative w-full flex items-center justify-center" 
+              onClick={handleClick}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={planImageUrl}
+                alt="Planimetria"
+                className="w-full h-full object-contain"
+                draggable={false}
+              />
+              {renderPunti()}
+            </div>
+          </TransformComponent>
+        </TransformWrapper>
 
-        {/* Istruzione durante la selezione */}
         {isSelecting && (
-          <div
-            className="absolute top-2 left-1/2 -translate-x-1/2 text-xs font-semibold px-3 py-1.5 rounded-full"
-            style={{
-              background: "hsl(220 90% 56% / 0.85)",
-              color: "white",
-              pointerEvents: "none",
-            }}
-          >
-            Tocca o clicca per segnare la posizione
-          </div>
-        )}
-
-        {/* Punti salvati */}
-        {punti.map((p) => (
-          <div
-            key={`${p.noteNumber}-${p.x}-${p.y}`}
-            className="absolute flex items-center justify-center"
-            style={{
-              left: `${p.x}%`,
-              top: `${p.y}%`,
-              transform: "translate(-50%, -50%)",
-              pointerEvents: "none",
-            }}
-          >
-            <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-lg border-2 border-white"
-              style={{
-                background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-              }}
-            >
-              {p.noteNumber}
+           <div className="absolute top-2 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 pointer-events-none">
+            <div className="text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg"
+                 style={{ background: "hsl(220 90% 56%)", color: "white" }}>
+              Tocca o clicca per posizionare il punto
             </div>
-          </div>
-        ))}
-
-        {/* Punto in attesa (posizione selezionata ma non ancora salvata) */}
-        {pendingPosition && (
-          <div
-            className="absolute flex items-center justify-center"
-            style={{
-              left: `${pendingPosition.x}%`,
-              top: `${pendingPosition.y}%`,
-              transform: "translate(-50%, -50%)",
-              pointerEvents: "none",
-            }}
-          >
-            <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-lg border-2 border-yellow-300 animate-pulse"
-              style={{ background: "hsl(40 100% 50%)" }}
-            >
-              {pendingNoteNumber ?? "?"}
+            <div className="text-[10px] uppercase font-bold px-2 py-1 rounded-full shadow-md"
+                 style={{ background: "black", color: "hsl(220 20% 70%)" }}>
+              (Pinch per ingrandire)
             </div>
           </div>
         )}
 
-        {/* Pulsante zoom */}
         {!isSelecting && (
           <button
-            onClick={(e) => { e.stopPropagation(); setZoomed(true); }}
-            className="absolute bottom-2 right-2 w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all"
+            onClick={() => setZoomed(true)}
+            className="absolute bottom-2 right-2 w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all"
             style={{
               background: "hsl(220 26% 14% / 0.85)",
               border: "1px solid hsl(220 20% 22%)",
@@ -163,58 +183,52 @@ export default function PlanimetriaMappa({
         )}
       </div>
 
-      {/* ─── Modal zoom ─── */}
-      {zoomed && (
+      {/* ─── Modal zoom schermo intero (se non in selezione inline) ─── */}
+      {zoomed && !isSelecting && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4"
-          onClick={() => setZoomed(false)}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-0 sm:p-4 backdrop-blur-sm"
         >
-          <div
-            className="relative w-full max-w-4xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              className="relative w-full rounded-2xl overflow-hidden"
-              style={{
-                background: "hsl(220 26% 8%)",
-                border: "1px solid hsl(220 20% 20%)",
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={planImageUrl}
-                alt="Planimetria ingrandita"
-                className="w-full h-auto object-contain max-h-[80vh]"
-              />
-              {/* Punti nella versione zoom */}
-              {punti.map((p) => (
-                <div
-                  key={`z-${p.noteNumber}-${p.x}-${p.y}`}
-                  className="absolute flex items-center justify-center"
-                  style={{
-                    left: `${p.x}%`,
-                    top: `${p.y}%`,
-                    transform: "translate(-50%, -50%)",
-                  }}
-                >
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-xl border-2 border-white"
-                    style={{
-                      background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-                    }}
-                  >
-                    {p.noteNumber}
-                  </div>
-                </div>
-              ))}
-            </div>
+          {/* Header */}
+          <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-20 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+            <span className="text-white text-sm font-medium drop-shadow-md">Planimetria Livello</span>
             <button
               onClick={() => setZoomed(false)}
-              className="absolute top-3 right-3 w-10 h-10 rounded-full flex items-center justify-center text-white text-lg transition-all"
-              style={{ background: "hsl(220 26% 20% / 0.9)" }}
+              className="w-10 h-10 bg-white/10 text-white rounded-full flex items-center justify-center text-xl hover:bg-white/20 transition-all border border-white/20 backdrop-blur-md shadow-xl pointer-events-auto"
             >
               ✕
             </button>
+          </div>
+
+          <div className="w-full h-full overflow-hidden flex items-center justify-center cursor-grab active:cursor-grabbing">
+            <TransformWrapper
+              initialScale={1}
+              minScale={0.5}
+              maxScale={6}
+              centerOnInit
+              wheel={{ step: 0.1 }}
+            >
+              <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+                <div className="relative flex items-center justify-center w-full h-full">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={planImageUrl}
+                    alt="Planimetria ingrandita"
+                    className="max-w-full max-h-full object-contain"
+                    draggable={false}
+                  />
+                  {renderPunti(true)}
+                </div>
+              </TransformComponent>
+            </TransformWrapper>
+          </div>
+
+          {/* Istruzioni bottom */}
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+            <div className="bg-black/50 backdrop-blur-md border border-white/10 rounded-full px-4 py-2 flex items-center gap-4 shadow-xl">
+              <span className="text-[10px] text-white/70 uppercase font-semibold tracking-wider">
+                Usa due dita o rotellina per lo zoom
+              </span>
+            </div>
           </div>
         </div>
       )}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { FieldNote, FieldNoteItem } from "@/app/actions/field-notes";
+import ImageViewerModal from "./ImageViewerModal";
 
 interface Props {
   notes: FieldNote[];
@@ -219,25 +220,13 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
               style={{ borderColor: "hsl(220 20% 24%)" }}
             />
 
-            {/* Modal Zoom */}
+            {/* Modal Zoom Avanzato */}
             {isZoomed && (
-              <div 
-                className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
-                onClick={() => setIsZoomed(false)}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img 
-                  src={item.value_text} 
-                  alt="Foto ingrandita" 
-                  className="max-w-full max-h-full rounded-lg object-contain animate-scale-in"
-                />
-                <button 
-                  className="absolute top-4 right-4 w-10 h-10 bg-white/10 text-white rounded-full flex items-center justify-center text-xl hover:bg-white/20 transition-all"
-                  onClick={() => setIsZoomed(false)}
-                >
-                  ✕
-                </button>
-              </div>
+              <ImageViewerModal
+                imageUrl={item.value_text}
+                onClose={() => setIsZoomed(false)}
+                title="Foto Appunto"
+              />
             )}
           </>
         ) : (
