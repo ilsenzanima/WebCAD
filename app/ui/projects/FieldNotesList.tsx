@@ -17,6 +17,7 @@ const ITEM_LABELS: Record<FieldNoteItem["item_type"], string> = {
   foto: "Foto",
   dim_quadrata: "◻ Dimensioni",
   dim_cubica: "⬛ Dim. cubiche",
+  posizione: "📍 Posizione",
 };
 
 const MEASURE_TYPES = ["base", "altezza", "spessore"] as const;
@@ -283,6 +284,19 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
             {item.value_text ?? "—"}
           </span>
         )}
+        {item.item_type === "posizione" && (() => {
+          try {
+            const { x, y } = item.value_text ? JSON.parse(item.value_text) : {};
+            if (typeof x === "number" && typeof y === "number") {
+              return (
+                <span className="text-xs font-mono" style={{ color: "hsl(220 90% 70%)" }}>
+                  x:{x}% y:{y}%
+                </span>
+              );
+            }
+          } catch { /* noop */ }
+          return <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>—</span>;
+        })()}
         {(item.item_type === "dim_quadrata" || item.item_type === "dim_cubica") && (() => {
           try {
             const cv = item.value_text ? JSON.parse(item.value_text) : {};

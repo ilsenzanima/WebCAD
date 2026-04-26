@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { getNoteTypes } from "@/app/actions/field-notes";
+import { getNoteTypes, getFieldNotes } from "@/app/actions/field-notes";
 import LevelNewNoteForm from "@/app/ui/projects/LevelNewNoteForm";
 
 export default async function LevelNewFieldNotePage({
@@ -29,14 +29,22 @@ export default async function LevelNewFieldNotePage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: level } = await (supabase as any)
     .from("levels")
-    .select("id, name")
+    .select("id, name, plan_image_url")
     .eq("id", levelId)
     .eq("project_id", id)
-    .single() as { data: { id: string; name: string } | null };
+    .single() as { data: { id: string; name: string; plan_image_url: string | null } | null };
 
   if (!level) return notFound();
 
-  const noteTypes = await getNoteTypes();
+  const [noteTypes, levelNotes] = await Promise.all([
+    getNoteTypes(),
+    getFieldNotes(levelId),
+  ]);
+
+  // Calcola il prossimo numero di nota (massimo + 1 tra le note del livello, o 1 se nessuna)
+  const nextNoteNumber = levelNotes.length > 0
+    ? Math.max(...levelNotes.map((n) => n.note_number)) + 1
+    : 1;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto w-full animate-fade-in pb-4">
@@ -106,6 +114,9 @@ export default async function LevelNewFieldNotePage({
           projectId={id}
           levelId={levelId}
           noteTypes={noteTypes}
+          planImageUrl={level.plan_image_url}
+          nextNoteNumber={nextNoteNumber}
+          levelNotes={levelNotes}
         />
       </div>
     </div>

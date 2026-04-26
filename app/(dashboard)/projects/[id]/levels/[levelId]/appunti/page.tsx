@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { getFieldNotes } from "@/app/actions/field-notes";
 import FieldNotesList from "@/app/ui/projects/FieldNotesList";
+import PlanimetriaMappa from "@/app/ui/projects/PlanimetriaMappa";
 
 export default async function LevelFieldNotesPage({
   params,
@@ -27,21 +28,45 @@ export default async function LevelFieldNotesPage({
 
   if (!project) return notFound();
 
-  // Fetch livello
+  // Fetch livello (inclusa planimetria)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: level } = await (supabase as any)
     .from("levels")
-    .select("id, name, elevation_z")
+    .select("id, name, elevation_z, plan_image_url")
     .eq("id", levelId)
     .eq("project_id", id)
-    .single() as { data: { id: string; name: string; elevation_z: number } | null };
+    .single() as { data: { id: string; name: string; elevation_z: number; plan_image_url: string | null } | null };
 
   if (!level) return notFound();
 
   const notes = await getFieldNotes(levelId);
+  const planImageUrl = level.plan_image_url;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto w-full animate-fade-in pb-4">
+
+      {/* ── Planimetria sticky (solo se disponibile) ───────── */}
+      {planImageUrl && (
+        <div
+          className="sticky top-0 z-20 px-4 sm:px-8 py-3"
+          style={{
+            background: "hsl(222 47% 6% / 0.95)",
+            borderBottom: "1px solid hsl(220 20% 14%)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "hsl(215 15% 45%)" }}>
+              🗺 Planimetria — {level.name}
+            </span>
+            <span className="text-xs" style={{ color: "hsl(215 15% 35%)" }}>
+              · {notes.length} punt{notes.length === 1 ? "o" : "i"} segnati
+            </span>
+          </div>
+          <PlanimetriaMappa planImageUrl={planImageUrl} notes={notes} />
+        </div>
+      )}
+
       {/* ── Header ───────────────────────────── */}
       <div className="px-4 sm:px-8 py-4 sm:py-6 space-y-3 sm:space-y-4">
         {/* Breadcrumb */}
@@ -118,6 +143,19 @@ export default async function LevelFieldNotesPage({
 
       {/* ── Lista Appunti ───────────────────────── */}
       <div className="px-4 sm:px-8 py-4 sm:py-6">
+        {!planImageUrl && (
+          <div
+            className="mb-4 px-4 py-3 rounded-xl text-xs flex items-center gap-2"
+            style={{
+              background: "hsl(220 26% 14%)",
+              border: "1px dashed hsl(220 20% 24%)",
+              color: "hsl(215 15% 45%)",
+            }}
+          >
+            <span>🗺</span>
+            <span>Nessuna planimetria caricata. Importa un&apos;immagine o PDF nell&apos;editor per abilitare &quot;Segna posizione&quot; sulle note.</span>
+          </div>
+        )}
         <FieldNotesList notes={notes} />
       </div>
     </div>

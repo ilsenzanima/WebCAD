@@ -10,6 +10,7 @@ import {
   type FieldNoteItem,
   type FieldNote,
 } from "@/app/actions/field-notes";
+import PlanimetriaMappa from "./PlanimetriaMappa";
 
 // ============================================
 // Tipi interni
@@ -37,6 +38,7 @@ const ITEM_LABELS: Record<ItemType, string> = {
   foto: "Foto",
   dim_quadrata: "◻ Dimensioni quadrate",
   dim_cubica: "⬛ Dimensioni cubiche",
+  posizione: "📍 Segna posizione",
 };
 
 const MEASURE_TYPES: ItemType[] = ["base", "altezza", "spessore"];
@@ -60,13 +62,19 @@ interface Props {
   levelId: string;       // livello (piano 2D/3D) a cui appartiene l'appunto
   noteTypes: FieldNoteType[];
   initialNote?: FieldNote; // se presente, siamo in modalità modifica
+  /** URL della planimetria del livello (per Segna Posizione) */
+  planImageUrl?: string | null;
+  /** Numero appunto corrente (per il marker "in attesa") */
+  nextNoteNumber?: number;
+  /** Note già salvate del livello (per mostrare i punti esistenti) */
+  levelNotes?: FieldNote[];
 }
 
 // ============================================
 // Componente principale
 // ============================================
 
-export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote }: Props) {
+export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote, planImageUrl, nextNoteNumber, levelNotes }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -105,6 +113,9 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
     }) ?? []
   );
   const [showItemDropdown, setShowItemDropdown] = useState(false);
+
+  // --- Posizione in selezione (apre la mappa) ---
+  const [posizionePickingId, setPosizionePickingId] = useState<string | null>(null);
 
   // --- Errori ---
   const [error, setError] = useState<string | null>(null);
@@ -179,9 +190,9 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
           value_num: MEASURE_TYPES.includes(item.item_type) ? (item.value_num ?? null) : null,
           value_unit: MEASURE_TYPES.includes(item.item_type) ? (item.value_unit ?? "cm") : null,
           value_bool: BOOL_TYPES.includes(item.item_type) ? (item.value_bool ?? true) : null,
-          // nota e foto usano value_text; composite salvano JSON in value_text
+          // nota, foto e posizione usano value_text; composite salvano JSON in value_text
           value_text:
-            (item.item_type === "nota" || item.item_type === "foto")
+            (item.item_type === "nota" || item.item_type === "foto" || item.item_type === "posizione")
               ? (item.value_text ?? null)
               : COMPOSITE_TYPES.includes(item.item_type)
               ? JSON.stringify(item.composite ?? {})
@@ -380,14 +391,68 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         )}
 
         <div className="space-y-3">
-          {items.map((item) => (
-            <ItemRow
-              key={item.id}
-              item={item}
-              onChange={(changes) => updateItem(item.id, changes)}
-              onRemove={() => removeItem(item.id)}
-            />
-          ))}
+          {items.map((item) => {
+            if (item.item_type === "posizione") {
+              // UI posizione inline: mostra il valore già scelto o il picker
+              const hasPos = !!item.value_text;
+              let posLabel = "Nessuna posizione selezionata";
+              if (hasPos) {
+                try {
+                  const { x, y } = JSON.parse(item.value_text!);
+                  posLabel = `x:${x}% y:${y}%`;
+                } catch { /* noop */ }
+              }
+              return (
+                <div key={item.id} className="rounded-xl overflow-hidden" style={{ border: "1px solid hsl(220 20% 18%)", background: "hsl(220 32% 10%)" }}>
+                  <div className="flex items-center gap-3 p-3">
+                    <span className="text-sm font-medium" style={{ color: "hsl(215 20% 65%)" }}>📍 Posizione</span>
+                    <span className="flex-1 text-xs font-mono" style={{ color: hasPos ? "hsl(220 90% 70%)" : "hsl(215 15% 40%)" }}>{posLabel}</span>
+                    {hasPos && (
+                      <button type="button" onClick={() => updateItem(item.id, { value_text: undefined })}
+                        className="text-xs px-2 py-1 rounded-lg transition-all"
+                        style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
+                      >Rimuovi</button>
+                    )}
+                    {planImageUrl ? (
+                      <button type="button" onClick={() => setPosizionePickingId(posizionePickingId === item.id ? null : item.id)}
+                        className="text-xs px-2 py-1 rounded-lg transition-all"
+                        style={{ background: "hsl(220 90% 56% / 0.15)", color: "hsl(220 90% 70%)", border: "1px solid hsl(220 90% 56% / 0.3)" }}
+                      >{posizionePickingId === item.id ? "Chiudi mappa" : (hasPos ? "Modifica" : "Seleziona")}</button>
+                    ) : (
+                      <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>Nessuna planimetria caricata</span>
+                    )}
+                    <button type="button" onClick={() => { removeItem(item.id); setPosizionePickingId(null); }}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-all flex-shrink-0"
+                      style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
+                      title="Rimuovi voce">✕</button>
+                  </div>
+                  {/* Mappa picker inline */}
+                  {posizionePickingId === item.id && planImageUrl && (
+                    <div className="px-3 pb-3">
+                      <PlanimetriaMappa
+                        planImageUrl={planImageUrl}
+                        notes={levelNotes ?? []}
+                        pendingNoteNumber={nextNoteNumber ?? (initialNote?.note_number)}
+                        pendingPosition={hasPos ? (() => { try { return JSON.parse(item.value_text!); } catch { return null; } })() : null}
+                        onPositionSelected={(x, y) => {
+                          updateItem(item.id, { value_text: JSON.stringify({ x, y }) });
+                          setPosizionePickingId(null);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            return (
+              <ItemRow
+                key={item.id}
+                item={item}
+                onChange={(changes) => updateItem(item.id, changes)}
+                onRemove={() => removeItem(item.id)}
+              />
+            );
+          })}
         </div>
       </div>
 
