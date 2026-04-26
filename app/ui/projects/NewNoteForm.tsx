@@ -155,7 +155,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
           value_num: MEASURE_TYPES.includes(item.item_type) ? (item.value_num ?? null) : null,
           value_unit: MEASURE_TYPES.includes(item.item_type) ? (item.value_unit ?? "cm") : null,
           value_bool: BOOL_TYPES.includes(item.item_type) ? (item.value_bool ?? true) : null,
-          value_text: item.item_type === "nota" ? (item.value_text ?? null) : null,
+          value_text: (item.item_type === "nota" || item.item_type === "foto") ? (item.value_text ?? null) : null,
           sort_order: idx,
         })),
       };
