@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 interface Props {
@@ -11,15 +12,20 @@ interface Props {
 }
 
 export default function ImageViewerModal({ imageUrl, onClose, title, children }: Props) {
+  const [mounted, setMounted] = useState(false);
+
   // Prevent scrolling on body when modal is open
   useEffect(() => {
+    setMounted(true);
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = "";
     };
   }, []);
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm"
       onClick={onClose}
@@ -75,6 +81,7 @@ export default function ImageViewerModal({ imageUrl, onClose, title, children }:
           </TransformWrapper>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

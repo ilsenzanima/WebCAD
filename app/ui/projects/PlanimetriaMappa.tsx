@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import type { FieldNote } from "@/app/actions/field-notes";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
@@ -44,6 +45,11 @@ export default function PlanimetriaMappa({
   pendingPosition,
 }: Props) {
   const [zoomed, setZoomed] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const punti = estraiPunti(notes);
@@ -184,7 +190,7 @@ export default function PlanimetriaMappa({
       </div>
 
       {/* ─── Modal zoom schermo intero (se non in selezione inline) ─── */}
-      {zoomed && !isSelecting && (
+      {zoomed && !isSelecting && mounted && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-0 sm:p-4 backdrop-blur-sm"
         >
@@ -230,7 +236,8 @@ export default function PlanimetriaMappa({
               </span>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

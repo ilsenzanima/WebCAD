@@ -29,15 +29,20 @@ export default async function EditFieldNotePage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: level } = await (supabase as any)
     .from("levels")
-    .select("id, name")
+    .select("id, name, plan_image_url")
     .eq("id", levelId)
     .eq("project_id", id)
-    .single() as { data: { id: string; name: string } | null };
+    .single() as { data: { id: string; name: string; plan_image_url: string | null } | null };
 
   if (!level) return notFound();
 
-  const noteTypes = await getNoteTypes();
-  const note = await getFieldNote(noteId);
+  const { getFieldNotes } = await import("@/app/actions/field-notes");
+
+  const [noteTypes, note, levelNotes] = await Promise.all([
+    getNoteTypes(),
+    getFieldNote(noteId),
+    getFieldNotes(levelId),
+  ]);
 
   if (!note || note.level_id !== levelId) return notFound();
 
@@ -92,6 +97,8 @@ export default async function EditFieldNotePage({
           levelId={levelId}
           noteTypes={noteTypes}
           initialNote={note}
+          planImageUrl={level.plan_image_url}
+          levelNotes={levelNotes}
         />
       </div>
     </div>
