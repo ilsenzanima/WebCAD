@@ -85,18 +85,17 @@ export default function Toolbar() {
 
       // Persistenza Immagine (Solo Upload su Storage, il DB verrà aggiornato al Salva manuale)
       if (activeLevelId && activeProjectId) {
-         startTransition(async () => {
-            try {
-              const blob = dataUrlToBlob(dataUrl);
-              const fileName = `plans/${activeLevelId}_${Date.now()}.jpg`;
-              const publicUrl = await uploadToStorage(blob, fileName);
-              
-              // Impostiamo l'URL nello store (che ora segnerà come dirty)
-              setBackgroundImage(publicUrl);
-            } catch (err) {
-              console.error("Errore upload planimetria:", err);
-            }
-         });
+        try {
+          const blob = dataUrlToBlob(dataUrl);
+          const fileName = `plans/${activeLevelId}_${Date.now()}.jpg`;
+          const publicUrl = await uploadToStorage(blob, fileName);
+          
+          // Impostiamo l'URL nello store (che ora segnerà come dirty)
+          setBackgroundImage(publicUrl);
+        } catch (err) {
+          console.error("Errore upload planimetria:", err);
+          alert("Errore durante il caricamento della planimetria nel cloud.");
+        }
       }
 
     } catch (error) {
@@ -150,17 +149,16 @@ export default function Toolbar() {
 
       // Persistenza (Solo Upload)
       if (activeLevelId && activeProjectId) {
-         startTransition(async () => {
-            try {
-              const fileName = `plans/${activeLevelId}_${Date.now()}_${file.name}`;
-              const publicUrl = await uploadToStorage(file, fileName);
-              
-              // Aggiorniamo lo store locale
-              setBackgroundImage(publicUrl);
-            } catch (err) {
-              console.error("Errore upload immagine:", err);
-            }
-         });
+        try {
+          const fileName = `plans/${activeLevelId}_${Date.now()}_${file.name}`;
+          const publicUrl = await uploadToStorage(file, fileName);
+          
+          // Aggiorniamo lo store locale
+          setBackgroundImage(publicUrl);
+        } catch (err) {
+          console.error("Errore upload immagine:", err);
+          alert("Errore durante il caricamento dell'immagine nel cloud.");
+        }
       }
 
       setIsProcessingFile(false);

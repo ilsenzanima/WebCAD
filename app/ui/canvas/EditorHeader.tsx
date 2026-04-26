@@ -49,7 +49,8 @@ export default function EditorHeader({
     hasUnsavedChanges,
     setHasUnsavedChanges,
     backgroundImageDataUrl,
-    calibrationRatio
+    calibrationRatio,
+    isProcessingFile
   } = useCanvasStore();
 
   useEffect(() => {
@@ -145,6 +146,12 @@ export default function EditorHeader({
   const handleSaveAll = () => {
     if (!activeLevelId || !activeProjectId) return;
     
+    const isDataUrl = backgroundImageDataUrl?.startsWith("data:");
+    if (isDataUrl) {
+      alert("Il caricamento dell'immagine nel cloud è ancora in corso. Attendi qualche secondo e riprova.");
+      return;
+    }
+
     startTransition(async () => {
       const res = await updateLevelMetadata(activeLevelId, activeProjectId, {
         plan_image_url: backgroundImageDataUrl ?? undefined,
@@ -269,7 +276,7 @@ export default function EditorHeader({
           <button
             id="btn-editor-save"
             onClick={handleSaveAll}
-            disabled={isPending || (!hasUnsavedChanges && !isRenamingProject)}
+            disabled={isPending || isProcessingFile || (!hasUnsavedChanges && !isRenamingProject)}
             className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             style={{ 
               background: hasUnsavedChanges 
