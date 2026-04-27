@@ -10,7 +10,13 @@ type MaterialsInsertClient = {
   from: (table: "materials") => {
     insert: (
       values: Database["public"]["Tables"]["materials"]["Insert"]
-    ) => Promise<{ error: { message: string } | null }>;
+    ) => {
+      select: (
+        columns: "id"
+      ) => {
+        single: () => Promise<{ data: { id: string } | null; error: { message: string } | null }>;
+      };
+    };
   };
 };
 
@@ -88,17 +94,21 @@ export async function createMaterial(
   };
 
   const materialsInsertClient = supabase as unknown as MaterialsInsertClient;
-  const { error } = await materialsInsertClient
+  const { data: insertedMaterial, error } = await materialsInsertClient
     .from("materials")
-    .insert(materialToInsert);
+    .insert(materialToInsert)
+    .select("id")
+    .single();
 
-  if (error) {
+  if (error || !insertedMaterial) {
     console.error("Errore inserimento materiale:", error);
-    return { message: `Errore durante il salvataggio: ${error.message}` };
+    return {
+      message: `Errore durante il salvataggio: ${error?.message ?? "materiale non creato"}`,
+    };
   }
 
   revalidatePath("/catalog");
-  redirect("/catalog?saved=1");
+  redirect(`/catalog?saved=1&id=${insertedMaterial.id}`);
 }
 
 export async function getMaterials() {
