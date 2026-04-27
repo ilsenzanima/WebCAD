@@ -32,7 +32,7 @@ export default async function ProjectDetailPage({
   // Fetch levels (disegni) of this project
   const { data: levels, error: levelsError } = await supabase
     .from("levels")
-    .select("id, name, elevation_z, created_at")
+    .select("id, project_id, name, elevation_z, plan_image_url, scale_ratio, created_at")
     .eq("project_id", id)
     .order("elevation_z", { ascending: true });
 

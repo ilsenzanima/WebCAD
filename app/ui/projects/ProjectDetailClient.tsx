@@ -22,8 +22,11 @@ interface Project {
 
 interface Drawing {
   id: string;
+  project_id: string;
   name: string;
   elevation_z: number;
+  plan_image_url?: string | null;
+  scale_ratio?: number | null;
   created_at: string;
 }
 
