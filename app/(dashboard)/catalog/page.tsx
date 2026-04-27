@@ -1,19 +1,45 @@
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { deleteMaterial } from "@/app/actions/materials";
+import type { Database } from "@/lib/types/database";
+import SaveToast from "@/app/ui/dashboard/SaveToast";
 
-export default async function CatalogPage() {
+type CatalogPageProps = {
+  searchParams?: Promise<{
+    saved?: string;
+  }>;
+};
+
+export default async function CatalogPage({ searchParams }: CatalogPageProps) {
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const showSavedToast = resolvedSearchParams.saved === "1";
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return (
+      <div className="p-8">
+        <p className="text-sm" style={{ color: "hsl(0 84% 75%)" }}>
+          Devi essere autenticato per visualizzare il catalogo materiali.
+        </p>
+      </div>
+    );
+  }
+
   const { data, error } = await supabase
     .from("materials")
     .select("*")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
   // Add cast to help TypeScript since Supabase TS generation isn't strictly mapping here
-  const materials = data as any[] | null;
+  const materials = data as Database["public"]["Tables"]["materials"]["Row"][] | null;
 
   return (
     <div className="p-8 space-y-8 animate-fade-in">
+      {showSavedToast && <SaveToast message="Materiale salvato con successo" />}
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -42,7 +68,14 @@ export default async function CatalogPage() {
           border: "1px solid hsl(220 20% 20%)",
         }}
       >
-        {(!materials || materials.length === 0) ? (
+        {error ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <h3 className="text-white font-medium mb-2">Errore caricamento materiali</h3>
+            <p className="text-sm text-center max-w-xs" style={{ color: "hsl(215 15% 50%)" }}>
+              {error.message}
+            </p>
+          </div>
+        ) : (!materials || materials.length === 0) ? (
           <div className="flex flex-col items-center justify-center py-16">
             <div className="text-5xl mb-4">📦</div>
             <h3 className="text-white font-medium mb-2">Nessun materiale</h3>

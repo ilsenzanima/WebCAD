@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/types/database";
 
 export type MaterialFormState =
   | {
@@ -12,14 +13,19 @@ export type MaterialFormState =
     }
   | undefined;
 
+const optionalNumberField = z.preprocess(
+  (value) => (value === "" || value === null || value === undefined ? null : value),
+  z.coerce.number().optional().nullable()
+);
+
 const MaterialSchema = z.object({
   name: z.string().min(2, "Il nome deve avere almeno 2 caratteri.").trim(),
   description: z.string().optional(),
   category: z.string().min(1, "La categoria è obbligatoria."),
-  length_mm: z.coerce.number().optional().nullable(),
-  width_mm: z.coerce.number().optional().nullable(),
-  thickness_mm: z.coerce.number().optional().nullable(),
-  unit_cost: z.coerce.number().optional().nullable(),
+  length_mm: optionalNumberField,
+  width_mm: optionalNumberField,
+  thickness_mm: optionalNumberField,
+  unit_cost: optionalNumberField,
   unit: z.string().min(1, "L'unità di misura è obbligatoria."),
   supplier: z.string().optional(),
   sku: z.string().optional(),
@@ -57,21 +63,23 @@ export async function createMaterial(
     return { errors: parsed.error.flatten().fieldErrors };
   }
 
-  const { error } = await supabase.from("materials").insert({
+  const materialToInsert: Database["public"]["Tables"]["materials"]["Insert"] = {
     user_id: user.id,
     name: parsed.data.name,
     description: parsed.data.description || null,
     category: parsed.data.category,
-    length_mm: parsed.data.length_mm || null,
-    width_mm: parsed.data.width_mm || null,
-    thickness_mm: parsed.data.thickness_mm || null,
-    unit_cost: parsed.data.unit_cost || null,
+    length_mm: parsed.data.length_mm ?? null,
+    width_mm: parsed.data.width_mm ?? null,
+    thickness_mm: parsed.data.thickness_mm ?? null,
+    unit_cost: parsed.data.unit_cost ?? null,
     unit: parsed.data.unit,
     supplier: parsed.data.supplier || null,
     sku: parsed.data.sku || null,
     stock_qty: 0,
     is_active: true,
-  } as any);
+  };
+
+  const { error } = await supabase.from("materials").insert(materialToInsert);
 
   if (error) {
     console.error("Errore inserimento materiale:", error);
@@ -79,21 +87,41 @@ export async function createMaterial(
   }
 
   revalidatePath("/catalog");
-  redirect("/catalog");
+  redirect("/catalog?saved=1");
 }
 
 export async function getMaterials() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return [];
+
   const { data } = await supabase
     .from("materials")
     .select("id, name, sku, unit_cost, unit")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
     .order("name");
   return data || [];
 }
 
 export async function deleteMaterial(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("materials").delete().eq("id", id);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("Utente non autenticato.");
+  }
+
+  const { error } = await supabase
+    .from("materials")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
   if (error) {
     console.error("Errore cancellazione materiale:", error);
     throw new Error("Impossibile eliminare il materiale.");
