@@ -6,6 +6,14 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/types/database";
 
+type MaterialsInsertClient = {
+  from: (table: "materials") => {
+    insert: (
+      values: Database["public"]["Tables"]["materials"]["Insert"]
+    ) => Promise<{ error: { message: string } | null }>;
+  };
+};
+
 export type MaterialFormState =
   | {
       errors?: Record<string, string[]>;
@@ -79,7 +87,10 @@ export async function createMaterial(
     is_active: true,
   };
 
-  const { error } = await supabase.from("materials").insert(materialToInsert);
+  const materialsInsertClient = supabase as unknown as MaterialsInsertClient;
+  const { error } = await materialsInsertClient
+    .from("materials")
+    .insert(materialToInsert);
 
   if (error) {
     console.error("Errore inserimento materiale:", error);
