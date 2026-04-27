@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { addLevel, updateProjectNotes, renameProject } from "@/app/actions/projects";
 import ProjectActionsMenu from "@/app/ui/dashboard/ProjectActionsMenu";
+import CreateDrawingModal from "./CreateDrawingModal";
+import LevelCard from "./LevelCard";
 
 // ============================================
 // Tipizzazione e utility
@@ -86,6 +88,10 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState(project.name);
 
+  // Stato per modale "Crea/Copia Disegno"
+  const [isCreatingLevel, setIsCreatingLevel] = useState(false);
+  const [levelTemplate, setLevelTemplate] = useState<{name: string, elevation_z: number} | null>(null);
+
   // Filtraggio disegni
   const filteredDrawings = drawings.filter(d => 
     d.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -95,18 +101,18 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
   // Handlers
   // ============================================
 
-  const handleCreate2D = () => {
-    startTransition(async () => {
-      const res = await addLevel(project.id);
-      if (res.success && res.level) {
-        // Redirige automaticamente al nuovo livello creato nell'editor
-        // Passando `levelId` tramite URL se supportato dall'editor (lo adatteremo in futuro).
-        // Per ora andiamo all'editor che carica il default o l'ultimo
-        router.push(`/projects/${project.id}/editor`);
-      } else {
-        alert("Errore nella creazione del disegno 2D.");
-      }
-    });
+  const handleCreateLevelSubmit = async (name: string, elevationZ: number) => {
+    const res = await addLevel(project.id, name, elevationZ);
+    if (!res.success) {
+      alert("Errore nella creazione del disegno 2D.");
+    }
+    setIsCreatingLevel(false);
+    setLevelTemplate(null);
+  };
+
+  const openCreateModal = (template?: {name: string, elevation_z: number}) => {
+    setLevelTemplate(template || null);
+    setIsCreatingLevel(true);
   };
 
   const handleSaveTitle = () => {
@@ -250,7 +256,7 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
              }}
           >
             <button 
-              onClick={handleCreate2D}
+              onClick={() => openCreateModal()}
               disabled={isPending}
               className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors flex items-center justify-between group/item"
               style={{ color: "hsl(210 40% 96%)" }}
@@ -287,60 +293,13 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
               {filteredDrawings.map((draw) => {
                 const gradient = avatarGradient(draw.id);
                 return (
-                  <div
-                    key={draw.id}
-                    className="relative rounded-2xl p-5 transition-all duration-200 group"
-                    style={{
-                      background: "hsl(220 26% 14%)",
-                      border: "1px solid hsl(220 20% 20%)",
-                    }}
-                    onMouseEnter={e => {
-                      (e.currentTarget as HTMLDivElement).style.borderColor = "hsl(220 90% 56%)";
-                      (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 24px rgba(0,0,0,0.3)";
-                    }}
-                    onMouseLeave={e => {
-                      (e.currentTarget as HTMLDivElement).style.borderColor = "hsl(220 20% 20%)";
-                      (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
-                    }}
-                  >
-                     <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-white mb-3"
-                        style={{ background: gradient }}
-                      >
-                        📐
-                      </div>
-                      <div className="text-white font-semibold text-sm truncate">{draw.name}</div>
-                      <div className="text-xs mt-1" style={{ color: "hsl(215 15% 45%)" }}>
-                        Creato il {safeFormatDate(draw.created_at)}
-                      </div>
-
-                      {/* Azioni: Editor + Appunti */}
-                      <div className="flex items-center gap-2 mt-4">
-                        <Link
-                          href={`/projects/${project.id}/editor`}
-                          title="Apri Editor 2D"
-                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-150"
-                          style={{
-                            background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-                            color: "white",
-                          }}
-                        >
-                          📐 Editor
-                        </Link>
-                        <Link
-                          href={`/projects/${project.id}/levels/${draw.id}/appunti`}
-                          title="Appunti Cantiere di questo piano"
-                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all duration-150"
-                          style={{
-                            background: "hsl(220 32% 20%)",
-                            color: "hsl(215 20% 75%)",
-                            border: "1px solid hsl(220 20% 26%)",
-                          }}
-                        >
-                          📋 Appunti
-                        </Link>
-                      </div>
-                  </div>
+                  <LevelCard 
+                    key={draw.id} 
+                    drawing={draw as any} 
+                    gradient={gradient} 
+                    onAddLevel={(ref) => openCreateModal({ name: `${ref.name} (Copia)`, elevation_z: ref.elevation_z + 1 })}
+                    formatDate={safeFormatDate}
+                  />
                 );
               })}
            </div>
@@ -382,6 +341,16 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
          </div>
       </div>
       
+      {isCreatingLevel && (
+        <CreateDrawingModal
+          title="Crea Nuovo Disegno"
+          submitLabel="Crea"
+          defaultName={levelTemplate?.name || "Nuovo Piano"}
+          defaultElevation={levelTemplate?.elevation_z || 0}
+          onClose={() => setIsCreatingLevel(false)}
+          onSubmit={handleCreateLevelSubmit}
+        />
+      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { useCanvasStore } from "@/lib/stores/canvas-store";
 import {
   renameProject,
   addLevel,
-  renameLevel,
+  updateLevelDetails,
   deleteLevel,
   updateLevelMetadata,
 } from "@/app/actions/projects";
@@ -112,8 +112,9 @@ export default function EditorHeader({
       setRenamingLevelId(null);
       return;
     }
+    const currentLevel = levels.find(l => l.id === levelId);
     startTransition(async () => {
-      await renameLevel(levelId, projectId, trimmed);
+      await updateLevelDetails(levelId, projectId, trimmed, currentLevel?.elevation_z || 0);
       updateLevel(levelId, { name: trimmed });
       setRenamingLevelId(null);
       router.refresh();

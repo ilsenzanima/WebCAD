@@ -177,24 +177,22 @@ export default function PlanimetriaMappa({
           </div>
         )}
 
-        {!isSelecting && (
-          <button
-            onClick={() => setZoomed(true)}
-            className="absolute bottom-2 right-2 w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all"
-            style={{
-              background: "hsl(220 26% 14% / 0.85)",
-              border: "1px solid hsl(220 20% 22%)",
-              color: "white",
-            }}
-            title="Ingrandisci planimetria"
-          >
-            ⛶
-          </button>
-        )}
+        <button
+          onClick={() => setZoomed(true)}
+          className="absolute bottom-2 right-2 w-10 h-10 rounded-lg flex items-center justify-center text-lg transition-all"
+          style={{
+            background: "hsl(220 26% 14% / 0.85)",
+            border: "1px solid hsl(220 20% 22%)",
+            color: "white",
+          }}
+          title="Ingrandisci planimetria"
+        >
+          ⛶
+        </button>
       </div>
 
-      {/* ─── Modal zoom schermo intero (se non in selezione inline) ─── */}
-      {zoomed && !isSelecting && mounted && createPortal(
+      {/* ─── Modal zoom schermo intero ─── */}
+      {zoomed && mounted && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-0 sm:p-4 backdrop-blur-sm"
         >
@@ -219,7 +217,13 @@ export default function PlanimetriaMappa({
             >
               {(utils) => (
                 <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
-                  <div className="relative flex items-center justify-center w-full h-full">
+                  <div 
+                    className="relative flex items-center justify-center w-full h-full"
+                    onClick={(e) => {
+                      handleClick(e);
+                      if (isSelecting) setZoomed(false); // Chiude il modal dopo la selezione
+                    }}
+                  >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={planImageUrl}

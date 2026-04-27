@@ -181,33 +181,40 @@ export async function getLevels(projectId: string) {
 // ACTION: Aggiunge un nuovo livello al progetto
 // ============================================================
 
-export async function addLevel(projectId: string) {
+export async function addLevel(projectId: string, customName?: string, elevationZ?: number) {
   const { supabase, user } = await getAuthUser();
   if (!user) throw new Error("Non autenticato.");
 
-  // Calcola la nuova elevation_z come max + 1
-  const { data: existing } = await supabase
-    .from("levels")
-    .select("elevation_z, name")
-    .eq("project_id", projectId)
-    .order("elevation_z", { ascending: false })
-    .limit(1);
+  let finalName = customName;
+  let finalZ = elevationZ;
 
-  const maxZ = existing && existing.length > 0 ? existing[0].elevation_z : 0;
-  const newZ = maxZ + 1;
-  const levelCount = await supabase
-    .from("levels")
-    .select("*", { count: "exact", head: true })
-    .eq("project_id", projectId);
-  const count = levelCount.count ?? 1;
-  const newName = `Piano ${count}`;
+  if (finalName === undefined || finalZ === undefined) {
+    const { data: existing } = await supabase
+      .from("levels")
+      .select("elevation_z, name")
+      .eq("project_id", projectId)
+      .order("elevation_z", { ascending: false })
+      .limit(1);
+
+    const maxZ = existing && existing.length > 0 ? existing[0].elevation_z : 0;
+    if (finalZ === undefined) finalZ = maxZ + 1;
+
+    if (finalName === undefined) {
+      const levelCount = await supabase
+        .from("levels")
+        .select("*", { count: "exact", head: true })
+        .eq("project_id", projectId);
+      const count = levelCount.count ?? 1;
+      finalName = `Piano ${count}`;
+    }
+  }
 
   const { data, error } = await supabase
     .from("levels")
     .insert({
       project_id: projectId,
-      name: newName,
-      elevation_z: newZ,
+      name: finalName,
+      elevation_z: finalZ,
       scale_ratio: null,
       plan_image_url: null,
     } as any)
@@ -220,6 +227,7 @@ export async function addLevel(projectId: string) {
   }
 
   revalidatePath(`/projects/${projectId}/editor`);
+  revalidatePath(`/projects/${projectId}`);
   return { success: true, level: data };
 }
 
@@ -227,10 +235,11 @@ export async function addLevel(projectId: string) {
 // ACTION: Rinomina un livello
 // ============================================================
 
-export async function renameLevel(
+export async function updateLevelDetails(
   levelId: string,
   projectId: string,
-  newName: string
+  newName: string,
+  elevationZ: number
 ) {
   const { supabase, user } = await getAuthUser();
   if (!user) throw new Error("Non autenticato.");
@@ -240,14 +249,15 @@ export async function renameLevel(
 
   const { error } = await supabase
     .from("levels")
-    .update({ name: trimmed } as any)
+    .update({ name: trimmed, elevation_z: elevationZ } as any)
     .eq("id", levelId);
 
   if (error) {
-    console.error("Errore rinomina livello:", error);
-    return { error: "Impossibile rinominare il piano." };
+    console.error("Errore aggiornamento livello:", error);
+    return { error: "Impossibile aggiornare il piano." };
   }
 
+  revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/editor`);
   return { success: true };
 }
@@ -259,7 +269,7 @@ export async function renameLevel(
 export async function updateLevelMetadata(
   levelId: string,
   projectId: string,
-  data: { scale_ratio?: number; plan_image_url?: string }
+  data: { scale_ratio?: number | null; plan_image_url?: string | null }
 ) {
   const { supabase, user } = await getAuthUser();
   if (!user) throw new Error("Non autenticato.");
@@ -287,16 +297,6 @@ export async function deleteLevel(levelId: string, projectId: string) {
   const { supabase, user } = await getAuthUser();
   if (!user) throw new Error("Non autenticato.");
 
-  // Verifica che ne rimanga almeno uno
-  const { count } = await supabase
-    .from("levels")
-    .select("*", { count: "exact", head: true })
-    .eq("project_id", projectId);
-
-  if (!count || count <= 1) {
-    return { error: "Non puoi eliminare l'unico piano del progetto." };
-  }
-
   const { error } = await supabase.from("levels").delete().eq("id", levelId);
 
   if (error) {
@@ -304,6 +304,7 @@ export async function deleteLevel(levelId: string, projectId: string) {
     return { error: "Impossibile eliminare il piano." };
   }
 
+  revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/editor`);
   return { success: true };
 }

@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { getFieldNotes } from "@/app/actions/field-notes";
 import FieldNotesList from "@/app/ui/projects/FieldNotesList";
-import PlanimetriaMappa from "@/app/ui/projects/PlanimetriaMappa";
+import StickyPlanimetria from "@/app/ui/projects/StickyPlanimetria";
 
 export default async function LevelFieldNotesPage({
   params,
@@ -47,24 +47,7 @@ export default async function LevelFieldNotesPage({
 
       {/* ── Planimetria sticky (solo se disponibile) ───────── */}
       {planImageUrl && (
-        <div
-          className="sticky top-0 z-20 px-4 sm:px-8 py-3"
-          style={{
-            background: "hsl(222 47% 6% / 0.95)",
-            borderBottom: "1px solid hsl(220 20% 14%)",
-            backdropFilter: "blur(8px)",
-          }}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "hsl(215 15% 45%)" }}>
-              🗺 Planimetria — {level.name}
-            </span>
-            <span className="text-xs" style={{ color: "hsl(215 15% 35%)" }}>
-              · {notes.length} punt{notes.length === 1 ? "o" : "i"} segnati
-            </span>
-          </div>
-          <PlanimetriaMappa planImageUrl={planImageUrl} notes={notes} />
-        </div>
+        <StickyPlanimetria planImageUrl={planImageUrl} notes={notes} levelName={level.name} />
       )}
 
       {/* ── Header ───────────────────────────── */}

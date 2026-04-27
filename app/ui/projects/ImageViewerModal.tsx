@@ -71,7 +71,7 @@ export default function ImageViewerModal({ imageUrl, onClose, title, children }:
                 <img
                   src={imageUrl}
                   alt={title || "Ingrandimento"}
-                  className="max-w-full max-h-full object-contain"
+                  className="w-full h-full object-contain"
                   draggable={false}
                 />
                 {/* Overlay (es. punti mappa) */}
