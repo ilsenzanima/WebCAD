@@ -20,6 +20,32 @@ type MaterialsInsertClient = {
   };
 };
 
+async function getAuthenticatedUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    return { supabase, user, authError: null as string | null };
+  }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (session?.user) {
+    return { supabase, user: session.user, authError: null as string | null };
+  }
+
+  return {
+    supabase,
+    user: null,
+    authError: error?.message ?? "Sessione utente non trovata.",
+  };
+}
+
 export type MaterialFormState =
   | {
       errors?: Record<string, string[]>;
@@ -49,13 +75,10 @@ export async function createMaterial(
   prevState: MaterialFormState,
   formData: FormData
 ): Promise<MaterialFormState> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, authError } = await getAuthenticatedUser();
 
   if (!user) {
-    return { message: "Utente non autenticato." };
+    return { message: `Utente non autenticato. ${authError ?? ""}`.trim() };
   }
 
   const rawData = {
@@ -112,10 +135,7 @@ export async function createMaterial(
 }
 
 export async function getMaterials() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getAuthenticatedUser();
 
   if (!user) return [];
 
@@ -129,13 +149,10 @@ export async function getMaterials() {
 }
 
 export async function deleteMaterial(id: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { supabase, user, authError } = await getAuthenticatedUser();
 
   if (!user) {
-    throw new Error("Utente non autenticato.");
+    throw new Error(`Utente non autenticato. ${authError ?? ""}`.trim());
   }
 
   const { error } = await supabase
