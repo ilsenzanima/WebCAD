@@ -29,10 +29,14 @@ export async function createMaterial(
   prevState: MaterialFormState,
   formData: FormData
 ): Promise<MaterialFormState> {
+  console.log("🟡 [createMaterial] START - formData entries:", Object.fromEntries(formData.entries()));
+
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  console.log("🟡 [createMaterial] user:", user?.id ?? "NOT AUTHENTICATED");
 
   if (!user) {
     return { message: "Utente non autenticato." };
@@ -58,13 +62,18 @@ export async function createMaterial(
     sku: formData.get("sku"),
   };
 
+  console.log("🟡 [createMaterial] rawData:", rawData);
+
   const parsed = MaterialSchema.safeParse(rawData);
 
   if (!parsed.success) {
+    console.error("🔴 [createMaterial] Zod validation failed:", parsed.error.flatten().fieldErrors);
     return { errors: parsed.error.flatten().fieldErrors };
   }
 
-  const { error } = await supabase.from("materials").insert({
+  console.log("🟢 [createMaterial] Zod OK - inserting into Supabase...");
+
+  const { data: insertedData, error } = await supabase.from("materials").insert({
     user_id: user.id,
     name: parsed.data.name,
     description: parsed.data.description || null,
@@ -78,12 +87,14 @@ export async function createMaterial(
     sku: parsed.data.sku || null,
     stock_qty: 0,
     is_active: true,
-  } as any);
+  } as any).select();
 
   if (error) {
-    console.error("Errore inserimento materiale:", error);
+    console.error("🔴 [createMaterial] Supabase error:", error);
     return { message: `Errore durante il salvataggio: ${error.message}` };
   }
+
+  console.log("🟢 [createMaterial] Insert OK:", insertedData);
 
   revalidatePath("/catalog");
   redirect("/catalog");
