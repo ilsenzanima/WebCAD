@@ -38,14 +38,21 @@ export async function createMaterial(
     return { message: "Utente non autenticato." };
   }
 
+  // Normalizza i campi numerici: stringa vuota → null
+  const toNum = (v: FormDataEntryValue | null) => {
+    if (v === null || v === "") return undefined;
+    const n = Number(v);
+    return isNaN(n) ? undefined : n;
+  };
+
   const rawData = {
     name: formData.get("name"),
     description: formData.get("description"),
     category: formData.get("category"),
-    length_mm: formData.get("length_mm"),
-    width_mm: formData.get("width_mm"),
-    thickness_mm: formData.get("thickness_mm"),
-    unit_cost: formData.get("unit_cost"),
+    length_mm: toNum(formData.get("length_mm")),
+    width_mm: toNum(formData.get("width_mm")),
+    thickness_mm: toNum(formData.get("thickness_mm")),
+    unit_cost: toNum(formData.get("unit_cost")),
     unit: formData.get("unit"),
     supplier: formData.get("supplier"),
     sku: formData.get("sku"),
@@ -62,10 +69,10 @@ export async function createMaterial(
     name: parsed.data.name,
     description: parsed.data.description || null,
     category: parsed.data.category,
-    length_mm: parsed.data.length_mm || null,
-    width_mm: parsed.data.width_mm || null,
-    thickness_mm: parsed.data.thickness_mm || null,
-    unit_cost: parsed.data.unit_cost || null,
+    length_mm: parsed.data.length_mm ?? null,
+    width_mm: parsed.data.width_mm ?? null,
+    thickness_mm: parsed.data.thickness_mm ?? null,
+    unit_cost: parsed.data.unit_cost ?? null,
     unit: parsed.data.unit,
     supplier: parsed.data.supplier || null,
     sku: parsed.data.sku || null,
