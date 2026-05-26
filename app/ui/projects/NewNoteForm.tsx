@@ -209,7 +209,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         : await createFieldNote(payload);
 
       if (res.success) {
-        router.push(`/projects/${projectId}/levels/${levelId}/appunti`);
+        router.push(`/projects/${projectId}`);
       } else {
         setError(res.error ?? "Errore durante il salvataggio");
       }
@@ -464,7 +464,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
       <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-3 sm:justify-end pb-8">
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => router.push(`/projects/${projectId}`)}
           disabled={isPending}
           className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
           style={{
@@ -473,7 +473,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
             color: "hsl(215 20% 65%)",
           }}
         >
-          Annulla
+          Indietro
         </button>
 
         <button

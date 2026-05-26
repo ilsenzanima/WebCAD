@@ -51,6 +51,9 @@ export default function NewMaterialPage() {
                 name="name"
                 type="text"
                 required
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
                 className="w-full px-4 py-3 rounded-xl text-sm text-white"
                 style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }}
               />
@@ -64,6 +67,9 @@ export default function NewMaterialPage() {
                 id="sku"
                 name="sku"
                 type="text"
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
                 className="w-full px-4 py-3 rounded-xl text-sm text-white"
                 style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }}
               />
@@ -170,6 +176,9 @@ export default function NewMaterialPage() {
                 id="supplier"
                 name="supplier"
                 type="text"
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
                 className="w-full px-4 py-3 rounded-xl text-sm text-white"
                 style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }}
               />
