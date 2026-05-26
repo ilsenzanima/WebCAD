@@ -13,6 +13,8 @@ import type { KonvaEventObject } from "konva/lib/Node";
 export default function CanvasWorkspace() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [wallStartPoint, setWallStartPoint] = useState<{ x: number; y: number } | null>(null);
+  const [wallPreviewPoint, setWallPreviewPoint] = useState<{ x: number; y: number } | null>(null);
 
   // Stato globale Zustand
   const {
@@ -94,10 +96,48 @@ export default function CanvasWorkspace() {
         // Aggiungiamo un punto per la calibrazione
         addCalibrationPoint(point);
         break;
+      case "wall":
+        if (!wallStartPoint) {
+          setWallStartPoint(point);
+          setWallPreviewPoint(point);
+        } else {
+          setWallStartPoint(null);
+          setWallPreviewPoint(null);
+        }
+        break;
       // TODO: Gestire wall, duct, select
       default:
         break;
     }
+  };
+
+  const handleStageMouseMove = (e: KonvaEventObject<MouseEvent>) => {
+    if (activeTool !== "wall" || !wallStartPoint) return;
+
+    const stage = e.target.getStage();
+    if (!stage) return;
+
+    const pointer = stage.getPointerPosition();
+    if (!pointer) return;
+
+    const point = {
+      x: (pointer.x - stage.x()) / stage.scaleX(),
+      y: (pointer.y - stage.y()) / stage.scaleY(),
+    };
+
+    if (e.evt.shiftKey) {
+      const deltaX = point.x - wallStartPoint.x;
+      const deltaY = point.y - wallStartPoint.y;
+
+      if (Math.abs(deltaX) >= Math.abs(deltaY)) {
+        setWallPreviewPoint({ x: point.x, y: wallStartPoint.y });
+      } else {
+        setWallPreviewPoint({ x: wallStartPoint.x, y: point.y });
+      }
+      return;
+    }
+
+    setWallPreviewPoint(point);
   };
 
   return (
@@ -125,6 +165,7 @@ export default function CanvasWorkspace() {
         draggable={activeTool === "pan"}
         onWheel={handleWheel}
         onClick={handleStageClick}
+        onMouseMove={handleStageMouseMove}
         onDragEnd={(e) => {
           // Salva la nuova posizione dopo il drag (PAN)
           setStagePosition(e.target.x(), e.target.y());
@@ -166,6 +207,15 @@ export default function CanvasWorkspace() {
               stroke="hsl(16 100% 58%)"
               strokeWidth={2 / scale}
               dash={[5 / scale, 5 / scale]} // Linea tratteggiata visibile nonostante lo zoom
+            />
+          )}
+
+          {activeTool === "wall" && wallStartPoint && wallPreviewPoint && (
+            <Line
+              points={[wallStartPoint.x, wallStartPoint.y, wallPreviewPoint.x, wallPreviewPoint.y]}
+              stroke="hsl(16 100% 58%)"
+              strokeWidth={2 / scale}
+              dash={[8 / scale, 5 / scale]}
             />
           )}
 
