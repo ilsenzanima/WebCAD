@@ -1,14 +1,8 @@
-import dynamic from "next/dynamic";
 import EditorHeader from "@/app/ui/canvas/EditorHeader";
+import Canvas3DWrapper from "@/app/ui/canvas/Canvas3DWrapper";
 import { createClient } from "@/lib/supabase/server";
 import { getLevels, get3DBox } from "@/app/actions/projects";
 import type { Level } from "@/lib/types/database";
-
-// Importazione dinamica del workspace 3D per disabilitare SSR (richiesto da Three.js/React Three Fiber)
-const Canvas3DWorkspace = dynamic(
-  () => import("@/app/ui/canvas/Canvas3DWorkspace"),
-  { ssr: false }
-);
 
 export default async function Editor3DPage({
   params,
@@ -43,7 +37,7 @@ export default async function Editor3DPage({
 
       {/* Area del Canvas 3D */}
       <div className="flex-1 w-full h-full relative">
-        <Canvas3DWorkspace projectId={id} />
+        <Canvas3DWrapper projectId={id} />
       </div>
     </div>
   );

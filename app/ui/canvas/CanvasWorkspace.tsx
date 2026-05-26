@@ -432,7 +432,7 @@ export default function CanvasWorkspace() {
           className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors shadow-lg cursor-pointer"
         >
           🖨️ Report
-        </button>
+        </Link>
 
         <button
           onClick={handleSaveToDatabase}
