@@ -11,7 +11,7 @@ const navItems = [
 ];
 
 const bottomNavItems = [
-  { href: "/catalog/tipi-appunto", icon: "🏷️", label: "Tipi Appunto" },
+  { href: "/catalog/configurazione", icon: "🏷️", label: "Configurazione Voci" },
 ];
 
 /**
