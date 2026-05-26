@@ -108,24 +108,35 @@ export default function LevelCard({ drawing, gradient, onAddLevel, formatDate }:
               {is3D ? (
                 <Link
                   href={`/projects/${drawing.project_id}/editor-3d?levelId=${drawing.id}`}
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold text-white transition-colors shadow-[0_4px_16px_hsl(24_100%_50%/_0.2)]"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold text-white transition-all shadow-[0_4px_16px_hsl(24_100%_50%/_0.2)] hover:opacity-90"
                   style={{
                     background: "linear-gradient(135deg, hsl(24 100% 50%), hsl(0 84% 50%))",
                   }}
                 >
-                  🧊 Apri Editor 3D
+                  🧊 Editor 3D
                 </Link>
               ) : (
                 <Link
                   href={`/projects/${drawing.project_id}/editor?levelId=${drawing.id}`}
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold text-white transition-colors shadow-[0_4px_16px_hsl(220_90%_56%/_0.2)]"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold text-white transition-all shadow-[0_4px_16px_hsl(220_90%_56%/_0.2)] hover:opacity-90"
                   style={{
                     background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
                   }}
                 >
-                  📐 Apri Editor 2D
+                  📐 Editor 2D
                 </Link>
               )}
+              <Link
+                href={`/projects/${drawing.project_id}/levels/${drawing.id}/appunti`}
+                className="px-3 flex items-center justify-center rounded-xl text-xs font-semibold text-white transition-colors hover:bg-white/10"
+                style={{
+                  border: "1px solid hsl(220 20% 24%)",
+                  background: "hsl(220 26% 18%)",
+                }}
+                title="Appunti e Note"
+              >
+                📋
+              </Link>
            </div>
         </div>
       </div>

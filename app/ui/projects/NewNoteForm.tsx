@@ -368,7 +368,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                   boxShadow: "0 12px 30px rgba(0,0,0,0.5)",
                 }}
               >
-                {(Object.keys(ITEM_LABELS) as ItemType[]).map((type) => (
+                {(Object.keys(ITEM_LABELS) as ItemType[]).filter(type => type !== "posizione").map((type) => (
                   <button
                     key={type}
                     type="button"

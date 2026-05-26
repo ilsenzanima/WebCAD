@@ -93,7 +93,7 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
 
   // Stato per modale "Crea/Copia Disegno"
   const [isCreatingLevel, setIsCreatingLevel] = useState(false);
-  const [levelTemplate, setLevelTemplate] = useState<{name: string, elevation_z: number} | null>(null);
+  const [levelTemplate, setLevelTemplate] = useState<{name: string, elevation_z: number, drawing_type?: "2d_wall" | "3d_box"} | null>(null);
 
   // Filtraggio disegni
   const filteredDrawings = drawings.filter(d => 
@@ -113,7 +113,7 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
     setLevelTemplate(null);
   };
 
-  const openCreateModal = (template?: {name: string, elevation_z: number}) => {
+  const openCreateModal = (template?: {name: string, elevation_z: number, drawing_type?: "2d_wall" | "3d_box"}) => {
     setLevelTemplate(template || null);
     setIsCreatingLevel(true);
   };
@@ -268,7 +268,7 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
                     key={draw.id} 
                     drawing={draw as any} 
                     gradient={gradient} 
-                    onAddLevel={(ref) => openCreateModal({ name: `${ref.name} (Copia)`, elevation_z: ref.elevation_z + 1 })}
+                    onAddLevel={(ref) => openCreateModal({ name: `${ref.name} (Copia)`, elevation_z: ref.elevation_z + 1, drawing_type: ref.drawing_type })}
                     formatDate={safeFormatDate}
                   />
                 );
@@ -318,6 +318,7 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
           submitLabel="Crea"
           defaultName={levelTemplate?.name || "Nuovo Piano"}
           defaultElevation={levelTemplate?.elevation_z || 0}
+          defaultType={levelTemplate?.drawing_type || "2d_wall"}
           onClose={() => setIsCreatingLevel(false)}
           onSubmit={handleCreateLevelSubmit}
         />

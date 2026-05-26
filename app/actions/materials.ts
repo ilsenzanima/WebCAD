@@ -31,73 +31,83 @@ export async function createMaterial(
 ): Promise<MaterialFormState> {
   console.log("🟡 [createMaterial] START - formData entries:", Object.fromEntries(formData.entries()));
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let success = false;
 
-  console.log("🟡 [createMaterial] user:", user?.id ?? "NOT AUTHENTICATED");
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) {
-    return { message: "Utente non autenticato." };
+    console.log("🟡 [createMaterial] user:", user?.id ?? "NOT AUTHENTICATED");
+
+    if (!user) {
+      return { message: "Utente non autenticato." };
+    }
+
+    // Normalizza i campi numerici: stringa vuota → null
+    const toNum = (v: FormDataEntryValue | null) => {
+      if (v === null || v === "") return undefined;
+      const n = Number(v);
+      return isNaN(n) ? undefined : n;
+    };
+
+    const rawData = {
+      name: formData.get("name"),
+      description: formData.get("description"),
+      category: formData.get("category"),
+      length_mm: toNum(formData.get("length_mm")),
+      width_mm: toNum(formData.get("width_mm")),
+      thickness_mm: toNum(formData.get("thickness_mm")),
+      unit_cost: toNum(formData.get("unit_cost")),
+      unit: formData.get("unit"),
+      supplier: formData.get("supplier"),
+      sku: formData.get("sku"),
+    };
+
+    console.log("🟡 [createMaterial] rawData:", rawData);
+
+    const parsed = MaterialSchema.safeParse(rawData);
+
+    if (!parsed.success) {
+      console.error("🔴 [createMaterial] Zod validation failed:", parsed.error.flatten().fieldErrors);
+      return { errors: parsed.error.flatten().fieldErrors };
+    }
+
+    console.log("🟢 [createMaterial] Zod OK - inserting into Supabase...");
+
+    const { data: insertedData, error } = await supabase.from("materials").insert({
+      user_id: user.id,
+      name: parsed.data.name,
+      description: parsed.data.description || null,
+      category: parsed.data.category,
+      length_mm: parsed.data.length_mm ?? null,
+      width_mm: parsed.data.width_mm ?? null,
+      thickness_mm: parsed.data.thickness_mm ?? null,
+      unit_cost: parsed.data.unit_cost ?? null,
+      unit: parsed.data.unit,
+      supplier: parsed.data.supplier || null,
+      sku: parsed.data.sku || null,
+      stock_qty: 0,
+      is_active: true,
+    } as any).select();
+
+    if (error) {
+      console.error("🔴 [createMaterial] Supabase error:", error);
+      return { message: `Errore durante il salvataggio: ${error.message}` };
+    }
+
+    console.log("🟢 [createMaterial] Insert OK:", insertedData);
+    success = true;
+  } catch (err: any) {
+    console.error("🔴 [createMaterial] Unexpected error:", err);
+    return { message: `Errore imprevisto: ${err.message || err}` };
   }
 
-  // Normalizza i campi numerici: stringa vuota → null
-  const toNum = (v: FormDataEntryValue | null) => {
-    if (v === null || v === "") return undefined;
-    const n = Number(v);
-    return isNaN(n) ? undefined : n;
-  };
-
-  const rawData = {
-    name: formData.get("name"),
-    description: formData.get("description"),
-    category: formData.get("category"),
-    length_mm: toNum(formData.get("length_mm")),
-    width_mm: toNum(formData.get("width_mm")),
-    thickness_mm: toNum(formData.get("thickness_mm")),
-    unit_cost: toNum(formData.get("unit_cost")),
-    unit: formData.get("unit"),
-    supplier: formData.get("supplier"),
-    sku: formData.get("sku"),
-  };
-
-  console.log("🟡 [createMaterial] rawData:", rawData);
-
-  const parsed = MaterialSchema.safeParse(rawData);
-
-  if (!parsed.success) {
-    console.error("🔴 [createMaterial] Zod validation failed:", parsed.error.flatten().fieldErrors);
-    return { errors: parsed.error.flatten().fieldErrors };
+  if (success) {
+    revalidatePath("/catalog");
+    redirect("/catalog");
   }
-
-  console.log("🟢 [createMaterial] Zod OK - inserting into Supabase...");
-
-  const { data: insertedData, error } = await supabase.from("materials").insert({
-    user_id: user.id,
-    name: parsed.data.name,
-    description: parsed.data.description || null,
-    category: parsed.data.category,
-    length_mm: parsed.data.length_mm ?? null,
-    width_mm: parsed.data.width_mm ?? null,
-    thickness_mm: parsed.data.thickness_mm ?? null,
-    unit_cost: parsed.data.unit_cost ?? null,
-    unit: parsed.data.unit,
-    supplier: parsed.data.supplier || null,
-    sku: parsed.data.sku || null,
-    stock_qty: 0,
-    is_active: true,
-  } as any).select();
-
-  if (error) {
-    console.error("🔴 [createMaterial] Supabase error:", error);
-    return { message: `Errore durante il salvataggio: ${error.message}` };
-  }
-
-  console.log("🟢 [createMaterial] Insert OK:", insertedData);
-
-  revalidatePath("/catalog");
-  redirect("/catalog");
 }
 
 export async function getMaterials() {

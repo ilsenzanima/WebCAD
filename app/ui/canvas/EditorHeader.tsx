@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useProjectStore } from "@/lib/stores/project-store";
 import { useCanvasStore } from "@/lib/stores/canvas-store";
 import {
@@ -28,6 +28,7 @@ export default function EditorHeader({
   initialLevelId,
 }: EditorHeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
 
   // ── Store init ────────────────────────────────────────────
@@ -346,12 +347,15 @@ export default function EditorHeader({
                     onClick={() => {
                       if (!isThisRenaming) {
                         setActiveLevel(level.id);
+                        const is3D = level.drawing_type === "3d_box";
+                        const targetPath = is3D ? `/projects/${projectId}/editor-3d` : `/projects/${projectId}/editor`;
+                        router.push(`${targetPath}?levelId=${level.id}`);
                       }
                     }}
                   >
                     {/* Icona piano */}
-                    <span className="text-base flex-shrink-0">
-                      {level.elevation_z === 0 ? "🏠" : level.elevation_z > 0 ? "⬆️" : "⬇️"}
+                    <span className="text-base flex-shrink-0" title={level.drawing_type === "3d_box" ? "3D" : "2D"}>
+                      {level.drawing_type === "3d_box" ? "📦" : "📏"}
                     </span>
 
                     {/* Nome (o input per rename) */}
