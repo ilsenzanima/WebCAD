@@ -216,81 +216,152 @@ export default function ProjectReport({ projectId }: Props) {
     usedArea: number;
   }
 
+  interface FreeRect {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }
+
+  interface PlacementCandidate {
+    boardIndex: number;
+    freeRectIndex: number;
+    rotated: boolean;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }
+
   const pack2D = (): PackedBoard[] => {
     // Ordina lastre richieste per area decrescente
     const sorted = [...sheetRequests].sort((a, b) => (b.width * b.height) - (a.width * a.height));
     const boards: PackedBoard[] = [];
+    const freeRectsByBoard: FreeRect[][] = [];
+
+    const createBoard = (): number => {
+      boards.push({
+        placed: [],
+        usedArea: 0,
+      });
+      freeRectsByBoard.push([
+        { x: 0, y: 0, w: commercialSheetW, h: commercialSheetH },
+      ]);
+      return boards.length - 1;
+    };
+
+    const tryMakeCandidate = (
+      reqW: number,
+      reqH: number,
+      boardIndex: number,
+      freeRectIndex: number,
+      freeRect: FreeRect,
+      rotated: boolean
+    ): PlacementCandidate | null => {
+      const pieceW = rotated ? reqH : reqW;
+      const pieceH = rotated ? reqW : reqH;
+
+      if (pieceW > freeRect.w || pieceH > freeRect.h) {
+        return null;
+      }
+
+      return {
+        boardIndex,
+        freeRectIndex,
+        rotated,
+        x: freeRect.x,
+        y: freeRect.y,
+        w: pieceW,
+        h: pieceH,
+      };
+    };
+
+    const isBetterBottomLeft = (a: PlacementCandidate, b: PlacementCandidate): boolean => {
+      if (a.y !== b.y) return a.y < b.y;
+      if (a.x !== b.x) return a.x < b.x;
+      const aShortSide = Math.min(a.w, a.h);
+      const bShortSide = Math.min(b.w, b.h);
+      return aShortSide > bShortSide;
+    };
+
+    const splitFreeRectGuillotine = (freeRect: FreeRect, piece: PlacementCandidate): FreeRect[] => {
+      const rightStrip: FreeRect | null = freeRect.w - piece.w > 0
+        ? {
+            x: freeRect.x + piece.w + bladeThickness,
+            y: freeRect.y,
+            w: freeRect.w - piece.w - bladeThickness,
+            h: piece.h,
+          }
+        : null;
+
+      const bottomStrip: FreeRect | null = freeRect.h - piece.h > 0
+        ? {
+            x: freeRect.x,
+            y: freeRect.y + piece.h + bladeThickness,
+            w: freeRect.w,
+            h: freeRect.h - piece.h - bladeThickness,
+          }
+        : null;
+
+      const leftovers: FreeRect[] = [];
+      if (rightStrip && rightStrip.w > 0 && rightStrip.h > 0) leftovers.push(rightStrip);
+      if (bottomStrip && bottomStrip.w > 0 && bottomStrip.h > 0) leftovers.push(bottomStrip);
+      return leftovers;
+    };
 
     sorted.forEach((req) => {
       // Se un pezzo è più grande del pannello standard, lo forziamo a stare dentro
       const reqW = Math.min(req.width, commercialSheetW);
       const reqH = Math.min(req.height, commercialSheetH);
+      let bestCandidate: PlacementCandidate | null = null;
 
-      let placed = false;
+      for (let bIdx = 0; bIdx < freeRectsByBoard.length; bIdx++) {
+        const freeRects = freeRectsByBoard[bIdx];
+        for (let rIdx = 0; rIdx < freeRects.length; rIdx++) {
+          const fr = freeRects[rIdx];
+          const candidates = [
+            tryMakeCandidate(reqW, reqH, bIdx, rIdx, fr, false),
+            tryMakeCandidate(reqW, reqH, bIdx, rIdx, fr, true),
+          ].filter((c): c is PlacementCandidate => c !== null);
 
-      // Cerca spazio nei pannelli esistenti
-      for (const board of boards) {
-        // Algoritmo euristico ad accostamento laterale semplice (a righe)
-        let currentY = 0;
-        let currentX = 0;
-        let maxRowHeight = 0;
-        let canPlace = true;
-
-        // Tenta di posizionarlo cercando un punto x, y vuoto
-        // In una versione MVP, accostiamo da sinistra a destra, salendo in alto per righe
-        while (currentY + reqH <= commercialSheetH) {
-          currentX = 0;
-          maxRowHeight = 0;
-          
-          while (currentX + reqW <= commercialSheetW) {
-            // Controlla se si sovrappone a qualche lastra già posizionata
-            const overlaps = board.placed.some(
-              (p) =>
-                currentX < p.x + p.w + bladeThickness &&
-                currentX + reqW + bladeThickness > p.x &&
-                currentY < p.y + p.h + bladeThickness &&
-                currentY + reqH + bladeThickness > p.y
-            );
-
-            if (!overlaps) {
-              board.placed.push({
-                x: currentX,
-                y: currentY,
-                w: reqW,
-                h: reqH,
-                label: req.label,
-              });
-              board.usedArea += reqW * reqH;
-              placed = true;
-              break;
+          for (const cand of candidates) {
+            if (!bestCandidate || isBetterBottomLeft(cand, bestCandidate)) {
+              bestCandidate = cand;
             }
-
-            // Sposta a destra
-            currentX += 50; // incrementi di 5cm per ricerca
           }
-
-          if (placed) break;
-          currentY += 50;
         }
-
-        if (placed) break;
       }
 
-      // Se non posizionato, crea un nuovo pannello commerciale
-      if (!placed) {
-        boards.push({
-          placed: [
-            {
-              x: 0,
-              y: 0,
-              w: reqW,
-              h: reqH,
-              label: req.label,
-            },
-          ],
-          usedArea: reqW * reqH,
-        });
+      if (!bestCandidate) {
+        const newBoardIndex = createBoard();
+        const baseFreeRect = freeRectsByBoard[newBoardIndex][0];
+        bestCandidate =
+          tryMakeCandidate(reqW, reqH, newBoardIndex, 0, baseFreeRect, false) ??
+          tryMakeCandidate(reqW, reqH, newBoardIndex, 0, baseFreeRect, true);
       }
+
+      if (!bestCandidate) {
+        return;
+      }
+
+      const board = boards[bestCandidate.boardIndex];
+      const freeRects = freeRectsByBoard[bestCandidate.boardIndex];
+      const targetFreeRect = freeRects[bestCandidate.freeRectIndex];
+      if (!board || !targetFreeRect) {
+        return;
+      }
+
+      board.placed.push({
+        x: bestCandidate.x,
+        y: bestCandidate.y,
+        w: bestCandidate.w,
+        h: bestCandidate.h,
+        label: req.label,
+      });
+      board.usedArea += bestCandidate.w * bestCandidate.h;
+
+      freeRects.splice(bestCandidate.freeRectIndex, 1);
+      freeRects.push(...splitFreeRectGuillotine(targetFreeRect, bestCandidate));
     });
 
     return boards;
@@ -427,7 +498,6 @@ export default function ProjectReport({ projectId }: Props) {
 
           <div className="space-y-4">
             {packedBars.map((bar, barIdx) => {
-              let currentLeft = 0;
               return (
                 <div 
                   key={barIdx} 
