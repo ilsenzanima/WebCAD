@@ -35,7 +35,11 @@ export default function NewMaterialPage() {
         </div>
       )}
 
-      <form action={action} className="space-y-6">
+      <form action={action} autoComplete="off" data-1p-ignore data-lpignore="true" className="space-y-6">
+        {/* Campi fittizi per disattivare l'autofill aggressivo delle estensioni browser */}
+        <input type="text" name="prevent_autofill_username" style={{ display: "none" }} autoComplete="off" />
+        <input type="password" name="prevent_autofill_password" style={{ display: "none" }} autoComplete="off" />
+
         <div
           className="p-6 rounded-2xl space-y-6"
           style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
@@ -196,7 +200,6 @@ export default function NewMaterialPage() {
           </Link>
           <button
             type="submit"
-            disabled={pending}
             className="px-5 py-3 rounded-xl font-semibold text-sm text-white transition-all duration-200"
             style={{
               background: pending ? "hsl(16 80% 45%)" : "linear-gradient(135deg, hsl(16 100% 58%), hsl(0 84% 50%))",
