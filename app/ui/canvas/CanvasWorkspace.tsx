@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Stage, Layer, Line, Circle, Rect, Text } from "react-konva";
+import Link from "next/link";
 import { useCanvasStore, PIXELS_TO_MM, calculateStructuralPoints, type Wall } from "@/lib/stores/canvas-store";
 import { useProjectStore } from "@/lib/stores/project-store";
 import type { KonvaEventObject } from "konva/lib/Node";
@@ -269,9 +270,9 @@ export default function CanvasWorkspace() {
         onMouseDown={handleStageMouseDown}
         onMouseMove={handleStageMouseMove}
         onMouseUp={handleStageMouseUp}
-        onTouchStart={handleStageMouseDown}
-        onTouchMove={handleStageMouseMove}
-        onTouchEnd={handleStageMouseUp}
+        onTouchStart={(e) => handleStageMouseDown(e as any)}
+        onTouchMove={(e) => handleStageMouseMove(e as any)}
+        onTouchEnd={() => handleStageMouseUp()}
         onDragEnd={(e) => setStagePosition(e.target.x(), e.target.y())}
         style={{
           cursor:

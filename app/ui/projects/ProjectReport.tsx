@@ -38,18 +38,18 @@ export default function ProjectReport({ projectId }: Props) {
       const supabase = createClient();
 
       // 1. Carica info progetto
-      const { data: proj } = await supabase
+      const { data: proj } = (await supabase
         .from("projects")
         .select("name, notes, created_at, updated_at")
         .eq("id", projectId)
-        .single();
+        .single()) as any;
       if (proj) setProjectData(proj);
 
       // 2. Carica tutti i disegni (levels)
-      const { data: levels } = await supabase
+      const { data: levels } = (await supabase
         .from("levels")
         .select("id, name, drawing_type")
-        .eq("project_id", projectId);
+        .eq("project_id", projectId)) as any;
 
       if (levels && levels.length > 0) {
         const loadedWalls: any[] = [];

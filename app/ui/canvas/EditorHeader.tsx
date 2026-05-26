@@ -48,8 +48,7 @@ export default function EditorHeader({
   const {
     hasUnsavedChanges,
     setHasUnsavedChanges,
-    walls,
-    isProcessingFile
+    walls
   } = useCanvasStore();
 
   useEffect(() => {
@@ -267,7 +266,7 @@ export default function EditorHeader({
           <button
             id="btn-editor-save"
             onClick={handleSaveAll}
-            disabled={isPending || isProcessingFile || (!hasUnsavedChanges && !isRenamingProject)}
+            disabled={isPending || (!hasUnsavedChanges && !isRenamingProject)}
             className="px-4 py-1.5 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed"
             style={{ 
               background: hasUnsavedChanges 
