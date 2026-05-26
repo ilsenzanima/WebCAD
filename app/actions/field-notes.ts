@@ -287,3 +287,55 @@ export async function deleteFieldNote(
   revalidatePath(`/projects/${projectId}/appunti`);
   return { success: true };
 }
+
+export async function getOrCreateLevelNote(
+  projectId: string,
+  levelId: string
+): Promise<{ success: boolean; noteId?: string; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Utente non autenticato" };
+
+  try {
+    // Cerca nota esistente per questo livello
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: existing, error: searchError } = await (supabase as any)
+      .from("field_notes")
+      .select("id")
+      .eq("level_id", levelId)
+      .limit(1);
+
+    if (searchError) {
+      console.error("🔴 [getOrCreateLevelNote] search error:", searchError);
+      return { success: false, error: searchError.message };
+    }
+
+    if (existing && existing.length > 0) {
+      return { success: true, noteId: existing[0].id };
+    }
+
+    // Se non esiste, creala al volo
+    const res = await createFieldNote({
+      project_id: projectId,
+      level_id: levelId,
+      type_id: null,
+      type_name: "Appunti Cantiere",
+      items: [
+        {
+          item_type: "nota",
+          value_text: "",
+          sort_order: 0
+        }
+      ]
+    });
+
+    if (res.success && res.note) {
+      return { success: true, noteId: res.note.id };
+    }
+
+    return { success: false, error: res.error || "Impossibile creare l'appunto." };
+  } catch (err: any) {
+    console.error("🔴 [getOrCreateLevelNote] unexpected error:", err);
+    return { success: false, error: err.message || String(err) };
+  }
+}

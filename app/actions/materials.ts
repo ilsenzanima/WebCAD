@@ -45,10 +45,11 @@ export async function createMaterial(
       return { message: "Utente non autenticato." };
     }
 
-    // Normalizza i campi numerici: stringa vuota → null
+    // Normalizza i campi numerici: stringa vuota → null, supporta la virgola
     const toNum = (v: FormDataEntryValue | null) => {
       if (v === null || v === "") return undefined;
-      const n = Number(v);
+      const cleanStr = String(v).replace(",", ".");
+      const n = Number(cleanStr);
       return isNaN(n) ? undefined : n;
     };
 
@@ -71,7 +72,12 @@ export async function createMaterial(
 
     if (!parsed.success) {
       console.error("🔴 [createMaterial] Zod validation failed:", parsed.error.flatten().fieldErrors);
-      return { errors: parsed.error.flatten().fieldErrors };
+      const errors = parsed.error.flatten().fieldErrors;
+      const firstError = Object.values(errors).flat()[0] || "Dati inseriti non validi.";
+      return {
+        errors,
+        message: `Verifica i campi inseriti: ${firstError}`
+      };
     }
 
     console.log("🟢 [createMaterial] Zod OK - inserting into Supabase...");
