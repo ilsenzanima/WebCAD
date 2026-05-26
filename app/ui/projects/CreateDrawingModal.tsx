@@ -4,9 +4,10 @@ import { useState } from "react";
 
 interface Props {
   onClose: () => void;
-  onSubmit: (name: string, elevationZ: number) => Promise<void>;
+  onSubmit: (name: string, elevationZ: number, drawingType: "2d_wall" | "3d_box") => Promise<void>;
   defaultName?: string;
   defaultElevation?: number;
+  defaultType?: "2d_wall" | "3d_box";
   title?: string;
   submitLabel?: string;
 }
@@ -14,13 +15,15 @@ interface Props {
 export default function CreateDrawingModal({ 
   onClose, 
   onSubmit, 
-  defaultName = "Nuovo Piano", 
+  defaultName = "Nuovo Disegno", 
   defaultElevation = 0,
+  defaultType = "2d_wall",
   title = "Crea Disegno",
   submitLabel = "Crea"
 }: Props) {
   const [name, setName] = useState(defaultName);
   const [elevation, setElevation] = useState(defaultElevation.toString());
+  const [drawingType, setDrawingType] = useState<"2d_wall" | "3d_box">(defaultType);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -28,7 +31,7 @@ export default function CreateDrawingModal({
     const elevZ = parseInt(elevation, 10);
     if (isNaN(elevZ)) return;
     setIsSubmitting(true);
-    await onSubmit(name, elevZ);
+    await onSubmit(name, elevZ, drawingType);
     setIsSubmitting(false);
   };
 
@@ -72,6 +75,44 @@ export default function CreateDrawingModal({
               onFocus={e => e.currentTarget.style.borderColor = "hsl(220 90% 56%)"}
               onBlur={e => e.currentTarget.style.borderColor = "hsl(220 20% 20%)"}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2" style={{ color: "hsl(215 15% 65%)" }}>
+              Tipo di Disegno
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDrawingType("2d_wall");
+                  if (name.startsWith("Cavedio 3D") || name === "Nuovo Disegno") setName("Parete 2D");
+                }}
+                className={`p-3 rounded-xl border text-sm font-medium transition-all text-center flex flex-col items-center justify-center gap-1 ${
+                  drawingType === "2d_wall"
+                    ? "border-blue-500 bg-blue-500/10 text-white"
+                    : "border-white/10 bg-white/5 text-gray-400 hover:bg-white/10"
+                }`}
+              >
+                <span className="text-xl">📏</span>
+                <span>Parete 2D</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setDrawingType("3d_box");
+                  if (name.startsWith("Parete 2D") || name === "Nuovo Disegno") setName("Cavedio 3D");
+                }}
+                className={`p-3 rounded-xl border text-sm font-medium transition-all text-center flex flex-col items-center justify-center gap-1 ${
+                  drawingType === "3d_box"
+                    ? "border-blue-500 bg-blue-500/10 text-white"
+                    : "border-white/10 bg-white/5 text-gray-400 hover:bg-white/10"
+                }`}
+              >
+                <span className="text-xl">📦</span>
+                <span>Cavedio 3D</span>
+              </button>
+            </div>
           </div>
 
           <div>

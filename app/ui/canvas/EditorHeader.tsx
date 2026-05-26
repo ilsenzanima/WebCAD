@@ -10,7 +10,7 @@ import {
   addLevel,
   updateLevelDetails,
   deleteLevel,
-  updateLevelMetadata,
+  saveWalls,
 } from "@/app/actions/projects";
 import type { Level } from "@/lib/types/database";
 
@@ -48,8 +48,7 @@ export default function EditorHeader({
   const {
     hasUnsavedChanges,
     setHasUnsavedChanges,
-    backgroundImageDataUrl,
-    calibrationRatio,
+    walls,
     isProcessingFile
   } = useCanvasStore();
 
@@ -143,25 +142,16 @@ export default function EditorHeader({
     });
   };
 
-  // ── Salvataggio Manuale ───────────────────────────────────
+  // ── Salvataggio Manuale delle Pareti ──
   const handleSaveAll = () => {
     if (!activeLevelId || !activeProjectId) return;
-    
-    const isDataUrl = backgroundImageDataUrl?.startsWith("data:");
-    if (isDataUrl) {
-      alert("Il caricamento dell'immagine nel cloud è ancora in corso. Attendi qualche secondo e riprova.");
-      return;
-    }
 
     startTransition(async () => {
-      const res = await updateLevelMetadata(activeLevelId, activeProjectId, {
-        plan_image_url: backgroundImageDataUrl ?? undefined,
-        scale_ratio: calibrationRatio ?? undefined,
-      });
+      const res = await saveWalls(activeLevelId, activeProjectId, walls);
 
       if (res.success) {
         setHasUnsavedChanges(false);
-        alert("Progetto salvato con successo!");
+        alert("Progetto salvato con successo! ✓");
       } else {
         alert("Errore durante il salvataggio.");
       }

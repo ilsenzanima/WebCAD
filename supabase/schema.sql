@@ -42,6 +42,7 @@ CREATE TABLE levels (
   elevation_z FLOAT NOT NULL DEFAULT 0,
   scale_ratio FLOAT,
   plan_image_url TEXT,
+  drawing_type VARCHAR(50) DEFAULT '2d_wall',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

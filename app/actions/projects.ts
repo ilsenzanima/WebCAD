@@ -59,13 +59,14 @@ export async function createProject(customName?: string) {
     throw new Error("Impossibile creare il progetto");
   }
 
-  // Creazione del primo livello base associato al progetto
+  // Creazione del primo disegno base associato al progetto
   const { error: levelError } = await supabase.from("levels").insert({
     project_id: data.id,
-    name: "Piano Terra",
+    name: "Piano Terra (2D)",
     elevation_z: 0,
     scale_ratio: null,
     plan_image_url: null,
+    drawing_type: "2d_wall",
   } as any);
 
   if (levelError) {
@@ -165,7 +166,7 @@ export async function getLevels(projectId: string) {
 
   const { data, error } = await supabase
     .from("levels")
-    .select("id, project_id, name, elevation_z, scale_ratio, plan_image_url, created_at")
+    .select("id, project_id, name, elevation_z, scale_ratio, plan_image_url, drawing_type, created_at")
     .eq("project_id", projectId)
     .order("elevation_z", { ascending: true });
 
@@ -181,7 +182,12 @@ export async function getLevels(projectId: string) {
 // ACTION: Aggiunge un nuovo livello al progetto
 // ============================================================
 
-export async function addLevel(projectId: string, customName?: string, elevationZ?: number) {
+export async function addLevel(
+  projectId: string,
+  customName?: string,
+  elevationZ?: number,
+  drawingType: "2d_wall" | "3d_box" = "2d_wall"
+) {
   const { supabase, user } = await getAuthUser();
   if (!user) throw new Error("Non autenticato.");
 
@@ -205,7 +211,7 @@ export async function addLevel(projectId: string, customName?: string, elevation
         .select("*", { count: "exact", head: true })
         .eq("project_id", projectId);
       const count = levelCount.count ?? 1;
-      finalName = `Piano ${count}`;
+      finalName = drawingType === "2d_wall" ? `Parete 2D ${count}` : `Cavedio 3D ${count}`;
     }
   }
 
@@ -217,8 +223,9 @@ export async function addLevel(projectId: string, customName?: string, elevation
       elevation_z: finalZ,
       scale_ratio: null,
       plan_image_url: null,
+      drawing_type: drawingType,
     } as any)
-    .select("id, project_id, name, elevation_z, scale_ratio, plan_image_url, created_at")
+    .select("id, project_id, name, elevation_z, scale_ratio, plan_image_url, drawing_type, created_at")
     .single();
 
   if (error) {
@@ -307,4 +314,168 @@ export async function deleteLevel(levelId: string, projectId: string) {
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/editor`);
   return { success: true };
+}
+
+// ============================================================
+// ACTION: Salva le pareti 2D nel database elements_master
+// ============================================================
+
+export async function saveWalls(levelId: string, projectId: string, walls: any[]) {
+  const { supabase, user } = await getAuthUser();
+  if (!user) throw new Error("Non autenticato.");
+
+  // 1. Elimina le pareti esistenti per questo livello
+  const { error: deleteError } = await supabase
+    .from("elements_master")
+    .delete()
+    .eq("level_id", levelId)
+    .eq("type", "wall");
+
+  if (deleteError) {
+    console.error("Errore durante l'eliminazione delle pareti:", deleteError);
+    return { error: "Impossibile salvare le pareti." };
+  }
+
+  if (walls.length === 0) {
+    revalidatePath(`/projects/${projectId}/editor`);
+    return { success: true };
+  }
+
+  // 2. Inserisci le nuove pareti
+  const rows = walls.map((w) => {
+    const dx = w.x2 - w.x1;
+    const dy = w.y2 - w.y1;
+    const total_length = Math.sqrt(dx * dx + dy * dy) * 10; // in mm (scala 1px = 10mm)
+
+    return {
+      level_id: levelId,
+      type: "wall",
+      total_length,
+      thickness: w.thickness,
+      geometry: { x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 },
+      structural_settings: { pitch: w.pitch, height: w.height },
+    };
+  });
+
+  const { error: insertError } = await supabase
+    .from("elements_master")
+    .insert(rows);
+
+  if (insertError) {
+    console.error("Errore inserimento pareti:", insertError);
+    return { error: "Errore durante il salvataggio." };
+  }
+
+  revalidatePath(`/projects/${projectId}/editor`);
+  return { success: true };
+}
+
+// ============================================================
+// QUERY: Carica le pareti 2D dal database
+// ============================================================
+
+export async function getWalls(levelId: string) {
+  const { supabase, user } = await getAuthUser();
+  if (!user) throw new Error("Non autenticato.");
+
+  const { data, error } = await supabase
+    .from("elements_master")
+    .select("id, thickness, geometry, structural_settings")
+    .eq("level_id", levelId)
+    .eq("type", "wall");
+
+  if (error) {
+    console.error("Errore caricamento pareti:", error);
+    return [];
+  }
+
+  return (data ?? []).map((row: any) => {
+    const geom = row.geometry || {};
+    const settings = row.structural_settings || {};
+    return {
+      id: row.id,
+      x1: geom.x1 ?? 0,
+      y1: geom.y1 ?? 0,
+      x2: geom.x2 ?? 0,
+      y2: geom.y2 ?? 0,
+      thickness: row.thickness ?? 100,
+      height: settings.height ?? 2700,
+      pitch: settings.pitch ?? 600,
+    };
+  });
+}
+
+// ============================================================
+// ACTION: Salva un cavedio/scatola 3D nel database elements_master
+// ============================================================
+
+export async function save3DBox(
+  levelId: string,
+  projectId: string,
+  boxData: { w: number; h: number; d: number; thickness: number }
+) {
+  const { supabase, user } = await getAuthUser();
+  if (!user) throw new Error("Non autenticato.");
+
+  // Elimina vecchi dati 3D per questo livello
+  const { error: deleteError } = await supabase
+    .from("elements_master")
+    .delete()
+    .eq("level_id", levelId)
+    .eq("type", "duct");
+
+  if (deleteError) {
+    console.error("Errore durante l'eliminazione dei dati 3D:", deleteError);
+    return { error: "Impossibile salvare i dati 3D." };
+  }
+
+  // Inserisci il nuovo cavedio 3D
+  const { error: insertError } = await supabase.from("elements_master").insert({
+    level_id: levelId,
+    type: "duct",
+    total_length: boxData.h, // Usiamo l'altezza come lunghezza totale
+    thickness: boxData.thickness,
+    geometry: { w: boxData.w, h: boxData.h, d: boxData.d },
+    structural_settings: {},
+  } as any);
+
+  if (insertError) {
+    console.error("Errore inserimento dati 3D:", insertError);
+    return { error: "Errore durante il salvataggio." };
+  }
+
+  revalidatePath(`/projects/${projectId}/editor-3d`);
+  return { success: true };
+}
+
+// ============================================================
+// QUERY: Carica il cavedio/scatola 3D dal database
+// ============================================================
+
+export async function get3DBox(levelId: string) {
+  const { supabase, user } = await getAuthUser();
+  if (!user) throw new Error("Non autenticato.");
+
+  const { data, error } = await supabase
+    .from("elements_master")
+    .select("id, thickness, geometry")
+    .eq("level_id", levelId)
+    .eq("type", "duct")
+    .maybeSingle();
+
+  if (error) {
+    console.error("Errore caricamento dati 3D:", error);
+    return null;
+  }
+
+  if (!data) return null;
+
+  const geom = (data.geometry as any) || {};
+  return {
+    id: data.id,
+    w: geom.w ?? 1000,
+    h: geom.h ?? 2000,
+    d: geom.d ?? 1000,
+    thickness: data.thickness ?? 15,
+  };
 }

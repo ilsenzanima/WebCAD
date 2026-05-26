@@ -30,6 +30,7 @@ export interface Level {
   elevation_z: number; // Z-index per attraversamento multi-piano
   scale_ratio: number | null; // Rapporto pixel -> mm (calibrazione)
   plan_image_url: string | null;
+  drawing_type?: "2d_wall" | "3d_box";
   created_at?: string;
 }
 

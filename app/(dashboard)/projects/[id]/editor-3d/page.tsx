@@ -1,10 +1,16 @@
-import CanvasWrapper from "@/app/ui/canvas/CanvasWrapper";
+import dynamic from "next/dynamic";
 import EditorHeader from "@/app/ui/canvas/EditorHeader";
 import { createClient } from "@/lib/supabase/server";
-import { getLevels } from "@/app/actions/projects";
+import { getLevels, get3DBox } from "@/app/actions/projects";
 import type { Level } from "@/lib/types/database";
 
-export default async function EditorPage({
+// Importazione dinamica del workspace 3D per disabilitare SSR (richiesto da Three.js/React Three Fiber)
+const Canvas3DWorkspace = dynamic(
+  () => import("@/app/ui/canvas/Canvas3DWorkspace"),
+  { ssr: false }
+);
+
+export default async function Editor3DPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -21,13 +27,13 @@ export default async function EditorPage({
 
   const projectName = project?.name ?? "Progetto Senza Nome";
 
-  // Livelli del progetto (ordinati per elevation_z)
+  // Livelli/disegni
   const levels = (await getLevels(id)) as Level[];
   const firstLevel = levels[0] ?? null;
 
   return (
     <div className="relative w-full h-full flex flex-col">
-      {/* Header con gestione nome e livelli */}
+      {/* Header unificato */}
       <EditorHeader
         projectId={id}
         initialName={projectName}
@@ -35,9 +41,9 @@ export default async function EditorPage({
         initialLevelId={firstLevel?.id ?? ""}
       />
 
-      {/* Area del Canvas */}
-      <div className="flex-1 w-full h-full relative cursor-crosshair">
-        <CanvasWrapper projectId={id} />
+      {/* Area del Canvas 3D */}
+      <div className="flex-1 w-full h-full relative">
+        <Canvas3DWorkspace projectId={id} />
       </div>
     </div>
   );
