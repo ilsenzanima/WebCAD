@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
-import { getFieldNotes, createFieldNote } from "@/app/actions/field-notes";
+import NotesRedirector from "@/app/ui/projects/NotesRedirector";
 
 export default async function LevelFieldNotesPage({
   params,
@@ -36,34 +36,5 @@ export default async function LevelFieldNotesPage({
 
   if (!level) return notFound();
 
-  // Recupera le note esistenti per questo livello
-  const notes = await getFieldNotes(levelId);
-  let note = notes[0] ?? null;
-
-  if (!note) {
-    // Se non esiste ancora alcuna nota per il livello, ne creiamo una di default istantaneamente
-    const res = await createFieldNote({
-      project_id: id,
-      level_id: levelId,
-      type_id: null,
-      type_name: "Appunti Cantiere",
-      items: [
-        {
-          item_type: "nota",
-          value_text: "",
-          sort_order: 0
-        }
-      ]
-    });
-    if (res.success && res.note) {
-      note = res.note;
-    }
-  }
-
-  if (note) {
-    redirect(`/projects/${id}/levels/${levelId}/appunti/${note.id}/modifica`);
-  }
-
-  // Fallback in caso di problemi imprevisti
-  redirect(`/projects/${id}`);
+  return <NotesRedirector projectId={id} levelId={levelId} />;
 }
