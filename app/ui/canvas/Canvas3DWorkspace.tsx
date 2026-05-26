@@ -46,11 +46,11 @@ export default function Canvas3DWorkspace({ projectId }: Props) {
     const fetchNotes = async () => {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
-      const { data } = await supabase
+      const { data } = (await supabase
         .from("projects")
         .select("notes")
         .eq("id", projectId)
-        .single();
+        .single()) as any;
       if (data) setDbNotes(data.notes ?? "");
     };
     fetchNotes();

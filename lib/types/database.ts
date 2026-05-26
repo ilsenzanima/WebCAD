@@ -18,6 +18,7 @@ export type StructuralPointType = "stud" | "pendant";
 export interface Project {
   id: string; // UUID
   name: string;
+  notes?: string | null;
   client_info: Record<string, unknown> | null; // JSONB
   created_at?: string;
   updated_at?: string;
