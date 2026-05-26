@@ -47,6 +47,24 @@ export default function CanvasWorkspace() {
 
   const { activeLevelId, activeProjectId, levels } = useProjectStore();
 
+  const [isShiftPressed, setIsShiftPressed] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setIsShiftPressed(true);
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setIsShiftPressed(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, []);
+
   // 1. Carica le note e le pareti del disegno dal database all'avvio o al cambio livello
   useEffect(() => {
     if (!activeLevelId) return;
@@ -178,12 +196,21 @@ export default function CanvasWorkspace() {
     const rawY = (pointer.y - stage.y()) / stage.scaleY();
 
     // Snap alla griglia
-    const snapped = {
-      x: snapToGrid(rawX),
-      y: snapToGrid(rawY),
-    };
+    let snappedX = snapToGrid(rawX);
+    let snappedY = snapToGrid(rawY);
 
-    setDrawingEndPoint(snapped);
+    // Tracciamento Ortogonale con tasto Shift
+    if (isShiftPressed) {
+      const dx = Math.abs(snappedX - drawingStartPoint.x);
+      const dy = Math.abs(snappedY - drawingStartPoint.y);
+      if (dx > dy) {
+        snappedY = drawingStartPoint.y; // Blocca orizzontale
+      } else {
+        snappedX = drawingStartPoint.x; // Blocca verticale
+      }
+    }
+
+    setDrawingEndPoint({ x: snappedX, y: snappedY });
   };
 
   const handleStageMouseUp = () => {
