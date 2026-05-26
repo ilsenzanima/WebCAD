@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createMaterial, type MaterialFormState } from "@/app/actions/materials";
 
 interface OptionItem { value: string; label: string; }
@@ -12,10 +13,17 @@ interface Props {
 }
 
 export default function NewMaterialForm({ categories, units }: Props) {
+  const router = useRouter();
   const [state, action, pending] = useActionState<MaterialFormState, FormData>(
     createMaterial,
     undefined
   );
+
+  useEffect(() => {
+    if (state?.success) {
+      router.push("/catalog");
+    }
+  }, [state, router]);
 
   return (
     <div className="p-8 max-w-3xl animate-fade-in">

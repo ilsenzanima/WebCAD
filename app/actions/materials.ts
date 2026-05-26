@@ -9,6 +9,7 @@ export type MaterialFormState =
   | {
       errors?: Record<string, string[]>;
       message?: string;
+      success?: boolean;
     }
   | undefined;
 
@@ -112,7 +113,7 @@ export async function createMaterial(
 
   if (success) {
     revalidatePath("/catalog");
-    redirect("/catalog");
+    return { success: true };
   }
 }
 
