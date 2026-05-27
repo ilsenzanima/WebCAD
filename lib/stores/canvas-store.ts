@@ -25,10 +25,12 @@ export interface Wall {
   y1: number;
   x2: number;
   y2: number;
-  thickness: number; // in mm
-  height: number; // in mm
+  thickness: number; // in mm (spessore della lastra)
+  height: number; // in mm (Lunghezza di Estrusione del cassonetto!)
   pitch: number; // in mm
   structuralPoints: { x: number; y: number; isManual: boolean }[];
+  materialId?: string | null; // Materiale unico per lastre cassonetto
+  offsetSide?: "left" | "right" | "center"; // Offset dello spessore rispetto alla linea d'asse
   studMaterialId?: string | null;
   studThickness?: number;
   layerSideAMaterialId?: string | null;
@@ -51,6 +53,9 @@ interface CanvasState {
   activeTool: CanvasTool;
   selectedWallId: string | null;
 
+  // Lunghezza estrusione globale (mm) per i cassonetti
+  globalExtrusionLength: number;
+
   // Pareti Disegnate
   walls: Wall[];
   
@@ -66,6 +71,7 @@ interface CanvasState {
   setScale: (scale: number) => void;
   setActiveTool: (tool: CanvasTool) => void;
   setSelectedWallId: (id: string | null) => void;
+  setGlobalExtrusionLength: (len: number) => void;
   resetViewport: () => void;
 
   // Azioni Pareti
@@ -149,6 +155,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   scale: 1,
   activeTool: "select",
   selectedWallId: null,
+  globalExtrusionLength: 3000,
   walls: [],
   drawingStartPoint: null,
   drawingEndPoint: null,
@@ -158,6 +165,16 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   setScale: (scale) => set({ scale }),
   setActiveTool: (tool) => set({ activeTool: tool, selectedWallId: null, drawingStartPoint: null, drawingEndPoint: null }),
   setSelectedWallId: (id) => set({ selectedWallId: id }),
+  setGlobalExtrusionLength: (len) =>
+    set((state) => {
+      // Quando cambia la lunghezza estrusione globale, aggiorna la profondità di tutte le lastre presenti
+      const updated = state.walls.map((w) => ({ ...w, height: len }));
+      return {
+        globalExtrusionLength: len,
+        walls: updated,
+        hasUnsavedChanges: true,
+      };
+    }),
   resetViewport: () => set({ stageX: 0, stageY: 0, scale: 1 }),
 
   addWall: (newWall) =>
@@ -171,7 +188,9 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         newWall.openings ?? []
       );
       
-      const resolvedWall = {
+      const wall: Wall = {
+        materialId: null,
+        offsetSide: "left",
         studMaterialId: null,
         studThickness: 50,
         layerSideAMaterialId: null,
@@ -182,17 +201,15 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         layerSideBThickness: 12.5,
         isControparete: false,
         ...newWall,
-      };
-      resolvedWall.thickness = (resolvedWall.studThickness ?? 50) + (resolvedWall.layerSideACount ?? 1) * (resolvedWall.layerSideAThickness ?? 12.5) + ((resolvedWall.isControparete ? 0 : (resolvedWall.layerSideBCount ?? 1) * (resolvedWall.layerSideBThickness ?? 12.5)));
-      const wall: Wall = {
-        ...resolvedWall,
+        thickness: newWall.thickness ?? 15,
+        height: state.globalExtrusionLength, // Usa estrusione globale
         structuralPoints,
       };
 
       return {
         walls: [...state.walls, wall],
         hasUnsavedChanges: true,
-        selectedWallId: wall.id, // Seleziona automaticamente la nuova parete
+        selectedWallId: wall.id, // Seleziona automaticamente la nuova lastra
       };
     }),
 
@@ -211,11 +228,9 @@ export const useCanvasStore = create<CanvasState>((set) => ({
           merged.pitch,
           merged.openings ?? []
         );
-        const computedThickness = (merged.studThickness ?? 50) + (merged.layerSideACount ?? 1) * (merged.layerSideAThickness ?? 12.5) + ((merged.isControparete ? 0 : (merged.layerSideBCount ?? 1) * (merged.layerSideBThickness ?? 12.5)));
 
         return {
           ...merged,
-          thickness: computedThickness,
           structuralPoints,
         };
       });
@@ -243,6 +258,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
       scale: 1,
       activeTool: "select",
       selectedWallId: null,
+      globalExtrusionLength: 3000,
       walls: [],
       drawingStartPoint: null,
       drawingEndPoint: null,
@@ -252,8 +268,13 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   setHasUnsavedChanges: (dirty) => set({ hasUnsavedChanges: dirty }),
   
   loadCanvasData: (walls) =>
-    set({
-      walls,
-      hasUnsavedChanges: false,
+    set((state) => {
+      // Trova la prima lunghezza di estrusione valida dalle pareti caricate, o usa quella globale
+      const firstExtrusion = walls.length > 0 ? walls[0].height : state.globalExtrusionLength;
+      return {
+        walls,
+        globalExtrusionLength: firstExtrusion || 3000,
+        hasUnsavedChanges: false,
+      };
     }),
 }));

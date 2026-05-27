@@ -86,65 +86,30 @@ export default function ProjectReport({ projectId }: Props) {
   const linearRequests: LinearMaterialRequest[] = [];
   const sheetRequests: SheetMaterialRequest[] = [];
 
-  // A. Estrazione materiali dalle Pareti 2D
+  // A. Estrazione materiali dalle Lastre 2D estruse in 3D
   allWalls.forEach((w) => {
     const dx = w.x2 - w.x1;
     const dy = w.y2 - w.y1;
     const lenMm = Math.round(Math.sqrt(dx * dx + dy * dy) * 10); // in mm (1px = 10mm)
     
-    // 1. Montanti verticali (ognuno lungo quanto l'altezza della parete)
-    // Il numero di montanti è dato dalla lista o calcolato dal passo
-    const pitchPx = w.pitch / 10;
-    const lenPx = Math.sqrt(dx * dx + dy * dy);
-    const numStuds = lenPx > pitchPx ? Math.floor(lenPx / pitchPx) + 2 : 2;
-
-    for (let i = 0; i < numStuds; i++) {
-      linearRequests.push({ length: w.height, label: `Montante H (Parete ${w.levelName})` });
-    }
-
-    // 2. Guide orizzontali (superiore e inferiore, ognuna lunga quanto la parete)
-    linearRequests.push({ length: lenMm, label: `Guida inf. L (Parete ${w.levelName})` });
-    linearRequests.push({ length: lenMm, label: `Guida sup. L (Parete ${w.levelName})` });
-
-    // 3. Lastre di rivestimento (2 lati, quindi copriamo Area = L x H x 2)
-    // Una lastra commerciale ha larghezza 1200mm. Dividiamo la parete in lastre verticali.
-    const numSheetsNeeded = Math.ceil(lenMm / commercialSheetW) * 2;
-    for (let i = 0; i < numSheetsNeeded; i++) {
+    // Le lastre del cassonetto sono caratterizzate da:
+    // - Una larghezza pari a lenMm (sezione frontale)
+    // - Una lunghezza pari alla profondità di estrusione w.height (es: 3000mm)
+    // Se la lunghezza di estrusione supera l'altezza del pannello commerciale (commercialSheetH = 2000mm),
+    // spezziamo il pezzo longitudinalmente (es. un pezzo da 2000mm e uno da 1000mm).
+    let remainingLength = w.height || 3000;
+    while (remainingLength > 0) {
+      const currentPieceLen = Math.min(remainingLength, commercialSheetH);
+      remainingLength -= currentPieceLen;
       sheetRequests.push({
-        width: Math.min(lenMm, commercialSheetW),
-        height: w.height,
-        label: `Lastra Parete (Parete ${w.levelName})`,
+        width: lenMm,
+        height: currentPieceLen,
+        label: `Lastra ${w.levelName || "Cassonetto"} (${lenMm}x${currentPieceLen}mm)`,
       });
     }
   });
 
-  // B. Estrazione materiali dai Cavedi 3D
-  all3DBoxes.forEach((box) => {
-    // 12 spigoli metallici (angolari):
-    // - 4 montanti verticali di altezza h
-    for (let i = 0; i < 4; i++) {
-      linearRequests.push({ length: box.h, label: `Angolare Vert. H (Cavedio ${box.levelName})` });
-    }
-    // - 4 profili di larghezza w
-    for (let i = 0; i < 4; i++) {
-      linearRequests.push({ length: box.w, label: `Angolare Orizz. W (Cavedio ${box.levelName})` });
-    }
-    // - 4 profili di profondità d
-    for (let i = 0; i < 4; i++) {
-      linearRequests.push({ length: box.d, label: `Angolare Orizz. D (Cavedio ${box.levelName})` });
-    }
-
-    // Lastre per le 6 facce:
-    // 2x W x H
-    sheetRequests.push({ width: box.w, height: box.h, label: `Lastra Front. (Cavedio ${box.levelName})` });
-    sheetRequests.push({ width: box.w, height: box.h, label: `Lastra Post. (Cavedio ${box.levelName})` });
-    // 2x D x H
-    sheetRequests.push({ width: box.d, height: box.h, label: `Lastra Lat. SX (Cavedio ${box.levelName})` });
-    sheetRequests.push({ width: box.d, height: box.h, label: `Lastra Lat. DX (Cavedio ${box.levelName})` });
-    // 2x W x D
-    sheetRequests.push({ width: box.w, height: box.d, label: `Lastra Inf. (Cavedio ${box.levelName})` });
-    sheetRequests.push({ width: box.w, height: box.d, label: `Lastra Sup. (Cavedio ${box.levelName})` });
-  });
+  // B. Rimosso calcolo fisso vecchi cavedi 3D (ora le lastre 3D derivano interamente dal 2D estruso)
 
   // ============================================================
   // ALGORITMO NESTING 1D (FIRST FIT DECREASING)
@@ -469,15 +434,17 @@ export default function ProjectReport({ projectId }: Props) {
             📊 Sintesi Quantità & Computo Materiali
           </h3>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className={`grid grid-cols-1 ${totalProfilesCount > 0 ? "md:grid-cols-2" : ""} gap-4`}>
             {/* Profili Lineari */}
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 print:border-gray-200 print:text-black">
-              <span className="text-xs uppercase font-bold text-gray-400">Profili & Montanti (1D)</span>
-              <div className="text-3xl font-extrabold text-orange-400 mt-1">{totalProfilesCount} <span className="text-lg font-medium text-white print:text-black">Barre</span></div>
-              <p className="text-xs text-gray-400 mt-2 print:text-gray-600">
-                Lunghezza singola: 3000 mm | Sfrido Stimato: <span className="font-bold text-white print:text-black">{totalProfileSfrido}%</span>
-              </p>
-            </div>
+            {totalProfilesCount > 0 && (
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/5 print:border-gray-200 print:text-black">
+                <span className="text-xs uppercase font-bold text-gray-400">Profili & Montanti (1D)</span>
+                <div className="text-3xl font-extrabold text-orange-400 mt-1">{totalProfilesCount} <span className="text-lg font-medium text-white print:text-black">Barre</span></div>
+                <p className="text-xs text-gray-400 mt-2 print:text-gray-600">
+                  Lunghezza singola: 3000 mm | Sfrido Stimato: <span className="font-bold text-white print:text-black">{totalProfileSfrido}%</span>
+                </p>
+              </div>
+            )}
             
             {/* Lastre di Rivestimento */}
             <div className="p-4 rounded-2xl bg-white/5 border border-white/5 print:border-gray-200 print:text-black">
@@ -491,7 +458,8 @@ export default function ProjectReport({ projectId }: Props) {
         </div>
 
         {/* ── OTTIMIZZATORE DI TAGLIO 1D (Barre) ── */}
-        <div className="space-y-4">
+        {totalProfilesCount > 0 && (
+          <div className="space-y-4">
           <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 print:text-black">
             ✂️ Nesting di Taglio 1D: Barre Profili & Montanti (3000mm)
           </h3>
@@ -549,6 +517,7 @@ export default function ProjectReport({ projectId }: Props) {
             })}
           </div>
         </div>
+      )}
 
         {/* ── OTTIMIZZATORE DI TAGLIO 2D (Lastre) ── */}
         <div className="space-y-4">

@@ -353,7 +353,12 @@ export async function saveWalls(levelId: string, projectId: string, walls: any[]
       total_length,
       thickness: w.thickness,
       geometry: { x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 },
-      structural_settings: { pitch: w.pitch, height: w.height },
+      structural_settings: { 
+        pitch: w.pitch, 
+        height: w.height,
+        materialId: w.materialId ?? null,
+        offsetSide: w.offsetSide ?? "left"
+      },
     };
   });
 
@@ -398,9 +403,11 @@ export async function getWalls(levelId: string) {
       y1: geom.y1 ?? 0,
       x2: geom.x2 ?? 0,
       y2: geom.y2 ?? 0,
-      thickness: row.thickness ?? 100,
-      height: settings.height ?? 2700,
+      thickness: row.thickness ?? 15,
+      height: settings.height ?? 3000,
       pitch: settings.pitch ?? 600,
+      materialId: settings.materialId ?? null,
+      offsetSide: settings.offsetSide ?? "left"
     };
   });
 }
