@@ -172,6 +172,58 @@ export default function CanvasWorkspace() {
     );
   };
 
+  const handleCreateWall = (x1: number, y1: number, x2: number, y2: number) => {
+    const TOLERANCE_PX = 2;
+    
+    const extWall = walls.find(w => {
+      const startsAtStart = Math.hypot(w.x1 - x1, w.y1 - y1) < TOLERANCE_PX;
+      const startsAtEnd = Math.hypot(w.x2 - x1, w.y2 - y1) < TOLERANCE_PX;
+      return startsAtStart || startsAtEnd;
+    });
+
+    if (extWall) {
+      const dx1 = extWall.x2 - extWall.x1;
+      const dy1 = extWall.y2 - extWall.y1;
+      const angle1 = Math.atan2(dy1, dx1);
+      
+      const dx2 = x2 - x1;
+      const dy2 = y2 - y1;
+      const angle2 = Math.atan2(dy2, dx2);
+      
+      let diff = Math.abs(angle1 - angle2);
+      if (diff > Math.PI) diff = 2 * Math.PI - diff;
+      
+      const isCollinear = diff < 0.1 || Math.abs(diff - Math.PI) < 0.1;
+      
+      if (isCollinear) {
+        const confirmMerge = window.confirm("Vuoi unire questa parete a quella esistente per formarne una sola continua?");
+        if (confirmMerge) {
+          const startsAtEnd = Math.hypot(extWall.x2 - x1, extWall.y2 - y1) < TOLERANCE_PX;
+          if (startsAtEnd) {
+            updateWall(extWall.id, { x2, y2 });
+          } else {
+            updateWall(extWall.id, { x1: x2, y1: y2 });
+          }
+          return { fused: true, endPoint: { x: x2, y: y2 } };
+        }
+      }
+    }
+
+    addWall({
+      id: `wall_${Date.now()}`,
+      x1,
+      y1,
+      x2,
+      y2,
+      thickness: 100,
+      height: 2700,
+      pitch: 600,
+      openings: []
+    });
+    
+    return { fused: false, endPoint: { x: x2, y: y2 } };
+  };
+
   // Interazioni di disegno click sullo stage
   const getSnapPoint = (x:number,y:number) => {
     let best = { x: snapToGrid(x), y: snapToGrid(y) };
@@ -202,8 +254,9 @@ export default function CanvasWorkspace() {
     setDrawingEndPoint(snapped);
     const len = Math.hypot(snapped.x - drawingStartPoint.x, snapped.y - drawingStartPoint.y);
     if (len > GRID_SIZE / 2) {
-      addWall({ id:`wall_${Date.now()}`, x1:drawingStartPoint.x, y1:drawingStartPoint.y, x2:snapped.x, y2:snapped.y, thickness:100, height:2700, pitch:600, openings:[] });
-      setDrawingStartPoint(snapped);
+      const res = handleCreateWall(drawingStartPoint.x, drawingStartPoint.y, snapped.x, snapped.y);
+      setDrawingStartPoint(res.endPoint);
+      setDrawingEndPoint(res.endPoint);
     }
   };
 
@@ -249,8 +302,8 @@ export default function CanvasWorkspace() {
         const dx = drawingEndPoint.x - drawingStartPoint.x; const dy = drawingEndPoint.y - drawingStartPoint.y; const l = Math.hypot(dx,dy)||1;
         const px = mm / PIXELS_TO_MM;
         const end = { x: drawingStartPoint.x + (dx/l)*px, y: drawingStartPoint.y + (dy/l)*px };
-        addWall({ id:`wall_${Date.now()}`, x1:drawingStartPoint.x, y1:drawingStartPoint.y, x2:end.x, y2:end.y, thickness:100, height:2700, pitch:600, openings:[] });
-        setDrawingStartPoint(end); setDrawingEndPoint(end); setLengthInput("");
+        const res = handleCreateWall(drawingStartPoint.x, drawingStartPoint.y, end.x, end.y);
+        setDrawingStartPoint(res.endPoint); setDrawingEndPoint(res.endPoint); setLengthInput("");
       }
     };
     window.addEventListener("keydown", onKey);

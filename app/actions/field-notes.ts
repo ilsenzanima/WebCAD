@@ -347,23 +347,79 @@ export async function getLevelNoteText(levelId: string): Promise<string> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("field_notes")
-    .select("field_note_items(item_type, value_text)")
+    .select("field_note_items(item_type, value_text, value_num, value_unit, value_bool)")
     .eq("level_id", levelId)
     .order("created_at", { ascending: true });
 
   if (error || !data || data.length === 0) return "";
 
-  const texts: string[] = [];
+  const technicalItems: string[] = [];
+  const noteTexts: string[] = [];
+
   for (const note of data) {
     const items = note.field_note_items ?? [];
     for (const item of items) {
-      if (item.item_type === "nota" && item.value_text) {
-        texts.push(item.value_text.trim());
+      if (item.item_type === "nota") {
+        if (item.value_text) noteTexts.push(item.value_text.trim());
+      } else {
+        let desc = "";
+        const valNum = item.value_num;
+        const valUnit = item.value_unit || "";
+        const valBool = item.value_bool;
+        const valText = item.value_text || "";
+
+        switch (item.item_type) {
+          case "base":
+            desc = `Base: ${valNum} ${valUnit || "mm"}`;
+            break;
+          case "altezza":
+            desc = `Altezza: ${valNum} ${valUnit || "mm"}`;
+            break;
+          case "spessore":
+            desc = `Spessore: ${valNum} ${valUnit || "mm"}`;
+            break;
+          case "lana_interna":
+            desc = `Lana Interna: ${valBool ? "Sì" : "No"}`;
+            break;
+          case "dipintura":
+            desc = `Dipintura: ${valBool ? "Sì" : "No"}`;
+            break;
+          case "dim_quadrata":
+            desc = `Dimensione Quadrata: ${valNum} ${valUnit || "mq"}`;
+            break;
+          case "dim_cubica":
+            desc = `Dimensione Cubica: ${valNum} ${valUnit || "mc"}`;
+            break;
+          case "materiale":
+            desc = `Materiale: ${valText}`;
+            break;
+          case "foto":
+            desc = `Foto allegata: ${valText}`;
+            break;
+          case "posizione":
+            desc = `Posizione segnata: ${valText}`;
+            break;
+          default:
+            desc = `${item.item_type}: ${valText || valNum || ""}`;
+        }
+        if (desc) technicalItems.push(`• ${desc}`);
       }
     }
   }
 
-  return texts.filter(Boolean).join("\n\n");
+  const sections: string[] = [];
+  if (technicalItems.length > 0) {
+    sections.push(
+      `=== MISURE & VOCI DA MOBILE ===\n${technicalItems.join("\n")}\n==============================`
+    );
+  }
+  
+  const mergedNotes = noteTexts.filter(Boolean).join("\n\n");
+  if (mergedNotes) {
+    sections.push(mergedNotes);
+  }
+
+  return sections.join("\n\n");
 }
 
 export async function updateLevelNoteText(
