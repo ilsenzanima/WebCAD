@@ -16,6 +16,7 @@ export interface Opening {
   width: number;
   height: number;
   offset: number;
+  sillHeight?: number; // Altezza da terra (davanzale) in mm, utile per le finestre
 }
 
 export interface Wall {

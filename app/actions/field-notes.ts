@@ -349,13 +349,21 @@ export async function getLevelNoteText(levelId: string): Promise<string> {
     .from("field_notes")
     .select("field_note_items(item_type, value_text)")
     .eq("level_id", levelId)
-    .order("created_at", { ascending: true })
-    .limit(1);
+    .order("created_at", { ascending: true });
 
   if (error || !data || data.length === 0) return "";
 
-  const noteItem = (data[0].field_note_items ?? []).find((item: FieldNoteItem) => item.item_type === "nota");
-  return noteItem?.value_text ?? "";
+  const texts: string[] = [];
+  for (const note of data) {
+    const items = note.field_note_items ?? [];
+    for (const item of items) {
+      if (item.item_type === "nota" && item.value_text) {
+        texts.push(item.value_text.trim());
+      }
+    }
+  }
+
+  return texts.filter(Boolean).join("\n\n");
 }
 
 export async function updateLevelNoteText(

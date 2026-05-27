@@ -51,6 +51,7 @@ export default function CanvasWorkspace() {
   const [lengthInput, setLengthInput] = useState("");
   const [selectedOpening, setSelectedOpening] = useState<{ wallId: string; openingId: string } | null>(null);
   const [materials, setMaterials] = useState<any[]>([]);
+  const [offsetDirection, setOffsetDirection] = useState<Record<string, "start" | "end">>({});
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -683,9 +684,14 @@ export default function CanvasWorkspace() {
                   className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-xs px-2.5 py-1.5 rounded-xl outline-none cursor-pointer"
                 >
                   <option value="">Nessuno (Default 50mm)</option>
-                  {studMaterials.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name} ({m.thickness_mm}mm)</option>
-                  ))}
+                  {studMaterials.map((m) => {
+                    const dimStr = m.length_mm && m.width_mm
+                      ? ` - ${m.length_mm}x${m.width_mm}x${m.thickness_mm}mm`
+                      : ` (${m.thickness_mm}mm)`;
+                    return (
+                      <option key={m.id} value={m.id}>{m.name}{dimStr}</option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -722,9 +728,14 @@ export default function CanvasWorkspace() {
                       className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-[10px] px-2 py-1.5 rounded-lg outline-none cursor-pointer"
                     >
                       <option value="">Default (12.5mm)</option>
-                      {plateMaterials.map((m) => (
-                        <option key={m.id} value={m.id}>{m.name}</option>
-                      ))}
+                      {plateMaterials.map((m) => {
+                        const dimStr = m.length_mm && m.width_mm
+                          ? ` - ${m.length_mm}x${m.width_mm}x${m.thickness_mm}mm`
+                          : ` (${m.thickness_mm}mm)`;
+                        return (
+                          <option key={m.id} value={m.id}>{m.name}{dimStr}</option>
+                        );
+                      })}
                     </select>
                   </div>
                   <div>
@@ -762,9 +773,14 @@ export default function CanvasWorkspace() {
                         className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-[10px] px-2 py-1.5 rounded-lg outline-none cursor-pointer"
                       >
                         <option value="">Default (12.5mm)</option>
-                        {plateMaterials.map((m) => (
-                          <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
+                        {plateMaterials.map((m) => {
+                          const dimStr = m.length_mm && m.width_mm
+                            ? ` - ${m.length_mm}x${m.width_mm}x${m.thickness_mm}mm`
+                            : ` (${m.thickness_mm}mm)`;
+                          return (
+                            <option key={m.id} value={m.id}>{m.name}{dimStr}</option>
+                          );
+                        })}
                       </select>
                     </div>
                     <div>
@@ -832,56 +848,107 @@ export default function CanvasWorkspace() {
                 </div>
               </div>
 
-              <div className="space-y-2 max-h-48 overflow-y-auto pr-1 scrollbar-thin">
-                {(selectedWall.openings || []).map((op) => (
-                  <div key={op.id} className="p-2.5 rounded-xl bg-[hsl(220_32%_10%)] border border-[hsl(220_20%_20%)] space-y-2 text-xs">
-                    <div className="flex items-center justify-between font-bold text-white">
-                      <span>{op.type === "door" ? "🚪 Porta" : "🪟 Finestra"}</span>
-                      <button
-                        onClick={() => {
-                          const filtered = selectedWall.openings.filter((o) => o.id !== op.id);
-                          updateWall(selectedWall.id, { openings: filtered });
-                        }}
-                        className="text-red-400 hover:text-red-300 transition-colors font-semibold text-[10px] cursor-pointer"
-                      >
-                        Rimuovi
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[8px] text-gray-500 block uppercase mb-0.5">Larghezza (mm)</label>
-                        <input
-                          type="number"
-                          value={op.width}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10) || 0;
-                            const updated = selectedWall.openings.map((o) => (o.id === op.id ? { ...o, width: val } : o));
-                            updateWall(selectedWall.id, { openings: updated });
+              <div className="space-y-3.5 max-h-52 overflow-y-auto pr-1 scrollbar-thin">
+                {(selectedWall.openings || []).map((op) => {
+                  const dx = selectedWall.x2 - selectedWall.x1;
+                  const dy = selectedWall.y2 - selectedWall.y1;
+                  const wallLenMm = Math.round(Math.hypot(dx, dy) * PIXELS_TO_MM);
+                  const isFromEnd = offsetDirection[op.id] === "end";
+                  
+                  return (
+                    <div key={op.id} className="p-2.5 rounded-xl bg-[hsl(220_32%_10%)] border border-[hsl(220_20%_20%)] space-y-2 text-xs">
+                      <div className="flex items-center justify-between font-bold text-white">
+                        <span>{op.type === "door" ? "🚪 Porta" : "🪟 Finestra"}</span>
+                        <button
+                          onClick={() => {
+                            const filtered = selectedWall.openings.filter((o) => o.id !== op.id);
+                            updateWall(selectedWall.id, { openings: filtered });
                           }}
-                          className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_22%)] text-white text-[10px] px-2 py-1 rounded outline-none"
-                        />
+                          className="text-red-400 hover:text-red-300 transition-colors font-semibold text-[10px] cursor-pointer"
+                        >
+                          Rimuovi
+                        </button>
                       </div>
-                      <div>
-                        <label className="text-[8px] text-gray-500 block uppercase mb-0.5">Distanza / Offset (mm)</label>
-                        <input
-                          type="number"
-                          value={op.offset}
-                          onChange={(e) => {
-                            const val = parseInt(e.target.value, 10) || 0;
-                            const updated = selectedWall.openings.map((o) => (o.id === op.id ? { ...o, offset: val } : o));
-                            updateWall(selectedWall.id, { openings: updated });
-                          }}
-                          className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_22%)] text-white text-[10px] px-2 py-1 rounded outline-none"
-                        />
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[8px] text-gray-500 block uppercase mb-0.5">Larghezza Foro (mm)</label>
+                          <input
+                            type="number"
+                            value={op.width}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              let calculatedOffset = op.offset;
+                              if (isFromEnd) {
+                                const currentDistanceFromEnd = wallLenMm - op.offset - op.width;
+                                calculatedOffset = wallLenMm - currentDistanceFromEnd - val;
+                              }
+                              const updated = selectedWall.openings.map((o) => (o.id === op.id ? { ...o, width: val, offset: calculatedOffset } : o));
+                              updateWall(selectedWall.id, { openings: updated });
+                            }}
+                            className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_22%)] text-white text-[10px] px-2 py-1 rounded outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] text-gray-500 block uppercase mb-0.5">Altezza Foro (mm)</label>
+                          <input
+                            type="number"
+                            value={op.height}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              const updated = selectedWall.openings.map((o) => (o.id === op.id ? { ...o, height: val } : o));
+                              updateWall(selectedWall.id, { openings: updated });
+                            }}
+                            className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_22%)] text-white text-[10px] px-2 py-1 rounded outline-none"
+                          />
+                        </div>
                       </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[8px] text-gray-500 block uppercase mb-0.5">Misura Offset (mm)</label>
+                          <input
+                            type="number"
+                            value={isFromEnd ? Math.max(0, wallLenMm - op.offset - op.width) : op.offset}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              const calculatedOffset = isFromEnd ? (wallLenMm - val - op.width) : val;
+                              const updated = selectedWall.openings.map((o) => (o.id === op.id ? { ...o, offset: calculatedOffset } : o));
+                              updateWall(selectedWall.id, { openings: updated });
+                            }}
+                            className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_22%)] text-white text-[10px] px-2 py-1 rounded outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[8px] text-gray-500 block uppercase mb-0.5">Riferimento Offset</label>
+                          <button
+                            onClick={() => setOffsetDirection((prev) => ({ ...prev, [op.id]: isFromEnd ? "start" : "end" }))}
+                            className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_22%)] text-white text-[10px] px-2 py-1 rounded outline-none text-left flex items-center justify-between cursor-pointer hover:bg-white/5 transition-colors"
+                          >
+                            <span>{isFromEnd ? "⬅️ Fine (B)" : "➡️ Inizio (A)"}</span>
+                            <span className="text-gray-500">🔄</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {op.type === "window" && (
+                        <div>
+                          <label className="text-[8px] text-gray-500 block uppercase mb-0.5">Altezza da Terra / Davanzale (mm)</label>
+                          <input
+                            type="number"
+                            value={op.sillHeight ?? 900}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10) || 0;
+                              const updated = selectedWall.openings.map((o) => (o.id === op.id ? { ...o, sillHeight: val } : o));
+                              updateWall(selectedWall.id, { openings: updated });
+                            }}
+                            className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_22%)] text-white text-[10px] px-2 py-1 rounded outline-none"
+                          />
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
-                {(!selectedWall.openings || selectedWall.openings.length === 0) && (
-                  <span className="text-[10px] text-gray-500 italic block text-center py-2">
-                    Nessun varco o apertura presente.
-                  </span>
-                )}
+                  );
+                })}
               </div>
             </div>
 
