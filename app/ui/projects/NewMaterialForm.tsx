@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createMaterial } from "@/app/actions/materials";
 
 interface OptionItem { value: string; label: string; }
@@ -10,6 +10,12 @@ interface Props { categories: OptionItem[]; units: OptionItem[]; }
 
 export default function NewMaterialForm({ categories, units }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
+  const defaultName = searchParams.get("name") || "";
+  const defaultCategory = searchParams.get("category") || "";
+  const defaultUnit = searchParams.get("unit") || "";
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -56,6 +62,7 @@ export default function NewMaterialForm({ categories, units }: Props) {
               name="name" 
               type="text" 
               required 
+              defaultValue={defaultName}
               autoComplete="off"
               data-1p-ignore
               data-lpignore="true"
@@ -67,13 +74,13 @@ export default function NewMaterialForm({ categories, units }: Props) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label htmlFor="category" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Categoria *</label>
-              <select id="category" name="category" className="w-full px-4 py-3 rounded-xl text-sm text-white" style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }}>
+              <select id="category" name="category" defaultValue={defaultCategory} className="w-full px-4 py-3 rounded-xl text-sm text-white cursor-pointer" style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }}>
                 {categories.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
               <label htmlFor="unit" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Unità di Misura *</label>
-              <select id="unit" name="unit" className="w-full px-4 py-3 rounded-xl text-sm text-white" style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }}>
+              <select id="unit" name="unit" defaultValue={defaultUnit} className="w-full px-4 py-3 rounded-xl text-sm text-white cursor-pointer" style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }}>
                 {units.map((unit) => <option key={unit.value} value={unit.value}>{unit.label}</option>)}
               </select>
             </div>
@@ -85,18 +92,34 @@ export default function NewMaterialForm({ categories, units }: Props) {
             <div className="space-y-1.5"><label htmlFor="thickness_mm" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Spessore (mm)</label><input id="thickness_mm" name="thickness_mm" type="number" step="0.1" autoComplete="off" className="w-full px-4 py-3 rounded-xl text-sm text-white" style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }} /></div>
           </div>
 
-          <div className="space-y-1.5">
-            <label htmlFor="supplier" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Fornitore</label>
-            <input 
-              id="supplier" 
-              name="supplier" 
-              type="text" 
-              autoComplete="off"
-              data-1p-ignore
-              data-lpignore="true"
-              className="w-full px-4 py-3 rounded-xl text-sm text-white" 
-              style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }} 
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label htmlFor="supplier" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Fornitore</label>
+              <input 
+                id="supplier" 
+                name="supplier" 
+                type="text" 
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
+                className="w-full px-4 py-3 rounded-xl text-sm text-white" 
+                style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }} 
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="grain_direction" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Orientamento Taglio (Verso Nesting)</label>
+              <select 
+                id="grain_direction" 
+                name="grain_direction" 
+                defaultValue="libero"
+                className="w-full px-4 py-3 rounded-xl text-sm text-white cursor-pointer" 
+                style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }}
+              >
+                <option value="libero">Libero (Ruotabile ↔ ↕ - Consigliato)</option>
+                <option value="lunghezza">Lungo la Lunghezza (Non ruotabile ↔)</option>
+                <option value="larghezza">Lungo la Larghezza (Non ruotabile ↕)</option>
+              </select>
+            </div>
           </div>
         </div>
 

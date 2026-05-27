@@ -64,6 +64,7 @@ export default async function CatalogPage() {
                 <th className="px-6 py-4 font-medium">Nome</th>
                 <th className="px-6 py-4 font-medium">Categoria</th>
                 <th className="px-6 py-4 font-medium">Dimensioni (mm)</th>
+                <th className="px-6 py-4 font-medium">Verso Taglio</th>
                 <th className="px-6 py-4 font-medium">Unità di Misura</th>
                 <th className="px-6 py-4 font-medium text-right">Azioni</th>
               </tr>
@@ -88,22 +89,40 @@ export default async function CatalogPage() {
                     {mat.thickness_mm ? `x ${mat.thickness_mm}T` : ""}
                     {!mat.length_mm && !mat.width_mm && !mat.thickness_mm && "-"}
                   </td>
+                  <td className="px-6 py-4">
+                    <span className="text-xs text-gray-400">
+                      {mat.grain_direction === "lunghezza"
+                        ? "↔ Lunghezza"
+                        : mat.grain_direction === "larghezza"
+                        ? "↕ Larghezza"
+                        : "↔↕ Libero"}
+                    </span>
+                  </td>
                   <td className="px-6 py-4" style={{ color: "hsl(215 20% 80%)" }}>
                     {mat.unit}
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <form action={async () => {
-                      "use server";
-                      await deleteMaterial(mat.id);
-                    }}>
-                      <button
-                        type="submit"
+                    <div className="flex items-center justify-end gap-2">
+                      <Link
+                        href={`/catalog/new?name=${encodeURIComponent(mat.name)}&category=${encodeURIComponent(mat.category)}&unit=${encodeURIComponent(mat.unit)}`}
                         className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                        style={{ color: "hsl(0 84% 65%)", background: "hsl(0 84% 60% / 0.1)" }}
+                        style={{ color: "hsl(16 100% 65%)", background: "hsl(16 100% 60% / 0.1)" }}
                       >
-                        Elimina
-                      </button>
-                    </form>
+                        + Variante
+                      </Link>
+                      <form action={async () => {
+                        "use server";
+                        await deleteMaterial(mat.id);
+                      }}>
+                        <button
+                          type="submit"
+                          className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                          style={{ color: "hsl(0 84% 65%)", background: "hsl(0 84% 60% / 0.1)" }}
+                        >
+                          Elimina
+                        </button>
+                      </form>
+                    </div>
                   </td>
                 </tr>
               ))}

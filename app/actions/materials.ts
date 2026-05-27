@@ -21,6 +21,7 @@ const MaterialSchema = z.object({
   thickness_mm: z.coerce.number().optional().nullable(),
   unit: z.string().min(1, "L'unità di misura è obbligatoria."),
   supplier: z.string().optional().nullable(),
+  grain_direction: z.string().optional().nullable(),
 });
 
 export async function createMaterial(
@@ -65,6 +66,7 @@ export async function createMaterial(
       thickness_mm: toNum(formData.get("thickness_mm")),
       unit: cleanStr(formData.get("unit")),
       supplier: cleanStr(formData.get("supplier")),
+      grain_direction: cleanStr(formData.get("grain_direction")),
     };
 
     console.log("🟡 [createMaterial] rawData:", rawData);
@@ -93,6 +95,7 @@ export async function createMaterial(
       thickness_mm: parsed.data.thickness_mm ?? null,
       unit: parsed.data.unit,
       supplier: parsed.data.supplier || null,
+      grain_direction: parsed.data.grain_direction || "libero",
       stock_qty: 0,
       is_active: true,
     } as any).select();

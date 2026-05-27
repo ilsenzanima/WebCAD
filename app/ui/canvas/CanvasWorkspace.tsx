@@ -96,6 +96,25 @@ export default function CanvasWorkspace() {
     loadMaterials();
   }, []);
 
+  const studMaterials = useMemo(() => {
+    return materials.filter((m) =>
+      m.category?.toLowerCase().includes("profilo") ||
+      m.name?.toLowerCase().includes("montante") ||
+      m.name?.toLowerCase().includes("profilo") ||
+      m.name?.toLowerCase().includes("stud")
+    );
+  }, [materials]);
+
+  const plateMaterials = useMemo(() => {
+    return materials.filter((m) =>
+      m.category?.toLowerCase().includes("lastra") ||
+      m.name?.toLowerCase().includes("lastra") ||
+      m.name?.toLowerCase().includes("silicato") ||
+      m.name?.toLowerCase().includes("cartongesso") ||
+      m.name?.toLowerCase().includes("promat")
+    );
+  }, [materials]);
+
 // Salva le modifiche su Supabase
   const handleSaveToDatabase = () => {
     if (!activeLevelId || !activeProjectId) return;
@@ -321,6 +340,77 @@ export default function CanvasWorkspace() {
                   lineCap="round"
                 />
 
+                {/* Varchi per le aperture (porte/finestre) */}
+                {(wall.openings || []).map((op) => {
+                  const opOffsetPx = op.offset / PIXELS_TO_MM;
+                  const opWidthPx = op.width / PIXELS_TO_MM;
+                  
+                  const startX = wall.x1 + Math.cos(angle) * opOffsetPx;
+                  const startY = wall.y1 + Math.sin(angle) * opOffsetPx;
+                  const endX = wall.x1 + Math.cos(angle) * (opOffsetPx + opWidthPx);
+                  const endY = wall.y1 + Math.sin(angle) * (opOffsetPx + opWidthPx);
+                  
+                  return (
+                    <ReactKonvaGroup key={op.id}>
+                      {/* Linea colore sfondo per cancellare il muro */}
+                      <Line
+                        points={[startX, startY, endX, endY]}
+                        stroke="hsl(228 39% 6%)"
+                        strokeWidth={thickPx + 2 / scale}
+                        lineCap="square"
+                      />
+                      {/* Dettaglio grafico dell'apertura */}
+                      {op.type === "door" ? (
+                        <>
+                          {/* Segmento porta aperta (perpendicolare a 90 gradi) */}
+                          <Line
+                            points={[
+                              startX,
+                              startY,
+                              startX - Math.sin(angle) * opWidthPx,
+                              startY + Math.cos(angle) * opWidthPx,
+                            ]}
+                            stroke="hsl(16 100% 58%)"
+                            strokeWidth={2 / scale}
+                          />
+                          {/* Arco di apertura */}
+                          <Arc
+                            x={startX}
+                            y={startY}
+                            innerRadius={0}
+                            outerRadius={opWidthPx}
+                            angle={90}
+                            rotation={angle * (180 / Math.PI) - 90}
+                            stroke="hsl(16 100% 58%)"
+                            strokeWidth={1 / scale}
+                            dash={[4 / scale, 4 / scale]}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          {/* Finestra: linea centrale e vetro */}
+                          <Line
+                            points={[startX, startY, endX, endY]}
+                            stroke="hsl(200 100% 60%)"
+                            strokeWidth={3 / scale}
+                          />
+                          <Line
+                            points={[
+                              startX - Math.sin(angle) * (thickPx / 3),
+                              startY + Math.cos(angle) * (thickPx / 3),
+                              endX - Math.sin(angle) * (thickPx / 3),
+                              endY + Math.cos(angle) * (thickPx / 3),
+                            ]}
+                            stroke="hsl(200 100% 60%)"
+                            strokeWidth={1 / scale}
+                            opacity={0.5}
+                          />
+                        </>
+                      )}
+                    </ReactKonvaGroup>
+                  );
+                })}
+
                 {/* Render dei Montanti Strutturali (Auto-Pitch) */}
                 {wall.structuralPoints.map((pt, idx) => (
                   <Circle
@@ -424,8 +514,54 @@ export default function CanvasWorkspace() {
           📏 Parete
         </button>
         
-        <button onClick={() => setActiveTool("door")} className="px-3 py-2 rounded-xl text-xs text-[hsl(215_20%_65%)] hover:bg-white/5">🚪 Porta</button>
-        <button onClick={() => setActiveTool("window")} className="px-3 py-2 rounded-xl text-xs text-[hsl(215_20%_65%)] hover:bg-white/5">🪟 Finestra</button>
+        <button
+          onClick={() => {
+            if (selectedWall) {
+              const dx = selectedWall.x2 - selectedWall.x1;
+              const dy = selectedWall.y2 - selectedWall.y1;
+              const lenMm = Math.round(Math.hypot(dx, dy) * PIXELS_TO_MM);
+              const width = 900;
+              const offset = Math.max(0, Math.round(lenMm / 2 - width / 2));
+              const newOpening = {
+                id: `opening_${Date.now()}`,
+                type: "door" as const,
+                width,
+                height: 2100,
+                offset
+              };
+              updateWall(selectedWall.id, { openings: [...(selectedWall.openings || []), newOpening] });
+            } else {
+              alert("Seleziona prima una parete (con lo strumento Selezione ↖) per poter inserire una Porta!");
+            }
+          }}
+          className="px-3 py-2 rounded-xl text-xs text-[hsl(215_20%_65%)] hover:bg-white/5 cursor-pointer"
+        >
+          🚪 Porta
+        </button>
+        <button
+          onClick={() => {
+            if (selectedWall) {
+              const dx = selectedWall.x2 - selectedWall.x1;
+              const dy = selectedWall.y2 - selectedWall.y1;
+              const lenMm = Math.round(Math.hypot(dx, dy) * PIXELS_TO_MM);
+              const width = 1200;
+              const offset = Math.max(0, Math.round(lenMm / 2 - width / 2));
+              const newOpening = {
+                id: `opening_${Date.now()}`,
+                type: "window" as const,
+                width,
+                height: 1000,
+                offset
+              };
+              updateWall(selectedWall.id, { openings: [...(selectedWall.openings || []), newOpening] });
+            } else {
+              alert("Seleziona prima una parete (con lo strumento Selezione ↖) per poter inserire una Finestra!");
+            }
+          }}
+          className="px-3 py-2 rounded-xl text-xs text-[hsl(215_20%_65%)] hover:bg-white/5 cursor-pointer"
+        >
+          🪟 Finestra
+        </button>
 
         <div className="w-px h-6 bg-white/10" />
 
@@ -455,7 +591,7 @@ export default function CanvasWorkspace() {
       {/* ── Pannello Configurazione Parete Selezionata ── */}
       {activeTool === "select" && selectedWall && (
         <div
-          className="absolute top-16 left-6 w-80 p-5 rounded-2xl border shadow-2xl z-20 flex flex-col gap-4 animate-fade-in"
+          className="absolute top-16 left-6 w-85 p-5 rounded-2xl border shadow-2xl z-20 flex flex-col gap-4 animate-fade-in max-h-[82vh] overflow-y-auto scrollbar-thin"
           style={{
             background: "hsl(220 26% 12% / 0.95)",
             borderColor: "hsl(220 20% 22%)",
@@ -468,63 +604,296 @@ export default function CanvasWorkspace() {
             </h4>
             <button
               onClick={() => setSelectedWallId(null)}
-              className="text-gray-400 hover:text-white transition-colors text-xs"
+              className="text-gray-400 hover:text-white transition-colors text-xs cursor-pointer"
             >
               Chiudi
             </button>
           </div>
 
-          <div className="flex flex-col gap-3">
-            <div>
-              <label className="text-[11px] font-semibold text-gray-400 block mb-1 uppercase">
-                Spessore (mm)
-              </label>
-              <input
-                type="number"
-                value={selectedWall.thickness}
-                onChange={(e) => updateWall(selectedWall.id, { thickness: parseInt(e.target.value, 10) || 0 })}
-                className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-sm px-3 py-2 rounded-xl focus:border-blue-500 outline-none"
-              />
+          <div className="flex flex-col gap-3.5">
+            {/* Sezione 1: Dimensioni Fisiche */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-semibold text-gray-400 uppercase block tracking-wider">Dimensioni Base</span>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[9px] text-gray-500 block uppercase mb-0.5">Lunghezza (mm)</label>
+                  <input
+                    type="number"
+                    value={Math.round(Math.hypot(selectedWall.x2 - selectedWall.x1, selectedWall.y2 - selectedWall.y1) * PIXELS_TO_MM)}
+                    onChange={(e) => {
+                      const newLenMm = parseInt(e.target.value, 10) || 0;
+                      const dx = selectedWall.x2 - selectedWall.x1;
+                      const dy = selectedWall.y2 - selectedWall.y1;
+                      const lenPx = Math.hypot(dx, dy);
+                      const newLenPx = newLenMm / PIXELS_TO_MM;
+                      const dirX = lenPx === 0 ? 1 : dx / lenPx;
+                      const dirY = lenPx === 0 ? 0 : dy / lenPx;
+                      updateWall(selectedWall.id, {
+                        x2: selectedWall.x1 + dirX * newLenPx,
+                        y2: selectedWall.y1 + dirY * newLenPx,
+                      });
+                    }}
+                    className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-xs px-2.5 py-1.5 rounded-xl outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-gray-500 block uppercase mb-0.5">Altezza (mm)</label>
+                  <input
+                    type="number"
+                    value={selectedWall.height}
+                    onChange={(e) => updateWall(selectedWall.id, { height: parseInt(e.target.value, 10) || 0 })}
+                    className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-xs px-2.5 py-1.5 rounded-xl outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[9px] text-gray-500 block uppercase mb-0.5">Passo Montanti (mm)</label>
+                <input
+                  type="number"
+                  value={selectedWall.pitch}
+                  onChange={(e) => updateWall(selectedWall.id, { pitch: parseInt(e.target.value, 10) || 0 })}
+                  className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-xs px-2.5 py-1.5 rounded-xl outline-none"
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="text-[11px] font-semibold text-gray-400 block mb-1 uppercase">
-                Altezza Parete (mm)
-              </label>
-              <input
-                type="number"
-                value={selectedWall.height}
-                onChange={(e) => updateWall(selectedWall.id, { height: parseInt(e.target.value, 10) || 0 })}
-                className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-sm px-3 py-2 rounded-xl focus:border-blue-500 outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="text-[11px] font-semibold text-gray-400 block mb-1 uppercase">
-                Passo Montanti / Pitch (mm)
-              </label>
-              <input
-                type="number"
-                value={selectedWall.pitch}
-                onChange={(e) => updateWall(selectedWall.id, { pitch: parseInt(e.target.value, 10) || 0 })}
-                className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-sm px-3 py-2 rounded-xl focus:border-blue-500 outline-none"
-              />
-            </div>
-
-            <div className="border-t pt-3 mt-1" style={{ borderColor: "hsl(220 20% 20%)" }}>
-              <div className="text-xs text-gray-400 flex justify-between">
-                <span>Lunghezza reale:</span>
-                <span className="font-semibold text-white">
-                  {Math.round(
-                    Math.sqrt(
-                      (selectedWall.x2 - selectedWall.x1) ** 2 +
-                        (selectedWall.y2 - selectedWall.y1) ** 2
-                    ) * PIXELS_TO_MM
-                  )}{" "}
-                  mm
+            {/* Sezione 2: Stratigrafia & Materiali reale */}
+            <div className="border-t pt-3 space-y-2.5" style={{ borderColor: "hsl(220 20% 20%)" }}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block">Stratigrafia reale</span>
+                <span className="text-xs font-bold text-green-400 bg-green-500/10 px-2 py-0.5 rounded-md">
+                  Spessore: {selectedWall.thickness} mm
                 </span>
               </div>
-              <div className="text-xs text-gray-400 flex justify-between mt-1">
+
+              {/* Selettore Montante */}
+              <div>
+                <label className="text-[9px] text-gray-500 block uppercase mb-0.5">Profilo Montante</label>
+                <select
+                  value={selectedWall.studMaterialId || ""}
+                  onChange={(e) => {
+                    const matId = e.target.value;
+                    const mat = materials.find((m) => m.id === matId);
+                    updateWall(selectedWall.id, {
+                      studMaterialId: matId || null,
+                      studThickness: mat?.thickness_mm ?? 50
+                    });
+                  }}
+                  className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-xs px-2.5 py-1.5 rounded-xl outline-none cursor-pointer"
+                >
+                  <option value="">Nessuno (Default 50mm)</option>
+                  {studMaterials.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name} ({m.thickness_mm}mm)</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Checkbox Controparete */}
+              <div className="flex items-center gap-2 py-1">
+                <input
+                  id="isControparete"
+                  type="checkbox"
+                  checked={selectedWall.isControparete || false}
+                  onChange={(e) => updateWall(selectedWall.id, { isControparete: e.target.checked })}
+                  className="rounded border-[hsl(220_20%_20%)] bg-[hsl(220_32%_8%)] text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+                <label htmlFor="isControparete" className="text-xs text-gray-300 cursor-pointer">
+                  È una controparete (Lastre solo su un lato)
+                </label>
+              </div>
+
+              {/* Lato A */}
+              <div className="p-2.5 rounded-xl bg-[hsl(220_32%_10%)] border border-[hsl(220_20%_20%)] space-y-2">
+                <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wide">Lastre Lato A</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[8px] text-gray-500 block uppercase mb-0.5">Tipo Lastra</label>
+                    <select
+                      value={selectedWall.layerSideAMaterialId || ""}
+                      onChange={(e) => {
+                        const matId = e.target.value;
+                        const mat = materials.find((m) => m.id === matId);
+                        updateWall(selectedWall.id, {
+                          layerSideAMaterialId: matId || null,
+                          layerSideAThickness: mat?.thickness_mm ?? 12.5
+                        });
+                      }}
+                      className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-[10px] px-2 py-1.5 rounded-lg outline-none cursor-pointer"
+                    >
+                      <option value="">Default (12.5mm)</option>
+                      {plateMaterials.map((m) => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[8px] text-gray-500 block uppercase mb-0.5">Strati</label>
+                    <select
+                      value={selectedWall.layerSideACount ?? 1}
+                      onChange={(e) => updateWall(selectedWall.id, { layerSideACount: parseInt(e.target.value, 10) || 1 })}
+                      className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-[10px] px-2 py-1.5 rounded-lg outline-none cursor-pointer"
+                    >
+                      <option value={1}>1 Strato</option>
+                      <option value={2}>2 Strati</option>
+                      <option value={3}>3 Strati</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lato B (visibile solo se non è controparete) */}
+              {!selectedWall.isControparete && (
+                <div className="p-2.5 rounded-xl bg-[hsl(220_32%_10%)] border border-[hsl(220_20%_20%)] space-y-2">
+                  <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wide">Lastre Lato B</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[8px] text-gray-500 block uppercase mb-0.5">Tipo Lastra</label>
+                      <select
+                        value={selectedWall.layerSideBMaterialId || ""}
+                        onChange={(e) => {
+                          const matId = e.target.value;
+                          const mat = materials.find((m) => m.id === matId);
+                          updateWall(selectedWall.id, {
+                            layerSideBMaterialId: matId || null,
+                            layerSideBThickness: mat?.thickness_mm ?? 12.5
+                          });
+                        }}
+                        className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-[10px] px-2 py-1.5 rounded-lg outline-none cursor-pointer"
+                      >
+                        <option value="">Default (12.5mm)</option>
+                        {plateMaterials.map((m) => (
+                          <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[8px] text-gray-500 block uppercase mb-0.5">Strati</label>
+                      <select
+                        value={selectedWall.layerSideBCount ?? 1}
+                        onChange={(e) => updateWall(selectedWall.id, { layerSideBCount: parseInt(e.target.value, 10) || 1 })}
+                        className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_20%)] text-white text-[10px] px-2 py-1.5 rounded-lg outline-none cursor-pointer"
+                      >
+                        <option value={1}>1 Strato</option>
+                        <option value={2}>2 Strati</option>
+                        <option value={3}>3 Strati</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Sezione 3: Aperture (Porte & Finestre) */}
+            <div className="border-t pt-3 space-y-2.5" style={{ borderColor: "hsl(220 20% 20%)" }}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider block">Aperture ({selectedWall.openings?.length || 0})</span>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => {
+                      const dx = selectedWall.x2 - selectedWall.x1;
+                      const dy = selectedWall.y2 - selectedWall.y1;
+                      const lenMm = Math.round(Math.hypot(dx, dy) * PIXELS_TO_MM);
+                      const width = 900;
+                      const offset = Math.max(0, Math.round(lenMm / 2 - width / 2));
+                      const newOpening = {
+                        id: `opening_${Date.now()}`,
+                        type: "door" as const,
+                        width,
+                        height: 2100,
+                        offset
+                      };
+                      updateWall(selectedWall.id, { openings: [...(selectedWall.openings || []), newOpening] });
+                    }}
+                    className="px-2 py-1 rounded bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 text-[9px] font-bold transition-colors cursor-pointer"
+                  >
+                    + Porta
+                  </button>
+                  <button
+                    onClick={() => {
+                      const dx = selectedWall.x2 - selectedWall.x1;
+                      const dy = selectedWall.y2 - selectedWall.y1;
+                      const lenMm = Math.round(Math.hypot(dx, dy) * PIXELS_TO_MM);
+                      const width = 1200;
+                      const offset = Math.max(0, Math.round(lenMm / 2 - width / 2));
+                      const newOpening = {
+                        id: `opening_${Date.now()}`,
+                        type: "window" as const,
+                        width,
+                        height: 1000,
+                        offset
+                      };
+                      updateWall(selectedWall.id, { openings: [...(selectedWall.openings || []), newOpening] });
+                    }}
+                    className="px-2 py-1 rounded bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 text-[9px] font-bold transition-colors cursor-pointer"
+                  >
+                    + Finestra
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1 scrollbar-thin">
+                {(selectedWall.openings || []).map((op) => (
+                  <div key={op.id} className="p-2.5 rounded-xl bg-[hsl(220_32%_10%)] border border-[hsl(220_20%_20%)] space-y-2 text-xs">
+                    <div className="flex items-center justify-between font-bold text-white">
+                      <span>{op.type === "door" ? "🚪 Porta" : "🪟 Finestra"}</span>
+                      <button
+                        onClick={() => {
+                          const filtered = selectedWall.openings.filter((o) => o.id !== op.id);
+                          updateWall(selectedWall.id, { openings: filtered });
+                        }}
+                        className="text-red-400 hover:text-red-300 transition-colors font-semibold text-[10px] cursor-pointer"
+                      >
+                        Rimuovi
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[8px] text-gray-500 block uppercase mb-0.5">Larghezza (mm)</label>
+                        <input
+                          type="number"
+                          value={op.width}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10) || 0;
+                            const updated = selectedWall.openings.map((o) => (o.id === op.id ? { ...o, width: val } : o));
+                            updateWall(selectedWall.id, { openings: updated });
+                          }}
+                          className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_22%)] text-white text-[10px] px-2 py-1 rounded outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[8px] text-gray-500 block uppercase mb-0.5">Distanza / Offset (mm)</label>
+                        <input
+                          type="number"
+                          value={op.offset}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value, 10) || 0;
+                            const updated = selectedWall.openings.map((o) => (o.id === op.id ? { ...o, offset: val } : o));
+                            updateWall(selectedWall.id, { openings: updated });
+                          }}
+                          className="w-full bg-[hsl(220_32%_8%)] border border-[hsl(220_20%_22%)] text-white text-[10px] px-2 py-1 rounded outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {(!selectedWall.openings || selectedWall.openings.length === 0) && (
+                  <span className="text-[10px] text-gray-500 italic block text-center py-2">
+                    Nessun varco o apertura presente.
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Riepilogo Metri */}
+            <div className="border-t pt-3" style={{ borderColor: "hsl(220 20% 20%)" }}>
+              <div className="text-[10px] text-gray-400 flex justify-between">
+                <span>Lunghezza parete:</span>
+                <span className="font-semibold text-white">
+                  {Math.round(Math.hypot(selectedWall.x2 - selectedWall.x1, selectedWall.y2 - selectedWall.y1) * PIXELS_TO_MM)} mm
+                </span>
+              </div>
+              <div className="text-[10px] text-gray-400 flex justify-between mt-1">
                 <span>Montanti calcolati:</span>
                 <span className="font-semibold text-orange-400">
                   {selectedWall.structuralPoints.length} pezzi
@@ -534,7 +903,7 @@ export default function CanvasWorkspace() {
 
             <button
               onClick={() => deleteWall(selectedWall.id)}
-              className="w-full py-2.5 rounded-xl text-xs font-semibold text-red-400 border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 transition-all mt-2 cursor-pointer"
+              className="w-full py-2.5 rounded-xl text-xs font-semibold text-red-400 border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 transition-all mt-1 cursor-pointer"
             >
               🗑️ Elimina Parete
             </button>
