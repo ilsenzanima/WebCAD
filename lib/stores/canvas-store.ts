@@ -8,7 +8,15 @@ import { create } from "zustand";
  * geometria delle pareti parametriche con montanti (Auto-Pitch).
  */
 
-export type CanvasTool = "select" | "pan" | "wall";
+export type CanvasTool = "select" | "pan" | "wall" | "door" | "window";
+
+export interface Opening {
+  id: string;
+  type: "door" | "window";
+  width: number;
+  height: number;
+  offset: number;
+}
 
 export interface Wall {
   id: string;
@@ -20,6 +28,16 @@ export interface Wall {
   height: number; // in mm
   pitch: number; // in mm
   structuralPoints: { x: number; y: number; isManual: boolean }[];
+  studMaterialId?: string | null;
+  studThickness?: number;
+  layerSideAMaterialId?: string | null;
+  layerSideACount?: number;
+  layerSideAThickness?: number;
+  layerSideBMaterialId?: string | null;
+  layerSideBCount?: number;
+  layerSideBThickness?: number;
+  isControparete?: boolean;
+  openings: Opening[];
 }
 
 interface CanvasState {
@@ -73,7 +91,8 @@ export function calculateStructuralPoints(
   y1: number,
   x2: number,
   y2: number,
-  pitchMm: number
+  pitchMm: number,
+  openings: Opening[] = []
 ): { x: number; y: number; isManual: boolean }[] {
   const dx = x2 - x1;
   const dy = y2 - y1;
@@ -87,6 +106,9 @@ export function calculateStructuralPoints(
   // Montante iniziale in A
   points.push({ x: x1, y: y1, isManual: false });
 
+  const openingRanges = openings.map((o) => ({ start: o.offset / PIXELS_TO_MM, end: (o.offset + o.width) / PIXELS_TO_MM }));
+  const isInsideOpening = (d: number) => openingRanges.some((r) => d > r.start && d < r.end);
+
   // Montanti intermedi
   if (pitchPx > 0 && lenPx > pitchPx) {
     const numStuds = Math.floor(lenPx / pitchPx);
@@ -94,12 +116,23 @@ export function calculateStructuralPoints(
       const t = (i * pitchPx) / lenPx;
       // Evitiamo di sovrapporre il montante finale se è vicinissimo
       if (t < 0.98) {
+        const dist = t * lenPx;
+        if (isInsideOpening(dist)) continue;
         points.push({
           x: x1 + t * dx,
           y: y1 + t * dy,
           isManual: false,
         });
       }
+    }
+  }
+
+  for (const opening of openings) {
+    for (const edge of [opening.offset, opening.offset + opening.width]) {
+      const t = (edge / PIXELS_TO_MM) / lenPx;
+      if (t <= 0 || t >= 1) continue;
+      points.push({ x: x1 + t * dx, y: y1 + t * dy, isManual: false });
+      points.push({ x: x1 + t * dx, y: y1 + t * dy, isManual: false });
     }
   }
 
@@ -133,11 +166,25 @@ export const useCanvasStore = create<CanvasState>((set) => ({
         newWall.y1,
         newWall.x2,
         newWall.y2,
-        newWall.pitch
+        newWall.pitch,
+        newWall.openings ?? []
       );
       
-      const wall: Wall = {
+      const resolvedWall = {
+        studMaterialId: null,
+        studThickness: 50,
+        layerSideAMaterialId: null,
+        layerSideACount: 1,
+        layerSideAThickness: 12.5,
+        layerSideBMaterialId: null,
+        layerSideBCount: 1,
+        layerSideBThickness: 12.5,
+        isControparete: false,
         ...newWall,
+      };
+      resolvedWall.thickness = (resolvedWall.studThickness ?? 50) + (resolvedWall.layerSideACount ?? 1) * (resolvedWall.layerSideAThickness ?? 12.5) + ((resolvedWall.isControparete ? 0 : (resolvedWall.layerSideBCount ?? 1) * (resolvedWall.layerSideBThickness ?? 12.5)));
+      const wall: Wall = {
+        ...resolvedWall,
         structuralPoints,
       };
 
@@ -160,11 +207,14 @@ export const useCanvasStore = create<CanvasState>((set) => ({
           merged.y1,
           merged.x2,
           merged.y2,
-          merged.pitch
+          merged.pitch,
+          merged.openings ?? []
         );
+        const computedThickness = (merged.studThickness ?? 50) + (merged.layerSideACount ?? 1) * (merged.layerSideAThickness ?? 12.5) + ((merged.isControparete ? 0 : (merged.layerSideBCount ?? 1) * (merged.layerSideBThickness ?? 12.5)));
 
         return {
           ...merged,
+          thickness: computedThickness,
           structuralPoints,
         };
       });
