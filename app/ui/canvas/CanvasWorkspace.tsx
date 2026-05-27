@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
-import { Stage, Layer, Line, Circle, Rect, Text } from "react-konva";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Stage, Layer, Line, Circle, Rect, Text, Arc } from "react-konva";
 import Link from "next/link";
 import { useCanvasStore, PIXELS_TO_MM, calculateStructuralPoints, type Wall } from "@/lib/stores/canvas-store";
 import { useProjectStore } from "@/lib/stores/project-store";
@@ -11,6 +11,7 @@ import { saveWalls, getWalls } from "@/app/actions/projects";
 
 // Snap a 20px (corrisponde a 200mm reali in scala 1px = 10mm)
 const GRID_SIZE = 20;
+const SNAP_DISTANCE_PX = 15;
 const snapToGrid = (val: number) => Math.round(val / GRID_SIZE) * GRID_SIZE;
 
 export default function CanvasWorkspace() {
@@ -49,6 +50,9 @@ export default function CanvasWorkspace() {
   const { activeLevelId, activeProjectId, levels } = useProjectStore();
 
   const [isShiftPressed, setIsShiftPressed] = useState(false);
+  const [lengthInput, setLengthInput] = useState("");
+  const [selectedOpening, setSelectedOpening] = useState<{ wallId: string; openingId: string } | null>(null);
+  const [materials, setMaterials] = useState<any[]>([]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -104,7 +108,18 @@ export default function CanvasWorkspace() {
     fetchNotes();
   }, [activeProjectId]);
 
-  // Salva le modifiche su Supabase
+  
+  useEffect(() => {
+    const loadMaterials = async () => {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { data } = await supabase.from("materials").select("id,name,category,thickness_mm").eq("is_active", true);
+      setMaterials(data ?? []);
+    };
+    loadMaterials();
+  }, []);
+
+// Salva le modifiche su Supabase
   const handleSaveToDatabase = () => {
     if (!activeLevelId || !activeProjectId) return;
     startTransition(async () => {
@@ -161,8 +176,18 @@ export default function CanvasWorkspace() {
   };
 
   // Interazioni di disegno click sullo stage
+  const getSnapPoint = (x:number,y:number) => {
+    let best = { x: snapToGrid(x), y: snapToGrid(y) };
+    let min = Infinity;
+    walls.forEach((w) => {
+      [{x:w.x1,y:w.y1},{x:w.x2,y:w.y2}].forEach((p)=>{ const d = Math.hypot(p.x-x,p.y-y); if (d < SNAP_DISTANCE_PX && d < min){ min=d; best=p; } });
+    });
+    return best;
+  };
+
   const handleStageMouseDown = (e: KonvaEventObject<MouseEvent>) => {
-    if (activeTool !== "wall") return;
+    if (e.evt.button === 2) { setDrawingStartPoint(null); setDrawingEndPoint(null); setLengthInput(""); return; }
+    if (activeTool !== "wall" && activeTool !== "door" && activeTool !== "window") return;
 
     const stage = e.target.getStage();
     if (!stage) return;
@@ -174,14 +199,15 @@ export default function CanvasWorkspace() {
     const rawX = (pointer.x - stage.x()) / stage.scaleX();
     const rawY = (pointer.y - stage.y()) / stage.scaleY();
 
-    // Snap alla griglia
-    const snapped = {
-      x: snapToGrid(rawX),
-      y: snapToGrid(rawY),
-    };
-
-    setDrawingStartPoint(snapped);
+    if (activeTool === "door" || activeTool === "window") return;
+    const snapped = getSnapPoint(rawX, rawY);
+    if (!drawingStartPoint) { setDrawingStartPoint(snapped); setDrawingEndPoint(snapped); return; }
     setDrawingEndPoint(snapped);
+    const len = Math.hypot(snapped.x - drawingStartPoint.x, snapped.y - drawingStartPoint.y);
+    if (len > GRID_SIZE / 2) {
+      addWall({ id:`wall_${Date.now()}`, x1:drawingStartPoint.x, y1:drawingStartPoint.y, x2:snapped.x, y2:snapped.y, thickness:100, height:2700, pitch:600, openings:[] });
+      setDrawingStartPoint(snapped);
+    }
   };
 
   const handleStageMouseMove = (e: KonvaEventObject<MouseEvent>) => {
@@ -214,30 +240,25 @@ export default function CanvasWorkspace() {
     setDrawingEndPoint({ x: snappedX, y: snappedY });
   };
 
-  const handleStageMouseUp = () => {
-    if (activeTool !== "wall" || !drawingStartPoint || !drawingEndPoint) return;
+  const handleStageMouseUp = () => {};
 
-    // Calcoliamo lunghezza per evitare pareti a punto singolo
-    const dx = drawingEndPoint.x - drawingStartPoint.x;
-    const dy = drawingEndPoint.y - drawingStartPoint.y;
-    const len = Math.sqrt(dx * dx + dy * dy);
-
-    if (len > GRID_SIZE / 2) {
-      addWall({
-        id: `wall_${Date.now()}`,
-        x1: drawingStartPoint.x,
-        y1: drawingStartPoint.y,
-        x2: drawingEndPoint.x,
-        y2: drawingEndPoint.y,
-        thickness: 100, // mm (default)
-        height: 2700, // mm (default)
-        pitch: 600, // mm (default)
-      });
-    }
-
-    setDrawingStartPoint(null);
-    setDrawingEndPoint(null);
-  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setDrawingStartPoint(null); setDrawingEndPoint(null); setLengthInput(""); }
+      if (activeTool === "wall" && drawingStartPoint && /[0-9]/.test(e.key)) setLengthInput((v) => v + e.key);
+      if (e.key === "Backspace") setLengthInput((v) => v.slice(0,-1));
+      if (e.key === "Enter" && drawingStartPoint && drawingEndPoint && lengthInput) {
+        const mm = parseFloat(lengthInput);
+        const dx = drawingEndPoint.x - drawingStartPoint.x; const dy = drawingEndPoint.y - drawingStartPoint.y; const l = Math.hypot(dx,dy)||1;
+        const px = mm / PIXELS_TO_MM;
+        const end = { x: drawingStartPoint.x + (dx/l)*px, y: drawingStartPoint.y + (dy/l)*px };
+        addWall({ id:`wall_${Date.now()}`, x1:drawingStartPoint.x, y1:drawingStartPoint.y, x2:end.x, y2:end.y, thickness:100, height:2700, pitch:600, openings:[] });
+        setDrawingStartPoint(end); setDrawingEndPoint(end); setLengthInput("");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [activeTool, drawingStartPoint, drawingEndPoint, lengthInput, addWall, setDrawingStartPoint, setDrawingEndPoint]);
 
   const selectedWall = walls.find((w) => w.id === selectedWallId);
 
@@ -273,6 +294,7 @@ export default function CanvasWorkspace() {
         onTouchStart={(e) => handleStageMouseDown(e as any)}
         onTouchMove={(e) => handleStageMouseMove(e as any)}
         onTouchEnd={() => handleStageMouseUp()}
+        onContextMenu={(e) => { e.evt.preventDefault(); setDrawingStartPoint(null); setDrawingEndPoint(null); setLengthInput(""); }}
         onDragEnd={(e) => setStagePosition(e.target.x(), e.target.y())}
         style={{
           cursor:
@@ -381,6 +403,12 @@ export default function CanvasWorkspace() {
         </Layer>
       </Stage>
 
+      {drawingStartPoint && lengthInput && (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 px-3 py-2 rounded bg-black/80 text-white text-xs z-30">
+          Lunghezza: {lengthInput} mm (Invio per confermare)
+        </div>
+      )}
+
       {/* ── Toolbar Comandi Flottante ── */}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 p-2 rounded-2xl bg-[hsl(220_32%_10%/0.9)] backdrop-blur-md border border-[hsl(220_20%_22%)] shadow-2xl z-20">
         <button
@@ -419,6 +447,9 @@ export default function CanvasWorkspace() {
           📏 Parete
         </button>
         
+        <button onClick={() => setActiveTool("door")} className="px-3 py-2 rounded-xl text-xs text-[hsl(215_20%_65%)] hover:bg-white/5">🚪 Porta</button>
+        <button onClick={() => setActiveTool("window")} className="px-3 py-2 rounded-xl text-xs text-[hsl(215_20%_65%)] hover:bg-white/5">🪟 Finestra</button>
+
         <div className="w-px h-6 bg-white/10" />
 
         <button

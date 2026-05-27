@@ -45,6 +45,16 @@ export interface ElementMaster {
   structural_settings: {
     pitch?: number;
     double_stud?: boolean;
+    studMaterialId?: string | null;
+    studThickness?: number;
+    layerSideAMaterialId?: string | null;
+    layerSideACount?: number;
+    layerSideAThickness?: number;
+    layerSideBMaterialId?: string | null;
+    layerSideBCount?: number;
+    layerSideBThickness?: number;
+    isControparete?: boolean;
+    openings?: Array<{ id: string; type: "door" | "window"; width: number; height: number; offset: number }>;
     [key: string]: unknown;
   };
   created_at?: string;
