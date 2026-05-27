@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 
@@ -20,14 +19,11 @@ const MaterialSchema = z.object({
   length_mm: z.coerce.number().optional().nullable(),
   width_mm: z.coerce.number().optional().nullable(),
   thickness_mm: z.coerce.number().optional().nullable(),
-  unit_cost: z.coerce.number().optional().nullable(),
   unit: z.string().min(1, "L'unità di misura è obbligatoria."),
   supplier: z.string().optional(),
-  sku: z.string().optional(),
 });
 
 export async function createMaterial(
-  prevState: MaterialFormState,
   formData: FormData
 ): Promise<MaterialFormState> {
   console.log("🟡 [createMaterial] START - formData entries:", Object.fromEntries(formData.entries()));
@@ -61,10 +57,8 @@ export async function createMaterial(
       length_mm: toNum(formData.get("length_mm")),
       width_mm: toNum(formData.get("width_mm")),
       thickness_mm: toNum(formData.get("thickness_mm")),
-      unit_cost: toNum(formData.get("unit_cost")),
       unit: formData.get("unit"),
       supplier: formData.get("supplier"),
-      sku: formData.get("sku"),
     };
 
     console.log("🟡 [createMaterial] rawData:", rawData);
@@ -91,10 +85,8 @@ export async function createMaterial(
       length_mm: parsed.data.length_mm ?? null,
       width_mm: parsed.data.width_mm ?? null,
       thickness_mm: parsed.data.thickness_mm ?? null,
-      unit_cost: parsed.data.unit_cost ?? null,
       unit: parsed.data.unit,
       supplier: parsed.data.supplier || null,
-      sku: parsed.data.sku || null,
       stock_qty: 0,
       is_active: true,
     } as any).select();

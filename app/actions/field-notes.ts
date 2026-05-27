@@ -339,3 +339,123 @@ export async function getOrCreateLevelNote(
     return { success: false, error: err.message || String(err) };
   }
 }
+
+
+export async function getLevelNoteText(levelId: string): Promise<string> {
+  const supabase = await createClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("field_notes")
+    .select("field_note_items(item_type, value_text)")
+    .eq("level_id", levelId)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  if (error || !data || data.length === 0) return "";
+
+  const noteItem = (data[0].field_note_items ?? []).find((item: FieldNoteItem) => item.item_type === "nota");
+  return noteItem?.value_text ?? "";
+}
+
+export async function updateLevelNoteText(
+  levelId: string,
+  text: string
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Utente non autenticato" };
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: noteData, error: noteError } = await (supabase as any)
+      .from("field_notes")
+      .select("id, project_id")
+      .eq("level_id", levelId)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true })
+      .limit(1);
+
+    if (noteError) return { success: false, error: noteError.message };
+
+    let noteId = noteData?.[0]?.id as string | undefined;
+    let projectId = noteData?.[0]?.project_id as string | undefined;
+
+    if (!noteId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: levelData, error: levelError } = await (supabase as any)
+        .from("levels")
+        .select("project_id")
+        .eq("id", levelId)
+        .single();
+
+      if (levelError || !levelData?.project_id) {
+        return { success: false, error: levelError?.message || "Livello non trovato" };
+      }
+
+      projectId = levelData.project_id;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: numData, error: numError } = await (supabase as any)
+        .rpc("next_field_note_number", { p_user_id: user.id });
+
+      if (numError) return { success: false, error: numError.message };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: newNote, error: newNoteError } = await (supabase as any)
+        .from("field_notes")
+        .insert({
+          project_id: projectId,
+          level_id: levelId,
+          user_id: user.id,
+          note_number: numData,
+          type_name: "Appunti Cantiere",
+        })
+        .select("id")
+        .single();
+
+      if (newNoteError) return { success: false, error: newNoteError.message };
+      noteId = newNote.id;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: items, error: itemsError } = await (supabase as any)
+      .from("field_note_items")
+      .select("id")
+      .eq("note_id", noteId)
+      .eq("item_type", "nota")
+      .order("sort_order", { ascending: true })
+      .limit(1);
+
+    if (itemsError) return { success: false, error: itemsError.message };
+
+    if (items && items.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: updError } = await (supabase as any)
+        .from("field_note_items")
+        .update({ value_text: text })
+        .eq("id", items[0].id);
+      if (updError) return { success: false, error: updError.message };
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: insError } = await (supabase as any)
+        .from("field_note_items")
+        .insert({
+          note_id: noteId,
+          item_type: "nota",
+          value_text: text,
+          sort_order: 0,
+        });
+      if (insError) return { success: false, error: insError.message };
+    }
+
+    if (projectId) {
+      revalidatePath(`/projects/${projectId}/levels/${levelId}/appunti`);
+    }
+
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, error: message };
+  }
+}

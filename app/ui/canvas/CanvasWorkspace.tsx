@@ -19,9 +19,7 @@ export default function CanvasWorkspace() {
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // Stati locali per caricamento database e note
-  const [dbNotes, setDbNotes] = useState("");
-
+  
   // Stato globale Zustand
   const {
     stageX,
@@ -66,7 +64,7 @@ export default function CanvasWorkspace() {
     };
   }, []);
 
-  // 1. Carica le note e le pareti del disegno dal database all'avvio o al cambio livello
+  // 1. Carica le pareti del disegno dal database all'avvio o al cambio livello
   useEffect(() => {
     if (!activeLevelId) return;
 
@@ -80,29 +78,8 @@ export default function CanvasWorkspace() {
         }))
       );
     });
-
-    // Cerca le note del progetto
-    const currentProj = levels.find((l) => l.project_id === activeProjectId);
-    // Nota: in uno scenario reale potremmo fare una fetch delle note, ma per semplicità
-    // usiamo una fetch asincrona o leggiamo dal record. Per il momento usiamo una stringa vuota
-    // che l'utente sovrascriverà, o carichiamo le note generali dal database.
   }, [activeLevelId, activeProjectId, levels, loadCanvasData]);
 
-  // Caricamento iniziale note del progetto
-  useEffect(() => {
-    if (!activeProjectId) return;
-    const fetchNotes = async () => {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data } = (await supabase
-        .from("projects")
-        .select("notes")
-        .eq("id", activeProjectId)
-        .single()) as any;
-      if (data) setDbNotes(data.notes ?? "");
-    };
-    fetchNotes();
-  }, [activeProjectId]);
 
   // Salva le modifiche su Supabase
   const handleSaveToDatabase = () => {
@@ -535,12 +512,13 @@ export default function CanvasWorkspace() {
       )}
 
       {/* Sidebar Note */}
-      <DrawingNotesSidebar
-        projectId={activeProjectId || ""}
-        initialNotes={dbNotes}
-        isOpen={isNotesOpen}
-        onClose={() => setIsNotesOpen(false)}
-      />
+      {activeLevelId && (
+        <DrawingNotesSidebar
+          levelId={activeLevelId}
+          isOpen={isNotesOpen}
+          onClose={() => setIsNotesOpen(false)}
+        />
+      )}
     </div>
   );
 }

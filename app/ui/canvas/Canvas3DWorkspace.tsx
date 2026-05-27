@@ -24,7 +24,6 @@ export default function Canvas3DWorkspace({ projectId }: Props) {
 
   // Appunti Sidebar
   const [isNotesOpen, setIsNotesOpen] = useState(false);
-  const [dbNotes, setDbNotes] = useState("");
 
   // Caricamento dei dati dal database all'avvio
   useEffect(() => {
@@ -40,21 +39,6 @@ export default function Canvas3DWorkspace({ projectId }: Props) {
     });
   }, [activeLevelId]);
 
-  // Caricamento note progetto
-  useEffect(() => {
-    if (!projectId) return;
-    const fetchNotes = async () => {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data } = (await supabase
-        .from("projects")
-        .select("notes")
-        .eq("id", projectId)
-        .single()) as any;
-      if (data) setDbNotes(data.notes ?? "");
-    };
-    fetchNotes();
-  }, [projectId]);
 
   // Salva il cavedio 3D su Supabase
   const handleSave3D = () => {
@@ -310,12 +294,13 @@ export default function Canvas3DWorkspace({ projectId }: Props) {
       </div>
 
       {/* Sidebar Note */}
-      <DrawingNotesSidebar
-        projectId={projectId}
-        initialNotes={dbNotes}
-        isOpen={isNotesOpen}
-        onClose={() => setIsNotesOpen(false)}
-      />
+      {activeLevelId && (
+        <DrawingNotesSidebar
+          levelId={activeLevelId}
+          isOpen={isNotesOpen}
+          onClose={() => setIsNotesOpen(false)}
+        />
+      )}
     </div>
   );
 }
