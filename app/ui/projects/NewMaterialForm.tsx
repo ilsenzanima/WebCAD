@@ -13,21 +13,24 @@ export default function NewMaterialForm({ categories, units }: Props) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleAction = async (formData: FormData) => {
     setErrorMessage(null);
     setIsSaving(true);
 
-    const formData = new FormData(e.currentTarget);
-    const result = await createMaterial(formData);
+    try {
+      const result = await createMaterial(formData);
 
-    if (result?.success) {
-      router.push("/catalog");
-      return;
+      if (result?.success) {
+        router.push("/catalog");
+        return;
+      }
+
+      setErrorMessage(result?.message || "Errore durante il salvataggio del materiale.");
+    } catch (err: any) {
+      setErrorMessage("Errore imprevisto durante il salvataggio.");
+    } finally {
+      setIsSaving(false);
     }
-
-    setErrorMessage(result?.message || "Errore durante il salvataggio del materiale.");
-    setIsSaving(false);
   };
 
   return (
@@ -44,11 +47,21 @@ export default function NewMaterialForm({ categories, units }: Props) {
         </div>
       )}
 
-      <form onSubmit={handleSubmit} autoComplete="off" data-1p-ignore data-lpignore="true" className="space-y-6">
+      <form action={handleAction} autoComplete="off" data-1p-ignore data-lpignore="true" className="space-y-6">
         <div className="p-6 rounded-2xl space-y-6" style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}>
           <div className="space-y-1.5">
             <label htmlFor="name" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Nome Materiale *</label>
-            <input id="name" name="name" type="text" required className="w-full px-4 py-3 rounded-xl text-sm text-white" style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }} />
+            <input 
+              id="name" 
+              name="name" 
+              type="text" 
+              required 
+              autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
+              className="w-full px-4 py-3 rounded-xl text-sm text-white" 
+              style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }} 
+            />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -67,14 +80,23 @@ export default function NewMaterialForm({ categories, units }: Props) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-1.5"><label htmlFor="length_mm" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Lunghezza (mm)</label><input id="length_mm" name="length_mm" type="number" step="0.1" className="w-full px-4 py-3 rounded-xl text-sm text-white" style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }} /></div>
-            <div className="space-y-1.5"><label htmlFor="width_mm" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Larghezza (mm)</label><input id="width_mm" name="width_mm" type="number" step="0.1" className="w-full px-4 py-3 rounded-xl text-sm text-white" style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }} /></div>
-            <div className="space-y-1.5"><label htmlFor="thickness_mm" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Spessore (mm)</label><input id="thickness_mm" name="thickness_mm" type="number" step="0.1" className="w-full px-4 py-3 rounded-xl text-sm text-white" style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }} /></div>
+            <div className="space-y-1.5"><label htmlFor="length_mm" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Lunghezza (mm)</label><input id="length_mm" name="length_mm" type="number" step="0.1" autoComplete="off" className="w-full px-4 py-3 rounded-xl text-sm text-white" style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }} /></div>
+            <div className="space-y-1.5"><label htmlFor="width_mm" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Larghezza (mm)</label><input id="width_mm" name="width_mm" type="number" step="0.1" autoComplete="off" className="w-full px-4 py-3 rounded-xl text-sm text-white" style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }} /></div>
+            <div className="space-y-1.5"><label htmlFor="thickness_mm" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Spessore (mm)</label><input id="thickness_mm" name="thickness_mm" type="number" step="0.1" autoComplete="off" className="w-full px-4 py-3 rounded-xl text-sm text-white" style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }} /></div>
           </div>
 
           <div className="space-y-1.5">
             <label htmlFor="supplier" className="block text-sm" style={{ color: "hsl(215 20% 75%)" }}>Fornitore</label>
-            <input id="supplier" name="supplier" type="text" className="w-full px-4 py-3 rounded-xl text-sm text-white" style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }} />
+            <input 
+              id="supplier" 
+              name="supplier" 
+              type="text" 
+              autoComplete="off"
+              data-1p-ignore
+              data-lpignore="true"
+              className="w-full px-4 py-3 rounded-xl text-sm text-white" 
+              style={{ background: "hsl(222 47% 6%)", border: "1px solid hsl(220 20% 22%)" }} 
+            />
           </div>
         </div>
 

@@ -61,10 +61,10 @@ export default async function CatalogPage() {
               }}
             >
               <tr>
-                <th className="px-6 py-4 font-medium">Nome & SKU</th>
+                <th className="px-6 py-4 font-medium">Nome</th>
                 <th className="px-6 py-4 font-medium">Categoria</th>
                 <th className="px-6 py-4 font-medium">Dimensioni (mm)</th>
-                <th className="px-6 py-4 font-medium">Costo / U.M.</th>
+                <th className="px-6 py-4 font-medium">Unità di Misura</th>
                 <th className="px-6 py-4 font-medium text-right">Azioni</th>
               </tr>
             </thead>
@@ -73,7 +73,6 @@ export default async function CatalogPage() {
                 <tr key={mat.id} className="transition-colors hover:bg-[hsl(220_20%_18%)]">
                   <td className="px-6 py-4">
                     <div className="font-medium text-white">{mat.name}</div>
-                    <div className="text-xs" style={{ color: "hsl(215 15% 50%)" }}>{mat.sku || "N/A"}</div>
                   </td>
                   <td className="px-6 py-4">
                     <span
@@ -90,7 +89,7 @@ export default async function CatalogPage() {
                     {!mat.length_mm && !mat.width_mm && !mat.thickness_mm && "-"}
                   </td>
                   <td className="px-6 py-4" style={{ color: "hsl(215 20% 80%)" }}>
-                    {mat.unit_cost ? `€ ${mat.unit_cost.toFixed(2)}` : "-"} / {mat.unit}
+                    {mat.unit}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <form action={async () => {

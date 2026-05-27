@@ -14,13 +14,13 @@ export type MaterialFormState =
 
 const MaterialSchema = z.object({
   name: z.string().min(2, "Il nome deve avere almeno 2 caratteri.").trim(),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   category: z.string().min(1, "La categoria è obbligatoria."),
   length_mm: z.coerce.number().optional().nullable(),
   width_mm: z.coerce.number().optional().nullable(),
   thickness_mm: z.coerce.number().optional().nullable(),
   unit: z.string().min(1, "L'unità di misura è obbligatoria."),
-  supplier: z.string().optional(),
+  supplier: z.string().optional().nullable(),
 });
 
 export async function createMaterial(
@@ -42,23 +42,29 @@ export async function createMaterial(
       return { message: "Utente non autenticato." };
     }
 
+    // Normalizza i campi stringa opzionali o mancanti: null o vuoti -> undefined
+    const cleanStr = (v: FormDataEntryValue | null) => {
+      if (v === null || v === "") return undefined;
+      return String(v).trim();
+    };
+
     // Normalizza i campi numerici: stringa vuota → null, supporta la virgola
     const toNum = (v: FormDataEntryValue | null) => {
       if (v === null || v === "") return undefined;
-      const cleanStr = String(v).replace(",", ".");
-      const n = Number(cleanStr);
+      const cleanStrVal = String(v).replace(",", ".");
+      const n = Number(cleanStrVal);
       return isNaN(n) ? undefined : n;
     };
 
     const rawData = {
-      name: formData.get("name"),
-      description: formData.get("description"),
-      category: formData.get("category"),
+      name: cleanStr(formData.get("name")),
+      description: cleanStr(formData.get("description")),
+      category: cleanStr(formData.get("category")),
       length_mm: toNum(formData.get("length_mm")),
       width_mm: toNum(formData.get("width_mm")),
       thickness_mm: toNum(formData.get("thickness_mm")),
-      unit: formData.get("unit"),
-      supplier: formData.get("supplier"),
+      unit: cleanStr(formData.get("unit")),
+      supplier: cleanStr(formData.get("supplier")),
     };
 
     console.log("🟡 [createMaterial] rawData:", rawData);
