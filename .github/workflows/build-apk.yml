@@ -18,13 +18,48 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Diagnostica ambiente Android
+        run: |
+          echo "=== Java version ==="
+          java -version || echo "Java non trovato"
+          echo "=== ANDROID_HOME ==="
+          echo $ANDROID_HOME
+          ls $ANDROID_HOME || echo "ANDROID_HOME non trovato"
+          echo "=== cmdline-tools ==="
+          ls $ANDROID_HOME/cmdline-tools || echo "cmdline-tools non trovata"
+          echo "=== sdkmanager path ==="
+          find $ANDROID_HOME -name "sdkmanager" 2>/dev/null || echo "sdkmanager non trovato"
+          echo "=== Build tools installati ==="
+          ls $ANDROID_HOME/build-tools || echo "build-tools non trovati"
+          echo "=== Platforms installate ==="
+          ls $ANDROID_HOME/platforms || echo "platforms non trovate"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Accetta licenze e installa componenti SDK
+        run: |
+          SDKMANAGER=$(find $ANDROID_HOME/cmdline-tools -name sdkmanager -type f 2>/dev/null | head -1)
+          if [ -z "$SDKMANAGER" ]; then
+            echo "ERRORE: sdkmanager non trovato in $ANDROID_HOME/cmdline-tools"
+            find $ANDROID_HOME -name "sdkmanager" 2>/dev/null
+            exit 1
+          fi
+          echo "sdkmanager trovato: $SDKMANAGER"
+          yes | "$SDKMANAGER" --licenses 2>/dev/null || true
+          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0" "platform-tools" 2>&1 || true
+          echo "=== SDK installato ==="
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install dipendenze npm
         run: npm ci
 
       - name: Build Next.js
@@ -34,55 +69,43 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder-project.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Installa componenti Android SDK mancanti
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          ls $ANDROID_HOME || echo "SDK root non trovato"
-          # Accetta le licenze Android
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          # Installa platform e build-tools necessari
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "platform-tools" || true
-
-      - name: Create dummy web assets directory for Capacitor
+      - name: Crea web assets per Capacitor
         run: |
           mkdir -p out
           echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>WebCAD</title></head><body><h1>WebCAD Loading...</h1></body></html>' > out/index.html
+          echo "Contenuto out/:"
+          ls -la out/
 
-      - name: Sync Capacitor Native Files
-        run: npx cap sync
+      - name: Sync Capacitor
+        run: npx cap sync android
 
-      - name: Build Android APK (Gradle assembleDebug)
+      - name: Build APK con Gradle
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug \
-            -Pandroid.useAndroidX=true \
-            --no-daemon \
-            --stacktrace
+          echo "=== Versione Gradle ==="
+          ./gradlew --version
+          echo "=== Build APK ==="
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1
 
-      - name: Copy compiled APK to public downloads
+      - name: Copia APK nei download pubblici
         run: |
           mkdir -p public/downloads
-          cp android/app/build/outputs/apk/debug/app-debug.apk public/downloads/webcad-alpha.apk
+          APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | head -1)
+          echo "APK trovato: $APK_PATH"
+          cp "$APK_PATH" public/downloads/webcad-alpha.apk
+          ls -lh public/downloads/
 
-      - name: Commit and Push compiled APK nel repository
+      - name: Commit APK nel repository
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "build: compilato APK reale funzionante per download diretto dal sito"
+          commit_message: "build: compilato APK debug per download diretto"
           file_pattern: "public/downloads/webcad-alpha.apk"
           branch: main
 
-      - name: Upload Debug APK Artifact
+      - name: Upload APK come artifact GitHub
         uses: actions/upload-artifact@v4
         with:
           name: webcad-alpha-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
