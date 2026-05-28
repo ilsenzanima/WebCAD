@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { Motion } from "@capacitor/motion";
+import { Capacitor } from "@capacitor/core";
 
 interface LivellaBollaProps {
   onCapture: (text: string) => void;
@@ -29,24 +31,52 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
   const lastAlignedRef = useRef(false);
 
   useEffect(() => {
-    // Rileva se le API per l'orientamento sono supportate
-    if (typeof window === "undefined" || !window.DeviceOrientationEvent) {
-      setIsSupported(false);
-      setHasPermission(false);
-      return;
+    let nativeListener: any = null;
+
+    async function setupMotion() {
+      // Se siamo su una piattaforma nativa (Capacitor)
+      if (Capacitor.isNativePlatform()) {
+        try {
+          setHasPermission(true);
+          nativeListener = await Motion.addListener("orientation", (event) => {
+            if (event.beta !== null) setBeta(event.beta);
+            if (event.gamma !== null) setGamma(event.gamma);
+          });
+        } catch (err) {
+          console.error("Errore inizializzazione Motion nativo:", err);
+          setupWebMotion();
+        }
+      } else {
+        setupWebMotion();
+      }
     }
 
-    // Su iOS 13+ è richiesta la richiesta esplicita di permessi
-    const needsPermission = typeof (DeviceOrientationEvent as any).requestPermission === "function";
-    if (!needsPermission) {
-      setHasPermission(true);
-      window.addEventListener("deviceorientation", handleOrientation);
-    } else {
-      setHasPermission(null); // in attesa che l'utente clicchi il pulsante di sblocco
+    function setupWebMotion() {
+      if (typeof window === "undefined" || !window.DeviceOrientationEvent) {
+        setIsSupported(false);
+        setHasPermission(false);
+        return;
+      }
+
+      // Su iOS 13+ è richiesta la richiesta esplicita di permessi
+      const needsPermission = typeof (DeviceOrientationEvent as any).requestPermission === "function";
+      if (!needsPermission) {
+        setHasPermission(true);
+        window.addEventListener("deviceorientation", handleOrientation);
+      } else {
+        setHasPermission(null); // in attesa che l'utente clicchi il pulsante di sblocco
+      }
     }
+
+    setupMotion();
 
     return () => {
-      window.removeEventListener("deviceorientation", handleOrientation);
+      if (nativeListener) {
+        nativeListener.remove();
+      }
+      if (typeof window !== "undefined") {
+        window.removeEventListener("deviceorientation", handleOrientation);
+      }
     };
   }, []);
 
