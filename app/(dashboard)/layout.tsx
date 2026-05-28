@@ -3,10 +3,12 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import LogoutButton from "@/app/ui/dashboard/LogoutButton";
 import MobileMenu from "@/app/ui/dashboard/MobileMenu";
+import UpdateNotifier from "@/app/ui/dashboard/UpdateNotifier";
 import type { ReactNode } from "react";
 
 const navItems = [
   { href: "/projects", icon: "📐", label: "Note di Cantiere" },
+  { href: "/sketches", icon: "🎨", label: "Sketch" },
 ];
 
 const bottomNavItems = [
@@ -39,6 +41,9 @@ export default async function DashboardLayout({
     return (
       <div className="flex h-screen overflow-hidden"
         style={{ background: "hsl(222 47% 6%)" }}>
+        
+        {/* Rilevatore di aggiornamenti real-time */}
+        <UpdateNotifier />
 
         {/* ─── Sidebar (solo desktop ≥ md) ───────────────────── */}
         <aside
