@@ -47,6 +47,18 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
+      - name: Copy compiled APK to public downloads
+        run: |
+          mkdir -p public/downloads
+          cp android/app/build/outputs/apk/debug/app-debug.apk public/downloads/webcad-alpha.apk
+
+      - name: Commit and Push compiled APK directly to repository
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "build: compilato APK reale funzionante per download diretto dal sito"
+          file_pattern: "public/downloads/webcad-alpha.apk"
+          branch: main
+
       - name: Upload Debug APK Artifact
         uses: actions/upload-artifact@v3
         with:

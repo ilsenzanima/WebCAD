@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import ProjectDetailClient from "@/app/ui/projects/ProjectDetailClient";
+import { getAllProjectFieldNotes } from "@/app/actions/field-notes";
 
 export default async function ProjectDetailPage({
   params,
@@ -18,7 +19,7 @@ export default async function ProjectDetailPage({
     redirect("/login");
   }
 
-  // Fetch project data
+  // Fetch project data (cantiere)
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .select("id, name, notes, created_at, updated_at")
@@ -29,14 +30,16 @@ export default async function ProjectDetailPage({
     return notFound();
   }
 
-  // Fetch levels (disegni) of this project
-  const { data: levels, error: levelsError } = await supabase
-    .from("levels")
-    .select("id, project_id, name, elevation_z, plan_image_url, scale_ratio, drawing_type, created_at")
-    .eq("project_id", id)
-    .order("elevation_z", { ascending: true });
+  // Fetch levels (note) di questo cantiere
+  const [levels, projectNotes] = await Promise.all([
+    supabase
+      .from("levels")
+      .select("id, project_id, name, elevation_z, plan_image_url, scale_ratio, drawing_type, created_at, completed, piano")
+      .eq("project_id", id)
+      .order("elevation_z", { ascending: true })
+      .then(res => res.data ?? []),
+    getAllProjectFieldNotes(id)
+  ]);
 
-  const drawings = levels ?? [];
-
-  return <ProjectDetailClient project={project} drawings={drawings} />;
+  return <ProjectDetailClient project={project} drawings={levels} notesList={projectNotes} />;
 }

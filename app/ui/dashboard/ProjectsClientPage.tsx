@@ -25,7 +25,7 @@ function safeFormatDate(dateStr?: string | null): string {
   }
 }
 
-// Genera un colore "avatar" deterministico dall'id
+// Genera colore determistico dall'id
 const AVATAR_GRADIENTS = [
   "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
   "linear-gradient(135deg, hsl(16 100% 58%), hsl(0 84% 55%))",
@@ -53,9 +53,10 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const filtered = projects.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Ordina i cantieri in ordine alfabetico per nome
+  const filtered = projects
+    .filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <>
@@ -72,7 +73,7 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
         >
           {/* Titolo + contatore */}
           <div className="flex items-baseline gap-2 mr-1 sm:mr-2 flex-shrink-0">
-            <h1 className="text-base sm:text-lg font-bold text-white">Progetti</h1>
+            <h1 className="text-base sm:text-lg font-bold text-white">Note di Cantiere</h1>
             <span
               className="text-xs font-semibold px-2 py-0.5 rounded-full"
               style={{
@@ -97,48 +98,46 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cerca progetto..."
+              placeholder="Cerca cantiere..."
               className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none transition-all"
               style={{
                 background: "hsl(220 32% 12%)",
                 border: "1px solid hsl(220 20% 20%)",
                 color: "hsl(210 40% 96%)",
               }}
-              onFocus={(e) =>
-                (e.currentTarget.style.borderColor = "hsl(220 90% 56%)")
-              }
-              onBlur={(e) =>
-                (e.currentTarget.style.borderColor = "hsl(220 20% 20%)")
-              }
+              onFocus={(e) => (e.currentTarget.style.borderColor = "hsl(220 90% 56%)")}
+              onBlur={(e) => (e.currentTarget.style.borderColor = "hsl(220 20% 20%)")}
             />
           </div>
 
-          {/* CTA nuovo progetto */}
+          {/* CTA nuovo cantiere */}
           <button
             id="btn-new-project"
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white flex-shrink-0 transition-all duration-200 whitespace-nowrap"
+            className="flex items-center gap-1.5 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white flex-shrink-0 transition-all duration-200 whitespace-nowrap cursor-pointer"
             style={{
-              background:
-                "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+              background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
               boxShadow: "0 4px 16px hsl(220 90% 56% / 0.3)",
             }}
           >
             <span className="text-base leading-none">+</span>
-            <span className="hidden sm:inline">Nuovo Progetto</span>
+            <span className="hidden sm:inline">Nuovo Cantiere</span>
             <span className="sm:hidden">Nuovo</span>
           </button>
         </div>
 
-        {/* ── Griglia progetti ─────────────────────────────────── */}
+        {/* ── Elenco alfabetico cantieri (Stile Lista) ─────────────────────────── */}
         <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-4 sm:py-6">
           {filtered.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 animate-fade-in">
+            <div
+              className="rounded-2xl overflow-hidden divide-y flex flex-col"
+              style={{
+                background: "hsl(220 26% 14% / 0.4)",
+                border: "1px solid hsl(220 20% 16%)",
+              }}
+            >
               {filtered.map((project) => (
-                <ProjectCard
-                  key={project.id}
-                  project={project}
-                />
+                <ProjectRow key={project.id} project={project} />
               ))}
             </div>
           ) : (
@@ -153,82 +152,49 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
   );
 }
 
-// ── Componente scheda ────────────────────────────────────────
-function ProjectCard({ project }: { project: Project }) {
+// ── Componente riga elenco cantiere ───────────────────────────
+function ProjectRow({ project }: { project: Project }) {
   const gradient = avatarGradient(project.id);
   const initials = getProjectInitials(project.name);
   const date = safeFormatDate(project.updated_at || project.created_at);
 
   return (
     <div
-      className="relative group rounded-2xl overflow-hidden transition-all duration-200"
-      style={{
-        background: "hsl(220 26% 14%)",
-        border: "1px solid hsl(220 20% 20%)",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.borderColor = "hsl(220 20% 30%)";
-        (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
-        (e.currentTarget as HTMLDivElement).style.boxShadow = "0 12px 32px rgba(0,0,0,0.3)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.borderColor = "hsl(220 20% 20%)";
-        (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
-        (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
-      }}
+      className="transition-colors hover:bg-white/[0.02]"
+      style={{ borderBottom: "1px solid hsl(220 20% 16%)" }}
     >
-      {/* Area cliccabile — tutta la card */}
       <Link
         href={`/projects/${project.id}`}
-        className="block p-3 sm:p-5 pb-3 sm:pb-4 focus:outline-none"
-        aria-label={`Apri progetto ${project.name}`}
+        className="flex items-center justify-between gap-4 p-4 focus:outline-none"
+        aria-label={`Apri cantiere ${project.name}`}
       >
-        {/* Avatar */}
-        <div
-          className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-white font-bold text-sm sm:text-base mb-3 sm:mb-4"
-          style={{ background: gradient }}
-        >
-          {initials || "🏗️"}
+        <div className="flex items-center gap-3.5 min-w-0">
+          {/* Avatar rotondo compatto */}
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 shadow-sm"
+            style={{ background: gradient }}
+          >
+            {initials || "🏢"}
+          </div>
+
+          {/* Nome e Data */}
+          <div className="min-w-0">
+            <h3 className="text-white font-bold text-sm leading-tight truncate">
+              {project.name}
+            </h3>
+            <p className="text-[10px] text-white/40 leading-none mt-1">
+              Modificato: {date}
+            </p>
+          </div>
         </div>
 
-        {/* Nome progetto */}
-        <div
-          className="text-white font-semibold text-xs sm:text-sm leading-snug line-clamp-2 mb-1"
-          style={{ minHeight: "2rem" }}
-        >
-          {project.name}
-        </div>
-
-        {/* Data */}
-        <div className="text-[10px] sm:text-xs" style={{ color: "hsl(215 15% 45%)" }}>
-          Mod. {date}
-        </div>
-      </Link>
-
-      {/* Footer con azioni */}
-      <div
-        className="px-3 sm:px-5 py-2 sm:py-3 flex items-center justify-between"
-        style={{ borderTop: "1px solid hsl(220 20% 18%)" }}
-      >
-        <Link
-          href={`/projects/${project.id}`}
-          className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-          style={{
-            background: "hsl(220 32% 20%)",
-            color: "hsl(215 20% 65%)",
-          }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.background = "hsl(220 32% 26%)")
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.background = "hsl(220 32% 20%)")
-          }
+        {/* Freccia o pulsante azione */}
+        <span
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors border border-white/5 bg-white/5 hover:bg-white/10 text-white/80"
         >
           Apri →
-        </Link>
-
-
-      </div>
+        </span>
+      </Link>
     </div>
   );
 }
@@ -249,29 +215,28 @@ function EmptyState({
         border: "1px dashed hsl(220 20% 24%)",
       }}
     >
-      <div className="text-5xl mb-4">{hasSearch ? "🔍" : "📐"}</div>
+      <div className="text-5xl mb-4">{hasSearch ? "🔍" : "📋"}</div>
       <h3 className="text-white font-semibold mb-2">
-        {hasSearch ? "Nessun risultato" : "Nessun progetto ancora"}
+        {hasSearch ? "Nessun risultato" : "Nessun cantiere ancora"}
       </h3>
       <p
-        className="text-sm text-center max-w-xs"
+        className="text-sm text-center max-w-xs leading-relaxed"
         style={{ color: "hsl(215 15% 50%)" }}
       >
         {hasSearch
           ? "Prova con un termine di ricerca diverso."
-          : "Crea il tuo primo progetto antincendio e inizia a disegnare."}
+          : "Crea il tuo primo cantiere e inizia a prendere note ed appunti strutturati."}
       </p>
       {!hasSearch && (
         <button
           onClick={onNewProject}
-          className="mt-6 px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200"
+          className="mt-6 px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 cursor-pointer"
           style={{
-            background:
-              "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+            background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
             boxShadow: "0 4px 16px hsl(220 90% 56% / 0.3)",
           }}
         >
-          + Crea il primo progetto
+          + Crea il primo cantiere
         </button>
       )}
     </div>

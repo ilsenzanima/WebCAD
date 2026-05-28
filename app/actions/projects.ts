@@ -186,7 +186,8 @@ export async function addLevel(
   projectId: string,
   customName?: string,
   elevationZ?: number,
-  drawingType: "2d_wall" | "3d_box" = "2d_wall"
+  drawingType: "2d_wall" | "3d_box" = "2d_wall",
+  piano: string = "Generico"
 ) {
   const { supabase, user } = await getAuthUser();
   if (!user) throw new Error("Non autenticato.");
@@ -224,8 +225,9 @@ export async function addLevel(
       scale_ratio: null,
       plan_image_url: null,
       drawing_type: drawingType,
+      piano: piano.trim() || "Generico",
     } as any)
-    .select("id, project_id, name, elevation_z, scale_ratio, plan_image_url, drawing_type, created_at")
+    .select("id, project_id, name, elevation_z, scale_ratio, plan_image_url, drawing_type, created_at, piano, completed")
     .single();
 
   if (error) {
@@ -485,4 +487,25 @@ export async function get3DBox(levelId: string) {
     d: geom.d ?? 1000,
     thickness: data.thickness ?? 15,
   };
+}
+
+// ============================================================
+// ACTION: Aggiorna lo stato di completamento di una nota/livello
+// ============================================================
+
+export async function toggleLevelCompleted(levelId: string, completed: boolean) {
+  const { supabase, user } = await getAuthUser();
+  if (!user) throw new Error("Non autenticato.");
+
+  const { error } = await supabase
+    .from("levels")
+    .update({ completed } as any)
+    .eq("id", levelId);
+
+  if (error) {
+    console.error("Errore aggiornamento completed livello:", error);
+    return { error: "Impossibile aggiornare lo stato della nota." };
+  }
+
+  return { success: true };
 }

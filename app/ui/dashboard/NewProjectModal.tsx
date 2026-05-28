@@ -59,9 +59,9 @@ export default function NewProjectModal({ open, onClose }: NewProjectModalProps)
                 border: "1px solid hsl(220 90% 56% / 0.3)",
               }}
             >
-              📐
+              📋
             </div>
-            <h2 className="text-white font-semibold text-base">Nuovo Progetto</h2>
+            <h2 className="text-white font-semibold text-base">Nuovo Cantiere</h2>
           </div>
           <button
             onClick={onClose}
@@ -81,7 +81,7 @@ export default function NewProjectModal({ open, onClose }: NewProjectModalProps)
               className="block text-xs font-medium"
               style={{ color: "hsl(215 20% 65%)" }}
             >
-              Nome del progetto
+              Nome del cantiere
             </label>
             <input
               ref={inputRef}
@@ -89,7 +89,7 @@ export default function NewProjectModal({ open, onClose }: NewProjectModalProps)
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Es. Progetto Antincendio Via Roma 12"
+              placeholder="Es. Cantiere Via Roma 12"
               maxLength={120}
               className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-opacity-40 transition-all outline-none"
               style={{
@@ -131,7 +131,7 @@ export default function NewProjectModal({ open, onClose }: NewProjectModalProps)
                   : "none",
               }}
             >
-              {isPending ? "Creazione..." : "Crea Progetto"}
+              {isPending ? "Creazione..." : "Crea Cantiere"}
             </button>
           </div>
         </form>
