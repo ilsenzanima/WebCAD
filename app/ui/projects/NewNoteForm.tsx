@@ -11,6 +11,8 @@ import {
   type FieldNote,
 } from "@/app/actions/field-notes";
 import PlanimetriaMappa from "./PlanimetriaMappa";
+import PhotoQuotaEditor from "./PhotoQuotaEditor";
+import LivellaBolla from "./LivellaBolla";
 
 // ============================================
 // Tipi interni
@@ -120,8 +122,24 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   // --- Posizione in selezione (apre la mappa) ---
   const [posizionePickingId, setPosizionePickingId] = useState<string | null>(null);
 
+  // --- Stati per Foto Quotata & Livella ---
+  const [showLivella, setShowLivella] = useState(false);
+  const [editingFotoId, setEditingFotoId] = useState<string | null>(null);
+  const [editingFotoUrl, setEditingFotoUrl] = useState<string | null>(null);
+
   // --- Errori ---
   const [error, setError] = useState<string | null>(null);
+
+  // Gestore per catturare l'inclinazione della livella ed inserirla come nota
+  function handleCaptureLivella(text: string) {
+    const draft: NoteItemDraft = {
+      id: crypto.randomUUID(),
+      item_type: "nota",
+      value_text: text,
+    };
+    setItems((prev) => [...prev, draft]);
+    setShowLivella(false);
+  }
 
   // ============================================
   // Handlers tipo
@@ -382,6 +400,20 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                     {ITEM_LABELS[type]}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowLivella(true);
+                    setShowItemDropdown(false);
+                  }}
+                  className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors font-bold"
+                  style={{
+                    color: "hsl(142, 60%, 75%)",
+                    borderTop: "1px solid hsl(220 20% 18%)",
+                  }}
+                >
+                  🟢 Livella a Bolla
+                </button>
               </div>
             )}
           </div>
@@ -454,6 +486,10 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                 onChange={(changes) => updateItem(item.id, changes)}
                 onRemove={() => removeItem(item.id)}
                 catalogMaterials={catalogMaterials}
+                onEditFoto={(id, url) => {
+                  setEditingFotoId(id);
+                  setEditingFotoUrl(url);
+                }}
               />
             );
           })}
@@ -489,6 +525,30 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
           {isPending ? "Salvataggio..." : "Salva Appunto"}
         </button>
       </div>
+
+      {/* Modale Livella a Bolla */}
+      {showLivella && (
+        <LivellaBolla
+          onCapture={handleCaptureLivella}
+          onClose={() => setShowLivella(false)}
+        />
+      )}
+
+      {/* Modale PhotoQuotaEditor per Foto Quotata */}
+      {editingFotoId && editingFotoUrl && (
+        <PhotoQuotaEditor
+          imageUrl={editingFotoUrl}
+          onSave={(newUrl) => {
+            updateItem(editingFotoId, { value_text: newUrl });
+            setEditingFotoId(null);
+            setEditingFotoUrl(null);
+          }}
+          onClose={() => {
+            setEditingFotoId(null);
+            setEditingFotoUrl(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -502,11 +562,13 @@ function ItemRow({
   onChange,
   onRemove,
   catalogMaterials = [],
+  onEditFoto,
 }: {
   item: NoteItemDraft;
   onChange: (changes: Partial<NoteItemDraft>) => void;
   onRemove: () => void;
   catalogMaterials?: any[];
+  onEditFoto?: (id: string, url: string) => void;
 }) {
   const label = ITEM_LABELS[item.item_type];
   const isMeasure = MEASURE_TYPES.includes(item.item_type);
@@ -695,22 +757,37 @@ function ItemRow({
       {isFoto && (
         <div className="flex-1 space-y-2">
           {item.value_text ? (
-            <div className="relative inline-block">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src={item.value_text} 
-                alt="Anteprima foto" 
-                className="h-24 w-auto rounded-lg object-cover" 
-                style={{ border: "1px solid hsl(220 20% 22%)" }}
-              />
+            <div className="flex flex-col gap-2">
+              <div className="relative inline-block w-fit">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img 
+                  src={item.value_text} 
+                  alt="Anteprima foto" 
+                  className="h-24 w-auto rounded-lg object-cover" 
+                  style={{ border: "1px solid hsl(220 20% 22%)" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => onChange({ value_text: undefined })}
+                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs shadow-md transition-all"
+                  style={{ background: "hsl(0 70% 50%)", color: "white" }}
+                  title="Rimuovi foto"
+                >
+                  ✕
+                </button>
+              </div>
+              
               <button
                 type="button"
-                onClick={() => onChange({ value_text: undefined })}
-                className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs shadow-md transition-all"
-                style={{ background: "hsl(0 70% 50%)", color: "white" }}
-                title="Rimuovi foto"
+                onClick={() => onEditFoto?.(item.id, item.value_text!)}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all w-fit"
+                style={{
+                  background: "hsl(220 90% 56% / 0.15)",
+                  color: "hsl(220 90% 70%)",
+                  border: "1px solid hsl(220 90% 56% / 0.3)",
+                }}
               >
-                ✕
+                📐 Disegna Quote su Foto
               </button>
             </div>
           ) : (
