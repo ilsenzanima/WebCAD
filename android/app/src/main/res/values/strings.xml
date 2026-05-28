@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WebCAD</string>
+    <string name="title_activity_main">WebCAD</string>
+    <string name="package_name">com.ilsenzanima.webcad</string>
+    <string name="custom_url_scheme">com.ilsenzanima.webcad</string>
+</resources>
