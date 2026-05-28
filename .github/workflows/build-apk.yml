@@ -79,6 +79,11 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Crea local.properties per Gradle
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          cat android/local.properties
+
       - name: Build APK con Gradle
         run: |
           cd android
