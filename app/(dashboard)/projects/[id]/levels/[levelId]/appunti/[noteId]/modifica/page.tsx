@@ -55,7 +55,7 @@ export default async function EditFieldNotePage({
           className="flex items-center gap-1.5 text-xs sm:text-sm font-medium flex-wrap"
           style={{ color: "hsl(215 15% 55%)" }}
         >
-          <Link href="/projects" className="hover:text-white transition-colors">Progetti</Link>
+          <Link href="/projects" className="hover:text-white transition-colors">Note di Cantiere</Link>
           <span>/</span>
           <Link href={`/projects/${id}`} className="hover:text-white transition-colors">{project.name}</Link>
           <span>/</span>

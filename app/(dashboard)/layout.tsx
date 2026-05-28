@@ -6,7 +6,7 @@ import MobileMenu from "@/app/ui/dashboard/MobileMenu";
 import type { ReactNode } from "react";
 
 const navItems = [
-  { href: "/projects", icon: "📐", label: "Progetti" },
+  { href: "/projects", icon: "📐", label: "Note di Cantiere" },
 ];
 
 const bottomNavItems = [

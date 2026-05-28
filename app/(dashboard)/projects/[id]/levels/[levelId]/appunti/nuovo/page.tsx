@@ -58,7 +58,7 @@ export default async function LevelNewFieldNotePage({
           style={{ color: "hsl(215 15% 55%)" }}
         >
           <Link href="/projects" className="hover:text-white transition-colors">
-            Progetti
+            Note di Cantiere
           </Link>
           <span>/</span>
           <Link
