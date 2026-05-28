@@ -243,8 +243,8 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
           }}
         >
           <span className="text-base leading-none">＋</span>
-          <span className="hidden sm:inline">Crea Disegno</span>
-          <span className="sm:hidden">Nuovo</span>
+          <span className="hidden sm:inline">Aggiungi Zona / Macroarea</span>
+          <span className="sm:hidden">Nuova Zona</span>
         </button>
 
         {/* Menu Azioni Progetto */}
@@ -256,7 +256,7 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
       {/* ── Disegni Grid ─────────────────────────────────── */}
       <div className="px-4 sm:px-8 py-4 sm:py-6">
         <h2 className="text-xs sm:text-sm border-b pb-2 mb-4 font-semibold uppercase tracking-wider" style={{ color: "hsl(215 15% 45%)", borderColor: "hsl(220 20% 16%)" }}>
-          Disegni del progetto ({filteredDrawings.length})
+          Zone / Macroaree di Cantiere ({filteredDrawings.length})
         </h2>
         
         {filteredDrawings.length > 0 ? (
@@ -276,7 +276,7 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
            </div>
         ) : (
           <div className="p-10 text-center rounded-2xl" style={{ border: "1px dashed hsl(220 20% 24%)", background: "hsl(220 26% 14%)" }}>
-             <p className="text-sm" style={{ color: "hsl(215 15% 50%)" }}>Nessun disegno trovato in questo progetto.</p>
+             <p className="text-sm" style={{ color: "hsl(215 15% 50%)" }}>Nessuna zona creata per questo progetto.</p>
           </div>
         )}
       </div>
@@ -314,9 +314,9 @@ export default function ProjectDetailClient({ project, drawings }: ProjectDetail
       
       {isCreatingLevel && (
         <CreateDrawingModal
-          title="Crea Nuovo Disegno"
+          title="Aggiungi Zona / Macroarea"
           submitLabel="Crea"
-          defaultName={levelTemplate?.name || "Nuovo Piano"}
+          defaultName={levelTemplate?.name || "Nuova Zona"}
           defaultElevation={levelTemplate?.elevation_z || 0}
           defaultType={levelTemplate?.drawing_type || "2d_wall"}
           onClose={() => setIsCreatingLevel(false)}
