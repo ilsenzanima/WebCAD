@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout repository
@@ -36,10 +38,19 @@ jobs:
         uses: actions/setup-java@v4
         with:
           java-version: '17'
-          distribution: 'zulu'
+          distribution: 'temurin'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Installa componenti Android SDK mancanti
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls $ANDROID_HOME || echo "SDK root non trovato"
+          # Accetta le licenze Android
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          # Installa platform e build-tools necessari
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "platform-tools" || true
 
       - name: Create dummy web assets directory for Capacitor
         run: |
@@ -53,14 +64,17 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug \
+            -Pandroid.useAndroidX=true \
+            --no-daemon \
+            --stacktrace
 
       - name: Copy compiled APK to public downloads
         run: |
           mkdir -p public/downloads
           cp android/app/build/outputs/apk/debug/app-debug.apk public/downloads/webcad-alpha.apk
 
-      - name: Commit and Push compiled APK direttamente nel repository
+      - name: Commit and Push compiled APK nel repository
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "build: compilato APK reale funzionante per download diretto dal sito"
