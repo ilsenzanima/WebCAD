@@ -2,9 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getNoteTypes } from "@/app/actions/field-notes";
 import { getUserTags } from "@/app/actions/settings";
-import UnifiedSettingsManager from "@/app/ui/projects/UnifiedSettingsManager";
+import SettingsClient from "@/app/ui/projects/SettingsClient";
 
-export default async function UnifiedSettingsPage() {
+export default async function SettingsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -15,5 +15,18 @@ export default async function UnifiedSettingsPage() {
     getUserTags("material_unit"),
   ]);
 
-  return <UnifiedSettingsManager initialNoteTypes={noteTypes} initialMaterialCategories={materialCategories} initialMaterialUnits={materialUnits} />;
+  const userData = {
+    id: user.id,
+    email: user.email,
+    fullName: user.user_metadata?.full_name || user.email?.split("@")[0] || "Utente",
+  };
+
+  return (
+    <SettingsClient
+      user={userData}
+      initialNoteTypes={noteTypes}
+      initialMaterialCategories={materialCategories}
+      initialMaterialUnits={materialUnits}
+    />
+  );
 }

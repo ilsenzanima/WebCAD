@@ -7,11 +7,10 @@ import type { ReactNode } from "react";
 
 const navItems = [
   { href: "/projects", icon: "📐", label: "Progetti" },
-  { href: "/catalog", icon: "📦", label: "Catalogo" },
 ];
 
 const bottomNavItems = [
-  { href: "/catalog/configurazione", icon: "🏷️", label: "Configurazione Voci" },
+  { href: "/settings", icon: "⚙️", label: "Impostazioni" },
 ];
 
 /**

@@ -124,3 +124,18 @@ export async function logout() {
   await supabase.auth.signOut();
   redirect("/login");
 }
+
+// ============================================
+// Server Action: cambio password
+// ============================================
+
+export async function changePassword(password: string): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autenticato" };
+
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) return { success: false, error: error.message };
+
+  return { success: true };
+}
