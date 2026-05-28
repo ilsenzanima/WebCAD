@@ -9,6 +9,8 @@ jobs:
   build:
     name: Build & Pack APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       ANDROID_HOME: /usr/local/lib/android/sdk
