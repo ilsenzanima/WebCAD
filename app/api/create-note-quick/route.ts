@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     }
 
     // 1. Recupera il project_id associato al livello
-    const { data: levelData, error: levelError } = await supabase
+    const { data: levelData, error: levelError } = await (supabase as any)
       .from("levels")
       .select("project_id")
       .eq("id", levelId)
@@ -28,11 +28,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Livello non trovato" }, { status: 404 });
     }
 
-    const projectId = levelData.project_id;
+    const projectId = (levelData as any).project_id;
 
     // 2. Trova o crea il tipo di appunto per il calcolo
     let typeId = null;
-    const { data: typeData } = await supabase
+    const { data: typeData } = await (supabase as any)
       .from("field_note_types")
       .select("id")
       .eq("name", typeName)
@@ -40,29 +40,29 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     if (typeData) {
-      typeId = typeData.id;
+      typeId = (typeData as any).id;
     } else {
       // Creiamo il tipo al volo
-      const { data: newType } = await supabase
+      const { data: newType } = await (supabase as any)
         .from("field_note_types")
         .insert({ name: typeName, user_id: user.id })
         .select("id")
         .single();
-      if (newType) typeId = newType.id;
+      if (newType) typeId = (newType as any).id;
     }
 
     // 3. Calcola il note_number successivo per quel livello
-    const { data: notes } = await supabase
+    const { data: notes } = await (supabase as any)
       .from("field_notes")
       .select("note_number")
       .eq("level_id", levelId)
       .order("note_number", { ascending: false })
       .limit(1);
 
-    const nextNumber = notes && notes.length > 0 ? notes[0].note_number + 1 : 1;
+    const nextNumber = notes && notes.length > 0 ? (notes[0] as any).note_number + 1 : 1;
 
     // 4. Inserisce la nota di cantiere
-    const { data: note, error: noteError } = await supabase
+    const { data: note, error: noteError } = await (supabase as any)
       .from("field_notes")
       .insert({
         project_id: projectId,
@@ -81,10 +81,10 @@ export async function POST(request: Request) {
     }
 
     // 5. Inserisce l'item (voce) della nota di tipo 'nota'
-    const { error: itemError } = await supabase
+    const { error: itemError } = await (supabase as any)
       .from("field_note_items")
       .insert({
-        note_id: note.id,
+        note_id: (note as any).id,
         item_type: "nota",
         value_text: text,
         sort_order: 0,
