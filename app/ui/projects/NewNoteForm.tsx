@@ -14,7 +14,6 @@ import PlanimetriaMappa from "./PlanimetriaMappa";
 import PhotoQuotaEditor from "./PhotoQuotaEditor";
 import LivellaBolla from "./LivellaBolla";
 import CalcolatriceWidget from "@/app/ui/dashboard/CalcolatriceWidget";
-import { interpretDettatoCantiere } from "@/app/actions/ai";
 
 // ============================================
 // Tipi interni
@@ -108,51 +107,6 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
       window.removeEventListener("webcad-import-calc", handleImportCalc);
     };
   }, []);
-
-  // --- Assistente IA Dettato ---
-  const [dettatoText, setDettatoText] = useState("");
-  const [isAILoading, setIsAILoading] = useState(false);
-  const [showAIBox, setShowAIBox] = useState(false);
-
-  async function handleInterpretAI() {
-    if (!dettatoText.trim()) return;
-    setError(null);
-    setIsAILoading(true);
-
-    try {
-      const res = await interpretDettatoCantiere(dettatoText);
-      setIsAILoading(false);
-      
-      if (res.success && res.items) {
-        // Convertiamo gli items strutturati estratti da Gemini
-        const newDrafts: NoteItemDraft[] = res.items.map((item) => ({
-          id: crypto.randomUUID(),
-          item_type: item.item_type,
-          value_num: item.value_num,
-          value_unit: (item.value_unit as any) ?? "cm",
-          value_bool: item.value_bool ?? true,
-          value_text: item.value_text ?? undefined,
-          composite: COMPOSITE_TYPES.includes(item.item_type)
-            ? { b: null, h: null, d: null, unit: "cm" }
-            : undefined
-        }));
-
-        if (newDrafts.length > 0) {
-          setItems((prev) => [...prev, ...newDrafts]);
-          setDettatoText("");
-          setShowAIBox(false);
-          alert(`🤖 Gemini ha interpretato ed aggiunto con successo ${newDrafts.length} voci di rilievo!`);
-        } else {
-          setError("L'IA non ha identificato misure chiare in questo testo. Prova ad essere più specifico, es: 'altezza due metri, spessore trenta'.");
-        }
-      } else {
-        setError(res.error ?? "Errore di interpretazione dell'IA.");
-      }
-    } catch (err: any) {
-      setIsAILoading(false);
-      setError("Errore di connessione con l'IA: " + err.message);
-    }
-  }
 
   // --- Tipo appunto ---
   const [typeFilter, setTypeFilter] = useState(initialNote?.type_name ?? "");
@@ -459,75 +413,6 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         )}
       </div>
 
-      {/* ── Assistente IA Dettato (Gemini) ── */}
-      <div
-        className="rounded-2xl p-6 space-y-4 border transition-all duration-300"
-        style={{ 
-          background: "linear-gradient(135deg, hsl(220 32% 10%), hsl(220 28% 12%))", 
-          borderColor: showAIBox ? "hsl(220 90% 56% / 0.3)" : "hsl(220 20% 18%)",
-          boxShadow: showAIBox ? "0 8px 30px hsl(220 90% 56% / 0.05)" : "none"
-        }}
-      >
-        <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowAIBox(!showAIBox)}>
-          <div className="flex items-center gap-2.5">
-            <span className="text-xl animate-pulse">🤖</span>
-            <div>
-              <h3 className="text-sm font-bold text-white">Assistente Vocale IA (Gemini)</h3>
-              <p className="text-[10px] text-white/50">Compila l'intero appunto dettando a voce libera</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-xs text-white/70"
-          >
-            {showAIBox ? "▲" : "▼"}
-          </button>
-        </div>
-
-        {showAIBox && (
-          <div className="space-y-3 pt-2 border-t border-white/5 animate-fade-in">
-            <p className="text-[11px] text-white/50 leading-relaxed">
-              Premi il microfono sulla tastiera del tuo smartphone e detta liberamente il rilievo. <br />
-              <span className="text-orange-400 font-bold">Esempio:</span> <em>"porta tagliafuoco larga novanta centimetri alta due metri e dieci spessore trenta presente lana di roccia interna e maniglione danneggiato"</em>
-            </p>
-            
-            <textarea
-              value={dettatoText}
-              onChange={(e) => setDettatoText(e.target.value)}
-              placeholder="Fai clic qui, detta o digita il tuo rilievo..."
-              rows={3}
-              className="w-full px-4 py-3 rounded-xl text-xs outline-none focus:ring-1 focus:ring-blue-500/50 resize-none font-medium leading-relaxed"
-              style={{
-                background: "hsl(220 32% 8%)",
-                border: "1px solid hsl(220 20% 18%)",
-                color: "white"
-              }}
-            />
-
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[9px] text-white/30">Richiede connessione internet attiva</span>
-              <button
-                type="button"
-                onClick={handleInterpretAI}
-                disabled={isAILoading || !dettatoText.trim()}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white transition-all shadow-md disabled:opacity-40 flex items-center gap-2 cursor-pointer"
-                style={{
-                  background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))"
-                }}
-              >
-                {isAILoading ? (
-                  <>
-                    <span className="w-3 h-3 rounded-full border-2 border-white/20 border-t-white animate-spin" />
-                    Elaborazione...
-                  </>
-                ) : (
-                  <>🤖 Interpreta con Gemini</>
-                )}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* ── Voci / Misure ── */}
       <div
