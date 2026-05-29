@@ -6,7 +6,7 @@ const config: CapacitorConfig = {
   webDir: 'out',
   server: {
     // Modifica questo URL con l'indirizzo reale del tuo sito Vercel (es. https://webcad-antincendio.vercel.app)
-    url: 'https://webcad-antincendio.vercel.app',
+    url: 'https://web-cad-lac.vercel.app',
     cleartext: true,
     allowNavigation: ['*']
   }
