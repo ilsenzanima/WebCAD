@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { updateSketch, Sketch } from "@/app/actions/sketches";
+import CalcolatriceWidget from "@/app/ui/dashboard/CalcolatriceWidget";
 
 interface SketchEditorClientProps {
   sketch: Sketch;
@@ -69,6 +70,49 @@ export default function SketchEditorClient({
   const [sidebarOpen, setSidebarOpen] = useState(false); // Sidebar rilievi/misure
   const [layersOpen, setLayersOpen] = useState(false); // Sidebar livelli e strumenti su mobile
   const [associatedNotes, setAssociatedNotes] = useState(initialNotes);
+  const [showCalc, setShowCalc] = useState(false);
+
+  useEffect(() => {
+    const handleImportCalc = async (e: Event) => {
+      const customEvent = e as CustomEvent<{ calculation: string }>;
+      if (customEvent.detail && customEvent.detail.calculation && sketch.level_id) {
+        const formula = customEvent.detail.calculation;
+        setSaveStatus("saving");
+        try {
+          const res = await fetch("/api/create-note-quick", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              levelId: sketch.level_id,
+              text: `🧮 Calcolo: ${formula}`
+            })
+          });
+
+          if (res.ok) {
+            // Ricarichiamo le note in tempo reale
+            const fetchRes = await fetch(`/api/notes-by-level?levelId=${sketch.level_id}`);
+            if (fetchRes.ok) {
+              setAssociatedNotes(await fetchRes.json());
+            }
+            setSaveStatus("saved");
+            setShowCalc(false);
+            // Mostriamo una notifica nativa
+            alert("✓ Calcolo salvato correttamente come riga di appunto per questa zona!");
+          } else {
+            setSaveStatus("error");
+          }
+        } catch (err) {
+          setSaveStatus("error");
+          console.error("Errore salvataggio calcolo sketch:", err);
+        }
+      }
+    };
+
+    window.addEventListener("webcad-import-calc", handleImportCalc);
+    return () => {
+      window.removeEventListener("webcad-import-calc", handleImportCalc);
+    };
+  }, [sketch.level_id]);
 
   // Stati del Modale Impostazioni
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -873,6 +917,22 @@ export default function SketchEditorClient({
               </button>
             )}
 
+            {/* Pulsante Calcolatrice */}
+            <button
+              onClick={() => {
+                setShowCalc(true);
+                setSidebarOpen(false);
+                setLayersOpen(false);
+              }}
+              className="w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer text-base"
+              style={{
+                background: showCalc ? "hsl(220 90% 56%)" : "bg-white/5",
+              }}
+              title="Calcolatrice Cantiere"
+            >
+              🧮
+            </button>
+
             <div className="w-8 h-[1px] bg-white/5 my-1" />
 
             {/* Undo */}
@@ -1203,6 +1263,13 @@ export default function SketchEditorClient({
           </div>
         </div>
       )}
+
+      {/* Calcolatrice in Sketch con Importazione se c'è un livello associato */}
+      <CalcolatriceWidget
+        isOpen={showCalc}
+        onClose={() => setShowCalc(false)}
+        showImportButton={!!sketch.level_id}
+      />
     </div>
   );
 }

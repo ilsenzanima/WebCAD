@@ -5,6 +5,7 @@ import LogoutButton from "@/app/ui/dashboard/LogoutButton";
 import MobileMenu from "@/app/ui/dashboard/MobileMenu";
 import UpdateNotifier from "@/app/ui/dashboard/UpdateNotifier";
 import SidebarProfile from "@/app/ui/dashboard/SidebarProfile";
+import GlobalCalcTrigger from "@/app/ui/dashboard/GlobalCalcTrigger";
 import type { ReactNode } from "react";
 
 const navItems = [
@@ -95,7 +96,7 @@ export default async function DashboardLayout({
           <div className="px-3 pb-2 space-y-1" style={{ borderTop: "1px solid hsl(220 20% 16%)", paddingTop: "0.75rem" }}>
             <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wider"
               style={{ color: "hsl(215 15% 40%)" }}>
-              Configurazione
+              Strumenti
             </p>
             {bottomNavItems.map((item) => (
               <Link
@@ -108,6 +109,8 @@ export default async function DashboardLayout({
                 <span>{item.label}</span>
               </Link>
             ))}
+            {/* Calcolatrice Globale fluttuante */}
+            <GlobalCalcTrigger mode="desktop" />
           </div>
 
           {/* Profilo & Notifiche di Aggiornamento */}
@@ -169,6 +172,8 @@ export default async function DashboardLayout({
                 <span className="text-[10px] font-medium leading-none">{item.label}</span>
               </Link>
             ))}
+            {/* Calcolatrice fluttuante in mobile nav */}
+            <GlobalCalcTrigger mode="mobile" />
           </nav>
         </div>
       </div>
