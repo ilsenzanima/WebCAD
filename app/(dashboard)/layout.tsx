@@ -108,32 +108,6 @@ export default async function DashboardLayout({
               </Link>
             ))}
           </div>
-
-          {/* User & Logout */}
-          <div className="p-3 space-y-1" style={{ borderTop: "1px solid hsl(220 20% 16%)" }}>
-            {/* User info */}
-            <div className="flex items-center gap-3 px-3 py-2">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
-                style={{ background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" }}
-              >
-                {initials}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-white text-xs font-medium truncate">{userName}</div>
-                <div className="text-xs truncate" style={{ color: "hsl(215 15% 45%)" }}>
-                  {user.email || "Nessuna email"}
-                </div>
-              </div>
-            </div>
-            <LogoutButton
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-150"
-              style={{ color: "hsl(215 20% 55%)" }}
-            >
-              <span className="text-base">↩</span>
-              <span>Esci</span>
-            </LogoutButton>
-          </div>
         </aside>
 
         {/* ─── Main content ───────────────────────────────────── */}
@@ -187,7 +161,6 @@ export default async function DashboardLayout({
                 <span className="text-[10px] font-medium leading-none">{item.label}</span>
               </Link>
             ))}
-            <MobileMenu />
           </nav>
         </div>
       </div>

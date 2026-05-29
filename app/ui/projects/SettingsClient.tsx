@@ -77,8 +77,8 @@ export default function SettingsClient({
         <p className="text-xs text-white/50">Gestisci il tuo profilo, configura l'app e scarica la versione mobile per il cantiere.</p>
       </div>
 
-      {/* Selettore Schede Tab */}
-      <div className="flex border-b border-white/10 overflow-x-auto scrollbar-none">
+      {/* Selettore Schede Tab per Desktop */}
+      <div className="hidden md:flex border-b border-white/10 overflow-x-auto scrollbar-none">
         {tabs.map((tab) => {
           const isSelected = activeTab === tab.key;
           return (
@@ -96,6 +96,32 @@ export default function SettingsClient({
             </button>
           );
         })}
+      </div>
+
+      {/* Selettore Schede Tab per Mobile (Dropdown) */}
+      <div className="block md:hidden space-y-1">
+        <label className="text-[10px] font-bold uppercase text-white/40">Sezione Impostazioni</label>
+        <div className="relative">
+          <select
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as any)}
+            className="w-full px-4 py-3.5 rounded-xl text-xs outline-none appearance-none transition-all pr-10 font-bold"
+            style={{
+              background: "hsl(220 26% 14%)",
+              border: "1px solid hsl(220 20% 22%)",
+              color: "white",
+            }}
+          >
+            {tabs.map((tab) => (
+              <option key={tab.key} value={tab.key} style={{ background: "hsl(220 32% 10%)" }}>
+                {tab.icon} &nbsp; {tab.label}
+              </option>
+            ))}
+          </select>
+          <div className="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none text-white/40 text-xs">
+            ▼
+          </div>
+        </div>
       </div>
 
       {/* ─── TAB 1: PROFILO & SICUREZZA ────────────────── */}
