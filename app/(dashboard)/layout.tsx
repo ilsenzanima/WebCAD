@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import LogoutButton from "@/app/ui/dashboard/LogoutButton";
 import MobileMenu from "@/app/ui/dashboard/MobileMenu";
 import UpdateNotifier from "@/app/ui/dashboard/UpdateNotifier";
+import SidebarProfile from "@/app/ui/dashboard/SidebarProfile";
 import type { ReactNode } from "react";
 
 const navItems = [
@@ -108,6 +109,13 @@ export default async function DashboardLayout({
               </Link>
             ))}
           </div>
+
+          {/* Profilo & Notifiche di Aggiornamento */}
+          <SidebarProfile 
+            userName={userName}
+            email={user.email || "Nessuna email"}
+            initials={initials}
+          />
         </aside>
 
         {/* ─── Main content ───────────────────────────────────── */}
