@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import { QueryProvider } from "@/lib/providers/query-provider";
 import NetworkSyncProvider from "@/app/providers/NetworkSyncProvider";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-});
+// Definizione statica del font-family per evitare errori di download Google Fonts in ambienti offline/sandbox
+const inter = {
+  variable: "font-sans",
+};
+
 
 export const metadata: Metadata = {
   title: "WebCAD Antincendio",
