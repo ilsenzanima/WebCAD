@@ -30,11 +30,24 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files and credentials
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+.env*.local
+*.key
+*.cert
+*.token
+*credentials*.json
+service-account*.json
+.supabase/
 
 # sample data & documenti sensibili (PRD Sezione 0)
 _sample_data/
+_sample_data/**/*
+
 
 # vercel
 .vercel
