@@ -32,7 +32,7 @@ interface Layer {
   icon: string;
 }
 
-// Dimensioni logiche fisse del foglio da disegno per evitare deformazioni su schermi diversi (aspetto 3:4 premium)
+// Dimensioni logiche fisse del foglio da disegno
 const LOGICAL_WIDTH = 1200;
 const LOGICAL_HEIGHT = 1600;
 
@@ -45,6 +45,7 @@ export default function SketchEditorClient({
 
   // Riferimenti ai Canvas dei livelli e overlay
   const containerRef = useRef<HTMLDivElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const layerCanvasRefs = {
     rilievo: useRef<HTMLCanvasElement>(null),
     impianti: useRef<HTMLCanvasElement>(null),
@@ -64,55 +65,20 @@ export default function SketchEditorClient({
   const [color, setColor] = useState("#ffffff");
   const [brushSize, setBrushSize] = useState(4);
   const [tool, setTool] = useState<"pen" | "eraser">("pen");
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
+  
+  // Stati di salvataggio (Manuale)
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | "unsaved">("saved");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Stati di Zoom e Pan (Multi-touch accelerato GPU)
+  const [scale, setScale] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
 
   // Stati dei Pannelli Drawer (destra)
   const [sidebarOpen, setSidebarOpen] = useState(false); // Sidebar rilievi/misure
-  const [layersOpen, setLayersOpen] = useState(false); // Sidebar livelli e strumenti su mobile
+  const [toolsOpen, setToolsOpen] = useState(false); // Sidebar strumenti per Mobile
+  const [layersOpen, setLayersOpen] = useState(false); // Menu di gestione livelli per Desktop
   const [associatedNotes, setAssociatedNotes] = useState(initialNotes);
-  const [showCalc, setShowCalc] = useState(false);
-
-  useEffect(() => {
-    const handleImportCalc = async (e: Event) => {
-      const customEvent = e as CustomEvent<{ calculation: string }>;
-      if (customEvent.detail && customEvent.detail.calculation && sketch.level_id) {
-        const formula = customEvent.detail.calculation;
-        setSaveStatus("saving");
-        try {
-          const res = await fetch("/api/create-note-quick", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              levelId: sketch.level_id,
-              text: `🧮 Calcolo: ${formula}`
-            })
-          });
-
-          if (res.ok) {
-            // Ricarichiamo le note in tempo reale
-            const fetchRes = await fetch(`/api/notes-by-level?levelId=${sketch.level_id}`);
-            if (fetchRes.ok) {
-              setAssociatedNotes(await fetchRes.json());
-            }
-            setSaveStatus("saved");
-            setShowCalc(false);
-            // Mostriamo una notifica nativa
-            alert("✓ Calcolo salvato correttamente come riga di appunto per questa zona!");
-          } else {
-            setSaveStatus("error");
-          }
-        } catch (err) {
-          setSaveStatus("error");
-          console.error("Errore salvataggio calcolo sketch:", err);
-        }
-      }
-    };
-
-    window.addEventListener("webcad-import-calc", handleImportCalc);
-    return () => {
-      window.removeEventListener("webcad-import-calc", handleImportCalc);
-    };
-  }, [sketch.level_id]);
 
   // Stati del Modale Impostazioni
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -123,6 +89,7 @@ export default function SketchEditorClient({
       : ""
   );
   const [assocLevelId, setAssocLevelId] = useState(sketch.level_id || "");
+  const [showCalc, setShowCalc] = useState(false);
 
   const [isPending, startTransition] = useTransition();
 
@@ -138,7 +105,7 @@ export default function SketchEditorClient({
     quote: [],
   });
 
-  // Riferimenti interni al disegno
+  // Riferimenti interni per il disegno e zoom a 2 dita
   const isDrawingRef = useRef(false);
   const pointsRef = useRef<Point[]>([]);
   const startPointRef = useRef<Point | null>(null);
@@ -146,7 +113,14 @@ export default function SketchEditorClient({
   const lastPointRef = useRef<Point | null>(null);
   const isShapeDetectedRef = useRef(false);
   const detectedShapeRef = useRef<any>(null);
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Riferimenti per zoom/pan a due dita
+  const activePointersRef = useRef<Map<number, Point>>(new Map());
+  const startTouchDistRef = useRef<number | null>(null);
+  const startTouchScaleRef = useRef<number>(1);
+  const startTouchCenterRef = useRef<{ x: number; y: number } | null>(null);
+  const startTouchPanRef = useRef({ x: 0, y: 0 });
+  const isZoomingRef = useRef(false);
 
   // Colori predefiniti per palette premium
   const premiumColors = [
@@ -160,9 +134,8 @@ export default function SketchEditorClient({
     "#ec4899", // Rosa
   ];
 
-  // 1. Inizializzazione Canvas a Risoluzione Logica Fissa
+  // Inizializzazione Canvas a Risoluzione Logica Fissa
   useEffect(() => {
-    // Configura tutti i canvas a 1200x1600 pixel
     const canvasIds: Array<keyof typeof layerCanvasRefs> = ["rilievo", "impianti", "quote"];
     
     canvasIds.forEach((id) => {
@@ -188,7 +161,6 @@ export default function SketchEditorClient({
       }
     }
 
-    // Carica l'immagine precedentemente salvata (se esiste) sul livello "rilievo" come base iniziale
     if (sketch.image_data) {
       const img = new Image();
       img.src = sketch.image_data;
@@ -198,13 +170,10 @@ export default function SketchEditorClient({
         if (ctx && rilievoCanvas) {
           ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
           ctx.drawImage(img, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-          
-          // Salva stato iniziale nello stack undo del livello rilievo
           undoStacksRef.current.rilievo = [rilievoCanvas.toDataURL()];
         }
       };
     } else {
-      // Salva lo stato vuoto iniziale per tutti i livelli
       canvasIds.forEach((id) => {
         const canvas = layerCanvasRefs[id].current;
         if (canvas) {
@@ -214,14 +183,54 @@ export default function SketchEditorClient({
     }
   }, [sketch.image_data]);
 
-  // 2. Algoritmo di Riconoscimento Geometrico (Esteso con Triangoli + Ellisse/Cerchio/Linee/Rettangolo)
+  // Listener per l'evento calcolatrice
+  useEffect(() => {
+    const handleImportCalc = async (e: Event) => {
+      const customEvent = e as CustomEvent<{ calculation: string }>;
+      if (customEvent.detail && customEvent.detail.calculation && sketch.level_id) {
+        const formula = customEvent.detail.calculation;
+        setSaveStatus("saving");
+        try {
+          const res = await fetch("/api/create-note-quick", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              levelId: sketch.level_id,
+              text: `🧮 Calcolo: ${formula}`
+            })
+          });
+
+          if (res.ok) {
+            const fetchRes = await fetch(`/api/notes-by-level?levelId=${sketch.level_id}`);
+            if (fetchRes.ok) {
+              setAssociatedNotes(await fetchRes.json());
+            }
+            setSaveStatus("saved");
+            setShowCalc(false);
+            alert("✓ Calcolo salvato correttamente come riga di appunto per questa zona!");
+          } else {
+            setSaveStatus("error");
+          }
+        } catch (err) {
+          setSaveStatus("error");
+          console.error("Errore salvataggio calcolo sketch:", err);
+        }
+      }
+    };
+
+    window.addEventListener("webcad-import-calc", handleImportCalc);
+    return () => {
+      window.removeEventListener("webcad-import-calc", handleImportCalc);
+    };
+  }, [sketch.level_id]);
+
+  // Algoritmo di Riconoscimento Geometrico (Fixato e calibrato per Quadrati/Rettangoli vs Triangoli)
   function detectShape(points: Point[]) {
     if (points.length < 8) return null;
 
     const start = points[0];
     const end = points[points.length - 1];
 
-    // Calcolo Bounding Box
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const p of points) {
       if (p.x < minX) minX = p.x;
@@ -234,11 +243,10 @@ export default function SketchEditorClient({
     const h = maxY - minY;
     const size = Math.sqrt(w * w + h * h);
 
-    // Verifica se è una forma chiusa
     const distStartEnd = Math.sqrt((start.x - end.x) ** 2 + (start.y - end.y) ** 2);
     const isClosed = distStartEnd < size * 0.25;
 
-    // A. Verifica LINEA RETTA
+    // A. LINEA RETTA
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const lineLength = Math.sqrt(dx * dx + dy * dy);
@@ -256,13 +264,13 @@ export default function SketchEditorClient({
       }
     }
 
-    // B. Se è una forma CHIUSA
+    // B. FORMA CHIUSA
     if (isClosed && w > 20 && h > 20) {
       const cx = minX + w / 2;
       const cy = minY + h / 2;
       const r = (w + h) / 4;
 
-      // Verifica CERCHIO / ELLISSE
+      // CERCHIO / ELLISSE
       let circleDevSum = 0;
       for (const p of points) {
         const dist = Math.sqrt((p.x - cx) ** 2 + (p.y - cy) ** 2);
@@ -270,7 +278,7 @@ export default function SketchEditorClient({
       }
       const avgCircleDev = circleDevSum / points.length;
 
-      if (avgCircleDev < r * 0.18) {
+      if (avgCircleDev < r * 0.16) {
         if (Math.abs(w - h) / Math.max(w, h) < 0.25) {
           return { type: "circle", params: { cx, cy, r } };
         } else {
@@ -278,33 +286,39 @@ export default function SketchEditorClient({
         }
       }
 
-      // C. Riconoscimento TRIANGOLO vs RETTANGOLO
-      // Troviamo i tre potenziali vertici:
-      // 1. Il picco superiore (Y minima)
-      // 2. Il punto più a sinistra (X minima)
-      // 3. Il punto più a destra (X massima)
-      let topPt = points[0], leftPt = points[0], rightPt = points[0];
-      for (const p of points) {
-        if (p.y < topPt.y) topPt = p;
-        if (p.x < leftPt.x) leftPt = p;
-        if (p.x > rightPt.x) rightPt = p;
-      }
+      // TRIANGOLO vs RETTANGOLO / QUADRATO (Algoritmo matematico dei 4 angoli)
+      const minDistanceTo = (target: Point) => {
+        let minD = Infinity;
+        for (const p of points) {
+          const d = Math.sqrt((p.x - target.x) ** 2 + (p.y - target.y) ** 2);
+          if (d < minD) minD = d;
+        }
+        return minD;
+      };
 
-      // Calcoliamo se l'area del bounding box è coperta per circa il 50% (tipico di un triangolo)
-      // o per più dell'80% (tipico di un rettangolo)
-      const triangleArea = 0.5 * w * h;
-      let pointsInsideTriangle = 0;
-      
-      // Semplice euristica: se la deviazione dei punti dai lati del triangolo formato da topPt, leftPt, rightPt
-      // è minima rispetto a un rettangolo, allora è un triangolo perfetto.
-      // Un indicatore molto solido è valutare la coordinata Y del centro inferiore:
-      // se l'utente disegna un triangolo, la parte inferiore è una base piatta e i lati salgono ad angolo.
-      // Se la distanza della coordinata Y dei punti centrali è significativamente minore del bounding box
-      // nella metà superiore rispetto a quella inferiore, è un triangolo.
-      const isTriangle = points.some(p => p.y > cy && Math.abs(p.x - cx) < w * 0.15) && 
-                         !points.some(p => p.y < cy && Math.abs(p.x - cx) > w * 0.4);
+      const distTL = minDistanceTo({ x: minX, y: minY });
+      const distTR = minDistanceTo({ x: maxX, y: minY });
+      const distBL = minDistanceTo({ x: minX, y: maxY });
+      const distBR = minDistanceTo({ x: maxX, y: maxY });
 
-      if (isTriangle) {
+      const threshold = size * 0.22; // 22% della diagonale del bounding box
+      const touchesTL = distTL < threshold;
+      const touchesTR = distTR < threshold;
+      const touchesBL = distBL < threshold;
+      const touchesBR = distBR < threshold;
+
+      const cornersTouched = (touchesTL ? 1 : 0) + (touchesTR ? 1 : 0) + (touchesBL ? 1 : 0) + (touchesBR ? 1 : 0);
+
+      // Se tocca tutti e 4 gli angoli del bounding box, è sicuramente un rettangolo/quadrato!
+      if (cornersTouched >= 4) {
+        // Se larghezza e altezza sono simili (differenza < 18%), semplifica in un quadrato perfetto
+        if (Math.abs(w - h) / Math.max(w, h) < 0.18) {
+          const side = (w + h) / 2;
+          return { type: "rectangle", params: { x: cx - side / 2, y: cy - side / 2, w: side, h: side } };
+        }
+        return { type: "rectangle", params: { x: minX, y: minY, w, h } };
+      } else {
+        // Altrimenti ha solo 3 (o meno) angoli passanti vicini, quindi è un triangolo!
         return {
           type: "triangle",
           params: {
@@ -316,58 +330,54 @@ export default function SketchEditorClient({
             y3: maxY,
           },
         };
-      } else {
-        return { type: "rectangle", params: { x: minX, y: minY, w, h } };
       }
     }
 
     return null;
   }
 
-  // 3. Unione e Salvataggio di tutti i livelli in un unico Base64 per Supabase
-  function triggerAutoSave() {
-    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
-
+  // 3. SALVATAGGIO MANUALE (Richiesto per evitare rallentamenti e conflitti durante il disegno rapido!)
+  async function handleSaveManual() {
+    if (saveStatus === "saving") return;
     setSaveStatus("saving");
 
-    autoSaveTimeoutRef.current = setTimeout(async () => {
-      try {
-        // Creiamo un canvas virtuale temporaneo per fondere solo i livelli VISIBILI
-        const mergeCanvas = document.createElement("canvas");
-        mergeCanvas.width = LOGICAL_WIDTH;
-        mergeCanvas.height = LOGICAL_HEIGHT;
-        const mergeCtx = mergeCanvas.getContext("2d");
+    try {
+      const mergeCanvas = document.createElement("canvas");
+      mergeCanvas.width = LOGICAL_WIDTH;
+      mergeCanvas.height = LOGICAL_HEIGHT;
+      const mergeCtx = mergeCanvas.getContext("2d");
 
-        if (mergeCtx) {
-          // Fondo i livelli dal basso verso l'alto (rilievo -> impianti -> quote)
-          const renderOrder = ["rilievo", "impianti", "quote"];
-          renderOrder.forEach((id) => {
-            const layer = layers.find((l) => l.id === id);
-            if (layer?.visible) {
-              const canvas = layerCanvasRefs[id as keyof typeof layerCanvasRefs].current;
-              if (canvas) {
-                mergeCtx.drawImage(canvas, 0, 0);
-              }
+      if (mergeCtx) {
+        const renderOrder = ["rilievo", "impianti", "quote"];
+        renderOrder.forEach((id) => {
+          const layer = layers.find((l) => l.id === id);
+          if (layer?.visible) {
+            const canvas = layerCanvasRefs[id as keyof typeof layerCanvasRefs].current;
+            if (canvas) {
+              mergeCtx.drawImage(canvas, 0, 0);
             }
-          });
-
-          const base64 = mergeCanvas.toDataURL("image/png");
-          const res = await updateSketch(sketch.id, { image_data: base64 });
-          
-          if (res.success) {
-            setSaveStatus("saved");
-          } else {
-            setSaveStatus("error");
           }
+        });
+
+        const base64 = mergeCanvas.toDataURL("image/png");
+        const res = await updateSketch(sketch.id, { image_data: base64 });
+        
+        if (res.success) {
+          setSaveStatus("saved");
+          setHasUnsavedChanges(false);
+        } else {
+          setSaveStatus("error");
+          alert("Errore durante il salvataggio: " + res.error);
         }
-      } catch (err) {
-        console.error("Errore salvataggio automatico multilivello:", err);
-        setSaveStatus("error");
       }
-    }, 1500);
+    } catch (err) {
+      console.error("Errore salvataggio manuale:", err);
+      setSaveStatus("error");
+      alert("Errore di rete durante il salvataggio.");
+    }
   }
 
-  // 4. Undo e Redo legati al livello attivo
+  // Undo e Redo manuali
   function handleUndo() {
     const activeCanvas = layerCanvasRefs[activeLayerId as keyof typeof layerCanvasRefs].current;
     if (!activeCanvas) return;
@@ -378,18 +388,17 @@ export default function SketchEditorClient({
     const ctx = activeCanvas.getContext("2d");
     if (!ctx) return;
 
-    // Sposta in redo
     const current = stack.pop()!;
     redoStacksRef.current[activeLayerId].push(current);
 
-    // Ridisegna il precedente
     const prev = stack[stack.length - 1];
     const img = new Image();
     img.src = prev;
     img.onload = () => {
       ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
       ctx.drawImage(img, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-      triggerAutoSave();
+      setHasUnsavedChanges(true);
+      setSaveStatus("unsaved");
     };
   }
 
@@ -411,7 +420,8 @@ export default function SketchEditorClient({
     img.onload = () => {
       ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
       ctx.drawImage(img, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-      triggerAutoSave();
+      setHasUnsavedChanges(true);
+      setSaveStatus("unsaved");
     };
   }
 
@@ -427,23 +437,97 @@ export default function SketchEditorClient({
     undoStacksRef.current[activeLayerId].push(activeCanvas.toDataURL());
     redoStacksRef.current[activeLayerId] = [];
 
-    triggerAutoSave();
+    setHasUnsavedChanges(true);
+    setSaveStatus("unsaved");
   }
 
-  // 5. Conversione Coordinate da CSS a Coordinate Logiche (1200x1600)
+  // Conversione Coordinate da CSS a Logiche
   function getCoordinates(e: React.PointerEvent<HTMLCanvasElement>): Point {
     const canvas = e.currentTarget;
     const rect = canvas.getBoundingClientRect();
-    
-    // Calcoliamo la posizione in percentuale e proiettiamola sulle dimensioni reali
     const x = ((e.clientX - rect.left) / rect.width) * LOGICAL_WIDTH;
     const y = ((e.clientY - rect.top) / rect.height) * LOGICAL_HEIGHT;
-    
     return { x, y };
   }
 
-  // 6. Gestione Disegno & Riconoscimento / Scaling Forme Dinamico (Procreate Style)
+  // 4. Gestione ZOOM & PAN via Touch (Gesture a due dita)
+  // Gestiamo touchstart, touchmove e touchend sul container del workspace per non interferire con il disegno a 1 dito
+  function handleTouchStart(e: React.TouchEvent<HTMLDivElement>) {
+    if (e.touches.length === 2) {
+      isZoomingRef.current = true;
+      isDrawingRef.current = false; // Ferma il disegno se si usano 2 dita
+
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+
+      const dx = t1.clientX - t2.clientX;
+      const dy = t1.clientY - t2.clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      const centerX = (t1.clientX + t2.clientX) / 2;
+      const centerY = (t1.clientY + t2.clientY) / 2;
+
+      startTouchDistRef.current = dist;
+      startTouchScaleRef.current = scale;
+      startTouchCenterRef.current = { x: centerX, y: centerY };
+      startTouchPanRef.current = { ...pan };
+    }
+  }
+
+  function handleTouchMove(e: React.TouchEvent<HTMLDivElement>) {
+    if (
+      isZoomingRef.current &&
+      e.touches.length === 2 &&
+      startTouchDistRef.current !== null &&
+      startTouchCenterRef.current !== null
+    ) {
+      e.preventDefault();
+
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+
+      const dx = t1.clientX - t2.clientX;
+      const dy = t1.clientY - t2.clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      const centerX = (t1.clientX + t2.clientX) / 2;
+      const centerY = (t1.clientY + t2.clientY) / 2;
+
+      // Calcola nuova scala
+      const newScale = startTouchScaleRef.current * (dist / startTouchDistRef.current);
+      // Limiti scale da 0.5x a 4.0x
+      const clampedScale = Math.max(0.5, Math.min(4, newScale));
+      setScale(clampedScale);
+
+      // Calcola nuovo pan basato sullo spostamento del centro di tocco
+      const deltaX = centerX - startTouchCenterRef.current.x;
+      const deltaY = centerY - startTouchCenterRef.current.y;
+      setPan({
+        x: startTouchPanRef.current.x + deltaX,
+        y: startTouchPanRef.current.y + deltaY,
+      });
+    }
+  }
+
+  function handleTouchEnd(e: React.TouchEvent<HTMLDivElement>) {
+    if (e.touches.length < 2) {
+      isZoomingRef.current = false;
+      startTouchDistRef.current = null;
+      startTouchCenterRef.current = null;
+    }
+  }
+
+  // Funzione rapida per resettare Zoom e Centrare
+  function resetZoom() {
+    setScale(1);
+    setPan({ x: 0, y: 0 });
+  }
+
+  // Disegno a mano e riconoscimento intelligente (Pointer Events a 1 dito)
   function handlePointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
+    // Se stiamo zoomando con 2 dita o l'evento non è primario (multi-touch), ignora il disegno
+    if (isZoomingRef.current || !e.isPrimary) return;
+
     e.preventDefault();
     const tempCanvas = tempCanvasRef.current;
     if (!tempCanvas) return;
@@ -459,7 +543,6 @@ export default function SketchEditorClient({
     isShapeDetectedRef.current = false;
     detectedShapeRef.current = null;
 
-    // Tracciamento temporaneo
     tempCtx.beginPath();
     tempCtx.moveTo(coords.x, coords.y);
     tempCtx.strokeStyle = tool === "eraser" ? "rgba(255,255,255,0.4)" : color;
@@ -468,7 +551,6 @@ export default function SketchEditorClient({
 
     tempCanvas.setPointerCapture(e.pointerId);
 
-    // Avvia timer 750ms per blocco forma intelligente
     if (holdTimeoutRef.current) clearTimeout(holdTimeoutRef.current);
     holdTimeoutRef.current = setTimeout(() => {
       if (isDrawingRef.current && pointsRef.current.length > 5) {
@@ -483,11 +565,11 @@ export default function SketchEditorClient({
           }
         }
       }
-    }, 750);
+    }, 700); // 700ms attesa
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
-    if (!isDrawingRef.current || !lastPointRef.current || !startPointRef.current) return;
+    if (!isDrawingRef.current || !lastPointRef.current || !startPointRef.current || !e.isPrimary) return;
     e.preventDefault();
 
     const tempCanvas = tempCanvasRef.current;
@@ -497,8 +579,6 @@ export default function SketchEditorClient({
     const coords = getCoordinates(e);
     pointsRef.current.push(coords);
 
-    // Se la forma geometrica è bloccata (dito fermo per 750ms), muovendo il dito
-    // ridimensioniamo dinamicamente la forma (Drag-to-size Procreate style)!
     if (isShapeDetectedRef.current && detectedShapeRef.current) {
       const shape = detectedShapeRef.current;
       const start = startPointRef.current;
@@ -526,7 +606,6 @@ export default function SketchEditorClient({
       return;
     }
 
-    // Disegno a mano libera
     tempCtx.beginPath();
     tempCtx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
     tempCtx.lineTo(coords.x, coords.y);
@@ -552,17 +631,15 @@ export default function SketchEditorClient({
 
     tempCanvas.releasePointerCapture(e.pointerId);
 
-    // Gomma o Penna composite operation
     if (tool === "eraser") {
       activeCtx.globalCompositeOperation = "destination-out";
-      activeCtx.lineWidth = brushSize * 1.8; // Gomma leggermente più larga per comodità
+      activeCtx.lineWidth = brushSize * 1.8;
     } else {
       activeCtx.globalCompositeOperation = "source-over";
       activeCtx.strokeStyle = color;
       activeCtx.lineWidth = brushSize;
     }
 
-    // Disegna la forma perfetta o il tracciato libero sul canvas logico reale
     if (isShapeDetectedRef.current && detectedShapeRef.current) {
       drawShapeOnCtx(activeCtx, detectedShapeRef.current);
     } else {
@@ -576,20 +653,18 @@ export default function SketchEditorClient({
       }
     }
 
-    // Ripristina composite di default
     activeCtx.globalCompositeOperation = "source-over";
-
-    // Svuota overlay
     tempCtx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
-    // Salva nella storia
+    // Salva nello storico
     undoStacksRef.current[activeLayerId].push(activeCanvas.toDataURL());
-    redoStacksRef.current[activeLayerId] = []; // Reset Redo
+    redoStacksRef.current[activeLayerId] = [];
 
-    triggerAutoSave();
+    // Segna modifiche non salvate (salvataggio manuale)
+    setHasUnsavedChanges(true);
+    setSaveStatus("unsaved");
   }
 
-  // Disegna preview verde brillante neon o rossa sull'overlay temporaneo
   function drawShapePreview(shape: any) {
     const tempCanvas = tempCanvasRef.current;
     const tempCtx = tempCanvas?.getContext("2d");
@@ -599,7 +674,6 @@ export default function SketchEditorClient({
     tempCtx.strokeStyle = tool === "eraser" ? "rgba(239, 68, 68, 0.9)" : "hsl(142, 71%, 45%)";
     tempCtx.lineWidth = brushSize + 2;
     tempCtx.setLineDash([]);
-    
     drawShapeOnCtx(tempCtx, shape);
   }
 
@@ -634,7 +708,6 @@ export default function SketchEditorClient({
     }
   }
 
-  // 7. Modifica associazione
   function handleUpdateSettings(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
@@ -663,7 +736,6 @@ export default function SketchEditorClient({
   const currentSettingsProject = projectsWithLevels.find((p) => p.id === assocProjectId);
   const settingsLevels = currentSettingsProject?.levels ?? [];
 
-  // Toggle visibilità livello
   const toggleLayerVisibility = (id: string) => {
     setLayers(
       layers.map((l) => {
@@ -673,15 +745,15 @@ export default function SketchEditorClient({
         return l;
       })
     );
-    // Innesca salvataggio per aggiornare l'immagine su database senza il livello nascosto
-    setTimeout(triggerAutoSave, 50);
+    setHasUnsavedChanges(true);
+    setSaveStatus("unsaved");
   };
 
   return (
-    <div className="h-[calc(100vh-60px)] md:h-screen flex overflow-hidden relative">
+    <div className="h-[calc(100vh-60px)] md:h-screen flex overflow-hidden relative select-none">
       
       {/* ── AREA DI DISEGNO CENTRALE ── */}
-      <div className="flex-1 flex flex-col relative h-full bg-[#0d1017]">
+      <div className="flex-1 flex flex-col relative h-full bg-[#090b0f] overflow-hidden">
         
         {/* BARRA SUPERIORE FLUTTUANTE */}
         <div
@@ -714,46 +786,90 @@ export default function SketchEditorClient({
             </div>
           </div>
 
+          {/* Stato e Pulsante di Salvataggio MANUALE (Premium & Visibile) */}
           <div className="flex items-center gap-2">
-            {saveStatus === "saving" && (
-              <span className="text-[10px] text-orange-400 font-bold bg-orange-400/5 px-2 py-0.5 rounded border border-orange-400/10">
-                Salvataggio...
+            {/* Tasto Reset Zoom */}
+            {scale !== 1 && (
+              <button
+                onClick={resetZoom}
+                className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-all"
+                title="Centra foglio e reset zoom"
+              >
+                🔍 Reset ({Math.round(scale * 100)}%)
+              </button>
+            )}
+
+            {/* Stato Salvataggio */}
+            {saveStatus === "unsaved" && (
+              <span className="text-[10px] text-orange-400 font-bold bg-orange-400/5 px-2.5 py-1.5 rounded-xl border border-orange-400/15 animate-pulse">
+                ● Modificato
               </span>
             )}
             {saveStatus === "saved" && (
-              <span className="text-[10px] text-emerald-400 font-bold bg-emerald-400/5 px-2 py-0.5 rounded border border-emerald-400/10">
-                Salvato
+              <span className="text-[10px] text-emerald-400 font-bold bg-emerald-400/5 px-2.5 py-1.5 rounded-xl border border-emerald-400/15">
+                ✓ Salvato
               </span>
             )}
-            
+
+            {/* Pulsante SALVA Disegno manuale */}
+            <button
+              onClick={handleSaveManual}
+              disabled={saveStatus === "saving" || !hasUnsavedChanges}
+              className="py-1.5 px-3 rounded-xl font-bold text-xs text-white transition-all shadow-md disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
+              style={{
+                background: hasUnsavedChanges 
+                  ? "linear-gradient(135deg, hsl(24 95% 50%), hsl(16 100% 50%))" 
+                  : "hsl(220 26% 14%)",
+                border: "1px solid " + (hasUnsavedChanges ? "hsl(24 95% 50% / 0.5)" : "hsl(220 20% 20%)"),
+              }}
+            >
+              {saveStatus === "saving" ? (
+                <>
+                  <span className="w-3 h-3 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+                  Salvo...
+                </>
+              ) : (
+                <>💾 Salva</>
+              )}
+            </button>
+
             {/* Impostazioni Sketch */}
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/5 border border-white/5 text-white/80 hover:bg-white/10 transition-all text-xs cursor-pointer"
+              className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-white/80 hover:bg-white/10 transition-all text-xs cursor-pointer"
             >
               ⚙️
             </button>
           </div>
         </div>
 
-        {/* WORKSPACE DI DISEGNO CON ASPECT RATIO FISSO 3:4 */}
+        {/* WORKSPACE DI DISEGNO CON SUPPORTI TOUCH GESTURE ZOOM/PAN */}
         <div
           ref={containerRef}
-          className="flex-1 w-full h-full flex items-center justify-center p-4 relative"
-          style={{ paddingTop: "76px", paddingRight: "76px" }} // Spazio per barra sup e barra laterale
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="flex-1 w-full h-full flex items-center justify-center relative touch-none select-none"
+          style={{ 
+            paddingTop: "76px", 
+            paddingRight: "0px", // Rimosso padding per mobile
+          }}
         >
-          {/* FOGLIO DA DISEGNO 3:4 CON OMBRA PREMIUM */}
+          {/* FOGLIO DA DISEGNO 3:4 CON OMBRA E SCALATURA GPU FLUIDISSIMA */}
           <div
-            className="relative shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10 rounded-2xl overflow-hidden aspect-[3/4]"
+            ref={workspaceRef}
+            className="relative shadow-[0_25px_60px_rgba(0,0,0,0.6)] border border-white/10 rounded-3xl overflow-hidden aspect-[3/4] transition-transform duration-75 ease-out"
             style={{
-              width: "100%",
-              height: "100%",
-              maxWidth: "calc((100vh - 120px) * 0.75)", // Ottimizzazione altezza mobile
-              maxHeight: "calc(100vh - 120px)",
+              width: "92%",
+              height: "92%",
+              maxWidth: "calc((100vh - 150px) * 0.75)",
+              maxHeight: "calc(100vh - 150px)",
               background: "hsl(228 39% 7%)",
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`, // Accelerazione hardware GPU e spostamento
+              transformOrigin: "center center"
             }}
           >
-            {/* Griglia ingegneristica */}
+            {/* Griglia */}
             <div
               className="absolute inset-0 pointer-events-none opacity-[0.03]"
               style={{
@@ -807,9 +923,100 @@ export default function SketchEditorClient({
           </div>
         </div>
 
-        {/* ── BARRA DEGLI STRUMENTI LATERALE FLUTTUANTE A DESTRA ── */}
+        {/* ── BARRA STRUMENTI MOBILE PERSISTENTE (Orizzontale in basso, solo mobile) ── */}
         <div
-          className="absolute right-3 top-[76px] bottom-3 w-14 z-30 py-3 rounded-2xl border flex flex-col justify-between items-center gap-3 shadow-lg"
+          className="md:hidden fixed bottom-4 left-4 right-4 z-30 px-3 py-2 rounded-2xl border flex items-center justify-between gap-1 shadow-2xl"
+          style={{
+            background: "hsl(220 35% 12% / 0.95)",
+            backdropFilter: "blur(12px)",
+            borderColor: "hsl(220 20% 16%)",
+          }}
+        >
+          {/* Strumento Penna / Gomma alternato */}
+          <button
+            onClick={() => setTool(tool === "pen" ? "eraser" : "pen")}
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-base active:scale-90 transition-all"
+            style={{
+              background: tool === "pen" ? "hsl(220 90% 56% / 0.15)" : "hsl(350 90% 56% / 0.15)",
+              border: "1px solid " + (tool === "pen" ? "hsl(220 90% 56% / 0.3)" : "hsl(350 90% 56% / 0.3)"),
+              color: "white",
+            }}
+          >
+            {tool === "pen" ? "✏️" : "🧼"}
+          </button>
+
+          {/* Palette Colori Premium Rapida */}
+          {tool !== "eraser" && (
+            <div className="flex items-center gap-1.5 overflow-x-auto max-w-[120px] px-1 scrollbar-none">
+              {premiumColors.slice(0, 5).map((hex) => {
+                const isSelected = color === hex;
+                return (
+                  <button
+                    key={hex}
+                    onClick={() => setColor(hex)}
+                    className="w-5.5 h-5.5 rounded-full border transition-all flex-shrink-0 active:scale-75"
+                    style={{
+                      backgroundColor: hex,
+                      borderColor: isSelected ? "white" : "white/10",
+                      transform: isSelected ? "scale(1.2)" : "scale(1)",
+                      boxShadow: isSelected ? `0 0 8px ${hex}` : "none",
+                    }}
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          {/* Dimensione Tratto Ciclica */}
+          <button
+            onClick={() => {
+              const nextSizes = [4, 8, 12, 16, 24];
+              const currentIndex = nextSizes.indexOf(brushSize);
+              const nextIndex = (currentIndex + 1) % nextSizes.length;
+              setBrushSize(nextSizes[nextIndex]);
+            }}
+            className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex flex-col items-center justify-center active:scale-95 transition-all text-white/80"
+          >
+            <span className="text-[10px] leading-none">📏</span>
+            <span className="text-[8px] font-extrabold mt-0.5">{brushSize}px</span>
+          </button>
+
+          {/* Calcolatrice rapida */}
+          <button
+            onClick={() => setShowCalc(true)}
+            className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-sm active:scale-95 transition-all"
+          >
+            🧮
+          </button>
+
+          {/* Gestore Livelli & Misure (Apre drawer completo) */}
+          <button
+            onClick={() => setToolsOpen(true)}
+            className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 text-blue-400 flex items-center justify-center text-sm active:scale-95 transition-all"
+          >
+            🥞
+          </button>
+
+          {/* Undo / Redo */}
+          <div className="flex gap-1">
+            <button
+              onClick={handleUndo}
+              className="w-8.5 h-8.5 rounded-lg bg-white/5 border border-white/10 text-white flex items-center justify-center text-xs active:scale-90 transition-all"
+            >
+              ↩
+            </button>
+            <button
+              onClick={handleRedo}
+              className="w-8.5 h-8.5 rounded-lg bg-white/5 border border-white/10 text-white flex items-center justify-center text-xs active:scale-90 transition-all"
+            >
+              ↪
+            </button>
+          </div>
+        </div>
+
+        {/* ── BARRA STRUMENTI DESKTOP LATERALE FLUTTUANTE A DESTRA (Hidden su Mobile) ── */}
+        <div
+          className="hidden md:flex absolute right-3 top-[76px] bottom-3 w-14 z-30 py-3 rounded-2xl border flex flex-col justify-between items-center gap-3 shadow-lg"
           style={{
             background: "hsl(220 35% 12% / 0.95)",
             backdropFilter: "blur(12px)",
@@ -818,7 +1025,6 @@ export default function SketchEditorClient({
         >
           {/* Strumenti Principali */}
           <div className="flex flex-col gap-2 items-center w-full">
-            {/* Penna */}
             <button
               onClick={() => setTool("pen")}
               className="w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer text-base"
@@ -831,7 +1037,6 @@ export default function SketchEditorClient({
               ✏️
             </button>
 
-            {/* Gomma */}
             <button
               onClick={() => setTool("eraser")}
               className="w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer text-base"
@@ -846,7 +1051,7 @@ export default function SketchEditorClient({
 
             <div className="w-8 h-[1px] bg-white/5 my-1" />
 
-            {/* Spessore Pennello (Mini range verticale) */}
+            {/* Slider Spessore */}
             <div className="flex flex-col items-center gap-1.5 py-1">
               <span className="text-[8px] text-white/40 uppercase font-bold">Px</span>
               <input
@@ -863,7 +1068,7 @@ export default function SketchEditorClient({
 
             <div className="w-8 h-[1px] bg-white/5 my-1" />
 
-            {/* Colori Palette rapida (il selezionato o primo) */}
+            {/* Colore Selezionato */}
             <div className="relative">
               <input
                 type="color"
@@ -880,9 +1085,8 @@ export default function SketchEditorClient({
             </div>
           </div>
 
-          {/* Livelli, Misure, Undo/Redo */}
+          {/* Livelli e Azioni */}
           <div className="flex flex-col gap-2 items-center w-full">
-            {/* Pulsante Apri Livelli */}
             <button
               onClick={() => {
                 setLayersOpen(!layersOpen);
@@ -900,7 +1104,6 @@ export default function SketchEditorClient({
               </span>
             </button>
 
-            {/* Pulsante Misure/Appunti */}
             {sketch.level_id && (
               <button
                 onClick={() => {
@@ -917,7 +1120,6 @@ export default function SketchEditorClient({
               </button>
             )}
 
-            {/* Pulsante Calcolatrice */}
             <button
               onClick={() => {
                 setShowCalc(true);
@@ -928,14 +1130,13 @@ export default function SketchEditorClient({
               style={{
                 background: showCalc ? "hsl(220 90% 56%)" : "bg-white/5",
               }}
-              title="Calcolatrice Cantiere"
+              title="Calcolatrice"
             >
               🧮
             </button>
 
             <div className="w-8 h-[1px] bg-white/5 my-1" />
 
-            {/* Undo */}
             <button
               onClick={handleUndo}
               className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 transition-all flex items-center justify-center text-xs"
@@ -944,7 +1145,6 @@ export default function SketchEditorClient({
               ↩
             </button>
 
-            {/* Redo */}
             <button
               onClick={handleRedo}
               className="w-9 h-9 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 transition-all flex items-center justify-center text-xs"
@@ -953,7 +1153,6 @@ export default function SketchEditorClient({
               ↪
             </button>
 
-            {/* Cancella tutto sul livello */}
             <button
               onClick={handleClearAll}
               className="w-9 h-9 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all flex items-center justify-center text-xs"
@@ -965,7 +1164,141 @@ export default function SketchEditorClient({
         </div>
       </div>
 
-      {/* ── SIDEBAR LIVELLI & PALETTE AVANZATA (Drawer a destra) ── */}
+      {/* ── SIDEBAR STRUMENTI COMPLETA PER MOBILE (Drawer a comparsa laterale destra) ── */}
+      {toolsOpen && (
+        <aside
+          className="fixed md:hidden top-0 right-0 h-full w-72 z-[1000] border-l flex flex-col transition-all duration-300 animate-slide-left p-4 space-y-4"
+          style={{
+            background: "hsl(220 32% 10% / 0.98)",
+            backdropFilter: "blur(20px)",
+            borderColor: "hsl(220 20% 16%)",
+            boxShadow: "-10px 0 40px rgba(0,0,0,0.6)",
+          }}
+        >
+          <div className="flex items-center justify-between border-b border-white/5 pb-2">
+            <h3 className="text-white font-bold text-xs uppercase tracking-wider">🛠️ Strumenti Disegno</h3>
+            <button onClick={() => setToolsOpen(false)} className="text-xs text-white/40 hover:text-white bg-white/5 w-6 h-6 rounded-full flex items-center justify-center">
+              ✕
+            </button>
+          </div>
+
+          {/* Penna o Gomma */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setTool("pen"); setToolsOpen(false); }}
+              className="flex-1 py-3.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5"
+              style={{
+                background: tool === "pen" ? "hsl(220 90% 56%)" : "hsl(220 26% 14%)",
+                color: "white"
+              }}
+            >
+              ✏️ Penna
+            </button>
+            <button
+              onClick={() => { setTool("eraser"); setToolsOpen(false); }}
+              className="flex-1 py-3.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5"
+              style={{
+                background: tool === "eraser" ? "hsl(220 90% 56%)" : "hsl(220 26% 14%)",
+                color: "white"
+              }}
+            >
+              🧼 Gomma
+            </button>
+          </div>
+
+          {/* Dimensione Tratto */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] text-white/40 uppercase font-bold">Dimensione Tratto ({brushSize}px)</label>
+            <input
+              type="range"
+              min="2"
+              max="24"
+              value={brushSize}
+              onChange={(e) => setBrushSize(parseInt(e.target.value))}
+              className="w-full accent-orange-500 h-2 rounded-lg cursor-pointer"
+            />
+          </div>
+
+          <div className="border-t border-white/5 pt-3">
+            <label className="text-[10px] text-white/40 uppercase font-bold block mb-2">🥞 Livelli CAD</label>
+            <div className="space-y-1.5">
+              {layers.map((layer) => {
+                const isActive = activeLayerId === layer.id;
+                return (
+                  <div
+                    key={layer.id}
+                    onClick={() => setActiveLayerId(layer.id)}
+                    className="flex items-center justify-between p-2 rounded-lg border cursor-pointer"
+                    style={{
+                      background: isActive ? "hsl(220 26% 16%)" : "transparent",
+                      borderColor: isActive ? "hsl(220 90% 56% / 0.4)" : "white/5",
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>{layer.icon}</span>
+                      <span className="text-[11px] text-white/80">{layer.name}</span>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }}
+                      className="w-6 h-6 rounded bg-white/5 flex items-center justify-center text-xs"
+                    >
+                      {layer.visible ? "👁️" : "🙈"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Palette Colori */}
+          {tool !== "eraser" && (
+            <div className="border-t border-white/5 pt-3 space-y-2">
+              <label className="text-[10px] text-white/40 uppercase font-bold block">🎨 Palette Colori</label>
+              <div className="grid grid-cols-5 gap-1.5">
+                {premiumColors.map((hex) => (
+                  <button
+                    key={hex}
+                    onClick={() => { setColor(hex); setToolsOpen(false); }}
+                    className="w-8 h-8 rounded-lg border transition-all"
+                    style={{
+                      backgroundColor: hex,
+                      borderColor: color === hex ? "white" : "transparent"
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Azioni Undo / Redo */}
+          <div className="border-t border-white/5 pt-4 flex gap-2 justify-between">
+            <button onClick={handleUndo} className="flex-1 py-2 bg-white/5 text-white/80 rounded-xl text-xs font-semibold">
+              ↩ Undo
+            </button>
+            <button onClick={handleRedo} className="flex-1 py-2 bg-white/5 text-white/80 rounded-xl text-xs font-semibold">
+              ↪ Redo
+            </button>
+            <button onClick={handleClearAll} className="px-3 py-2 bg-red-500/10 text-red-400 rounded-xl text-xs font-semibold">
+              🗑️ Reset
+            </button>
+          </div>
+
+          {/* Pulsante consultazione misure */}
+          {sketch.level_id && (
+            <button
+              onClick={() => {
+                setSidebarOpen(true);
+                setToolsOpen(false);
+              }}
+              className="w-full py-3 bg-white/5 text-white rounded-xl text-xs font-bold border border-white/10"
+            >
+              📋 Leggi Misure di Cantiere
+            </button>
+          )}
+        </aside>
+      )}
+
+      {/* ── SIDEBAR LIVELLI DESKTOP (Drawer a destra) ── */}
       {layersOpen && (
         <aside
           className="absolute right-16 top-[76px] bottom-3 w-72 z-40 border rounded-2xl flex flex-col transition-all duration-300 animate-slide-left p-4 space-y-4"
@@ -983,7 +1316,6 @@ export default function SketchEditorClient({
             </button>
           </div>
 
-          {/* Elenco Livelli CAD */}
           <div className="space-y-2">
             {layers.map((layer) => {
               const isActive = activeLayerId === layer.id;
@@ -1003,73 +1335,53 @@ export default function SketchEditorClient({
                       {layer.name}
                     </span>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    {/* Occhiolino Visibilità */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleLayerVisibility(layer.id);
-                      }}
-                      className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-xs"
-                      title={layer.visible ? "Nascondi" : "Mostra"}
-                    >
-                      {layer.visible ? "👁️" : "🙈"}
-                    </button>
-                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleLayerVisibility(layer.id); }}
+                    className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-xs"
+                  >
+                    {layer.visible ? "👁️" : "🙈"}
+                  </button>
                 </div>
               );
             })}
           </div>
 
           <div className="border-t border-white/5 pt-3">
-            <h4 className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-2">
-              🎨 Palette Colori Avanzata
-            </h4>
+            <h4 className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-2">🎨 Palette Avanzata</h4>
             <div className="grid grid-cols-4 gap-2">
               {premiumColors.map((hex) => (
                 <button
                   key={hex}
                   onClick={() => setColor(hex)}
-                  className="w-10 h-10 rounded-xl border transition-all relative flex items-center justify-center cursor-pointer"
+                  className="w-10 h-10 rounded-xl border transition-all"
                   style={{
                     backgroundColor: hex,
-                    borderColor: color === hex ? "white" : "transparent",
-                    boxShadow: color === hex ? "0 0 8px white/30" : "none",
+                    borderColor: color === hex ? "white" : "transparent"
                   }}
-                >
-                  {color === hex && (
-                    <span
-                      className="text-[9px] font-extrabold"
-                      style={{ color: hex === "#ffffff" ? "#000" : "#fff" }}
-                    >
-                      ✓
-                    </span>
-                  )}
-                </button>
+                />
               ))}
             </div>
           </div>
         </aside>
       )}
 
-      {/* ── SIDEBAR DETTAGLIO MISURE/NOTE (Right Drawer) ── */}
+      {/* ── SIDEBAR DETTAGLIO MISURE (Right Drawer) ── */}
       {sidebarOpen && sketch.level_id && (
         <aside
-          className="absolute right-16 top-[76px] bottom-3 w-80 md:w-96 z-40 border rounded-2xl flex flex-col transition-all duration-300 animate-slide-left"
+          className="fixed md:absolute top-0 md:top-[76px] right-0 md:right-16 h-full md:bottom-3 w-80 md:w-96 z-[1001] border-l md:border rounded-r-none md:rounded-2xl flex flex-col transition-all duration-300 animate-slide-left"
           style={{
-            background: "hsl(220 32% 10% / 0.95)",
-            backdropFilter: "blur(16px)",
+            background: "hsl(220 32% 10% / 0.98)",
+            backdropFilter: "blur(20px)",
             borderColor: "hsl(220 20% 16%)",
-            boxShadow: "-10px 10px 40px rgba(0,0,0,0.5)",
+            boxShadow: "-10px 10px 40px rgba(0,0,0,0.6)",
           }}
         >
           <div className="p-4 border-b border-white/5 flex items-center justify-between">
             <div>
               <h3 className="text-white font-bold text-xs uppercase tracking-wider">📋 Rilievi di Cantiere</h3>
-              <p className="text-[9px] text-white/40 mt-0.5">Misure registrate in questa nota</p>
+              <p className="text-[9px] text-white/40 mt-0.5">Misure registrate</p>
             </div>
-            <button onClick={() => setSidebarOpen(false)} className="text-white/40 hover:text-white">
+            <button onClick={() => setSidebarOpen(false)} className="text-white/40 hover:text-white bg-white/5 w-8 h-8 rounded-full flex items-center justify-center">
               ✕
             </button>
           </div>
@@ -1091,10 +1403,7 @@ export default function SketchEditorClient({
                   }}
                 >
                   <div className="flex items-center justify-between border-b border-white/5 pb-1.5">
-                    <span
-                      className="px-2 py-0.5 rounded text-[9px] font-extrabold text-white"
-                      style={{ background: "hsl(24 95% 50%)" }}
-                    >
+                    <span className="px-2 py-0.5 rounded text-[9px] font-extrabold text-white" style={{ background: "hsl(24 95% 50%)" }}>
                       N° {note.note_number}
                     </span>
                     <span className="text-[9px] font-bold text-white/50 uppercase tracking-wider">
@@ -1102,52 +1411,36 @@ export default function SketchEditorClient({
                     </span>
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-1.5 text-xs text-white/80">
                     {note.field_note_items?.length === 0 ? (
                       <p className="text-[10px] text-white/40 italic">Nessuna misura.</p>
                     ) : (
                       note.field_note_items?.map((item: any) => {
                         const type = item.item_type;
                         if (type === "header") {
-                          return (
-                            <div key={item.id} className="text-xs font-bold text-orange-400 pt-1">
-                              {item.value_text}
-                            </div>
-                          );
+                          return <div key={item.id} className="text-xs font-bold text-orange-400 pt-1">{item.value_text}</div>;
                         }
                         if (type === "text") {
-                          return (
-                            <div key={item.id} className="text-xs text-white/80 leading-normal bg-white/5 p-1.5 rounded-lg">
-                              💬 {item.value_text}
-                            </div>
-                          );
+                          return <div key={item.id} className="bg-white/5 p-1.5 rounded-lg">💬 {item.value_text}</div>;
                         }
                         if (type === "number") {
                           return (
-                            <div key={item.id} className="text-xs text-white/80 flex items-center justify-between">
+                            <div key={item.id} className="flex justify-between">
                               <span className="text-white/50">Misura:</span>
-                              <span className="font-bold text-emerald-400">
-                                {item.value_num} {item.value_unit || "m"}
-                              </span>
+                              <span className="font-bold text-emerald-400">{item.value_num} {item.value_unit || "m"}</span>
                             </div>
                           );
                         }
                         if (type === "boolean") {
                           return (
-                            <div key={item.id} className="text-xs text-white/80 flex items-center justify-between">
+                            <div key={item.id} className="flex justify-between">
                               <span className="text-white/50">Stato:</span>
-                              <span className="font-bold text-white">
-                                {item.value_bool ? "🟢 SÌ" : "🔴 NO"}
-                              </span>
+                              <span className="font-bold text-white">{item.value_bool ? "🟢 SÌ" : "🔴 NO"}</span>
                             </div>
                           );
                         }
                         if (type === "livella") {
-                          return (
-                            <div key={item.id} className="text-xs text-emerald-400 bg-emerald-500/5 p-1.5 rounded border border-emerald-500/10">
-                              📐 {item.value_text}
-                            </div>
-                          );
+                          return <div key={item.id} className="text-emerald-400 bg-emerald-500/5 p-1.5 rounded border border-emerald-500/10">📐 {item.value_text}</div>;
                         }
                         return null;
                       })
@@ -1160,9 +1453,9 @@ export default function SketchEditorClient({
         </aside>
       )}
 
-      {/* MODALE IMPOSTAZIONI ED ASSOCIAZIONE */}
+      {/* MODALE IMPOSTAZIONI */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsSettingsOpen(false)} />
           <div
             className="relative w-full max-w-md rounded-2xl p-6 border shadow-2xl animate-fade-in"
@@ -1264,7 +1557,7 @@ export default function SketchEditorClient({
         </div>
       )}
 
-      {/* Calcolatrice in Sketch con Importazione se c'è un livello associato */}
+      {/* Calcolatrice in Sketch */}
       <CalcolatriceWidget
         isOpen={showCalc}
         onClose={() => setShowCalc(false)}

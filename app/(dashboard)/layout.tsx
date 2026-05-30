@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import LogoutButton from "@/app/ui/dashboard/LogoutButton";
 import MobileMenu from "@/app/ui/dashboard/MobileMenu";
+import MobileHeaderMenu from "@/app/ui/dashboard/MobileHeaderMenu";
 import UpdateNotifier from "@/app/ui/dashboard/UpdateNotifier";
 import SidebarProfile from "@/app/ui/dashboard/SidebarProfile";
 import GlobalCalcTrigger from "@/app/ui/dashboard/GlobalCalcTrigger";
@@ -123,58 +124,12 @@ export default async function DashboardLayout({
 
         {/* ─── Main content ───────────────────────────────────── */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Top bar (solo mobile) */}
-          <header
-            className="md:hidden flex items-center justify-between px-4 py-3 flex-shrink-0"
-            style={{
-              background: "hsl(220 32% 10%)",
-              borderBottom: "1px solid hsl(220 20% 16%)",
-            }}
-          >
-            <div className="flex items-center gap-2">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-base"
-                style={{ background: "linear-gradient(135deg, hsl(16 100% 58%), hsl(0 84% 60%))" }}
-              >
-                🔥
-              </div>
-              <div className="text-white font-bold text-sm">WebCAD</div>
-            </div>
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
-              style={{ background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" }}
-            >
-              {initials}
-            </div>
-          </header>
+          <MobileHeaderMenu initials={initials} />
 
           {/* Contenuto pagina */}
-          <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+          <main className="flex-1 overflow-y-auto pb-4 md:pb-0">
             {children}
           </main>
-
-          {/* ─── Bottom Nav (solo mobile) ──────────────────────── */}
-          <nav
-            className="md:hidden fixed bottom-0 left-0 right-0 flex items-center justify-around px-2 py-2 z-50"
-            style={{
-              background: "hsl(220 32% 10%)",
-              borderTop: "1px solid hsl(220 20% 16%)",
-            }}
-          >
-            {[...navItems, ...bottomNavItems].map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all"
-                style={{ color: "hsl(215 20% 55%)" }}
-              >
-                <span className="text-xl leading-none">{item.icon}</span>
-                <span className="text-[10px] font-medium leading-none">{item.label}</span>
-              </Link>
-            ))}
-            {/* Calcolatrice fluttuante in mobile nav */}
-            <GlobalCalcTrigger mode="mobile" />
-          </nav>
         </div>
       </div>
     );
