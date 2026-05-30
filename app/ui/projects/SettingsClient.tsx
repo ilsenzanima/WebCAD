@@ -255,8 +255,9 @@ export default function SettingsClient({
             </div>
 
             <a
-              href="/downloads/webcad-alpha.apk"
-              download
+              href="https://web-cad-lac.vercel.app/downloads/webcad-alpha.apk"
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-flex items-center justify-center w-full py-3.5 px-6 rounded-xl font-bold text-xs text-white transition-all shadow-lg hover:brightness-110 active:scale-[0.98]"
               style={{
                 background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
