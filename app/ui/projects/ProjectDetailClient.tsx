@@ -7,6 +7,8 @@ import { addLevel, updateProjectNotes, renameProject, toggleLevelCompleted } fro
 import ProjectActionsMenu from "@/app/ui/dashboard/ProjectActionsMenu";
 import CreateDrawingModal from "./CreateDrawingModal";
 import type { FieldNote } from "@/app/actions/field-notes";
+import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
+
 
 // ============================================
 // Tipizzazione e utility
@@ -69,8 +71,28 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   const [searchQuery, setSearchQuery] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  // Store offline Zustand
+  const isOnline = useOfflineStore((state) => state.isOnline);
+  const setProjectsCache = useOfflineStore((state) => state.setProjectsCache);
+  const setLevelsCache = useOfflineStore((state) => state.setLevelsCache);
+  const setFieldNotesCache = useOfflineStore((state) => state.setFieldNotesCache);
+  const addLevelOptimistic = useOfflineStore((state) => state.addLevelOptimistic);
+  const renameProjectOptimistic = useOfflineStore((state) => state.renameProjectOptimistic);
+  const toggleLevelCompletedOptimistic = useOfflineStore((state) => state.toggleLevelCompletedOptimistic);
+
+  // Leggi dinamicamente dallo store offline
+  const cachedLevels = useOfflineStore((state) => state.levels[project.id]);
+  const levelsToUse = cachedLevels && cachedLevels.length > 0 ? cachedLevels : drawings;
+
+  // Inizializza la cache dello store all'avvio
+  useEffect(() => {
+    setProjectsCache([project]);
+    setLevelsCache(project.id, drawings);
+    setFieldNotesCache(notesList);
+  }, [project, drawings, notesList, setProjectsCache, setLevelsCache, setFieldNotesCache]);
+
   // Stato note locali (completamento)
-  const [localDrawings, setLocalDrawings] = useState<Drawing[]>(drawings);
+  const [localDrawings, setLocalDrawings] = useState<Drawing[]>(levelsToUse);
 
   // Stato per gli accordion aperti (dropdown note)
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
@@ -87,10 +109,11 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   // Stato per modale "Aggiungi Nota"
   const [isCreatingLevel, setIsCreatingLevel] = useState(false);
 
-  // Sincronizza lo stato locale quando cambiano le prop
+  // Sincronizza lo stato locale quando cambiano i livelli dello store o le prop
   useEffect(() => {
-    setLocalDrawings(drawings);
-  }, [drawings]);
+    setLocalDrawings(levelsToUse);
+  }, [levelsToUse]);
+
 
   // Calcola l'elenco dei piani unici già inseriti per proporli nel modale
   const existingPiani = useMemo(() => {
@@ -183,7 +206,13 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
     drawingType: "2d_wall" | "3d_box",
     piano: string
   ) => {
-    // drawingType forzato a "2d_wall" per le note
+    if (!isOnline) {
+      const tempId = generateTempId();
+      addLevelOptimistic(tempId, project.id, name, elevationZ, "2d_wall", piano);
+      setIsCreatingLevel(false);
+      return;
+    }
+
     const res = await addLevel(project.id, name, elevationZ, "2d_wall", piano);
     if (!res.success) {
       alert("Errore nella creazione della nota.");
@@ -194,6 +223,11 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
 
   const handleSaveTitle = () => {
     if (editTitle.trim() !== project.name && editTitle.trim()) {
+      if (!isOnline) {
+        renameProjectOptimistic(project.id, editTitle);
+        setIsEditingTitle(false);
+        return;
+      }
       startTransition(async () => {
         await renameProject(project.id, editTitle);
         setIsEditingTitle(false);
@@ -208,10 +242,15 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   const handleToggleCompleted = (levelId: string, currentCompleted: boolean) => {
     const nextCompleted = !currentCompleted;
     
-    // Aggiornamento ottimisico dell'interfaccia client
+    // Aggiornamento ottimistico dell'interfaccia client
     setLocalDrawings((prev) =>
       prev.map((d) => (d.id === levelId ? { ...d, completed: nextCompleted } : d))
     );
+
+    if (!isOnline) {
+      toggleLevelCompletedOptimistic(levelId, project.id, nextCompleted);
+      return;
+    }
 
     startTransition(async () => {
       const res = await toggleLevelCompleted(levelId, nextCompleted);
@@ -224,6 +263,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
       }
     });
   };
+
 
   // Toggle accordion espansione della riga nota
   const toggleAccordion = (levelId: string) => {

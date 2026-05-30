@@ -14,6 +14,8 @@ import PlanimetriaMappa from "./PlanimetriaMappa";
 import PhotoQuotaEditor from "./PhotoQuotaEditor";
 import LivellaBolla from "./LivellaBolla";
 import CalcolatriceWidget from "@/app/ui/dashboard/CalcolatriceWidget";
+import { useOfflineStore } from "@/lib/stores/offline-store";
+
 
 // ============================================
 // Tipi interni
@@ -84,8 +86,21 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
+  // Store offline Zustand
+  const isOnline = useOfflineStore((state) => state.isOnline);
+  const setCatalogMaterialsCache = useOfflineStore((state) => state.setCatalogMaterialsCache);
+  const setNoteTypesCache = useOfflineStore((state) => state.setNoteTypesCache);
+  const saveFieldNoteItemsOptimistic = useOfflineStore((state) => state.saveFieldNoteItemsOptimistic);
+
+  // Carica i materiali e i tipi di note nella cache offline
+  useEffect(() => {
+    setCatalogMaterialsCache(catalogMaterials);
+    setNoteTypesCache(noteTypes);
+  }, [catalogMaterials, noteTypes, setCatalogMaterialsCache, setNoteTypesCache]);
+
   // --- Calcolatrice ---
   const [showCalc, setShowCalc] = useState(false);
+
 
   useEffect(() => {
     const handleImportCalc = (e: Event) => {
@@ -274,6 +289,14 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         })),
       };
 
+      if (!isOnline) {
+        // Salvataggio offline ottimistico
+        const noteId = initialNote ? initialNote.id : `temp-note-${Date.now()}`;
+        saveFieldNoteItemsOptimistic(noteId, projectId, levelId, payload.items);
+        router.push(`/projects/${projectId}`);
+        return;
+      }
+
       const res = initialNote 
         ? await updateFieldNote(initialNote.id, payload)
         : await createFieldNote(payload);
@@ -285,6 +308,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
       }
     });
   }
+
 
   // ============================================
   // JSX
