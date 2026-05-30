@@ -111,7 +111,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
 
   // Sincronizza lo stato locale quando cambiano i livelli dello store o le prop
   useEffect(() => {
-    setLocalDrawings(levelsToUse);
+    setLocalDrawings(levelsToUse as Drawing[]);
   }, [levelsToUse]);
 
 
