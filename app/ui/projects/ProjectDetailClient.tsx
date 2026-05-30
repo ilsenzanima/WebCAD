@@ -87,7 +87,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   // Inizializza la cache dello store all'avvio
   useEffect(() => {
     setProjectsCache([project as any]);
-    setLevelsCache(project.id, drawings);
+    setLevelsCache(project.id, drawings as any);
     setFieldNotesCache(notesList);
   }, [project, drawings, notesList, setProjectsCache, setLevelsCache, setFieldNotesCache]);
 
