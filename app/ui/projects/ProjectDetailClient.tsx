@@ -92,7 +92,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   }, [project, drawings, notesList, setProjectsCache, setLevelsCache, setFieldNotesCache]);
 
   // Stato note locali (completamento)
-  const [localDrawings, setLocalDrawings] = useState<Drawing[]>(levelsToUse);
+  const [localDrawings, setLocalDrawings] = useState<Drawing[]>(levelsToUse as Drawing[]);
 
   // Stato per gli accordion aperti (dropdown note)
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
