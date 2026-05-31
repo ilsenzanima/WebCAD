@@ -153,7 +153,7 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const currentProjectLevels = quickAdd 
-    ? (useOfflineStore.getState().levels[quickAdd.projectId] ?? []).map(l => l.name)
+    ? Array.from(new Set((useOfflineStore.getState().levels[quickAdd.projectId] ?? []).map(l => l.piano || "Generico").filter(Boolean)))
     : [];
 
   return (

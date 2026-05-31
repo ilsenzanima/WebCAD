@@ -32,6 +32,7 @@ export interface Level {
   scale_ratio: number | null; // Rapporto pixel -> mm (calibrazione)
   plan_image_url: string | null;
   drawing_type?: "2d_wall" | "3d_box";
+  piano?: string | null;
   created_at?: string;
 }
 
