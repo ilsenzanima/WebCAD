@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { changePassword, logout } from "@/app/actions/auth";
 import UnifiedSettingsManager from "./UnifiedSettingsManager";
+import { APP_VERSION } from "@/lib/version";
 import type { FieldNoteType } from "@/app/actions/field-notes";
 import type { UserTag } from "@/app/actions/settings";
 
@@ -74,7 +75,7 @@ export default function SettingsClient({
       {/* Intestazione */}
       <div>
         <h1 className="text-2xl font-bold text-white">⚙️ Impostazioni Generali</h1>
-        <p className="text-xs text-white/50">Gestisci il tuo profilo, configura l'app e scarica la versione mobile per il cantiere.</p>
+        <p className="text-xs text-white/50">Gestisci il tuo profilo, configura l&apos;app e scarica la versione mobile per il cantiere (Versione Corrente: v{APP_VERSION}).</p>
       </div>
 
       {/* Selettore Schede Tab per Desktop */}
@@ -104,6 +105,7 @@ export default function SettingsClient({
         <div className="relative">
           <select
             value={activeTab}
+            /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
             onChange={(e) => setActiveTab(e.target.value as any)}
             className="w-full px-4 py-3.5 rounded-xl text-xs outline-none appearance-none transition-all pr-10 font-bold"
             style={{
@@ -255,7 +257,7 @@ export default function SettingsClient({
             </div>
 
             <a
-              href="https://web-cad-lac.vercel.app/downloads/webcad-alpha.apk"
+              href={`https://web-cad-lac.vercel.app/downloads/webcad-v${APP_VERSION}.apk`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center w-full py-3.5 px-6 rounded-xl font-bold text-xs text-white transition-all shadow-lg hover:brightness-110 active:scale-[0.98]"
@@ -264,7 +266,7 @@ export default function SettingsClient({
                 boxShadow: "0 6px 20px hsl(220 90% 56% / 0.3)",
               }}
             >
-              📥 Scarica APK Alpha
+              📥 Scarica APK v{APP_VERSION}
             </a>
             <p className="text-[10px] text-white/40">Dimensione: ~4.5 MB | Richiede Android 8.0+</p>
 
@@ -287,9 +289,9 @@ export default function SettingsClient({
               borderColor: "hsl(220 20% 20%)",
             }}
           >
-            <h3 className="text-sm font-bold text-white">📖 Guida all'installazione su Android</h3>
+            <h3 className="text-sm font-bold text-white">📖 Guida all&apos;installazione su Android</h3>
             <p className="text-xs text-white/50 leading-relaxed">
-              Segui questi passaggi per installare l'app nativa di WebCAD sul tuo telefono ed abilitare i sensori di cantiere:
+              Segui questi passaggi per installare l&apos;app nativa di WebCAD sul tuo telefono ed abilitare i sensori di cantiere:
             </p>
 
             <div className="space-y-3 pt-2">
@@ -301,8 +303,8 @@ export default function SettingsClient({
                   1
                 </div>
                 <div>
-                  <h4 className="font-semibold text-white">Scarica l'APK</h4>
-                  <p className="text-white/60 text-[11px] leading-relaxed">Clicca sul pulsante a sinistra dal tuo smartphone per scaricare il file d'installazione.</p>
+                  <h4 className="font-semibold text-white">Scarica l&apos;APK</h4>
+                  <p className="text-white/60 text-[11px] leading-relaxed">Clicca sul pulsante a sinistra dal tuo smartphone per scaricare il file d&apos;installazione.</p>
                 </div>
               </div>
 
@@ -315,7 +317,7 @@ export default function SettingsClient({
                 </div>
                 <div>
                   <h4 className="font-semibold text-white">Abilita le Origini Sconosciute</h4>
-                  <p className="text-white/60 text-[11px] leading-relaxed">Durante l'apertura del file, il telefono chiederà l'autorizzazione all'installazione. Consenti l'installazione dalle impostazioni del browser.</p>
+                  <p className="text-white/60 text-[11px] leading-relaxed">Durante l&apos;apertura del file, il telefono chiederà l&apos;autorizzazione all&apos;installazione. Consenti l&apos;installazione dalle impostazioni del browser.</p>
                 </div>
               </div>
 
@@ -328,7 +330,7 @@ export default function SettingsClient({
                 </div>
                 <div>
                   <h4 className="font-semibold text-white">Consenti i permessi dei sensori</h4>
-                  <p className="text-white/60 text-[11px] leading-relaxed">Al primo avvio, l'applicazione chiederà l'accesso alla fotocamera (per le foto quotate) e ai sensori fisici (per la livella a bolla). Premi 'Consenti'.</p>
+                  <p className="text-white/60 text-[11px] leading-relaxed">Al primo avvio, l&apos;applicazione chiederà l&apos;accesso alla fotocamera (per le foto quotate) e ai sensori fisici (per la livella a bolla). Premi &apos;Consenti&apos;.</p>
                 </div>
               </div>
             </div>

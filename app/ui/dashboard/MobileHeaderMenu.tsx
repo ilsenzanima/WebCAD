@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
 import CalcolatriceWidget from "./CalcolatriceWidget";
+import { APP_VERSION } from "@/lib/version";
 
 interface MobileHeaderMenuProps {
   initials: string;
@@ -145,12 +146,15 @@ export default function MobileHeaderMenu({ initials }: MobileHeaderMenuProps) {
             </div>
 
             {/* Pulsante Esci in fondo */}
-            <div className="border-t border-white/5 pt-4">
+            <div className="border-t border-white/5 pt-4 space-y-3">
               <LogoutButton
                 className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-xs font-bold transition-all bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 active:scale-95 cursor-pointer"
               >
                 ↩ Esci dall&apos;account
               </LogoutButton>
+              <div className="text-center text-[9px] text-white/30 font-mono">
+                WebCAD Cantiere v{APP_VERSION}
+              </div>
             </div>
           </aside>
         </div>

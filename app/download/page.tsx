@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { APP_VERSION } from "@/lib/version";
 
 interface StepItemProps {
   number: number;
@@ -62,7 +63,7 @@ export default function DownloadPage() {
             color: "hsl(220 90% 70%)",
           }}
         >
-          Versione Alpha v0.2.0
+          Versione Alpha v{APP_VERSION}
         </span>
       </div>
 
@@ -128,7 +129,7 @@ export default function DownloadPage() {
               </div>
 
               <a
-                href="https://web-cad-lac.vercel.app/downloads/webcad-alpha.apk"
+                href={`https://web-cad-lac.vercel.app/downloads/webcad-v${APP_VERSION}.apk`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center w-full py-4 px-6 rounded-xl font-bold text-sm text-white transition-all shadow-lg hover:brightness-110 active:scale-[0.98]"
@@ -137,7 +138,7 @@ export default function DownloadPage() {
                   boxShadow: "0 6px 20px hsl(220 90% 56% / 0.3)",
                 }}
               >
-                📥 Scarica APK Alpha
+                📥 Scarica APK v{APP_VERSION}
               </a>
               <p className="text-[10px] text-white/40">Dimensione: ~4.5 MB | Compatibile con Android 8.0 o superiore</p>
             </div>
@@ -190,12 +191,12 @@ export default function DownloadPage() {
                   borderColor: "hsl(220 20% 24%)",
                 }}
               >
-                <h4 className="text-xs font-bold text-white">Come partecipare all'Alpha su iPhone:</h4>
+                <h4 className="text-xs font-bold text-white">Come partecipare all&apos;Alpha su iPhone:</h4>
                 <ol className="list-decimal list-inside text-[11px] text-white/70 space-y-1.5 pl-1 leading-relaxed">
-                  <li>Invia una richiesta email all'amministratore per essere inserito nella lista tester.</li>
+                  <li>Invia una richiesta email all&apos;amministratore per essere inserito nella lista tester.</li>
                   <li>Riceverai un invito ufficiale da Apple per unirti al gruppo di test di **WebCAD**.</li>
-                  <li>Installa l'app gratuita **TestFlight** dall'App Store di Apple.</li>
-                  <li>Apri l'invito, accetta il test e scarica l'app di WebCAD in anteprima sul tuo iPhone!</li>
+                  <li>Installa l&apos;app gratuita **TestFlight** dall&apos;App Store di Apple.</li>
+                  <li>Apri l&apos;invito, accetta il test e scarica l&apos;app di WebCAD in anteprima sul tuo iPhone!</li>
                 </ol>
               </div>
 

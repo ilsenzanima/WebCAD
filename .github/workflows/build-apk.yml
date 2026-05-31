@@ -86,6 +86,20 @@ jobs:
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           cat android/local.properties
 
+      - name: Estrai versione e aggiorna Android Gradle
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Versione rilevata: $VERSION"
+          
+          # Aggiorna build.gradle con versionName dinamico e versionCode progressivo
+          sed -i "s/versionName \".*\"/versionName \"$VERSION\"/g" android/app/build.gradle
+          sed -i "s/versionCode [0-9]*/versionCode ${{ github.run_number }}/g" android/app/build.gradle
+          
+          echo "=== android/app/build.gradle modificato ==="
+          grep -E "versionCode|versionName" android/app/build.gradle
+
       - name: Build APK con Gradle
         run: |
           cd android
@@ -99,20 +113,25 @@ jobs:
         run: |
           mkdir -p public/downloads
           APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | head -1)
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
           echo "APK trovato: $APK_PATH"
+          
+          # Copia sia la versione taggata che quella generica per retrocompatibilità
+          cp "$APK_PATH" "public/downloads/webcad-v$VERSION.apk"
           cp "$APK_PATH" public/downloads/webcad-alpha.apk
+          
           ls -lh public/downloads/
 
       - name: Commit APK nel repository
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "build: compilato APK debug per download diretto"
-          file_pattern: "public/downloads/webcad-alpha.apk"
+          commit_message: "build: compilato APK debug v${{ steps.get_version.outputs.VERSION }} (build #${{ github.run_number }})"
+          file_pattern: "public/downloads/webcad-*.apk"
           branch: main
 
       - name: Upload APK come artifact GitHub
         uses: actions/upload-artifact@v4
         with:
-          name: webcad-alpha-apk
+          name: webcad-v${{ steps.get_version.outputs.VERSION }}-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: warn

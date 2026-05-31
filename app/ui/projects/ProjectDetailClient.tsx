@@ -127,6 +127,17 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
     return Array.from(new Set(list));
   }, [localDrawings]);
 
+  // Mappa di associazione rapida levelId -> noteId per navigazione immediata senza redirector
+  const levelToNoteIdMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    notesList.forEach((n) => {
+      if (n.level_id) {
+        map[n.level_id] = n.id;
+      }
+    });
+    return map;
+  }, [notesList]);
+
   // Genera una mappa con l'elenco formattato delle voci di ciascun appunto (Level)
   const formattedItemsMap = useMemo(() => {
     const map: Record<string, string[]> = {};
@@ -463,13 +474,21 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                         </div>
 
                         {/* Pulsante Modifica (Matita per aprire l'editor) */}
-                        <Link
-                          href={`/projects/${project.id}/levels/${note.id}/appunti`}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all bg-white/5 hover:bg-white/10 border border-white/5 flex-shrink-0"
-                          title="Gestisci appunti e quote"
-                        >
-                          ✏️
-                        </Link>
+                        {(() => {
+                          const existingNoteId = levelToNoteIdMap[note.id];
+                          const targetHref = existingNoteId
+                            ? `/projects/${project.id}/levels/${note.id}/appunti/${existingNoteId}/modifica`
+                            : `/projects/${project.id}/levels/${note.id}/appunti`;
+                          return (
+                            <Link
+                              href={targetHref}
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all bg-white/5 hover:bg-white/10 border border-white/5 flex-shrink-0"
+                              title="Gestisci appunti e quote"
+                            >
+                              ✏️
+                            </Link>
+                          );
+                        })()}
                       </div>
 
                       {/* Dropdown Accordion: Elenco rapido delle voci dell'appunto */}
