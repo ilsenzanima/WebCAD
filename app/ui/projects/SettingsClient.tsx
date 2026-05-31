@@ -260,6 +260,13 @@ export default function SettingsClient({
               href={`https://web-cad-lac.vercel.app/downloads/webcad-v${APP_VERSION}.apk`}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => {
+                const isCapacitor = typeof window !== "undefined" && (window as any).Capacitor;
+                if (isCapacitor) {
+                  e.preventDefault();
+                  window.open(`https://web-cad-lac.vercel.app/downloads/webcad-v${APP_VERSION}.apk`, "_system");
+                }
+              }}
               className="inline-flex items-center justify-center w-full py-3.5 px-6 rounded-xl font-bold text-xs text-white transition-all shadow-lg hover:brightness-110 active:scale-[0.98]"
               style={{
                 background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
