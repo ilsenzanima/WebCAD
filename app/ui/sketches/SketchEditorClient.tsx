@@ -122,6 +122,12 @@ export default function SketchEditorClient({
   const startTouchPanRef = useRef({ x: 0, y: 0 });
   const isZoomingRef = useRef(false);
 
+  // Riferimenti per drag shape a due dita
+  const isDraggingShapeRef = useRef(false);
+  const startShapeCenterRef = useRef<{ x: number; y: number } | null>(null);
+  const initialShapeParamsRef = useRef<any>(null);
+  const initialStartPointRef = useRef<Point | null>(null);
+
   // Colori predefiniti per palette premium
   const premiumColors = [
     "#ffffff", // Bianco
@@ -454,27 +460,101 @@ export default function SketchEditorClient({
   // Gestiamo touchstart, touchmove e touchend sul container del workspace per non interferire con il disegno a 1 dito
   function handleTouchStart(e: React.TouchEvent<HTMLDivElement>) {
     if (e.touches.length === 2) {
-      isZoomingRef.current = true;
-      isDrawingRef.current = false; // Ferma il disegno se si usano 2 dita
+      if (isShapeDetectedRef.current && detectedShapeRef.current) {
+        // Se c'è una forma attiva rilevata, usiamo le due dita per spostarla (Drag Shape)
+        isZoomingRef.current = false;
+        isDrawingRef.current = false;
+        isDraggingShapeRef.current = true;
 
-      const t1 = e.touches[0];
-      const t2 = e.touches[1];
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const centerX = (t1.clientX + t2.clientX) / 2;
+        const centerY = (t1.clientY + t2.clientY) / 2;
 
-      const dx = t1.clientX - t2.clientX;
-      const dy = t1.clientY - t2.clientY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+        startShapeCenterRef.current = { x: centerX, y: centerY };
+        initialShapeParamsRef.current = JSON.parse(JSON.stringify(detectedShapeRef.current.params));
+        initialStartPointRef.current = startPointRef.current ? { ...startPointRef.current } : null;
+      } else {
+        // Altrimenti, zoom classico del foglio
+        isZoomingRef.current = true;
+        isDrawingRef.current = false;
 
-      const centerX = (t1.clientX + t2.clientX) / 2;
-      const centerY = (t1.clientY + t2.clientY) / 2;
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
 
-      startTouchDistRef.current = dist;
-      startTouchScaleRef.current = scale;
-      startTouchCenterRef.current = { x: centerX, y: centerY };
-      startTouchPanRef.current = { ...pan };
+        const dx = t1.clientX - t2.clientX;
+        const dy = t1.clientY - t2.clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        const centerX = (t1.clientX + t2.clientX) / 2;
+        const centerY = (t1.clientY + t2.clientY) / 2;
+
+        startTouchDistRef.current = dist;
+        startTouchScaleRef.current = scale;
+        startTouchCenterRef.current = { x: centerX, y: centerY };
+        startTouchPanRef.current = { ...pan };
+      }
     }
   }
 
   function handleTouchMove(e: React.TouchEvent<HTMLDivElement>) {
+    if (
+      isDraggingShapeRef.current &&
+      e.touches.length === 2 &&
+      startShapeCenterRef.current !== null &&
+      initialShapeParamsRef.current !== null
+    ) {
+      e.preventDefault();
+
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+
+      const centerX = (t1.clientX + t2.clientX) / 2;
+      const centerY = (t1.clientY + t2.clientY) / 2;
+
+      // Delta pixel a schermo
+      const screenDx = centerX - startShapeCenterRef.current.x;
+      const screenDy = centerY - startShapeCenterRef.current.y;
+
+      // Spostamento logico diviso per scala zoom del canvas
+      const logicalDx = screenDx / scale;
+      const logicalDy = screenDy / scale;
+
+      const shape = detectedShapeRef.current;
+      const initParams = initialShapeParamsRef.current;
+
+      if (!shape || !initParams) return;
+
+      if (shape.type === "line") {
+        shape.params.x1 = initParams.x1 + logicalDx;
+        shape.params.y1 = initParams.y1 + logicalDy;
+        shape.params.x2 = initParams.x2 + logicalDx;
+        shape.params.y2 = initParams.y2 + logicalDy;
+      } else if (shape.type === "circle" || shape.type === "ellipse") {
+        shape.params.cx = initParams.cx + logicalDx;
+        shape.params.cy = initParams.cy + logicalDy;
+      } else if (shape.type === "rectangle") {
+        shape.params.x = initParams.x + logicalDx;
+        shape.params.y = initParams.y + logicalDy;
+      } else if (shape.type === "triangle") {
+        shape.params.x1 = initParams.x1 + logicalDx;
+        shape.params.y1 = initParams.y1 + logicalDy;
+        shape.params.x2 = initParams.x2 + logicalDx;
+        shape.params.y2 = initParams.y2 + logicalDy;
+        shape.params.x3 = initParams.x3 + logicalDx;
+        shape.params.y3 = initParams.y3 + logicalDy;
+      }
+
+      // Spostiamo anche il punto iniziale del disegno per l'interazione successiva
+      if (initialStartPointRef.current && startPointRef.current) {
+        startPointRef.current.x = initialStartPointRef.current.x + logicalDx;
+        startPointRef.current.y = initialStartPointRef.current.y + logicalDy;
+      }
+
+      drawShapePreview(shape);
+      return;
+    }
+
     if (
       isZoomingRef.current &&
       e.touches.length === 2 &&
@@ -514,6 +594,12 @@ export default function SketchEditorClient({
       isZoomingRef.current = false;
       startTouchDistRef.current = null;
       startTouchCenterRef.current = null;
+
+      // Resetta drag della forma
+      isDraggingShapeRef.current = false;
+      startShapeCenterRef.current = null;
+      initialShapeParamsRef.current = null;
+      initialStartPointRef.current = null;
     }
   }
 
@@ -565,7 +651,7 @@ export default function SketchEditorClient({
           }
         }
       }
-    }, 700); // 700ms attesa
+    }, 500); // 500ms attesa
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
@@ -578,6 +664,26 @@ export default function SketchEditorClient({
 
     const coords = getCoordinates(e);
     pointsRef.current.push(coords);
+
+    // Se l'utente si sta muovendo (sta disegnando), riprogrammiamo il timeout di hold
+    // Il rilevamento della forma si attiverà solo se l'utente si ferma tenendo premuto per 500ms
+    if (!isShapeDetectedRef.current) {
+      if (holdTimeoutRef.current) clearTimeout(holdTimeoutRef.current);
+      holdTimeoutRef.current = setTimeout(() => {
+        if (isDrawingRef.current && pointsRef.current.length > 5) {
+          const shape = detectShape(pointsRef.current);
+          if (shape) {
+            isShapeDetectedRef.current = true;
+            detectedShapeRef.current = shape;
+            drawShapePreview(shape);
+            
+            if (typeof navigator !== "undefined" && navigator.vibrate) {
+              navigator.vibrate(35);
+            }
+          }
+        }
+      }, 500); // 500ms hold fermo nello stesso punto
+    }
 
     if (isShapeDetectedRef.current && detectedShapeRef.current) {
       const shape = detectedShapeRef.current;
