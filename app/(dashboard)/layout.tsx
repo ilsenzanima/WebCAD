@@ -59,14 +59,13 @@ export default async function DashboardLayout({
           {/* Logo */}
           <div className="px-5 py-5" style={{ borderBottom: "1px solid hsl(220 20% 16%)" }}>
             <div className="flex items-center gap-3">
-              <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
-                style={{ background: "linear-gradient(135deg, hsl(16 100% 58%), hsl(0 84% 60%))" }}
-              >
-                🔥
-              </div>
+              <img
+                src="/logo.svg"
+                alt="WebCAD Logo"
+                className="w-10 h-10 object-contain flex-shrink-0 select-none"
+              />
               <div>
-                <div className="text-white font-bold text-sm leading-tight">WebCAD</div>
+                <div className="text-white font-extrabold text-sm leading-tight">WebCAD</div>
                 <div className="text-xs leading-tight" style={{ color: "hsl(215 15% 45%)" }}>
                   Antincendio
                 </div>

@@ -38,8 +38,6 @@ function StepItem({ number, title, description }: StepItemProps) {
 }
 
 export default function DownloadPage() {
-  const [activeTab, setActiveTab] = useState<"android" | "ios">("android");
-
   return (
     <div
       className="min-h-screen flex flex-col justify-between p-6 text-white"
@@ -68,9 +66,9 @@ export default function DownloadPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 w-full max-w-xl mx-auto flex flex-col items-center justify-center py-12 text-center space-y-8">
+      <div className="flex-1 w-full max-w-xl mx-auto flex flex-col items-center justify-center py-12 text-center space-y-8 animate-fade-in">
         <div className="space-y-3">
-          <div className="text-4xl">📲</div>
+          <div className="text-4xl">🤖</div>
           <h1 className="text-3xl font-extrabold tracking-tight">
             Scarica WebCAD Cantiere
           </h1>
@@ -79,143 +77,65 @@ export default function DownloadPage() {
           </p>
         </div>
 
-        {/* Tab Selector */}
-        <div
-          className="flex p-1 rounded-xl w-full max-w-xs border"
-          style={{
-            background: "hsl(220 32% 8%)",
-            borderColor: "hsl(220 20% 18%)",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => setActiveTab("android")}
-            className="flex-1 py-2 rounded-lg text-xs font-bold transition-all"
+        <div className="w-full space-y-8">
+          {/* Download Button Card */}
+          <div
+            className="w-full p-6 rounded-2xl border space-y-6"
             style={{
-              background: activeTab === "android" ? "hsl(220 26% 16%)" : "transparent",
-              color: activeTab === "android" ? "white" : "white/50",
+              background: "hsl(220 26% 14%)",
+              borderColor: "hsl(220 20% 20%)",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
             }}
           >
-            🤖 Android (APK)
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("ios")}
-            className="flex-1 py-2 rounded-lg text-xs font-bold transition-all"
-            style={{
-              background: activeTab === "ios" ? "hsl(220 26% 16%)" : "transparent",
-              color: activeTab === "ios" ? "white" : "white/50",
-            }}
-          >
-            🍎 iPhone (iOS)
-          </button>
+            <div className="space-y-1.5">
+              <span className="text-[10px] text-white/40 uppercase font-bold tracking-wider">File di installazione pronto</span>
+              <h3 className="text-base font-bold">Android Application Package (.apk)</h3>
+            </div>
+
+            <a
+              href={`https://web-cad-lac.vercel.app/downloads/webcad-v${APP_VERSION}.apk`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => {
+                const isCapacitor = typeof window !== "undefined" && (window as any).Capacitor;
+                if (isCapacitor) {
+                  e.preventDefault();
+                  window.open(`https://web-cad-lac.vercel.app/downloads/webcad-v${APP_VERSION}.apk`, "_system");
+                }
+              }}
+              className="inline-flex items-center justify-center w-full py-4 px-6 rounded-xl font-bold text-sm text-white transition-all shadow-lg hover:brightness-110 active:scale-[0.98]"
+              style={{
+                background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+                boxShadow: "0 6px 20px hsl(220 90% 56% / 0.3)",
+              }}
+            >
+              📥 Scarica APK v{APP_VERSION}
+            </a>
+            <p className="text-[10px] text-white/40">Dimensione: ~4.5 MB | Compatibile con Android 8.0 o superiore</p>
+          </div>
+
+          {/* Guida Installazione */}
+          <div className="w-full text-left space-y-4">
+            <h3 className="text-base font-bold text-white pl-1">📖 Come installare su Android</h3>
+            <div className="space-y-3">
+              <StepItem
+                number={1}
+                title="Scarica l'APK"
+                description="Clicca sul pulsante sopra per scaricare il file d'installazione direttamente sulla memoria del tuo smartphone."
+              />
+              <StepItem
+                number={2}
+                title="Abilita le Origini Sconosciute"
+                description="Se richiesto dal sistema durante l'apertura del file, autorizza l'installazione da 'Fonti Sconosciute' o dalle impostazioni del browser (Google Chrome, Edge o Firefox)."
+              />
+              <StepItem
+                number={3}
+                title="Installa ed Avvia"
+                description="Apri il file appena scaricato, premi 'Installa' ed avvia l'app. Accedi con le tue credenziali WebCAD per iniziare subito a prendere misure sul campo."
+              />
+            </div>
+          </div>
         </div>
-
-        {/* Tab Contents */}
-        {activeTab === "android" ? (
-          <div className="w-full space-y-8 animate-fade-in">
-            {/* Download Button Card */}
-            <div
-              className="w-full p-6 rounded-2xl border space-y-6"
-              style={{
-                background: "hsl(220 26% 14%)",
-                borderColor: "hsl(220 20% 20%)",
-                boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
-              }}
-            >
-              <div className="space-y-1.5">
-                <span className="text-[10px] text-white/40 uppercase font-bold tracking-wider">File di installazione pronto</span>
-                <h3 className="text-base font-bold">Android Application Package (.apk)</h3>
-              </div>
-
-              <a
-                href={`https://web-cad-lac.vercel.app/downloads/webcad-v${APP_VERSION}.apk`}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => {
-                  const isCapacitor = typeof window !== "undefined" && (window as any).Capacitor;
-                  if (isCapacitor) {
-                    e.preventDefault();
-                    window.open(`https://web-cad-lac.vercel.app/downloads/webcad-v${APP_VERSION}.apk`, "_system");
-                  }
-                }}
-                className="inline-flex items-center justify-center w-full py-4 px-6 rounded-xl font-bold text-sm text-white transition-all shadow-lg hover:brightness-110 active:scale-[0.98]"
-                style={{
-                  background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-                  boxShadow: "0 6px 20px hsl(220 90% 56% / 0.3)",
-                }}
-              >
-                📥 Scarica APK v{APP_VERSION}
-              </a>
-              <p className="text-[10px] text-white/40">Dimensione: ~4.5 MB | Compatibile con Android 8.0 o superiore</p>
-            </div>
-
-            {/* Guida Installazione */}
-            <div className="w-full text-left space-y-4">
-              <h3 className="text-base font-bold text-white pl-1">📖 Come installare su Android</h3>
-              <div className="space-y-3">
-                <StepItem
-                  number={1}
-                  title="Scarica l'APK"
-                  description="Clicca sul pulsante sopra per scaricare il file d'installazione direttamente sulla memoria del tuo smartphone."
-                />
-                <StepItem
-                  number={2}
-                  title="Abilita le Origini Sconosciute"
-                  description="Se richiesto dal sistema durante l'apertura del file, autorizza l'installazione da 'Fonti Sconosciute' o dalle impostazioni del browser (Google Chrome, Edge o Firefox)."
-                />
-                <StepItem
-                  number={3}
-                  title="Installa ed Avvia"
-                  description="Apri il file appena scaricato, premi 'Installa' ed avvia l'app. Accedi con le tue credenziali WebCAD per iniziare subito a prendere misure sul campo."
-                />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="w-full space-y-6 animate-fade-in">
-            {/* iOS Informazioni Card */}
-            <div
-              className="w-full p-8 rounded-2xl border text-center space-y-6"
-              style={{
-                background: "hsl(220 26% 14%)",
-                borderColor: "hsl(220 20% 20%)",
-                boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
-              }}
-            >
-              <div className="text-3xl">📦</div>
-              <div className="space-y-2">
-                <h3 className="text-base font-bold">Distribuzione tramite Apple TestFlight</h3>
-                <p className="text-xs text-white/60 leading-relaxed max-w-sm mx-auto">
-                  La politica di Apple non consente di installare file di installazione diretta (`.ipa`) su iPhone senza sblocco. Usiamo il programma ufficiale di test di Apple.
-                </p>
-              </div>
-
-              <div
-                className="p-4 rounded-xl border border-dashed text-left space-y-2.5"
-                style={{
-                  background: "hsl(220 32% 10% / 0.6)",
-                  borderColor: "hsl(220 20% 24%)",
-                }}
-              >
-                <h4 className="text-xs font-bold text-white">Come partecipare all&apos;Alpha su iPhone:</h4>
-                <ol className="list-decimal list-inside text-[11px] text-white/70 space-y-1.5 pl-1 leading-relaxed">
-                  <li>Invia una richiesta email all&apos;amministratore per essere inserito nella lista tester.</li>
-                  <li>Riceverai un invito ufficiale da Apple per unirti al gruppo di test di **WebCAD**.</li>
-                  <li>Installa l&apos;app gratuita **TestFlight** dall&apos;App Store di Apple.</li>
-                  <li>Apri l&apos;invito, accetta il test e scarica l&apos;app di WebCAD in anteprima sul tuo iPhone!</li>
-                </ol>
-              </div>
-
-              <a
-                href="mailto:dagostini.lorenzo@gmail.com?subject=Richiesta Invito TestFlight WebCAD"
-                className="inline-flex items-center justify-center w-full py-3.5 px-6 rounded-xl font-bold text-xs text-white/80 border border-white/10 hover:bg-white/5 transition-all"
-              >
-                ✉️ Richiedi Invito TestFlight (iOS)
-              </a>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Footer */}

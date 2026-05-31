@@ -37,12 +37,11 @@ export default function MobileHeaderMenu({ initials }: MobileHeaderMenuProps) {
           onClick={() => setIsOpen(true)}
           className="flex items-center gap-2.5 cursor-pointer active:scale-95 transition-all select-none animate-pulse-subtle"
         >
-          <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-xs shadow-md shadow-orange-500/10"
-            style={{ background: "linear-gradient(135deg, hsl(16 100% 58%), hsl(0 84% 60%))" }}
-          >
-            🔥
-          </div>
+          <img
+            src="/logo.svg"
+            alt="WebCAD Logo"
+            className="w-7 h-7 object-contain select-none shadow-md shadow-orange-500/5"
+          />
           <div className="flex flex-col justify-center">
             <span className="text-white font-extrabold text-sm tracking-wide flex items-center gap-1 leading-none">
               WebCAD <span className="text-[9px] bg-orange-500/20 border border-orange-500/30 text-orange-400 px-1.5 py-0.5 rounded-full font-bold">MENU</span>

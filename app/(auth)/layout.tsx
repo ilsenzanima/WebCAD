@@ -28,11 +28,8 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         {/* Logo */}
         <div className="relative z-10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl"
-              style={{ background: "linear-gradient(135deg, hsl(16 100% 58%), hsl(0 84% 60%))" }}>
-              🔥
-            </div>
-            <span className="text-white font-bold text-xl tracking-tight">WebCAD Antincendio</span>
+            <img src="/logo.svg" alt="WebCAD Logo" className="w-11 h-11 object-contain select-none animate-pulse-subtle" />
+            <span className="text-white font-extrabold text-xl tracking-tight">WebCAD Antincendio</span>
           </div>
         </div>
 
@@ -74,12 +71,9 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         style={{ background: "hsl(222 47% 6%)" }}>
 
         {/* Logo mobile */}
-        <div className="absolute top-6 left-6 flex items-center gap-2 lg:hidden">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm"
-            style={{ background: "linear-gradient(135deg, hsl(16 100% 58%), hsl(0 84% 60%))" }}>
-            🔥
-          </div>
-          <span className="text-white font-semibold text-sm">WebCAD</span>
+        <div className="absolute top-6 left-6 flex items-center gap-2.5 lg:hidden">
+          <img src="/logo.svg" alt="WebCAD Logo" className="w-8 h-8 object-contain select-none" />
+          <span className="text-white font-extrabold text-base tracking-wide">WebCAD</span>
         </div>
 
         <div className="w-full max-w-sm animate-fade-in">

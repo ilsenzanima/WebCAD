@@ -276,16 +276,6 @@ export default function SettingsClient({
               📥 Scarica APK v{APP_VERSION}
             </a>
             <p className="text-[10px] text-white/40">Dimensione: ~4.5 MB | Richiede Android 8.0+</p>
-
-            <div className="border-t border-white/5 pt-4 text-center">
-              <p className="text-[10px] text-white/40 mb-2">Sei su iPhone (iOS)?</p>
-              <a
-                href="mailto:dagostini.lorenzo@gmail.com?subject=Richiesta Invito TestFlight WebCAD"
-                className="inline-flex items-center justify-center w-full py-2 px-4 rounded-lg font-semibold text-[10px] text-white/70 border border-white/10 hover:bg-white/5 transition-all"
-              >
-                🍎 Richiedi Invito TestFlight
-              </a>
-            </div>
           </div>
 
           {/* Guida all'installazione */}
