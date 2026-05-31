@@ -421,8 +421,8 @@ export const useOfflineStore = create<OfflineState>()(
                 // Nota: createProject originariamente reindirizza. Se fallisce o reindirizza, gestiamo l'ID.
                 // Invece di usare createProject standard che ha redirect(), useremo il client di Supabase se disponibile o invochiamo createProject gestendolo.
                 // Poiché il client può importare `@/lib/supabase/client`, creiamo un client Supabase client-side per aggirare i redirect server-side bloccanti in background!
-                const { createSupabaseClient } = await import("@/lib/supabase/client");
-                const supabase = createSupabaseClient();
+                const { createClient } = await import("@/lib/supabase/client");
+                const supabase = createClient() as any;
                 const { data: { user } } = await supabase.auth.getUser();
 
                 if (user) {
@@ -459,8 +459,8 @@ export const useOfflineStore = create<OfflineState>()(
               }
               case "ADD_LEVEL": {
                 // Inserimento livello tramite Supabase client per aggirare redirect e prendere l'id reale
-                const { createSupabaseClient } = await import("@/lib/supabase/client");
-                const supabase = createSupabaseClient();
+                const { createClient } = await import("@/lib/supabase/client");
+                const supabase = createClient() as any;
                 const { data, error } = await supabase
                   .from("levels")
                   .insert({
@@ -490,8 +490,8 @@ export const useOfflineStore = create<OfflineState>()(
                 const realLvlId = resolvedPayload.levelId;
                 let realNoteId = resolvedPayload.noteId;
 
-                const { createSupabaseClient } = await import("@/lib/supabase/client");
-                const supabase = createSupabaseClient();
+                const { createClient } = await import("@/lib/supabase/client");
+                const supabase = createClient() as any;
 
                 // Se la nota ha un TempID, creiamo prima la nota nel database
                 if (realNoteId.startsWith("temp_")) {

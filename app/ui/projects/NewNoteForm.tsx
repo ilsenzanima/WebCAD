@@ -15,6 +15,7 @@ import PhotoQuotaEditor from "./PhotoQuotaEditor";
 import LivellaBolla from "./LivellaBolla";
 import CalcolatriceWidget from "@/app/ui/dashboard/CalcolatriceWidget";
 import { useOfflineStore } from "@/lib/stores/offline-store";
+import type { Material } from "@/lib/types/database";
 
 
 // ============================================
@@ -75,7 +76,7 @@ interface Props {
   /** Note già salvate del livello (per mostrare i punti esistenti) */
   levelNotes?: FieldNote[];
   /** Catalogo dei materiali */
-  catalogMaterials?: any[];
+  catalogMaterials?: Material[];
 }
 
 // ============================================
@@ -85,6 +86,29 @@ interface Props {
 export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote, planImageUrl, nextNoteNumber, levelNotes, catalogMaterials = [] }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
+  // --- Voci misure ---
+  const [items, setItems] = useState<NoteItemDraft[]>(
+    initialNote?.field_note_items?.map((item) => {
+      const isComposite = item.item_type === "dim_quadrata" || item.item_type === "dim_cubica";
+      let composite: CompositeValue | undefined;
+      if (isComposite && item.value_text) {
+        try { composite = JSON.parse(item.value_text); } catch { composite = { unit: "cm" }; }
+      }
+      return {
+        id: item.id,
+        item_type: item.item_type,
+        value_num: item.value_num,
+        value_unit: (item.value_unit as "mm" | "cm") ?? "cm",
+        value_bool: item.value_bool ?? true,
+        value_text: isComposite ? undefined : (item.value_text ?? undefined),
+        composite,
+      };
+    }) ?? []
+  );
+
+  // Stato per l'autofocus dell'ultimo elemento inserito
+  const [lastAddedId, setLastAddedId] = useState<string | null>(null);
 
   // Store offline Zustand
   const isOnline = useOfflineStore((state) => state.isOnline);
@@ -138,25 +162,6 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   );
   const noMatch = typeFilter.trim() !== "" && filteredTypes.length === 0;
 
-  // --- Voci misure ---
-  const [items, setItems] = useState<NoteItemDraft[]>(
-    initialNote?.field_note_items?.map((item) => {
-      const isComposite = item.item_type === "dim_quadrata" || item.item_type === "dim_cubica";
-      let composite: CompositeValue | undefined;
-      if (isComposite && item.value_text) {
-        try { composite = JSON.parse(item.value_text); } catch { composite = { unit: "cm" }; }
-      }
-      return {
-        id: item.id,
-        item_type: item.item_type,
-        value_num: item.value_num,
-        value_unit: (item.value_unit as "mm" | "cm") ?? "cm",
-        value_bool: item.value_bool ?? true,
-        value_text: isComposite ? undefined : (item.value_text ?? undefined),
-        composite,
-      };
-    }) ?? []
-  );
   const [showItemDropdown, setShowItemDropdown] = useState(false);
 
   // --- Posizione in selezione (apre la mappa) ---
@@ -210,8 +215,9 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   // ============================================
 
   function addItem(itemType: ItemType) {
+    const newId = crypto.randomUUID();
     const draft: NoteItemDraft = {
-      id: crypto.randomUUID(),
+      id: newId,
       item_type: itemType,
       value_unit: "cm",
       value_bool: true,
@@ -221,6 +227,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         : undefined,
     };
     setItems((prev) => [...prev, draft]);
+    setLastAddedId(newId);
     setShowItemDropdown(false);
   }
 
@@ -366,7 +373,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
               }}
               data-1p-ignore
               autoComplete="off"
-              name={`typeFilter_${Date.now()}`}
+              name="typeFilter"
             />
           </div>
 
@@ -396,7 +403,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
               {noMatch && (
                 <div className="px-4 py-3 border-t" style={{ borderColor: "hsl(220 20% 22%)" }}>
                   <p className="text-xs mb-2" style={{ color: "hsl(215 15% 50%)" }}>
-                    Nessun tipo trovato per "{typeFilter}"
+                    Nessun tipo trovato per &quot;{typeFilter}&quot;
                   </p>
                   <button
                     type="button"
@@ -479,56 +486,116 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                 ＋
               </button>
 
-            {showItemDropdown && (
-              <div
-                className="absolute right-0 mt-1 w-44 rounded-xl overflow-hidden z-50"
-                style={{
-                  background: "hsl(220 26% 14%)",
-                  border: "1px solid hsl(220 20% 22%)",
-                  boxShadow: "0 12px 30px rgba(0,0,0,0.5)",
-                }}
-              >
-                {(Object.keys(ITEM_LABELS) as ItemType[]).filter(type => type !== "posizione").map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => addItem(type)}
-                    className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors"
-                    style={{
-                      color: "hsl(210 40% 90%)",
-                      borderBottom: "1px solid hsl(220 20% 18%)",
-                    }}
-                  >
-                    {ITEM_LABELS[type]}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowLivella(true);
-                    setShowItemDropdown(false);
-                  }}
-                  className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors font-bold"
+              {showItemDropdown && (
+                <div
+                  className="absolute right-0 mt-1 w-44 rounded-xl overflow-hidden z-50"
                   style={{
-                    color: "hsl(142, 60%, 75%)",
-                    borderTop: "1px solid hsl(220 20% 18%)",
+                    background: "hsl(220 26% 14%)",
+                    border: "1px solid hsl(220 20% 22%)",
+                    boxShadow: "0 12px 30px rgba(0,0,0,0.5)",
                   }}
                 >
-                  🟢 Livella a Bolla
-                </button>
-              </div>
-            )}
+                  {(Object.keys(ITEM_LABELS) as ItemType[]).filter(type => type !== "posizione").map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => addItem(type)}
+                      className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors"
+                      style={{
+                        color: "hsl(210 40% 90%)",
+                        borderBottom: "1px solid hsl(220 20% 18%)",
+                      }}
+                    >
+                      {ITEM_LABELS[type]}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLivella(true);
+                      setShowItemDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors font-bold"
+                    style={{
+                      color: "hsl(142, 60%, 75%)",
+                      borderTop: "1px solid hsl(220 20% 18%)",
+                    }}
+                  >
+                    🟢 Livella a Bolla
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-          </div>
+        </div>
+
+        {/* Barra dei Pulsanti Rapidi (Quick Actions) per inserimento al volo */}
+        <div className="flex flex-wrap gap-1.5 p-3 rounded-2xl border" style={{ background: "hsl(220 32% 10% / 0.5)", borderColor: "hsl(220 20% 16%)" }}>
+          <button
+            type="button"
+            onClick={() => addItem("base")}
+            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400"
+          >
+            ↔ L (Orizzontale)
+          </button>
+          <button
+            type="button"
+            onClick={() => addItem("altezza")}
+            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400"
+          >
+            ↕ H (Verticale)
+          </button>
+          <button
+            type="button"
+            onClick={() => addItem("spessore")}
+            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400"
+          >
+            ↗ S (Spessore)
+          </button>
+          <button
+            type="button"
+            onClick={() => addItem("dim_quadrata")}
+            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-400"
+          >
+            ◻ Sezione
+          </button>
+          <button
+            type="button"
+            onClick={() => addItem("nota")}
+            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 text-purple-400"
+          >
+            📝 Nota
+          </button>
+          <button
+            type="button"
+            onClick={() => addItem("materiale")}
+            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 text-pink-400"
+          >
+            📦 Materiale
+          </button>
+          <button
+            type="button"
+            onClick={() => addItem("foto")}
+            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-400"
+          >
+            📷 Foto/Quota
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowLivella(true)}
+            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-extrabold transition-all bg-lime-500/10 hover:bg-lime-500/20 border border-lime-500/20 text-lime-400"
+          >
+            🟢 Livella
+          </button>
         </div>
 
         {items.length === 0 && (
           <p className="text-sm text-center py-6" style={{ color: "hsl(215 15% 40%)" }}>
-            Clicca "＋" per aggiungere misure o note.
+            Usa i pulsanti rapidi qui sopra per compilare l&apos;abaco.
           </p>
         )}
 
-        <div className="space-y-3">
+        <div className="space-y-2">
           {items.map((item) => {
             if (item.item_type === "posizione") {
               // UI posizione inline: mostra il valore già scelto o il picker
@@ -593,6 +660,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                   setEditingFotoId(id);
                   setEditingFotoUrl(url);
                 }}
+                lastAddedId={lastAddedId}
               />
             );
           })}
@@ -673,12 +741,14 @@ function ItemRow({
   onRemove,
   catalogMaterials = [],
   onEditFoto,
+  lastAddedId,
 }: {
   item: NoteItemDraft;
   onChange: (changes: Partial<NoteItemDraft>) => void;
   onRemove: () => void;
-  catalogMaterials?: any[];
+  catalogMaterials?: Material[];
   onEditFoto?: (id: string, url: string) => void;
+  lastAddedId?: string | null;
 }) {
   const label = ITEM_LABELS[item.item_type];
   const isMeasure = MEASURE_TYPES.includes(item.item_type);
@@ -689,57 +759,116 @@ function ItemRow({
   const isDim3D = item.item_type === "dim_cubica";
   const isMateriale = item.item_type === "materiale";
 
+  const rowRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const selectRef = useRef<HTMLSelectElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (item.id === lastAddedId) {
+      const timer = setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        } else if (selectRef.current) {
+          selectRef.current.focus();
+        } else if (fileInputRef.current) {
+          fileInputRef.current.focus();
+        }
+        rowRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [item.id, lastAddedId]);
+
   // Helper per aggiornare il composite
   const updateComposite = (patch: Partial<CompositeValue>) => {
     onChange({ composite: { ...{ unit: "cm" }, ...item.composite, ...patch } });
   };
 
-  // Layout verticale per i tipi compositi (hanno più campi)
   if (isComposite) {
     const cv = item.composite ?? { unit: "cm" };
-    const unitSel = (
-      <select
-        value={cv.unit ?? "cm"}
-        onChange={(e) => updateComposite({ unit: e.target.value as "mm" | "cm" })}
-        className="px-2 py-2 rounded-lg text-sm outline-none cursor-pointer flex-shrink-0"
-        style={{ background: "hsl(220 26% 18%)", border: "1px solid hsl(220 20% 24%)", color: "hsl(210 40% 85%)" }}
-      >
-        <option value="mm">mm</option>
-        <option value="cm">cm</option>
-      </select>
-    );
-    const numInput = (placeholder: string, val: number | null | undefined, key: "b" | "h" | "d") => (
-      <div className="flex items-center gap-1.5 flex-1">
-        <span className="text-xs flex-shrink-0" style={{ color: "hsl(215 15% 45%)", minWidth: 16 }}>
-          {key === "b" ? "↔" : key === "h" ? "↕" : "↗"}
-        </span>
-        <input
-          type="number" min="0" step="0.1"
-          value={val ?? ""}
-          onChange={(e) => updateComposite({ [key]: e.target.value ? parseFloat(e.target.value) : null })}
-          placeholder={placeholder}
-          className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-          style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
-          data-1p-ignore autoComplete="off"
-        />
-      </div>
-    );
     return (
-      <div className="p-4 rounded-xl space-y-3" style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 18%)" }}>
+      <div
+        ref={rowRef}
+        className="p-3 rounded-xl space-y-2 text-sm"
+        style={{
+          background: item.id === lastAddedId ? "hsl(220 90% 56% / 0.05)" : "hsl(220 32% 10%)",
+          border: item.id === lastAddedId ? "1px solid hsl(220 90% 56% / 0.3)" : "1px solid hsl(220 20% 18%)",
+        }}
+      >
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium" style={{ color: "hsl(215 20% 65%)" }}>{label}</span>
-          <div className="flex items-center gap-2">
-            {unitSel}
-            <button type="button" onClick={onRemove}
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-all"
-              style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
-              title="Rimuovi voce">✕</button>
+          <span className="text-xs font-bold" style={{ color: "hsl(215 20% 65%)" }}>
+            {item.item_type === "dim_quadrata" ? "◻ Sezione 2D" : "⬛ Sezione 3D"}
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => updateComposite({ unit: cv.unit === "mm" ? "cm" : "mm" })}
+              className="px-2 py-1 rounded-lg text-xs font-bold transition-all"
+              style={{
+                background: "hsl(220 26% 18%)",
+                border: "1px solid hsl(220 20% 24%)",
+                color: cv.unit === "mm" ? "hsl(220 90% 70%)" : "hsl(210 40% 85%)",
+              }}
+            >
+              {cv.unit ?? "cm"}
+            </button>
+            <button
+              type="button"
+              onClick={onRemove}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all text-red-400 bg-red-950/20 border border-red-900/30"
+              title="Rimuovi"
+            >
+              ✕
+            </button>
           </div>
         </div>
-        <div className={`flex gap-2 ${isDim3D ? "flex-col sm:flex-row" : ""}`}>
-          {numInput("Larghezza", cv.b, "b")}
-          {numInput("Altezza", cv.h, "h")}
-          {isDim3D && numInput("Profondità", cv.d, "d")}
+        <div className="flex gap-2">
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <span className="text-[10px] text-gray-500">L:</span>
+            <input
+              ref={inputRef}
+              type="number"
+              min="0"
+              step="0.1"
+              value={cv.b ?? ""}
+              onChange={(e) => updateComposite({ b: e.target.value ? parseFloat(e.target.value) : null })}
+              placeholder="Base"
+              className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+              style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
+            />
+          </div>
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <span className="text-[10px] text-gray-500">H:</span>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={cv.h ?? ""}
+              onChange={(e) => updateComposite({ h: e.target.value ? parseFloat(e.target.value) : null })}
+              placeholder="Altezza"
+              className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+              style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
+            />
+          </div>
+          {isDim3D && (
+            <div className="flex items-center gap-1 flex-1 min-w-0">
+              <span className="text-[10px] text-gray-500">P:</span>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={cv.d ?? ""}
+                onChange={(e) => updateComposite({ d: e.target.value ? parseFloat(e.target.value) : null })}
+                placeholder="Prof."
+                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
+              />
+            </div>
+          )}
         </div>
       </div>
     );
@@ -747,26 +876,33 @@ function ItemRow({
 
   return (
     <div
-      className="flex items-center gap-3 p-4 rounded-xl"
+      ref={rowRef}
+      className="grid grid-cols-[85px_1fr_auto] items-center gap-2 p-2 rounded-xl text-sm"
       style={{
-        background: "hsl(220 32% 10%)",
-        border: "1px solid hsl(220 20% 18%)",
+        background: item.id === lastAddedId ? "hsl(220 90% 56% / 0.05)" : "hsl(220 32% 10%)",
+        border: item.id === lastAddedId ? "1px solid hsl(220 90% 56% / 0.3)" : "1px solid hsl(220 20% 18%)",
+        minHeight: "48px",
       }}
     >
       {/* Label */}
       <span
-        className="text-sm font-medium w-24 flex-shrink-0"
+        className="font-medium text-xs truncate flex items-center gap-1"
         style={{ color: "hsl(215 20% 65%)" }}
       >
-        {label}
+        {item.item_type === "base" ? "↔ L (Oriz.)" :
+         item.item_type === "altezza" ? "↕ H (Vert.)" :
+         item.item_type === "spessore" ? "↗ S (Spes.)" :
+         item.item_type === "nota" ? "📝 Nota" :
+         item.item_type === "materiale" ? "📦 Materiale" :
+         item.item_type === "foto" ? "📷 Foto" : label}
       </span>
 
       {/* Input misura */}
       {isMeasure && (
-        <div className="flex flex-1 items-center gap-2">
-          {/* Wrapper per evitare crash con estensioni */}
+        <div className="flex flex-1 items-center gap-1.5 min-w-0">
           <div className="flex-1 relative">
             <input
+              ref={inputRef}
               type="number"
               min="0"
               step="0.1"
@@ -775,7 +911,7 @@ function ItemRow({
                 onChange({ value_num: e.target.value ? parseFloat(e.target.value) : null })
               }
               placeholder="0"
-              className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+              className="w-full px-2.5 py-1.5 rounded-lg text-xs outline-none"
               style={{
                 background: "hsl(220 26% 14%)",
                 border: "1px solid hsl(220 20% 22%)",
@@ -785,31 +921,28 @@ function ItemRow({
               autoComplete="off"
             />
           </div>
-          <select
-            value={item.value_unit ?? "cm"}
-            onChange={(e) =>
-              onChange({ value_unit: e.target.value as "mm" | "cm" })
-            }
-            className="px-2 py-2 rounded-lg text-sm outline-none cursor-pointer"
+          <button
+            type="button"
+            onClick={() => onChange({ value_unit: item.value_unit === "mm" ? "cm" : "mm" })}
+            className="px-2 py-1.5 rounded-lg text-xs font-bold transition-all flex-shrink-0"
             style={{
               background: "hsl(220 26% 18%)",
               border: "1px solid hsl(220 20% 24%)",
-              color: "hsl(210 40% 85%)",
+              color: item.value_unit === "mm" ? "hsl(220 90% 70%)" : "hsl(210 40% 85%)",
             }}
           >
-            <option value="mm">mm</option>
-            <option value="cm">cm</option>
-          </select>
+            {item.value_unit ?? "cm"}
+          </button>
         </div>
       )}
 
       {/* Checkbox bool */}
       {isBool && (
-        <div className="flex flex-1 items-center gap-3">
+        <div className="flex flex-1 items-center gap-2 min-w-0">
           <button
             type="button"
             onClick={() => onChange({ value_bool: !item.value_bool })}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold transition-all"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold transition-all"
             style={{
               background: item.value_bool
                 ? "hsl(142 60% 40%)"
@@ -820,20 +953,21 @@ function ItemRow({
           >
             ✓
           </button>
-          <span className="text-sm" style={{ color: "hsl(215 20% 55%)" }}>
+          <span className="text-xs" style={{ color: "hsl(215 20% 55%)" }}>
             {item.value_bool ? "Presente" : "Non presente"}
           </span>
         </div>
       )}
 
-      {/* Textarea nota */}
+      {/* Input nota */}
       {isNote && (
-        <textarea
+        <input
+          ref={inputRef}
+          type="text"
           value={item.value_text ?? ""}
           onChange={(e) => onChange({ value_text: e.target.value })}
           placeholder="Scrivi una nota..."
-          rows={2}
-          className="flex-1 px-3 py-2 rounded-lg text-sm outline-none resize-none"
+          className="flex-1 px-2.5 py-1.5 rounded-lg text-xs outline-none min-w-0"
           style={{
             background: "hsl(220 26% 14%)",
             border: "1px solid hsl(220 20% 22%)",
@@ -845,16 +979,17 @@ function ItemRow({
       {/* Materiale */}
       {isMateriale && (
         <select
+          ref={selectRef}
           value={item.value_text ?? ""}
           onChange={(e) => onChange({ value_text: e.target.value })}
-          className="flex-1 px-3 py-2 rounded-lg text-sm outline-none cursor-pointer"
+          className="flex-1 px-2 py-1.5 rounded-lg text-xs outline-none cursor-pointer min-w-0"
           style={{
             background: "hsl(220 26% 14%)",
             border: "1px solid hsl(220 20% 22%)",
             color: "hsl(210 40% 96%)",
           }}
         >
-          <option value="">Seleziona un materiale...</option>
+          <option value="">Seleziona materiale...</option>
           {catalogMaterials.map((mat) => (
             <option key={mat.id} value={mat.name}>
               {mat.name} {mat.sku ? `(${mat.sku})` : ""}
@@ -865,23 +1000,23 @@ function ItemRow({
 
       {/* Foto */}
       {isFoto && (
-        <div className="flex-1 space-y-2">
+        <div className="flex-1 flex items-center gap-2 min-w-0">
           {item.value_text ? (
-            <div className="flex flex-col gap-2">
-              <div className="relative inline-block w-fit">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="relative inline-block flex-shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img 
                   src={item.value_text} 
                   alt="Anteprima foto" 
-                  className="h-24 w-auto rounded-lg object-cover" 
+                  className="h-8 w-8 rounded-lg object-cover" 
                   style={{ border: "1px solid hsl(220 20% 22%)" }}
                 />
                 <button
                   type="button"
                   onClick={() => onChange({ value_text: undefined })}
-                  className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs shadow-md transition-all"
+                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] shadow-md transition-all"
                   style={{ background: "hsl(0 70% 50%)", color: "white" }}
-                  title="Rimuovi foto"
+                  title="Rimuovi"
                 >
                   ✕
                 </button>
@@ -890,26 +1025,26 @@ function ItemRow({
               <button
                 type="button"
                 onClick={() => onEditFoto?.(item.id, item.value_text!)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all w-fit"
+                className="px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap"
                 style={{
                   background: "hsl(220 90% 56% / 0.15)",
                   color: "hsl(220 90% 70%)",
                   border: "1px solid hsl(220 90% 56% / 0.3)",
                 }}
               >
-                📐 Disegna Quote su Foto
+                📐 Quote
               </button>
             </div>
           ) : (
-            <div>
+            <div className="flex items-center w-full min-w-0">
               <input
+                ref={fileInputRef}
                 type="file"
                 accept="image/*"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
                   
-                  // Comprimiamo e ridimensioniamo l'immagine per non superare il limite 1MB di Next.js
                   const reader = new FileReader();
                   reader.onload = (evt) => {
                     const img = new Image();
@@ -937,7 +1072,6 @@ function ItemRow({
                       const ctx = canvas.getContext("2d");
                       ctx?.drawImage(img, 0, 0, width, height);
                       
-                      // Esporta come JPEG compresso (qualità 0.7)
                       const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
                       onChange({ value_text: compressedBase64 });
                     };
@@ -945,10 +1079,9 @@ function ItemRow({
                   };
                   reader.readAsDataURL(file);
                 }}
-                className="w-full text-xs file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:text-white file:cursor-pointer cursor-pointer"
+                className="w-full text-[10px] file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:text-white file:cursor-pointer cursor-pointer"
                 style={{ color: "hsl(215 15% 50%)" }}
               />
-              {/* Iniettiamo un po' di stile per il bottone file via classi inline dato che non possiamo usare tailwind complex qui */}
               <style dangerouslySetInnerHTML={{__html: `
                 input[type=file]::file-selector-button {
                   background: linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%));
@@ -963,12 +1096,7 @@ function ItemRow({
       <button
         type="button"
         onClick={onRemove}
-        className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-all flex-shrink-0 ml-1"
-        style={{
-          background: "hsl(0 60% 20%)",
-          color: "hsl(0 70% 60%)",
-          border: "1px solid hsl(0 60% 25%)",
-        }}
+        className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all flex-shrink-0 text-red-400 bg-red-950/20 border border-red-900/30"
         title="Rimuovi voce"
       >
         ✕

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 interface PhotoQuotaEditorProps {
   imageUrl: string; // Immagine Base64 o URL
@@ -32,6 +32,84 @@ const AXIS_LABELS = {
   neutral: "Libera (Giallo)",
 };
 
+// Funzione helper per disegnare un segmento di quota completo di frecce e testo
+function drawSingleLine(
+  ctx: CanvasRenderingContext2D,
+  x1: number, y1: number,
+  x2: number, y2: number,
+  color: string,
+  text: string,
+  isDraft = false
+) {
+  ctx.save();
+
+  // Spessore proporzionale alle dimensioni dell'immagine
+  const baseDimension = Math.max(ctx.canvas.width, ctx.canvas.height);
+  const lineWidth = Math.max(2, baseDimension * 0.005);
+  const tickSize = Math.max(6, baseDimension * 0.015);
+  const fontSize = Math.max(12, baseDimension * 0.022);
+
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = "round";
+
+  // 1. Disegna la linea principale
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+
+  // 2. Disegna i trattini obliqui tipici delle quote alle estremità (a 45°)
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const drawTick = (x: number, y: number) => {
+    ctx.beginPath();
+    ctx.moveTo(x - Math.cos(angle + Math.PI/4) * tickSize, y - Math.sin(angle + Math.PI/4) * tickSize);
+    ctx.lineTo(x + Math.cos(angle + Math.PI/4) * tickSize, y + Math.sin(angle + Math.PI/4) * tickSize);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth * 1.5;
+    ctx.stroke();
+  };
+
+  drawTick(x1, y1);
+  drawTick(x2, y2);
+
+  // 3. Disegna il valore della quota al centro
+  if (text && !isDraft) {
+    const midX = (x1 + x2) / 2;
+    const midY = (y1 + y2) / 2;
+
+    ctx.font = `bold ${fontSize}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const textWidth = ctx.measureText(text).width;
+    const paddingX = fontSize * 0.5;
+    const paddingY = fontSize * 0.3;
+
+    // Disegna rettangolo di sfondo scuro ad alto contrasto
+    ctx.fillStyle = "rgba(10, 15, 30, 0.85)";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, lineWidth * 0.4);
+    
+    ctx.beginPath();
+    ctx.roundRect(
+      midX - textWidth/2 - paddingX,
+      midY - fontSize/2 - paddingY,
+      textWidth + paddingX * 2,
+      fontSize + paddingY * 2,
+      4
+    );
+    ctx.fill();
+    ctx.stroke();
+
+    // Scrivi il testo
+    ctx.fillStyle = "white";
+    ctx.fillText(text, midX, midY);
+  }
+
+  ctx.restore();
+}
+
 export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuotaEditorProps) {
   const [lines, setLines] = useState<QuotaLine[]>([]);
   const [currentAxis, setCurrentAxis] = useState<"x" | "y" | "z" | "neutral">("neutral");
@@ -51,24 +129,8 @@ export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuo
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
-  // Caricamento dell'immagine
-  useEffect(() => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      imgRef.current = img;
-      redraw();
-    };
-    img.src = imageUrl;
-  }, [imageUrl]);
-
-  // Ridimensionamento e ridisegno quando cambiano le linee o lo stato del disegno
-  useEffect(() => {
-    redraw();
-  }, [lines, isDrawing, startPt, currentPt, currentAxis]);
-
   // Ridisegna tutto sul canvas
-  function redraw() {
+  const redraw = useCallback(() => {
     const canvas = canvasRef.current;
     const img = imgRef.current;
     if (!canvas || !img) return;
@@ -107,85 +169,25 @@ export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuo
 
       drawSingleLine(ctx, startPt.x, startPt.y, endX, endY, AXIS_COLORS[currentAxis], "", true);
     }
-  }
+  }, [lines, isDrawing, startPt, currentPt, currentAxis]);
 
-  // Funzione helper per disegnare un segmento di quota completo di frecce e testo
-  function drawSingleLine(
-    ctx: CanvasRenderingContext2D,
-    x1: number, y1: number,
-    x2: number, y2: number,
-    color: string,
-    text: string,
-    isDraft = false
-  ) {
-    ctx.save();
-
-    // Spessore proporzionale alle dimensioni dell'immagine
-    const baseDimension = Math.max(ctx.canvas.width, ctx.canvas.height);
-    const lineWidth = Math.max(2, baseDimension * 0.005);
-    const tickSize = Math.max(6, baseDimension * 0.015);
-    const fontSize = Math.max(12, baseDimension * 0.022);
-
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth;
-    ctx.lineCap = "round";
-
-    // 1. Disegna la linea principale
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-
-    // 2. Disegna i trattini obliqui tipici delle quote alle estremità (a 45°)
-    const angle = Math.atan2(y2 - y1, x2 - x1);
-    const drawTick = (x: number, y: number) => {
-      ctx.beginPath();
-      ctx.moveTo(x - Math.cos(angle + Math.PI/4) * tickSize, y - Math.sin(angle + Math.PI/4) * tickSize);
-      ctx.lineTo(x + Math.cos(angle + Math.PI/4) * tickSize, y + Math.sin(angle + Math.PI/4) * tickSize);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = lineWidth * 1.5;
-      ctx.stroke();
+  // Caricamento dell'immagine
+  useEffect(() => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      imgRef.current = img;
+      redraw();
     };
+    img.src = imageUrl;
+  }, [imageUrl, redraw]);
 
-    drawTick(x1, y1);
-    drawTick(x2, y2);
+  // Ridimensionamento e ridisegno quando cambiano le linee o lo stato del disegno
+  useEffect(() => {
+    redraw();
+  }, [redraw]);
 
-    // 3. Disegna il valore della quota al centro
-    if (text && !isDraft) {
-      const midX = (x1 + x2) / 2;
-      const midY = (y1 + y2) / 2;
 
-      ctx.font = `bold ${fontSize}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-
-      const textWidth = ctx.measureText(text).width;
-      const paddingX = fontSize * 0.5;
-      const paddingY = fontSize * 0.3;
-
-      // Disegna rettangolo di sfondo scuro ad alto contrasto
-      ctx.fillStyle = "rgba(10, 15, 30, 0.85)";
-      ctx.strokeStyle = color;
-      ctx.lineWidth = Math.max(1, lineWidth * 0.4);
-      
-      ctx.beginPath();
-      ctx.roundRect(
-        midX - textWidth/2 - paddingX,
-        midY - fontSize/2 - paddingY,
-        textWidth + paddingX * 2,
-        fontSize + paddingY * 2,
-        4
-      );
-      ctx.fill();
-      ctx.stroke();
-
-      // Scrivi il testo
-      ctx.fillStyle = "white";
-      ctx.fillText(text, midX, midY);
-    }
-
-    ctx.restore();
-  }
 
   // Converte le coordinate dello schermo/touch in coordinate reali dell'immagine
   function getCanvasCoords(clientX: number, clientY: number): { x: number; y: number } | null {
