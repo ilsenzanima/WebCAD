@@ -100,6 +100,16 @@ jobs:
           echo "=== android/app/build.gradle modificato ==="
           grep -E "versionCode|versionName" android/app/build.gradle
 
+      - name: Genera Keystore di Debug fisso se mancante
+        run: |
+          if [ ! -f android/app/debug.keystore ]; then
+            echo "debug.keystore non trovato. Generazione in corso..."
+            keytool -genkey -v -keystore android/app/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            echo "Keystore di debug generato con successo."
+          else
+            echo "debug.keystore esistente trovato. Verrà utilizzata la firma esistente."
+          fi
+
       - name: Build APK con Gradle
         run: |
           cd android
@@ -126,7 +136,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "build: compilato APK debug v${{ steps.get_version.outputs.VERSION }} (build #${{ github.run_number }})"
-          file_pattern: "public/downloads/webcad-*.apk"
+          file_pattern: "public/downloads/webcad-*.apk android/app/debug.keystore"
           branch: main
 
       - name: Upload APK come artifact GitHub
