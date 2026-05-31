@@ -12,23 +12,42 @@ import * as THREE from "three";
 const SNAP_SIZE = 10;
 
 interface Face2DProps {
+  id: string;
   vertices: [number, number, number][];
+  height?: number;
   color?: string;
   isSelected?: boolean;
+  activeTool: "navigate" | "polygon" | "rectangle" | "ellipse" | "extrude";
   onSelect: () => void;
+  onExtrudeStart: (e: any, faceId: string, currentHeight: number) => void;
+  onExtrudeMove: (e: any) => void;
+  onExtrudeEnd: (e: any) => void;
 }
 
 /**
- * Componente per renderizzare una faccia 2D orizzontale (piano XZ) a partire dai suoi vertici.
- * Supporta la selezione interattiva e cambia colore se selezionata.
+ * Componente per renderizzare una faccia 2D orizzontale (piano XZ) o un volume estruso 3D.
+ * Supporta la selezione interattiva ed eventi Push/Pull tridimensionali.
  * 
  * 📐 Matematica di Mappatura:
- * Three.js crea la ShapeGeometry sul piano XY bidimensionale (X, Y).
- * Per disporla orizzontalmente sul nostro piano 3D di calpestio (XZ), dobbiamo:
- * 1. Mappare le coordinate 3D (X, Z) dei nostri punti sui valori (X, Y) della forma 2D.
- * 2. Applicare una rotazione di -90 gradi (-PI/2) sull'asse X alla Mesh risultante per sdraiarla in orizzontale.
+ * Three.js crea la ShapeGeometry e la ExtrudeGeometry sul piano XY locale (X, Y).
+ * Per disporla orizzontalmente sul nostro piano 3D di calpestio (XZ), applichiamo:
+ * 1. Mappatura delle coordinate 3D (X, Z) dei vertici sui valori (X, Y) della forma 2D.
+ * 2. Applicazione di una rotazione di -90 gradi (-PI/2) sull'asse X per adagiare la Mesh a terra.
+ * 3. L'asse locale Z punterà così esattamente verso l'alto (asse Y globale positivo). L'estrusione
+ *    avviene lungo Z locale, quindi il volume crescerà naturalmente in altezza!
  */
-function Face2D({ vertices, color = "#0ea5e9", isSelected = false, onSelect }: Face2DProps) {
+function Face2D({
+  id,
+  vertices,
+  height = 0,
+  color = "#0ea5e9",
+  isSelected = false,
+  activeTool,
+  onSelect,
+  onExtrudeStart,
+  onExtrudeMove,
+  onExtrudeEnd
+}: Face2DProps) {
   const shape = useMemo(() => {
     if (vertices.length < 3) return null;
     
@@ -42,25 +61,59 @@ function Face2D({ vertices, color = "#0ea5e9", isSelected = false, onSelect }: F
     return s;
   }, [vertices]);
 
+  const extrudeSettings = useMemo(() => {
+    return {
+      depth: height,
+      bevelEnabled: false,
+      steps: 1
+    };
+  }, [height]);
+
   if (!shape) return null;
+
+  const handlePointerDown = (e: any) => {
+    e.stopPropagation();
+    if (activeTool === "extrude") {
+      onExtrudeStart(e, id, height);
+    } else {
+      onSelect();
+    }
+  };
+
+  const handlePointerMove = (e: any) => {
+    if (activeTool === "extrude") {
+      e.stopPropagation();
+      onExtrudeMove(e);
+    }
+  };
+
+  const handlePointerUp = (e: any) => {
+    if (activeTool === "extrude") {
+      e.stopPropagation();
+      onExtrudeEnd(e);
+    }
+  };
 
   return (
     <mesh
       rotation={[-Math.PI / 2, 0, 0]}
       position={[0, 0.05, 0]}
-      onPointerDown={(e) => {
-        e.stopPropagation();
-        onSelect();
-      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
     >
-      <shapeGeometry args={[shape]} />
+      {height === 0 ? (
+        <shapeGeometry args={[shape]} />
+      ) : (
+        <extrudeGeometry args={[shape, extrudeSettings]} />
+      )}
       <meshStandardMaterial
         color={isSelected ? "#f59e0b" : color}
         roughness={0.3}
         metalness={0.1}
         side={THREE.DoubleSide}
         transparent
-        opacity={isSelected ? 0.75 : 0.5}
+        opacity={isSelected ? 0.8 : 0.5}
       />
     </mesh>
   );
@@ -134,6 +187,7 @@ interface CompletedFace {
     radiusZ?: number;
   };
   vertices: [number, number, number][];
+  height?: number;
 }
 
 export default function ThreeDSketchupDesigner() {
@@ -146,8 +200,11 @@ export default function ThreeDSketchupDesigner() {
   // Coordinata proiettata del mouse sulla griglia (con snap) per l'anteprima elastica
   const [hoveredPoint, setHoveredPoint] = useState<[number, number, number] | null>(null);
   
-  // Strumento di disegno attivo ('navigate' per muovere liberamente la telecamera, o strumenti grafici)
-  const [activeTool, setActiveTool] = useState<"navigate" | "polygon" | "rectangle" | "ellipse">("polygon");
+  // Strumento di disegno attivo
+  const [activeTool, setActiveTool] = useState<"navigate" | "polygon" | "rectangle" | "ellipse" | "extrude">("polygon");
+  
+  // Riferimento per memorizzare i dettagli del trascinamento (drag) durante l'estrusione Push/Pull
+  const dragInfo = useRef<{ faceId: string; startY: number; startHeight: number } | null>(null);
   
   // ID della faccia correntemente selezionata per l'ispettore delle misure
   const [selectedFaceId, setSelectedFaceId] = useState<string | null>(null);
@@ -397,6 +454,61 @@ export default function ThreeDSketchupDesigner() {
     );
   };
 
+  // Aggiorna l'altezza di un solido dall'Ispettore Parametrico o da trascinamento
+  const updateFaceHeight = (faceId: string, height: number) => {
+    setCompletedFaces((prev) =>
+      prev.map((f) => {
+        if (f.id === faceId) {
+          return { ...f, height };
+        }
+        return f;
+      })
+    );
+  };
+
+  // Inizia il trascinamento dell'estrusione (Push/Pull)
+  const handleExtrudeStart = useCallback((e: any, faceId: string, currentHeight: number) => {
+    e.stopPropagation();
+    // Cattura il puntatore per tracciare il drag ovunque sul display
+    e.target.setPointerCapture(e.pointerId);
+    dragInfo.current = {
+      faceId,
+      startY: e.clientY,
+      startHeight: currentHeight
+    };
+    setSelectedFaceId(faceId);
+  }, []);
+
+  // Aggiorna l'altezza in tempo reale durante il trascinamento (Push/Pull)
+  const handleExtrudeMove = useCallback((e: any) => {
+    if (!dragInfo.current) return;
+    e.stopPropagation();
+    
+    // Calcoliamo lo spostamento Y del mouse sullo schermo (salendo clientY diminuisce, quindi startY - clientY è positivo)
+    const deltaY = dragInfo.current.startY - e.clientY;
+    
+    // Scala unità: 1 pixel = 0.8 unità 3D
+    let newHeight = dragInfo.current.startHeight + deltaY * 0.8;
+    
+    // Snap magnetico se abilitato
+    if (useSnap) {
+      newHeight = Math.round(newHeight / SNAP_SIZE) * SNAP_SIZE;
+    }
+    
+    // Limitiamo l'estrusione per scopi prototipali (es. tra -100 e 600)
+    newHeight = Math.max(-100, Math.min(600, newHeight));
+    
+    updateFaceHeight(dragInfo.current.faceId, newHeight);
+  }, [useSnap]);
+
+  // Termina l'operazione di estrusione
+  const handleExtrudeEnd = useCallback((e: any) => {
+    if (!dragInfo.current) return;
+    e.stopPropagation();
+    e.target.releasePointerCapture(e.pointerId);
+    dragInfo.current = null;
+  }, []);
+
   // Cancella l'ultimo nodo tracciato
   const handleUndoVertex = () => {
     if (tempVertices.length === 0) return;
@@ -457,7 +569,7 @@ export default function ThreeDSketchupDesigner() {
           </button>
         </div>
 
-        {/* 🛠️ BARRA DEGLI STRUMENTI PREMIUM (Disabilitazione OrbitControls su disegno) */}
+        {/* 🛠️ BARRA DEGLI STRUMENTI PREMIUM */}
         <div className="absolute top-20 left-4 z-20 flex gap-1 p-1 rounded-2xl shadow-lg border"
           style={{
             background: "hsl(220 35% 12% / 0.85)",
@@ -469,6 +581,7 @@ export default function ThreeDSketchupDesigner() {
             { id: "polygon", label: "✍ Poligono", desc: "Disegna un profilo cliccando nodo dopo nodo" },
             { id: "rectangle", label: "▱ Rettangolo", desc: "Clicca due punti per formare un rettangolo" },
             { id: "ellipse", label: "◯ Ellisse", desc: "Clicca il centro e poi definisci i raggi" },
+            { id: "extrude", label: "⇡ Push/Pull", desc: "Clicca e trascina una faccia in verticale per estruderla" },
           ].map((tool) => (
             <button
               key={tool.id}
@@ -532,14 +645,20 @@ export default function ThreeDSketchupDesigner() {
             );
           })}
 
-          {/* Facce Poligonali Completate e Chiuse */}
+          {/* Facce Poligonali Completate e Chiuse (e solidi estrusi) */}
           {completedFaces.map((face) => (
             <Face2D
               key={face.id}
+              id={face.id}
               vertices={face.vertices}
+              height={face.height}
               color="#38bdf8"
               isSelected={face.id === selectedFaceId}
+              activeTool={activeTool}
               onSelect={() => setSelectedFaceId(face.id)}
+              onExtrudeStart={handleExtrudeStart}
+              onExtrudeMove={handleExtrudeMove}
+              onExtrudeEnd={handleExtrudeEnd}
             />
           ))}
 
@@ -606,6 +725,13 @@ export default function ThreeDSketchupDesigner() {
                 <li>Fai click per **fissare la forma** e completarla.</li>
               </>
             )}
+            {activeTool === "extrude" && (
+              <>
+                <li>Sei in modalità **Push/Pull (Estrusione 3D)**.</li>
+                <li>Fai clic su una faccia a terra e **trascina il mouse verso l&apos;alto/basso** per estruderla.</li>
+                <li>Gli OrbitControls sono bloccati per consentire il disegno.</li>
+              </>
+            )}
           </ol>
         </div>
       </div>
@@ -644,9 +770,24 @@ export default function ThreeDSketchupDesigner() {
                 <p className="text-[10px] text-white/40 font-mono">ID: {selectedFace.id}</p>
               </div>
 
-              {/* INPUT PER RETTANGOLO */}
+              {/* Parametro Comune: Altezza Estrusione (Y) */}
+              <div className="space-y-1 border-t border-white/5 pt-2">
+                <label className="text-[10px] text-sky-400 font-bold uppercase block">Altezza Solido (Y)</label>
+                <input
+                  type="number"
+                  step="10"
+                  value={Math.round(selectedFace.height || 0)}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    updateFaceHeight(selectedFace.id, val);
+                  }}
+                  className="w-full bg-[#0d0f17] text-white text-xs font-bold p-2.5 rounded-xl border border-white/10 focus:border-sky-500 outline-none"
+                />
+              </div>
+
+              {/* INPUT SPECIFICI PER RETTANGOLO */}
               {selectedFace.type === "rectangle" && (
-                <div className="space-y-3 pt-2">
+                <div className="space-y-3 border-t border-white/5 pt-2">
                   <div className="space-y-1">
                     <label className="text-[10px] text-white/50 font-bold uppercase block">Larghezza (X)</label>
                     <input
@@ -679,9 +820,9 @@ export default function ThreeDSketchupDesigner() {
                 </div>
               )}
 
-              {/* INPUT PER ELLISSE */}
+              {/* INPUT SPECIFICI PER ELLISSE */}
               {selectedFace.type === "ellipse" && (
-                <div className="space-y-3 pt-2">
+                <div className="space-y-3 border-t border-white/5 pt-2">
                   <div className="space-y-1">
                     <label className="text-[10px] text-white/50 font-bold uppercase block">Raggio X</label>
                     <input
@@ -716,7 +857,7 @@ export default function ThreeDSketchupDesigner() {
 
               {/* INFO PER POLIGONO */}
               {selectedFace.type === "polygon" && (
-                <div className="pt-2 text-[10px] text-white/60 space-y-1.5 font-semibold">
+                <div className="pt-2 border-t border-white/5 text-[10px] text-white/60 space-y-1.5 font-semibold">
                   <p>✓ Nodi del perimetro: <span className="text-sky-400 font-extrabold">{selectedFace.vertices.length}</span></p>
                   <p className="text-[9px] text-white/40 italic font-normal leading-relaxed">
                     Il poligono a mano libera non supporta la modifica parametrica di larghezza o raggio. Puoi modificarlo ricreandolo.
