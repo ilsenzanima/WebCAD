@@ -3,6 +3,7 @@
 import { Suspense, useRef, useState, useEffect } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls, Stage, useGLTF, Html, ContactShadows } from "@react-three/drei";
+import PhotoQuotaEditor from "./PhotoQuotaEditor";
 
 // --- COMPONENTE DI CARICAMENTO ---
 function Loader() {
@@ -43,6 +44,7 @@ export default function ModelViewer({ modelUrl, onSnapshotTaken }: ModelViewerPr
   const glRef = useRef<any>(null);
   const [snapshot, setSnapshot] = useState<string | null>(null);
   const [showFlash, setShowFlash] = useState(false);
+  const [isEditingSnapshot, setIsEditingSnapshot] = useState(false);
 
   // Gestore per catturare lo snapshot della vista corrente
   const handleTakeSnapshot = () => {
@@ -157,26 +159,52 @@ export default function ModelViewer({ modelUrl, onSnapshotTaken }: ModelViewerPr
             </button>
           </div>
           
-          <div className="flex gap-1.5 w-full">
+          <div className="flex gap-1 w-full">
+            <button
+              type="button"
+              onClick={() => setIsEditingSnapshot(true)}
+              className="flex-1 py-1 bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-white text-[10px] font-bold rounded transition-colors text-center"
+              title="Aggiungi quote o note grafiche sopra lo snapshot"
+            >
+              📐 Quota
+            </button>
             <a
               href={snapshot}
               download="vista-prospettica-3d.png"
-              className="flex-1 text-center py-1 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white text-[10px] font-bold rounded transition-colors"
+              className="px-2 py-1 bg-sky-500 hover:bg-sky-400 active:bg-sky-600 text-white text-[10px] font-bold rounded text-center transition-colors"
               title="Salva l'immagine sul dispositivo"
             >
               Scarica
             </a>
-            <button
-              type="button"
-              onClick={() => {
-                alert("Snapshot pronto per l'inclusione nel report PDF!");
-              }}
-              className="px-2 py-1 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white text-[10px] font-semibold rounded transition-colors"
-              title="Usa questa foto per il report di cantiere"
-            >
-              Usa
-            </button>
           </div>
+          
+          <button
+            type="button"
+            onClick={() => {
+              alert("Snapshot pronto per l'inclusione nel report PDF!");
+            }}
+            className="w-full py-1 bg-white/10 hover:bg-white/20 active:bg-white/30 text-white text-[10px] font-semibold rounded transition-colors text-center"
+            title="Usa questa foto per il report di cantiere"
+          >
+            Usa nel Report
+          </button>
+        </div>
+      )}
+
+      {/* Modale PhotoQuotaEditor per Annotare lo Snapshot */}
+      {isEditingSnapshot && snapshot && (
+        <div className="absolute inset-0 z-30 bg-[#090b11]">
+          <PhotoQuotaEditor
+            imageUrl={snapshot}
+            onSave={(newUrl) => {
+              setSnapshot(newUrl);
+              setIsEditingSnapshot(false);
+              if (onSnapshotTaken) {
+                onSnapshotTaken(newUrl);
+              }
+            }}
+            onClose={() => setIsEditingSnapshot(false)}
+          />
         </div>
       )}
     </div>
