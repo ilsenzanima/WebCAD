@@ -12,11 +12,16 @@ import {
 } from "@/app/actions/field-notes";
 import PlanimetriaMappa from "./PlanimetriaMappa";
 import PhotoQuotaEditor from "./PhotoQuotaEditor";
+import ModelViewer from "./ModelViewer";
 import LivellaBolla from "./LivellaBolla";
 import CalcolatriceWidget from "@/app/ui/dashboard/CalcolatriceWidget";
 import { useOfflineStore } from "@/lib/stores/offline-store";
 import type { Material } from "@/lib/types/database";
 
+const is3DModelUrl = (url?: string | null) => {
+  if (!url) return false;
+  return url.startsWith("data:model/") || url.startsWith("data:application/octet-stream") || url.startsWith("data:application/x-gltf") || url.endsWith(".glb") || url.endsWith(".gltf");
+};
 
 // ============================================
 // Tipi interni
@@ -106,6 +111,8 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
       };
     }) ?? []
   );
+
+  const [activeModel3DUrl, setActiveModel3DUrl] = useState<string | null>(null);
 
   // Stato per l'autofocus dell'ultimo elemento inserito
   const [lastAddedId, setLastAddedId] = useState<string | null>(null);
@@ -599,6 +606,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                   setEditingFotoId(id);
                   setEditingFotoUrl(url);
                 }}
+                onOpen3DModel={setActiveModel3DUrl}
                 lastAddedId={lastAddedId}
               />
             );
@@ -660,6 +668,23 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         />
       )}
 
+      {/* Modale Visualizzatore 3D GLB/GLTF */}
+      {activeModel3DUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+          <div className="bg-[#090b11] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl relative animate-fade-in">
+            <button
+              onClick={() => setActiveModel3DUrl(null)}
+              className="absolute top-4 right-4 z-50 px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs transition-all cursor-pointer shadow-lg active:scale-95"
+            >
+              ✕ Chiudi
+            </button>
+            <div className="flex-1 overflow-hidden p-2">
+              <ModelViewer modelUrl={activeModel3DUrl} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Calcolatrice Cantiere con Importazione */}
       <CalcolatriceWidget
         isOpen={showCalc}
@@ -680,6 +705,7 @@ function ItemRow({
   onRemove,
   catalogMaterials = [],
   onEditFoto,
+  onOpen3DModel,
   lastAddedId,
 }: {
   item: NoteItemDraft;
@@ -687,6 +713,7 @@ function ItemRow({
   onRemove: () => void;
   catalogMaterials?: Material[];
   onEditFoto?: (id: string, url: string) => void;
+  onOpen3DModel?: (url: string) => void;
   lastAddedId?: string | null;
 }) {
   const label = ITEM_LABELS[item.item_type];
@@ -937,23 +964,33 @@ function ItemRow({
         </select>
       )}
 
-      {/* Foto */}
+      {/* Foto o Allegato 3D */}
       {isFoto && (
         <div className="flex-1 flex items-center gap-2 min-w-0">
           {item.value_text ? (
             <div className="flex items-center gap-2 min-w-0">
               <div className="relative inline-block flex-shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img 
-                  src={item.value_text} 
-                  alt="Anteprima foto" 
-                  className="h-8 w-8 rounded-lg object-cover" 
-                  style={{ border: "1px solid hsl(220 20% 22%)" }}
-                />
+                {is3DModelUrl(item.value_text) ? (
+                  <div 
+                    onClick={() => onOpen3DModel?.(item.value_text!)}
+                    className="h-8 w-8 rounded-lg flex items-center justify-center bg-sky-500/15 text-sky-400 text-sm font-bold border border-sky-500/30 cursor-pointer hover:bg-sky-500/25 transition-all" 
+                    title="Clicca per visualizzare il modello 3D"
+                  >
+                    📦
+                  </div>
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img 
+                    src={item.value_text} 
+                    alt="Anteprima foto" 
+                    className="h-8 w-8 rounded-lg object-cover" 
+                    style={{ border: "1px solid hsl(220 20% 22%)" }}
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => onChange({ value_text: undefined })}
-                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] shadow-md transition-all"
+                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] shadow-md transition-all animate-fade-in"
                   style={{ background: "hsl(0 70% 50%)", color: "white" }}
                   title="Rimuovi"
                 >
@@ -961,60 +998,85 @@ function ItemRow({
                 </button>
               </div>
               
-              <button
-                type="button"
-                onClick={() => onEditFoto?.(item.id, item.value_text!)}
-                className="px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap"
-                style={{
-                  background: "hsl(220 90% 56% / 0.15)",
-                  color: "hsl(220 90% 70%)",
-                  border: "1px solid hsl(220 90% 56% / 0.3)",
-                }}
-              >
-                📐 Quote
-              </button>
+              {is3DModelUrl(item.value_text) ? (
+                <button
+                  type="button"
+                  onClick={() => onOpen3DModel?.(item.value_text!)}
+                  className="px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap"
+                  style={{
+                    background: "hsl(220 90% 56% / 0.15)",
+                    color: "hsl(220 90% 70%)",
+                    border: "1px solid hsl(220 90% 56% / 0.3)",
+                  }}
+                >
+                  👁 Visualizza 3D
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onEditFoto?.(item.id, item.value_text!)}
+                  className="px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap"
+                  style={{
+                    background: "hsl(220 90% 56% / 0.15)",
+                    color: "hsl(220 90% 70%)",
+                    border: "1px solid hsl(220 90% 56% / 0.3)",
+                  }}
+                >
+                  📐 Quote
+                </button>
+              )}
             </div>
           ) : (
             <div className="flex items-center w-full min-w-0">
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,.glb,.gltf"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
                   
+                  const is3DModel = file.name.endsWith(".glb") || file.name.endsWith(".gltf") || file.type.includes("gltf") || file.type.includes("model");
+                  
                   const reader = new FileReader();
                   reader.onload = (evt) => {
-                    const img = new Image();
-                    img.onload = () => {
-                      const canvas = document.createElement("canvas");
-                      const MAX_WIDTH = 800;
-                      const MAX_HEIGHT = 800;
-                      let width = img.width;
-                      let height = img.height;
+                    const resultUrl = evt.target?.result as string;
+                    
+                    if (is3DModel) {
+                      // Salviamo direttamente il Base64 DataURL del modello 3D nel database
+                      onChange({ value_text: resultUrl });
+                    } else {
+                      // Compressione immagine classica
+                      const img = new Image();
+                      img.onload = () => {
+                        const canvas = document.createElement("canvas");
+                        const MAX_WIDTH = 800;
+                        const MAX_HEIGHT = 800;
+                        let width = img.width;
+                        let height = img.height;
 
-                      if (width > height) {
-                        if (width > MAX_WIDTH) {
-                          height *= MAX_WIDTH / width;
-                          width = MAX_WIDTH;
+                        if (width > height) {
+                          if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                          }
+                        } else {
+                          if (height > MAX_HEIGHT) {
+                            width *= MAX_HEIGHT / height;
+                            height = MAX_HEIGHT;
+                          }
                         }
-                      } else {
-                        if (height > MAX_HEIGHT) {
-                          width *= MAX_HEIGHT / height;
-                          height = MAX_HEIGHT;
-                        }
-                      }
 
-                      canvas.width = width;
-                      canvas.height = height;
-                      const ctx = canvas.getContext("2d");
-                      ctx?.drawImage(img, 0, 0, width, height);
-                      
-                      const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
-                      onChange({ value_text: compressedBase64 });
-                    };
-                    img.src = evt.target?.result as string;
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext("2d");
+                        ctx?.drawImage(img, 0, 0, width, height);
+                        
+                        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+                        onChange({ value_text: compressedBase64 });
+                      };
+                      img.src = resultUrl;
+                    }
                   };
                   reader.readAsDataURL(file);
                 }}

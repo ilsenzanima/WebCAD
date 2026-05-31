@@ -66,8 +66,8 @@ export default function ThreeDHubPage() {
             </div>
           </Link>
 
-          {/* Card 2: Modellatore Solidi (SketchUp) */}
-          <Link href="/3d/sketchup" 
+          {/* Card 2: Visualizzatore Modelli 3D (GLB/GLTF) */}
+          <Link href="/3d/viewer" 
             className="group p-6 rounded-2xl border text-left space-y-6 transition-all duration-300 hover:-translate-y-1 active:scale-[0.99]"
             style={{
               background: "hsl(220 26% 14% / 0.6)",
@@ -75,17 +75,17 @@ export default function ThreeDHubPage() {
               boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
             }}>
             <div className="flex items-center justify-between">
-              <div className="text-3xl p-3 rounded-xl bg-sky-500/10 text-sky-400 group-hover:scale-110 transition-transform">💻</div>
-              <span className="text-[9px] bg-sky-500/15 border border-sky-500/30 text-sky-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Ottimizzato Desktop</span>
+              <div className="text-3xl p-3 rounded-xl bg-sky-500/10 text-sky-400 group-hover:scale-110 transition-transform">🔍</div>
+              <span className="text-[9px] bg-sky-500/15 border border-sky-500/30 text-sky-400 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Visualizzatore</span>
             </div>
             <div className="space-y-2">
-              <h3 className="text-lg font-bold text-white group-hover:text-sky-400 transition-colors">Modellatore Solidi (SketchUp)</h3>
+              <h3 className="text-lg font-bold text-white group-hover:text-sky-400 transition-colors">Visualizzatore 3D (GLB / GLTF)</h3>
               <p className="text-xs text-white/50 leading-relaxed">
-                Disegna un profilo 2D cliccando sulla griglia di riferimento, chiudilo per formare una faccia e poi trascinalo (estrusione Push/Pull) per creare volumi 3D complessi.
+                Carica ed ispeziona in tempo reale modelli 3D complessi in formato nativo GLB/GLTF esportati da CAD professionali quali Fusion 360, FreeCAD, Blender, ecc.
               </p>
             </div>
             <div className="text-xs font-bold text-sky-400 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-              Apri Strumento 💻 →
+              Apri Visualizzatore 🔍 →
             </div>
           </Link>
 
