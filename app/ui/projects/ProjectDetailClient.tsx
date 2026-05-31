@@ -86,7 +86,9 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
 
   // Inizializza la cache dello store all'avvio
   useEffect(() => {
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     setProjectsCache([project as any]);
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     setLevelsCache(project.id, drawings as any);
     setFieldNotesCache(notesList);
   }, [project, drawings, notesList, setProjectsCache, setLevelsCache, setFieldNotesCache]);
@@ -102,6 +104,9 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const debouncedNotes = useDebounce(notes, 1000);
   
+  // Gestione collassabile note generali (default aperto se c'è testo salvato)
+  const [notesOpen, setNotesOpen] = useState(notes.trim() !== "");
+  
   // Stato per editare il titolo del cantiere
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState(project.name);
@@ -111,6 +116,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
 
   // Sincronizza lo stato locale quando cambiano i livelli dello store o le prop
   useEffect(() => {
+    /* eslint-disable-next-line react-hooks/set-state-in-effect */
     setLocalDrawings(levelsToUse as Drawing[]);
   }, [levelsToUse]);
 
@@ -293,18 +299,16 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   return (
     <div className="flex flex-col h-full overflow-y-auto w-full animate-fade-in pb-4">
       {/* ── Breadcrumb e Header ───────────────────────────── */}
-      <div className="px-4 sm:px-8 py-4 sm:py-6 space-y-3 sm:space-y-4">
-        {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-xs sm:text-sm font-medium" style={{ color: "hsl(215 15% 55%)" }}>
-          <Link href="/projects" className="hover:text-white transition-colors">Note di Cantiere</Link>
-          <span>/</span>
-          <span className="text-white truncate max-w-[180px] sm:max-w-none">{project.name}</span>
-        </div>
+      <div className="px-4 sm:px-8 py-2 sm:py-3 border-b" style={{ borderColor: "hsl(220 20% 12%)" }}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-4">
+          <div className="min-w-0 flex items-center gap-2 sm:gap-3">
+            {/* Breadcrumb + Titolo in linea */}
+            <div className="flex items-center gap-1.5 text-xs font-medium" style={{ color: "hsl(215 15% 50%)" }}>
+              <Link href="/projects" className="hover:text-white transition-colors flex-shrink-0">Cantieri</Link>
+              <span className="flex-shrink-0">/</span>
+            </div>
 
-        {/* Titolo Cantiere */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="group flex items-center gap-2 sm:gap-3">
+            <div className="group flex items-center gap-1.5 min-w-0">
               {isEditingTitle ? (
                 <input 
                   autoFocus
@@ -313,32 +317,33 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                   onChange={(e) => setEditTitle(e.target.value)}
                   onBlur={handleSaveTitle}
                   onKeyDown={(e) => e.key === "Enter" && handleSaveTitle()}
-                  className="text-xl sm:text-2xl font-bold bg-transparent border-b border-white outline-none w-full"
+                  className="text-base sm:text-lg font-bold bg-transparent border-b border-white outline-none w-full"
                   style={{ color: "hsl(210 40% 96%)" }}
                 />
               ) : (
-                <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2 truncate">
+                <h1 className="text-base sm:text-lg font-bold text-white flex items-center gap-1.5 truncate">
                   <span className="truncate">{project.name}</span>
                   <button 
                     onClick={() => setIsEditingTitle(true)}
-                    className="flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-sm p-1 rounded-md bg-white/5 hover:bg-white/10"
-                    title="Rinomina cantiere"
+                    className="flex-shrink-0 opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity text-xs p-1 rounded-md bg-white/5 hover:bg-white/10"
+                    title={`Rinomina cantiere (Ultima modifica: ${safeFormatDate(project.updated_at)})`}
                   >
                     ✏️
                   </button>
                 </h1>
               )}
             </div>
-            <p className="mt-1 text-xs sm:text-sm" style={{ color: "hsl(215 15% 50%)" }}>
-              Ultima modifica: {safeFormatDate(project.updated_at)}
-            </p>
+          </div>
+
+          <div className="text-[10px] sm:text-xs flex-shrink-0" style={{ color: "hsl(215 15% 45%)" }}>
+            Ultima modifica: {safeFormatDate(project.updated_at)}
           </div>
         </div>
       </div>
 
       {/* ── Barra Controlli (Cerca + Aggiungi) ───────────────────────────── */}
       <div 
-        className="px-4 sm:px-8 py-3 sm:py-4 flex items-center gap-2 sm:gap-4 sticky top-0 z-10"
+        className="px-4 sm:px-8 py-1.5 sm:py-2 flex items-center gap-2 sm:gap-4 sticky top-0 z-10"
         style={{
           background: "hsl(222 47% 6%)",
           borderBottom: "1px solid hsl(220 20% 14%)",
@@ -347,7 +352,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
       >
         <div className="relative flex-1">
           <span
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm pointer-events-none"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-xs pointer-events-none"
             style={{ color: "hsl(215 15% 45%)" }}
           >
             🔍
@@ -357,7 +362,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Cerca note..."
-            className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none transition-all"
+            className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs outline-none transition-all"
             style={{
               background: "hsl(220 32% 12%)",
               border: "1px solid hsl(220 20% 20%)",
@@ -372,13 +377,13 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
         <button
           onClick={() => setIsCreatingLevel(true)}
           disabled={isPending}
-          className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-white transition-all duration-200 disabled:opacity-50 whitespace-nowrap focus:outline-none cursor-pointer"
+          className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all duration-200 disabled:opacity-50 whitespace-nowrap focus:outline-none cursor-pointer"
           style={{
             background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
             boxShadow: "0 4px 16px hsl(220 90% 56% / 0.3)",
           }}
         >
-          <span className="text-base leading-none">＋</span>
+          <span className="text-sm leading-none">＋</span>
           <span>Aggiungi Nota</span>
         </button>
 
@@ -422,12 +427,12 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                       style={{ borderBottom: "1px solid hsl(220 20% 16%)" }}
                     >
                       {/* Riga principale anteprima nota */}
-                      <div className="flex items-center justify-between gap-3 p-4">
+                      <div className="flex items-center justify-between gap-3 p-2.5 sm:p-4">
                         {/* Checkbox completato */}
                         <button
                           type="button"
                           onClick={() => handleToggleCompleted(note.id, isCompleted)}
-                          className="w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold transition-all flex-shrink-0"
+                          className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold transition-all flex-shrink-0"
                           style={{
                             background: isCompleted ? "hsl(142 60% 40%)" : "hsl(220 32% 10%)",
                             border: `1px solid ${isCompleted ? "hsl(142 60% 35%)" : "hsl(220 20% 22%)"}`,
@@ -470,7 +475,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                       {/* Dropdown Accordion: Elenco rapido delle voci dell'appunto */}
                       {isExpanded && (
                         <div
-                          className="px-6 pb-4 pt-1 animate-fade-in text-xs space-y-2 border-t border-dashed"
+                          className="px-4 pb-2.5 pt-1 animate-fade-in text-[11px] space-y-1.5 border-t border-dashed"
                           style={{ borderColor: "hsl(220 20% 16%)", background: "hsl(220 32% 8% / 0.4)" }}
                         >
                           {items.length > 0 ? (
@@ -503,34 +508,44 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
       </div>
 
       {/* ── Appunti Generali del Cantiere (Autosave in calce) ────────────────────── */}
-      <div className="px-4 sm:px-8 mt-auto pt-4 sm:pt-6 border-t" style={{ borderColor: "hsl(220 20% 16%)" }}>
-         <div className="flex items-center justify-between mb-3">
-           <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: "hsl(215 15% 45%)" }}>
-             Note Generali del Cantiere
-           </h2>
+      <div className="px-4 sm:px-8 mt-auto pt-2 pb-2 border-t" style={{ borderColor: "hsl(220 20% 16%)" }}>
+         <div className="flex items-center justify-between mb-2">
+           <button
+             type="button"
+             onClick={() => setNotesOpen((o) => !o)}
+             className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider focus:outline-none select-none hover:text-white transition-colors"
+             style={{ color: "hsl(215 15% 45%)" }}
+           >
+             <span>🏢 Note Generali del Cantiere</span>
+             <span className="text-[9px] transition-transform duration-200" style={{ transform: notesOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+               ▼
+             </span>
+           </button>
            <div className="text-[10px]" style={{ color: "hsl(215 15% 40%)" }}>
-              {saveStatus === "saving" && <span className="animate-pulse">Salvataggio in corso...</span>}
-              {saveStatus === "saved" && <span className="text-green-500">Salvato automaticamente ✓</span>}
-              {saveStatus === "error" && <span className="text-red-500">Errore di salvataggio!</span>}
-              {saveStatus === "idle" && <span>Modifiche salvate automaticamente</span>}
+              {saveStatus === "saving" && <span className="animate-pulse">Salvataggio...</span>}
+              {saveStatus === "saved" && <span className="text-green-500">Salvato ✓</span>}
+              {saveStatus === "error" && <span className="text-red-500">Errore!</span>}
+              {saveStatus === "idle" && notesOpen && <span>Salvataggio automatico</span>}
            </div>
          </div>
          
-         <div 
-           className="rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 transition-all"
-           style={{ border: "1px solid hsl(220 20% 20%)", background: "hsl(220 26% 12%)" }}
-         >
-            <textarea 
-              value={notes}
-              onChange={(e) => {
-                 setNotes(e.target.value);
-                 if (saveStatus !== "saving") setSaveStatus("idle");
-              }}
-              placeholder="Scrivi qui annotazioni generali del cantiere, calcoli rapidi..."
-              className="w-full min-h-[120px] p-4 bg-transparent resize-y outline-none text-xs leading-relaxed"
-              style={{ color: "hsl(210 40% 90%)" }}
-            />
-         </div>
+         {notesOpen && (
+           <div 
+             className="rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 transition-all"
+             style={{ border: "1px solid hsl(220 20% 20%)", background: "hsl(220 26% 12%)" }}
+           >
+              <textarea 
+                value={notes}
+                onChange={(e) => {
+                   setNotes(e.target.value);
+                   if (saveStatus !== "saving") setSaveStatus("idle");
+                }}
+                placeholder="Scrivi qui annotazioni generali del cantiere, calcoli rapidi..."
+                className="w-full min-h-[80px] p-3 bg-transparent resize-y outline-none text-xs leading-relaxed"
+                style={{ color: "hsl(210 40% 90%)" }}
+              />
+           </div>
+         )}
       </div>
       
       {isCreatingLevel && (

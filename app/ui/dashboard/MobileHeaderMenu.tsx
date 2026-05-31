@@ -25,7 +25,7 @@ export default function MobileHeaderMenu({ initials }: MobileHeaderMenuProps) {
     <>
       {/* Testata Mobile Interattiva */}
       <header
-        className="md:hidden flex items-center justify-between px-4 py-3 flex-shrink-0 relative z-40"
+        className="md:hidden flex items-center justify-between px-4 py-2 flex-shrink-0 relative z-40"
         style={{
           background: "hsl(220 32% 10%)",
           borderBottom: "1px solid hsl(220 20% 16%)",
@@ -37,16 +37,15 @@ export default function MobileHeaderMenu({ initials }: MobileHeaderMenuProps) {
           className="flex items-center gap-2.5 cursor-pointer active:scale-95 transition-all select-none animate-pulse-subtle"
         >
           <div
-            className="w-8.5 h-8.5 rounded-xl flex items-center justify-center text-base shadow-md shadow-orange-500/10"
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-xs shadow-md shadow-orange-500/10"
             style={{ background: "linear-gradient(135deg, hsl(16 100% 58%), hsl(0 84% 60%))" }}
           >
             🔥
           </div>
-          <div className="flex flex-col">
-            <span className="text-white font-extrabold text-sm tracking-wide flex items-center gap-1">
+          <div className="flex flex-col justify-center">
+            <span className="text-white font-extrabold text-sm tracking-wide flex items-center gap-1 leading-none">
               WebCAD <span className="text-[9px] bg-orange-500/20 border border-orange-500/30 text-orange-400 px-1.5 py-0.5 rounded-full font-bold">MENU</span>
             </span>
-            <span className="text-[9px] text-white/40 leading-none -mt-0.5">Tocca per il menu</span>
           </div>
         </div>
 
@@ -150,7 +149,7 @@ export default function MobileHeaderMenu({ initials }: MobileHeaderMenuProps) {
               <LogoutButton
                 className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-xs font-bold transition-all bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 active:scale-95 cursor-pointer"
               >
-                ↩ Esci dall'account
+                ↩ Esci dall&apos;account
               </LogoutButton>
             </div>
           </aside>

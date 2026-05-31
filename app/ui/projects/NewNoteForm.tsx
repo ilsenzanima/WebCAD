@@ -335,7 +335,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
 
       {/* ── Tipo appunto ── */}
       <div
-        className="rounded-2xl p-6 space-y-3"
+        className="rounded-2xl p-4 space-y-2"
         style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
       >
         <label className="block text-sm font-semibold text-white">
@@ -447,13 +447,12 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
 
       {/* ── Voci / Misure ── */}
       <div
-        className="rounded-2xl p-6 space-y-4"
+        className="rounded-2xl p-4 space-y-3"
         style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
       >
         <div className="flex items-center justify-between">
-          <label className="block text-sm font-semibold text-white">
-            Misure e note
-          </label>
+          {/* Label rimossa per risparmiare spazio, il pulsante "+" e la calcolatrice sono autoesplicativi */}
+          <div />
 
           {/* Pulsanti Azioni Note */}
           <div className="flex items-center gap-2">
@@ -529,69 +528,9 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
           </div>
         </div>
 
-        {/* Barra dei Pulsanti Rapidi (Quick Actions) per inserimento al volo */}
-        <div className="flex flex-wrap gap-1.5 p-3 rounded-2xl border" style={{ background: "hsl(220 32% 10% / 0.5)", borderColor: "hsl(220 20% 16%)" }}>
-          <button
-            type="button"
-            onClick={() => addItem("base")}
-            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400"
-          >
-            ↔ L (Orizzontale)
-          </button>
-          <button
-            type="button"
-            onClick={() => addItem("altezza")}
-            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400"
-          >
-            ↕ H (Verticale)
-          </button>
-          <button
-            type="button"
-            onClick={() => addItem("spessore")}
-            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400"
-          >
-            ↗ S (Spessore)
-          </button>
-          <button
-            type="button"
-            onClick={() => addItem("dim_quadrata")}
-            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-400"
-          >
-            ◻ Sezione
-          </button>
-          <button
-            type="button"
-            onClick={() => addItem("nota")}
-            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 text-purple-400"
-          >
-            📝 Nota
-          </button>
-          <button
-            type="button"
-            onClick={() => addItem("materiale")}
-            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-pink-500/10 hover:bg-pink-500/20 border border-pink-500/20 text-pink-400"
-          >
-            📦 Materiale
-          </button>
-          <button
-            type="button"
-            onClick={() => addItem("foto")}
-            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-bold transition-all bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-400"
-          >
-            📷 Foto/Quota
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowLivella(true)}
-            className="flex-1 min-w-[100px] flex items-center justify-center gap-1 px-2.5 py-2 rounded-xl text-[10px] sm:text-xs font-extrabold transition-all bg-lime-500/10 hover:bg-lime-500/20 border border-lime-500/20 text-lime-400"
-          >
-            🟢 Livella
-          </button>
-        </div>
-
         {items.length === 0 && (
           <p className="text-sm text-center py-6" style={{ color: "hsl(215 15% 40%)" }}>
-            Usa i pulsanti rapidi qui sopra per compilare l&apos;abaco.
+            Premi ＋ per aggiungere misure e appunti.
           </p>
         )}
 
