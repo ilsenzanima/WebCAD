@@ -17,11 +17,19 @@ function Loader() {
 }
 
 // --- COMPONENTE DI CATTURA GL ---
-// Permette al genitore di accedere al contesto WebGL del renderer di Three.js
+// Permette al genitore di accedere al contesto WebGL del renderer di Three.js e gestisce la pulizia della memoria
 function SnapshotGrabber({ onGlReady }: { onGlReady: (gl: any) => void }) {
   const { gl } = useThree();
   useEffect(() => {
     onGlReady(gl);
+    return () => {
+      // Dismette il renderer e libera le risorse della GPU al disassemblaggio del Canvas
+      try {
+        gl.dispose();
+      } catch (err) {
+        console.warn("Errore dismissione renderer Three.js:", err);
+      }
+    };
   }, [gl, onGlReady]);
   return null;
 }

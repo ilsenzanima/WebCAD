@@ -3,9 +3,9 @@
 import { useState, useTransition, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { addLevel, updateProjectNotes, renameProject, toggleLevelCompleted } from "@/app/actions/projects";
+import { updateProjectNotes, renameProject, toggleLevelCompleted } from "@/app/actions/projects";
 import ProjectActionsMenu from "@/app/ui/dashboard/ProjectActionsMenu";
-import CreateDrawingModal from "./CreateDrawingModal";
+import QuickAddModal from "./QuickAddModal";
 import type { FieldNote } from "@/app/actions/field-notes";
 import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
 
@@ -83,6 +83,31 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   // Leggi dinamicamente dallo store offline
   const cachedLevels = useOfflineStore((state) => state.levels[project.id]);
   const levelsToUse = cachedLevels && cachedLevels.length > 0 ? cachedLevels : drawings;
+  const cachedFieldNotes = useOfflineStore((state) => state.fieldNotes);
+
+  // Unisce le note caricate dal server con quelle presenti nello store offline per questo progetto
+  const projectNotes = useMemo(() => {
+    const allNotesMap: Record<string, FieldNote> = {};
+    notesList.forEach(n => { allNotesMap[n.id] = n; });
+    Object.values(cachedFieldNotes).forEach(n => {
+      if (n.project_id === project.id) {
+        allNotesMap[n.id] = n;
+      }
+    });
+    return Object.values(allNotesMap);
+  }, [notesList, cachedFieldNotes, project.id]);
+
+  // Raggruppa le note per livello
+  const notesByLevel = useMemo(() => {
+    const map: Record<string, FieldNote[]> = {};
+    projectNotes.forEach((note) => {
+      if (note.level_id) {
+        if (!map[note.level_id]) map[note.level_id] = [];
+        map[note.level_id].push(note);
+      }
+    });
+    return map;
+  }, [projectNotes]);
 
   // Inizializza la cache dello store all'avvio
   useEffect(() => {
@@ -111,8 +136,96 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState(project.name);
 
-  // Stato per modale "Aggiungi Nota"
-  const [isCreatingLevel, setIsCreatingLevel] = useState(false);
+  // Stati per inserimento rapido dropdown e modale
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [quickAddType, setQuickAddType] = useState<"nota" | "sketch" | "3d" | null>(null);
+
+  // Gestore per l'inserimento rapido dal dettaglio del progetto
+  const handleQuickAddSubmit = async (title: string, pianoName: string) => {
+    if (!quickAddType) return;
+    
+    // 1. Controlla se il livello esiste già offline
+    let level = localDrawings.find(l => l.name.toLowerCase() === pianoName.toLowerCase());
+    let levelId = level?.id;
+    
+    if (!levelId) {
+      // Crea il livello optimisticamente
+      levelId = generateTempId();
+      addLevelOptimistic(
+        levelId,
+        project.id,
+        pianoName,
+        0,
+        "2d_wall",
+        pianoName
+      );
+    }
+    
+    // 2. Crea la nota optimisticamente in base al tipo
+    const tempNoteId = generateTempId();
+    
+    if (quickAddType === "nota") {
+      const initialItems = [{ item_type: "nota" as const, value_text: title, sort_order: 0 }];
+      useOfflineStore.getState().saveFieldNoteItemsOptimistic(
+        tempNoteId,
+        project.id,
+        levelId,
+        initialItems,
+        "Appunti Cantiere"
+      );
+      
+      setQuickAddType(null);
+      router.push(`/projects/${project.id}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
+    } else if (quickAddType === "sketch") {
+      // Genera un foglio millimetrato Base64 iniziale
+      const canvas = document.createElement("canvas");
+      canvas.width = 1200;
+      canvas.height = 1200;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, 1200, 1200);
+        ctx.strokeStyle = "#e2e8f0";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 1200; i += 40) {
+          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 1200); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(1200, i); ctx.stroke();
+        }
+      }
+      const emptySketchBase64 = canvas.toDataURL("image/png");
+      
+      const initialItems = [
+        { item_type: "nota" as const, value_text: title, sort_order: 0 },
+        { item_type: "foto" as const, value_text: emptySketchBase64, sort_order: 1 }
+      ];
+      
+      useOfflineStore.getState().saveFieldNoteItemsOptimistic(
+        tempNoteId,
+        project.id,
+        levelId,
+        initialItems,
+        "Sketch"
+      );
+      
+      setQuickAddType(null);
+      router.push(`/projects/${project.id}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
+    } else if (quickAddType === "3d") {
+      const initialItems = [
+        { item_type: "nota" as const, value_text: title, sort_order: 0 }
+      ];
+      
+      useOfflineStore.getState().saveFieldNoteItemsOptimistic(
+        tempNoteId,
+        project.id,
+        levelId,
+        initialItems,
+        "Report 3D"
+      );
+      
+      setQuickAddType(null);
+      router.push(`/projects/${project.id}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
+    }
+  };
 
   // Sincronizza lo stato locale quando cambiano i livelli dello store o le prop
   useEffect(() => {
@@ -217,26 +330,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   // Handlers
   // ============================================
 
-  const handleCreateLevelSubmit = async (
-    name: string,
-    elevationZ: number,
-    drawingType: "2d_wall" | "3d_box",
-    piano: string
-  ) => {
-    if (!isOnline) {
-      const tempId = generateTempId();
-      addLevelOptimistic(tempId, project.id, name, elevationZ, "2d_wall", piano);
-      setIsCreatingLevel(false);
-      return;
-    }
 
-    const res = await addLevel(project.id, name, elevationZ, "2d_wall", piano);
-    if (!res.success) {
-      alert("Errore nella creazione della nota.");
-    }
-    setIsCreatingLevel(false);
-    router.refresh();
-  };
 
   const handleSaveTitle = () => {
     if (editTitle.trim() !== project.name && editTitle.trim()) {
@@ -384,19 +478,63 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
           />
         </div>
 
-        {/* Pulsante Aggiungi Nota */}
-        <button
-          onClick={() => setIsCreatingLevel(true)}
-          disabled={isPending}
-          className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all duration-200 disabled:opacity-50 whitespace-nowrap focus:outline-none cursor-pointer"
-          style={{
-            background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-            boxShadow: "0 4px 16px hsl(220 90% 56% / 0.3)",
-          }}
-        >
-          <span className="text-sm leading-none">＋</span>
-          <span>Aggiungi Nota</span>
-        </button>
+        {/* Pulsante Dropdown Aggiungi ＋ */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowAddMenu(!showAddMenu)}
+            disabled={isPending}
+            className="flex items-center gap-1.5 sm:gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold text-white transition-all duration-150 disabled:opacity-50 whitespace-nowrap focus:outline-none cursor-pointer hover:brightness-110 active:scale-95"
+            style={{
+              background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+              boxShadow: "0 4px 16px hsl(220 90% 56% / 0.25)",
+            }}
+          >
+            <span>Aggiungi ＋</span>
+          </button>
+          
+          {showAddMenu && (
+            <div
+              className="absolute right-0 mt-1.5 w-40 rounded-xl overflow-hidden z-50 border flex flex-col"
+              style={{
+                background: "hsl(220 26% 14%)",
+                borderColor: "hsl(220 20% 22%)",
+                boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddMenu(false);
+                  setQuickAddType("nota");
+                }}
+                className="w-full text-left px-4 py-2.5 text-xs hover:bg-white/5 transition-colors text-white/90 flex items-center gap-2"
+              >
+                <span>📝</span> Nota
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddMenu(false);
+                  setQuickAddType("sketch");
+                }}
+                className="w-full text-left px-4 py-2.5 text-xs hover:bg-white/5 transition-colors text-white/90 border-t border-white/5 flex items-center gap-2"
+              >
+                <span>🎨</span> Sketch (Disegno)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddMenu(false);
+                  setQuickAddType("3d");
+                }}
+                className="w-full text-left px-4 py-2.5 text-xs hover:bg-white/5 transition-colors text-white/90 border-t border-white/5 flex items-center gap-2"
+              >
+                <span>📦</span> Report 3D (CAD)
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Menu Azioni Progetto/Cantiere */}
         <div className="relative flex items-center justify-center p-1">
@@ -404,8 +542,8 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
         </div>
       </div>
 
-      {/* ── Sezione Note Suddivise per Piano ──────────────────────── */}
-      <div className="px-4 sm:px-8 py-4 sm:py-6 flex-1 space-y-6">
+      {/* ── Elenco Note Raggruppate per Piano ───────────────────────────── */}
+      <div className="flex-1 p-4 sm:p-8 space-y-6 sm:space-y-8 overflow-y-auto">
         {groupedNotes.sortedPiani.length > 0 ? (
           groupedNotes.sortedPiani.map((pianoName) => (
             <div key={pianoName} className="space-y-2.5">
@@ -417,101 +555,130 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                 🏢 {pianoName}
               </h3>
 
-              {/* Elenco Note di questo Piano */}
+              {/* Elenco Livelli di questo Piano */}
               <div
-                className="rounded-2xl overflow-hidden divide-y"
+                className="rounded-2xl overflow-hidden divide-y flex flex-col"
                 style={{
                   background: "hsl(220 26% 14% / 0.5)",
                   border: "1px solid hsl(220 20% 18%)",
                   borderColor: "hsl(220 20% 16%)",
                 }}
               >
-                {groupedNotes.groups[pianoName].map((note) => {
-                  const isCompleted = !!note.completed;
-                  const isExpanded = !!expandedNotes[note.id];
-                  const items = formattedItemsMap[note.id] ?? [];
-
+                {groupedNotes.groups[pianoName].map((lvl) => {
+                  const levelNotesList = notesByLevel[lvl.id] ?? [];
+                  
                   return (
-                    <div
-                      key={note.id}
-                      className="transition-colors hover:bg-white/[0.01]"
-                      style={{ borderBottom: "1px solid hsl(220 20% 16%)" }}
-                    >
-                      {/* Riga principale anteprima nota */}
-                      <div className="flex items-center justify-between gap-3 p-2.5 sm:p-4">
-                        {/* Checkbox completato */}
+                    <div key={lvl.id} className="p-4 space-y-3">
+                      {/* Titolo Livello con stato di completamento */}
+                      <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-white">{lvl.name}</span>
+                          <span className="text-[10px] text-white/40">({levelNotesList.length} elementi)</span>
+                        </div>
+                        {/* Toggle completato */}
                         <button
                           type="button"
-                          onClick={() => handleToggleCompleted(note.id, isCompleted)}
-                          className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold transition-all flex-shrink-0"
+                          onClick={() => handleToggleCompleted(lvl.id, !!lvl.completed)}
+                          className="px-2.5 py-1 rounded-md text-[10px] font-bold transition-all border border-white/10"
                           style={{
-                            background: isCompleted ? "hsl(142 60% 40%)" : "hsl(220 32% 10%)",
-                            border: `1px solid ${isCompleted ? "hsl(142 60% 35%)" : "hsl(220 20% 22%)"}`,
-                            color: isCompleted ? "white" : "transparent",
+                            background: lvl.completed ? "hsl(142 60% 40%/0.15)" : "transparent",
+                            borderColor: lvl.completed ? "hsl(142 60% 35%)" : "hsl(220 20% 22%)",
+                            color: lvl.completed ? "hsl(142 60% 70%)" : "white/60",
                           }}
                         >
-                          ✓
+                          {lvl.completed ? "✓ Completato" : "Segna Completato"}
                         </button>
-
-                        {/* Nome Nota (Clic per espandere/comprimere l'accordion) */}
-                        <div
-                          onClick={() => toggleAccordion(note.id)}
-                          className="flex-1 min-w-0 cursor-pointer select-none py-1 flex items-center gap-2"
-                        >
-                          <span
-                            className="font-bold text-sm transition-all"
-                            style={{
-                              color: isCompleted ? "hsl(215 15% 45%)" : "white",
-                              textDecoration: isCompleted ? "line-through" : "none",
-                              opacity: isCompleted ? 0.5 : 1,
-                            }}
-                          >
-                            {note.name}
-                          </span>
-                          <span className="text-[10px] text-white/30 transition-transform duration-200" style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
-                            ▼
-                          </span>
-                        </div>
-
-                        {/* Pulsante Modifica (Matita per aprire l'editor) */}
-                        {(() => {
-                          const existingNoteId = levelToNoteIdMap[note.id];
-                          const targetHref = existingNoteId
-                            ? `/projects/${project.id}/levels/${note.id}/appunti/${existingNoteId}/modifica`
-                            : `/projects/${project.id}/levels/${note.id}/appunti`;
-                          return (
-                            <Link
-                              href={targetHref}
-                              className="w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all bg-white/5 hover:bg-white/10 border border-white/5 flex-shrink-0"
-                              title="Gestisci appunti e quote"
-                            >
-                              ✏️
-                            </Link>
-                          );
-                        })()}
                       </div>
 
-                      {/* Dropdown Accordion: Elenco rapido delle voci dell'appunto */}
-                      {isExpanded && (
-                        <div
-                          className="px-4 pb-2.5 pt-1 animate-fade-in text-[11px] space-y-1.5 border-t border-dashed"
-                          style={{ borderColor: "hsl(220 20% 16%)", background: "hsl(220 32% 8% / 0.4)" }}
-                        >
-                          {items.length > 0 ? (
-                            <ul className="space-y-1.5">
-                              {items.map((itemText, idx) => (
-                                <li
-                                  key={idx}
-                                  className="text-white/70 leading-relaxed font-mono truncate"
-                                >
-                                  {itemText}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-white/40 italic">Nessuna misura o appunto inserito in questa nota. Premi ✏️ per aggiungerne.</p>
-                          )}
+                      {/* Lista elementi del livello */}
+                      {levelNotesList.length > 0 ? (
+                        <div className="space-y-2.5 pt-1">
+                          {levelNotesList.map((note) => {
+                            const typeName = note.type_name || "Appunti Cantiere";
+                            const titleItem = note.field_note_items?.find(i => i.item_type === "nota");
+                            const noteTitle = titleItem?.value_text || `Appunto #${note.note_number}`;
+                            
+                            // Troviamo eventuali foto o snapshot per la preview
+                            const fotoItem = note.field_note_items?.find(i => i.item_type === "foto");
+                            const previewUrl = fotoItem?.value_text;
+                            
+                            return (
+                              <div 
+                                key={note.id} 
+                                className="p-3 bg-white/[0.015] border border-white/5 rounded-xl flex items-center justify-between gap-3.5 hover:bg-white/[0.03] transition-colors"
+                              >
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  {/* Icona in base al tipo */}
+                                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-base flex-shrink-0">
+                                    {typeName === "Sketch" ? "🎨" : typeName === "Report 3D" ? "📦" : "📝"}
+                                  </div>
+                                  
+                                  {/* Testo e tipo */}
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-white text-xs font-bold truncate">{noteTitle}</span>
+                                      <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded-full"
+                                        style={{
+                                          background: typeName === "Sketch" ? "rgba(245, 158, 11, 0.15)" : typeName === "Report 3D" ? "rgba(168, 85, 247, 0.15)" : "rgba(14, 165, 233, 0.15)",
+                                          color: typeName === "Sketch" ? "#fbbf24" : typeName === "Report 3D" ? "#c084fc" : "#38bdf8",
+                                          border: `1px solid ${typeName === "Sketch" ? "rgba(245, 158, 11, 0.3)" : typeName === "Report 3D" ? "rgba(168, 85, 247, 0.3)" : "rgba(14, 165, 233, 0.3)"}`
+                                        }}
+                                      >
+                                        {typeName === "Sketch" ? "Sketch" : typeName === "Report 3D" ? "3D" : "Nota"}
+                                      </span>
+                                    </div>
+                                    
+                                    {/* Sotto-dettagli (se ci sono) */}
+                                    {typeName === "Appunti Cantiere" && (
+                                      <p className="text-[10px] text-white/40 mt-1 truncate">
+                                        {(note.field_note_items ?? [])
+                                          .filter(i => i.item_type !== "nota" && i.item_type !== "foto")
+                                          .map(i => {
+                                            if (i.item_type === "base") return `↔ ${i.value_num}${i.value_unit || "cm"}`;
+                                            if (i.item_type === "altezza") return `↕ ${i.value_num}${i.value_unit || "cm"}`;
+                                            if (i.item_type === "spessore") return `↗ ${i.value_num}${i.value_unit || "cm"}`;
+                                            if (i.item_type === "materiale") return `📦 ${i.value_text}`;
+                                            return "";
+                                          })
+                                          .filter(Boolean)
+                                          .join(" · ") || "Nessuna misura inserita"}
+                                      </p>
+                                    )}
+                                    
+                                    {typeName === "Sketch" && (
+                                      <p className="text-[10px] text-amber-400/60 mt-1">Disegno a mano libera / quotato</p>
+                                    )}
+                                    
+                                    {typeName === "Report 3D" && (
+                                      <p className="text-[10px] text-purple-400/60 mt-1">Modello 3D esterno con snapshot</p>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                {/* Anteprima grafica fluttuante (se presente) */}
+                                {previewUrl && (
+                                  <div className="w-10 h-10 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center flex-shrink-0">
+                                    <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
+                                  </div>
+                                )}
+                                
+                                {/* Azioni della nota */}
+                                <div className="flex-shrink-0">
+                                  <Link
+                                    href={`/projects/${project.id}/levels/${lvl.id}/appunti/${note.id}/modifica`}
+                                    className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white transition-all bg-white/5 border border-white/10 hover:bg-white/10"
+                                  >
+                                    {typeName === "Sketch" ? "✏️ Disegna" : typeName === "Report 3D" ? "👁 Visualizza" : "✏️ Modifica"}
+                                  </Link>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
+                      ) : (
+                        <p className="text-[11px] text-white/30 italic py-2">
+                          Nessun elemento ancora inserito. Clicca su Aggiungi in alto o usa i pulsanti rapidi sulla card.
+                        </p>
                       )}
                     </div>
                   );
@@ -521,7 +688,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
           ))
         ) : (
           <div className="p-12 text-center rounded-2xl" style={{ border: "1px dashed hsl(220 20% 24%)", background: "hsl(220 26% 14%)" }}>
-            <p className="text-sm" style={{ color: "hsl(215 15% 50%)" }}>Nessuna nota trovata per questo cantiere.</p>
+            <p className="text-sm" style={{ color: "hsl(215 15% 50%)" }}>Nessun elemento corrispondente alla ricerca.</p>
           </div>
         )}
       </div>
@@ -549,10 +716,10 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
          </div>
          
          {notesOpen && (
-           <div 
-             className="rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 transition-all"
-             style={{ border: "1px solid hsl(220 20% 20%)", background: "hsl(220 26% 12%)" }}
-           >
+            <div 
+              className="rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 transition-all"
+              style={{ border: "1px solid hsl(220 20% 20%)", background: "hsl(220 26% 12%)" }}
+            >
               <textarea 
                 value={notes}
                 onChange={(e) => {
@@ -563,19 +730,17 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                 className="w-full min-h-[80px] p-3 bg-transparent resize-y outline-none text-xs leading-relaxed"
                 style={{ color: "hsl(210 40% 90%)" }}
               />
-           </div>
+            </div>
          )}
       </div>
-      
-      {isCreatingLevel && (
-        <CreateDrawingModal
-          title="Aggiungi Nota di Cantiere"
-          submitLabel="Aggiungi"
-          defaultName=""
-          defaultPiano=""
+
+      {/* Modale Inserimento Rapido */}
+      {quickAddType && (
+        <QuickAddModal
+          type={quickAddType}
           existingPiani={existingPiani}
-          onClose={() => setIsCreatingLevel(false)}
-          onSubmit={handleCreateLevelSubmit}
+          onClose={() => setQuickAddType(null)}
+          onSubmit={handleQuickAddSubmit}
         />
       )}
     </div>

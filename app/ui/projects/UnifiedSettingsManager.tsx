@@ -1,24 +1,21 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { createNoteType, deleteNoteType, type FieldNoteType } from "@/app/actions/field-notes";
 import { createUserTag, deleteUserTag, type UserTag } from "@/app/actions/settings";
 
-type TabKey = "note_types" | "material_category" | "material_unit";
+type TabKey = "material_category" | "material_unit";
 
 interface Props {
-  initialNoteTypes: FieldNoteType[];
+  initialNoteTypes?: any[]; // Non più utilizzato ma mantenuto per compatibilità prop
   initialMaterialCategories: UserTag[];
   initialMaterialUnits: UserTag[];
 }
 
 export default function UnifiedSettingsManager({
-  initialNoteTypes,
   initialMaterialCategories,
   initialMaterialUnits,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<TabKey>("note_types");
-  const [noteTypes, setNoteTypes] = useState(initialNoteTypes);
+  const [activeTab, setActiveTab] = useState<TabKey>("material_category");
   const [materialCategories, setMaterialCategories] = useState(initialMaterialCategories);
   const [materialUnits, setMaterialUnits] = useState(initialMaterialUnits);
   const [inputValue, setInputValue] = useState("");
@@ -27,16 +24,14 @@ export default function UnifiedSettingsManager({
   const [isPending, startTransition] = useTransition();
 
   const tabs = [
-    { key: "note_types" as const, label: "Tipi Appunti", icon: "🏷️" },
-    { key: "material_category" as const, label: "Categorie Materiali", icon: "📦" },
+    { key: "material_category" as const, label: "Materiali", icon: "📦" },
     { key: "material_unit" as const, label: "Unità di Misura", icon: "📏" },
   ];
 
   const currentItems = useMemo(() => {
-    if (activeTab === "note_types") return noteTypes.map((item) => ({ id: item.id, name: item.name }));
     if (activeTab === "material_category") return materialCategories.map((item) => ({ id: item.id, name: item.name }));
     return materialUnits.map((item) => ({ id: item.id, name: item.name }));
-  }, [activeTab, noteTypes, materialCategories, materialUnits]);
+  }, [activeTab, materialCategories, materialUnits]);
 
   function handleAdd() {
     const value = inputValue.trim();
@@ -44,17 +39,6 @@ export default function UnifiedSettingsManager({
 
     setError(null);
     startTransition(async () => {
-      if (activeTab === "note_types") {
-        const res = await createNoteType(value);
-        if (res.success && res.type) {
-          setNoteTypes((prev) => [...prev, res.type!].sort((a, b) => a.name.localeCompare(b.name)));
-          setInputValue("");
-          return;
-        }
-        setError(res.error ?? "Errore durante la creazione");
-        return;
-      }
-
       const res = await createUserTag(activeTab, value);
       if (res.success && res.tag) {
         if (activeTab === "material_category") {
@@ -73,21 +57,15 @@ export default function UnifiedSettingsManager({
     setDeletingId(id);
     setError(null);
     startTransition(async () => {
-      if (activeTab === "note_types") {
-        const res = await deleteNoteType(id);
-        if (res.success) setNoteTypes((prev) => prev.filter((item) => item.id !== id));
-        else setError(res.error ?? "Errore durante l'eliminazione");
-      } else {
-        const res = await deleteUserTag(id);
-        if (res.success) {
-          if (activeTab === "material_category") {
-            setMaterialCategories((prev) => prev.filter((item) => item.id !== id));
-          } else {
-            setMaterialUnits((prev) => prev.filter((item) => item.id !== id));
-          }
+      const res = await deleteUserTag(id);
+      if (res.success) {
+        if (activeTab === "material_category") {
+          setMaterialCategories((prev) => prev.filter((item) => item.id !== id));
         } else {
-          setError(res.error ?? "Errore durante l'eliminazione");
+          setMaterialUnits((prev) => prev.filter((item) => item.id !== id));
         }
+      } else {
+        setError(res.error ?? "Errore durante l'eliminazione");
       }
       setDeletingId(null);
     });
@@ -100,7 +78,7 @@ export default function UnifiedSettingsManager({
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className="px-4 py-2 rounded-full text-sm font-semibold transition-all"
+            className="px-4 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer"
             style={{
               background: activeTab === tab.key ? "hsl(220 90% 56%)" : "hsl(220 26% 14%)",
               color: activeTab === tab.key ? "white" : "hsl(215 20% 75%)",
@@ -125,7 +103,7 @@ export default function UnifiedSettingsManager({
           <button
             onClick={handleAdd}
             disabled={!inputValue.trim() || isPending}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 cursor-pointer"
             style={{ background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" }}
           >
             Aggiungi
@@ -147,7 +125,7 @@ export default function UnifiedSettingsManager({
                 {item.name}
                 <button
                   onClick={() => handleDelete(item.id)}
-                  className="w-5 h-5 rounded-full text-xs"
+                  className="w-5 h-5 rounded-full text-xs cursor-pointer flex items-center justify-center"
                   style={{ background: "hsl(0 60% 24%)", color: "hsl(0 70% 75%)" }}
                   disabled={isPending && deletingId === item.id}
                   aria-label={`Elimina ${item.name}`}

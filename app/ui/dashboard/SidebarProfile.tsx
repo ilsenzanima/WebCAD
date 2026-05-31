@@ -96,15 +96,6 @@ export default function SidebarProfile({ userName, email, initials }: SidebarPro
           </div>
         )}
       </div>
-
-      {/* Pulsante Logout */}
-      <LogoutButton
-        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150 border border-white/5 bg-white/5 hover:bg-white/10"
-        style={{ color: "hsl(215 20% 65%)" }}
-      >
-        <span>↩</span>
-        <span>Esci dall'Account</span>
-      </LogoutButton>
     </div>
   );
 }

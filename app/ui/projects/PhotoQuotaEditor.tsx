@@ -125,6 +125,19 @@ export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuo
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Forza il focus e la selezione dell'input all'apertura per inserimento rapido da tastiera
+  useEffect(() => {
+    if (showPrompt) {
+      const timer = setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.select();
+        }
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [showPrompt]);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -371,6 +384,7 @@ export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuo
               <input
                 ref={inputRef}
                 type="text"
+                autoFocus
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => {

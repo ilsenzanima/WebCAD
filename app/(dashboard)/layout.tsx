@@ -10,9 +10,7 @@ import GlobalCalcTrigger from "@/app/ui/dashboard/GlobalCalcTrigger";
 import type { ReactNode } from "react";
 
 const navItems = [
-  { href: "/projects", icon: "📐", label: "Note di Cantiere" },
-  { href: "/sketches", icon: "🎨", label: "Sketch" },
-  { href: "/3d", icon: "📦", label: "Modellatore 3D (Test)" },
+  { href: "/projects", icon: "📐", label: "Progetti" },
 ];
 
 const bottomNavItems = [
@@ -99,6 +97,8 @@ export default async function DashboardLayout({
               style={{ color: "hsl(215 15% 40%)" }}>
               Strumenti
             </p>
+            {/* Calcolatrice Globale in cima */}
+            <GlobalCalcTrigger mode="desktop" />
             {bottomNavItems.map((item) => (
               <Link
                 key={item.href}
@@ -110,8 +110,6 @@ export default async function DashboardLayout({
                 <span>{item.label}</span>
               </Link>
             ))}
-            {/* Calcolatrice Globale fluttuante */}
-            <GlobalCalcTrigger mode="desktop" />
           </div>
 
           {/* Profilo & Notifiche di Aggiornamento */}

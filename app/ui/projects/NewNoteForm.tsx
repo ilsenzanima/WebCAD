@@ -164,6 +164,44 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   const [isCreatingType, setIsCreatingType] = useState(false);
   const typeInputRef = useRef<HTMLInputElement>(null);
 
+  // Auto-inizializzazione per Sketch e Report 3D
+  useEffect(() => {
+    if (typeFilter === "Sketch" || selectedType?.name === "Sketch") {
+      const hasNota = items.some(i => i.item_type === "nota");
+      const hasFoto = items.some(i => i.item_type === "foto");
+      if (!hasNota || !hasFoto) {
+        const newItems = [...items];
+        if (!hasNota) {
+          newItems.push({ id: crypto.randomUUID(), item_type: "nota", value_text: initialNote?.field_note_items?.find(i => i.item_type === "nota")?.value_text || "" });
+        }
+        if (!hasFoto) {
+          const canvas = document.createElement("canvas");
+          canvas.width = 1200;
+          canvas.height = 1200;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(0, 0, 1200, 1200);
+            ctx.strokeStyle = "#e2e8f0";
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 1200; i += 40) {
+              ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 1200); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(1200, i); ctx.stroke();
+            }
+          }
+          const emptySketchBase64 = canvas.toDataURL("image/png");
+          newItems.push({ id: crypto.randomUUID(), item_type: "foto", value_text: emptySketchBase64 });
+        }
+        setItems(newItems);
+      }
+    } else if (typeFilter === "Report 3D" || selectedType?.name === "Report 3D") {
+      const hasNota = items.some(i => i.item_type === "nota");
+      if (!hasNota) {
+        setItems(prev => [...prev, { id: crypto.randomUUID(), item_type: "nota", value_text: initialNote?.field_note_items?.find(i => i.item_type === "nota")?.value_text || "" }]);
+      }
+    }
+  }, [typeFilter, selectedType]);
+
   const filteredTypes = allTypes.filter((t) =>
     t.name.toLowerCase().includes(typeFilter.toLowerCase())
   );
@@ -328,6 +366,9 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   // JSX
   // ============================================
 
+  const isSketch = typeFilter === "Sketch" || selectedType?.name === "Sketch";
+  const isReport3D = typeFilter === "Report 3D" || selectedType?.name === "Report 3D";
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Errore globale */}
@@ -452,166 +493,354 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
       </div>
 
 
-      {/* ── Voci / Misure ── */}
+      {/* ── Voci / Misure o UI Specializzate ── */}
       <div
-        className="rounded-2xl p-4 space-y-3"
+        className="rounded-2xl p-4 space-y-4"
         style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
       >
-        <div className="flex items-center justify-between">
-          {/* Label rimossa per risparmiare spazio, il pulsante "+" e la calcolatrice sono autoesplicativi */}
-          <div />
-
-          {/* Pulsanti Azioni Note */}
-          <div className="flex items-center gap-2">
-            {/* Bottone Calcolatrice */}
-            <button
-              type="button"
-              onClick={() => setShowCalc(true)}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-sm transition-all"
-              style={{
-                background: "hsl(220 26% 18%)",
-                border: "1px solid hsl(220 20% 24%)",
-                boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
-              }}
-              title="Apri Calcolatrice Cantiere"
-            >
-              🧮
-            </button>
-
-            {/* Pulsante "+" con dropdown */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowItemDropdown((p) => !p)}
-                className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-lg transition-all"
-                style={{
-                  background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-                  boxShadow: "0 4px 12px hsl(220 90% 56% / 0.3)",
-                }}
-              >
-                ＋
-              </button>
-
-              {showItemDropdown && (
-                <div
-                  className="absolute right-0 mt-1 w-44 rounded-xl overflow-hidden z-50"
-                  style={{
-                    background: "hsl(220 26% 14%)",
-                    border: "1px solid hsl(220 20% 22%)",
-                    boxShadow: "0 12px 30px rgba(0,0,0,0.5)",
-                  }}
-                >
-                  {(Object.keys(ITEM_LABELS) as ItemType[]).filter(type => type !== "posizione").map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => addItem(type)}
-                      className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors"
-                      style={{
-                        color: "hsl(210 40% 90%)",
-                        borderBottom: "1px solid hsl(220 20% 18%)",
-                      }}
-                    >
-                      {ITEM_LABELS[type]}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowLivella(true);
-                      setShowItemDropdown(false);
+        {isSketch ? (
+          (() => {
+            const sketchTitleItem = items.find(i => i.item_type === "nota");
+            const sketchFotoItem = items.find(i => i.item_type === "foto");
+            return (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-white/60 uppercase mb-1">
+                    Titolo dello Sketch
+                  </label>
+                  <input
+                    type="text"
+                    value={sketchTitleItem?.value_text ?? ""}
+                    onChange={(e) => {
+                      if (sketchTitleItem) {
+                        updateItem(sketchTitleItem.id, { value_text: e.target.value });
+                      }
                     }}
-                    className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors font-bold"
+                    placeholder="es. Schema quadro elettrico, Dettaglio tubazioni..."
+                    className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
                     style={{
-                      color: "hsl(142, 60%, 75%)",
-                      borderTop: "1px solid hsl(220 20% 18%)",
+                      background: "hsl(220 32% 10%)",
+                      border: "1px solid hsl(220 20% 22%)",
+                      color: "hsl(210 40% 96%)",
                     }}
-                  >
-                    🟢 Livella a Bolla
-                  </button>
+                  />
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
 
-        {items.length === 0 && (
-          <p className="text-sm text-center py-6" style={{ color: "hsl(215 15% 40%)" }}>
-            Premi ＋ per aggiungere misure e appunti.
-          </p>
-        )}
-
-        <div className="space-y-2">
-          {items.map((item) => {
-            if (item.item_type === "posizione") {
-              // UI posizione inline: mostra il valore già scelto o il picker
-              const hasPos = !!item.value_text;
-              let posLabel = "Nessuna posizione selezionata";
-              if (hasPos) {
-                try {
-                  const { x, y } = JSON.parse(item.value_text!);
-                  posLabel = `x:${x}% y:${y}%`;
-                } catch { /* noop */ }
-              }
-              return (
-                <div key={item.id} className="rounded-xl overflow-hidden" style={{ border: "1px solid hsl(220 20% 18%)", background: "hsl(220 32% 10%)" }}>
-                  <div className="flex items-center gap-3 p-3">
-                    <span className="text-sm font-medium" style={{ color: "hsl(215 20% 65%)" }}>📍 Posizione</span>
-                    <span className="flex-1 text-xs font-mono" style={{ color: hasPos ? "hsl(220 90% 70%)" : "hsl(215 15% 40%)" }}>{posLabel}</span>
-                    {hasPos && (
-                      <button type="button" onClick={() => updateItem(item.id, { value_text: undefined })}
-                        className="text-xs px-2 py-1 rounded-lg transition-all"
-                        style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
-                      >Rimuovi</button>
-                    )}
-                    {planImageUrl ? (
-                      <button type="button" onClick={() => setPosizionePickingId(posizionePickingId === item.id ? null : item.id)}
-                        className="text-xs px-2 py-1 rounded-lg transition-all"
-                        style={{ background: "hsl(220 90% 56% / 0.15)", color: "hsl(220 90% 70%)", border: "1px solid hsl(220 90% 56% / 0.3)" }}
-                      >{posizionePickingId === item.id ? "Chiudi mappa" : (hasPos ? "Modifica" : "Seleziona")}</button>
-                    ) : (
-                      <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>Nessuna planimetria caricata</span>
-                    )}
-                    <button type="button" onClick={() => { removeItem(item.id); setPosizionePickingId(null); }}
-                      className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-all flex-shrink-0"
-                      style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
-                      title="Rimuovi voce">✕</button>
-                  </div>
-                  {/* Mappa picker inline */}
-                  {posizionePickingId === item.id && planImageUrl && (
-                    <div className="px-3 pb-3">
-                      <PlanimetriaMappa
-                        planImageUrl={planImageUrl}
-                        notes={levelNotes ?? []}
-                        pendingNoteNumber={nextNoteNumber ?? (initialNote?.note_number)}
-                        pendingPosition={hasPos ? (() => { try { return JSON.parse(item.value_text!); } catch { return null; } })() : null}
-                        onPositionSelected={(x, y) => {
-                          updateItem(item.id, { value_text: JSON.stringify({ x, y }) });
-                          setPosizionePickingId(null);
-                        }}
+                <div>
+                  <label className="block text-xs font-semibold text-white/60 uppercase mb-1">
+                    Disegno (Foglio Millimetrato)
+                  </label>
+                  
+                  {sketchFotoItem?.value_text ? (
+                    <div className="relative group rounded-2xl overflow-hidden border border-white/10 bg-white p-2.5 flex flex-col items-center gap-4">
+                      <img
+                        src={sketchFotoItem.value_text}
+                        alt="Sketch"
+                        className="max-h-[350px] object-contain rounded-lg"
                       />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (sketchFotoItem) {
+                            setEditingFotoId(sketchFotoItem.id);
+                            setEditingFotoUrl(sketchFotoItem.value_text!);
+                          }
+                        }}
+                        className="px-6 py-2.5 rounded-xl text-xs font-bold text-white transition-all bg-amber-500 hover:bg-amber-600 active:scale-95 flex items-center gap-2 cursor-pointer"
+                      >
+                        📐 Apri Lavagna / Disegna
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center text-xs text-white/40 italic">
+                      Generazione area da disegno in corso...
                     </div>
                   )}
                 </div>
-              );
-            }
-            return (
-              <ItemRow
-                key={item.id}
-                item={item}
-                onChange={(changes) => updateItem(item.id, changes)}
-                onRemove={() => removeItem(item.id)}
-                catalogMaterials={catalogMaterials}
-                onEditFoto={(id, url) => {
-                  setEditingFotoId(id);
-                  setEditingFotoUrl(url);
-                }}
-                onOpen3DModel={setActiveModel3DUrl}
-                lastAddedId={lastAddedId}
-              />
+              </div>
             );
-          })}
-        </div>
+          })()
+        ) : isReport3D ? (
+          (() => {
+            const reportTitleItem = items.find(i => i.item_type === "nota");
+            const model3dItem = items.find(i => i.item_type === "foto" && is3DModelUrl(i.value_text));
+            const snapshotItem = items.find(i => i.item_type === "foto" && !is3DModelUrl(i.value_text));
+            return (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-white/60 uppercase mb-1">
+                    Titolo del Report 3D
+                  </label>
+                  <input
+                    type="text"
+                    value={reportTitleItem?.value_text ?? ""}
+                    onChange={(e) => {
+                      if (reportTitleItem) {
+                        updateItem(reportTitleItem.id, { value_text: e.target.value });
+                      }
+                    }}
+                    placeholder="es. Assieme condotte piano 1, Vista assonometrica..."
+                    className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
+                    style={{
+                      background: "hsl(220 32% 10%)",
+                      border: "1px solid hsl(220 20% 22%)",
+                      color: "hsl(210 40% 96%)",
+                    }}
+                  />
+                </div>
+
+                {!model3dItem ? (
+                  <div className="p-6 rounded-2xl border border-dashed border-white/20 bg-white/[0.02] text-center space-y-3">
+                    <div className="text-3xl">📦</div>
+                    <div className="text-xs font-bold text-white">Carica un Modello 3D (Fusion 360 / FreeCAD)</div>
+                    <p className="text-[10px] text-white/40 max-w-md mx-auto">
+                      Supporta file in formato .glb o .gltf. Una volta caricato potrai ruotarlo e scattare foto quotate.
+                    </p>
+                    <input
+                      type="file"
+                      accept=".glb,.gltf"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (evt) => {
+                          const resultUrl = evt.target?.result as string;
+                          const newItems = [...items];
+                          const existingModelIndex = newItems.findIndex(i => i.item_type === "foto" && is3DModelUrl(i.value_text));
+                          if (existingModelIndex > -1) {
+                            newItems[existingModelIndex].value_text = resultUrl;
+                          } else {
+                            newItems.push({ id: crypto.randomUUID(), item_type: "foto", value_text: resultUrl });
+                          }
+                          setItems(newItems);
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                      className="text-xs mx-auto text-white/60 cursor-pointer"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-semibold text-white/60 uppercase">
+                          Modellatore 3D Attivo
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            removeItem(model3dItem.id);
+                          }}
+                          className="text-[10px] text-red-400 hover:text-red-300 font-bold cursor-pointer"
+                        >
+                          Sostituisci Modello 3D
+                        </button>
+                      </div>
+
+                      <div className="rounded-2xl overflow-hidden border border-white/10">
+                        <ModelViewer
+                          modelUrl={model3dItem.value_text}
+                          onSnapshotTaken={(newSnapshot) => {
+                            const newItems = [...items];
+                            const existingSnapshotIndex = newItems.findIndex(i => i.item_type === "foto" && !is3DModelUrl(i.value_text));
+                            if (existingSnapshotIndex > -1) {
+                              newItems[existingSnapshotIndex].value_text = newSnapshot;
+                            } else {
+                              newItems.push({ id: crypto.randomUUID(), item_type: "foto", value_text: newSnapshot });
+                            }
+                            setItems(newItems);
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {snapshotItem?.value_text && (
+                      <div className="p-4 rounded-2xl border border-white/10 bg-white/[0.015] space-y-2 animate-fade-in">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-white">📸 Snapshot Quotato Attivo</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (snapshotItem) {
+                                setEditingFotoId(snapshotItem.id);
+                                setEditingFotoUrl(snapshotItem.value_text!);
+                              }
+                            }}
+                            className="text-[10px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            ✏️ Modifica Quote Snapshot
+                          </button>
+                        </div>
+                        <div className="relative group rounded-xl overflow-hidden border border-white/5 bg-white p-2 max-w-sm mx-auto">
+                          <img
+                            src={snapshotItem.value_text}
+                            alt="Snapshot 3D"
+                            className="max-h-[220px] object-contain rounded"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <div />
+
+              {/* Pulsanti Azioni Note */}
+              <div className="flex items-center gap-2">
+                {/* Bottone Calcolatrice */}
+                <button
+                  type="button"
+                  onClick={() => setShowCalc(true)}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-sm transition-all"
+                  style={{
+                    background: "hsl(220 26% 18%)",
+                    border: "1px solid hsl(220 20% 24%)",
+                    boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
+                  }}
+                  title="Apri Calcolatrice Cantiere"
+                >
+                  🧮
+                </button>
+
+                {/* Pulsante "+" con dropdown */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowItemDropdown((p) => !p)}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-lg transition-all"
+                    style={{
+                      background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+                      boxShadow: "0 4px 12px hsl(220 90% 56% / 0.3)",
+                    }}
+                  >
+                    ＋
+                  </button>
+
+                  {showItemDropdown && (
+                    <div
+                      className="absolute right-0 mt-1 w-44 rounded-xl overflow-hidden z-50"
+                      style={{
+                        background: "hsl(220 26% 14%)",
+                        border: "1px solid hsl(220 20% 22%)",
+                        boxShadow: "0 12px 30px rgba(0,0,0,0.5)",
+                      }}
+                    >
+                      {(Object.keys(ITEM_LABELS) as ItemType[]).filter(type => type !== "posizione").map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          onClick={() => addItem(type)}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors"
+                          style={{
+                            color: "hsl(210 40% 90%)",
+                            borderBottom: "1px solid hsl(220 20% 18%)",
+                          }}
+                        >
+                          {ITEM_LABELS[type]}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowLivella(true);
+                          setShowItemDropdown(false);
+                        }}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors font-bold"
+                        style={{
+                          color: "hsl(142, 60%, 75%)",
+                          borderTop: "1px solid hsl(220 20% 18%)",
+                        }}
+                      >
+                        🟢 Livella a Bolla
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {items.length === 0 && (
+              <p className="text-sm text-center py-6" style={{ color: "hsl(215 15% 40%)" }}>
+                Premi ＋ per aggiungere misure e appunti.
+              </p>
+            )}
+
+            <div className="space-y-2">
+              {items.map((item) => {
+                if (item.item_type === "posizione") {
+                  const hasPos = !!item.value_text;
+                  let posLabel = "Nessuna posizione selezionata";
+                  if (hasPos) {
+                    try {
+                      const { x, y } = JSON.parse(item.value_text!);
+                      posLabel = `x:${x}% y:${y}%`;
+                    } catch { /* noop */ }
+                  }
+                  return (
+                    <div key={item.id} className="rounded-xl overflow-hidden" style={{ border: "1px solid hsl(220 20% 18%)", background: "hsl(220 32% 10%)" }}>
+                      <div className="flex items-center gap-3 p-3">
+                        <span className="text-sm font-medium" style={{ color: "hsl(215 20% 65%)" }}>📍 Posizione</span>
+                        <span className="flex-1 text-xs font-mono" style={{ color: hasPos ? "hsl(220 90% 70%)" : "hsl(215 15% 40%)" }}>{posLabel}</span>
+                        {hasPos && (
+                          <button type="button" onClick={() => updateItem(item.id, { value_text: undefined })}
+                            className="text-xs px-2 py-1 rounded-lg transition-all cursor-pointer"
+                            style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
+                          >Rimuovi</button>
+                        )}
+                        {planImageUrl ? (
+                          <button type="button" onClick={() => setPosizionePickingId(posizionePickingId === item.id ? null : item.id)}
+                            className="text-xs px-2 py-1 rounded-lg transition-all cursor-pointer"
+                            style={{ background: "hsl(220 90% 56% / 0.15)", color: "hsl(220 90% 70%)", border: "1px solid hsl(220 90% 56% / 0.3)" }}
+                          >{posizionePickingId === item.id ? "Chiudi mappa" : (hasPos ? "Modifica" : "Seleziona")}</button>
+                        ) : (
+                          <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>Nessuna planimetria caricata</span>
+                        )}
+                        <button type="button" onClick={() => { removeItem(item.id); setPosizionePickingId(null); }}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-all flex-shrink-0 cursor-pointer"
+                          style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
+                          title="Rimuovi voce">✕</button>
+                      </div>
+                      {posizionePickingId === item.id && planImageUrl && (
+                        <div className="px-3 pb-3">
+                          <PlanimetriaMappa
+                            planImageUrl={planImageUrl}
+                            notes={levelNotes ?? []}
+                            pendingNoteNumber={nextNoteNumber ?? (initialNote?.note_number)}
+                            pendingPosition={hasPos ? (() => { try { return JSON.parse(item.value_text!); } catch { return null; } })() : null}
+                            onPositionSelected={(x, y) => {
+                              updateItem(item.id, { value_text: JSON.stringify({ x, y }) });
+                              setPosizionePickingId(null);
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                return (
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    onChange={(changes) => updateItem(item.id, changes)}
+                    onRemove={() => removeItem(item.id)}
+                    catalogMaterials={catalogMaterials}
+                    onEditFoto={(id, url) => {
+                      setEditingFotoId(id);
+                      setEditingFotoUrl(url);
+                    }}
+                    onOpen3DModel={setActiveModel3DUrl}
+                    lastAddedId={lastAddedId}
+                  />
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── Pulsanti ── */}

@@ -52,7 +52,7 @@ interface OfflineState {
   deleteProjectOptimistic: (projectId: string) => void;
   addLevelOptimistic: (tempId: string, projectId: string, name: string, elevationZ: number, drawingType: "2d_wall" | "3d_box", piano: string) => void;
   toggleLevelCompletedOptimistic: (levelId: string, projectId: string, completed: boolean) => void;
-  saveFieldNoteItemsOptimistic: (noteId: string, projectId: string, levelId: string, items: Omit<FieldNoteItem, "id">[]) => void;
+  saveFieldNoteItemsOptimistic: (noteId: string, projectId: string, levelId: string, items: Omit<FieldNoteItem, "id">[], typeName?: string) => void;
   deleteFieldNoteOptimistic: (noteId: string, projectId: string) => void;
   updateLevelNoteTextOptimistic: (levelId: string, text: string) => void;
 
@@ -246,7 +246,7 @@ export const useOfflineStore = create<OfflineState>()(
         }
       },
 
-      saveFieldNoteItemsOptimistic: (noteId, projectId, levelId, items) => {
+      saveFieldNoteItemsOptimistic: (noteId, projectId, levelId, items, typeName) => {
         const updatedItems: FieldNoteItem[] = items.map((item, idx) => ({
           id: generateTempId(),
           ...item,
@@ -259,6 +259,7 @@ export const useOfflineStore = create<OfflineState>()(
             ? {
                 ...existingNote,
                 field_note_items: updatedItems,
+                type_name: typeName ?? existingNote.type_name ?? "Appunti Cantiere",
                 updated_at: new Date().toISOString(),
               }
             : {
@@ -267,7 +268,7 @@ export const useOfflineStore = create<OfflineState>()(
                 level_id: levelId,
                 note_number: 999, // Segnaposto offline
                 type_id: null,
-                type_name: "Appunti Cantiere",
+                type_name: typeName ?? "Appunti Cantiere",
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 field_note_items: updatedItems,
@@ -285,7 +286,7 @@ export const useOfflineStore = create<OfflineState>()(
           const op: SyncOperation = {
             id: generateTempId(),
             action: "SAVE_NOTE_ITEMS",
-            payload: { noteId, projectId, levelId, items },
+            payload: { noteId, projectId, levelId, items, typeName: typeName ?? "Appunti Cantiere" },
             timestamp: Date.now(),
           };
           set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
@@ -503,7 +504,7 @@ export const useOfflineStore = create<OfflineState>()(
                       level_id: realLvlId,
                       user_id: (await supabase.auth.getUser()).data.user?.id,
                       note_number: numData || 1,
-                      type_name: "Appunti Cantiere",
+                      type_name: resolvedPayload.typeName || "Appunti Cantiere",
                     })
                     .select("id")
                     .single();
