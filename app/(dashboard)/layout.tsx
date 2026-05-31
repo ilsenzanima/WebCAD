@@ -12,6 +12,7 @@ import type { ReactNode } from "react";
 const navItems = [
   { href: "/projects", icon: "📐", label: "Note di Cantiere" },
   { href: "/sketches", icon: "🎨", label: "Sketch" },
+  { href: "/3d", icon: "📦", label: "Modellatore 3D (Test)" },
 ];
 
 const bottomNavItems = [

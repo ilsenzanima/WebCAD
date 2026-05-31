@@ -463,7 +463,8 @@ export default function SketchEditorClient({
       if (isShapeDetectedRef.current && detectedShapeRef.current) {
         // Se c'è una forma attiva rilevata, usiamo le due dita per spostarla (Drag Shape)
         isZoomingRef.current = false;
-        isDrawingRef.current = false;
+        // Manteniamo isDrawingRef.current a true per far sì che al rilascio delle dita
+        // la forma venga salvata correttamente sul canvas in modo definitivo!
         isDraggingShapeRef.current = true;
 
         const t1 = e.touches[0];
@@ -506,6 +507,10 @@ export default function SketchEditorClient({
     ) {
       e.preventDefault();
 
+      const tempCanvas = tempCanvasRef.current;
+      if (!tempCanvas) return;
+      const rect = tempCanvas.getBoundingClientRect();
+
       const t1 = e.touches[0];
       const t2 = e.touches[1];
 
@@ -516,9 +521,14 @@ export default function SketchEditorClient({
       const screenDx = centerX - startShapeCenterRef.current.x;
       const screenDy = centerY - startShapeCenterRef.current.y;
 
-      // Spostamento logico diviso per scala zoom del canvas
-      const logicalDx = screenDx / scale;
-      const logicalDy = screenDy / scale;
+      // Calcoliamo il fattore di scala reale (pixel logici del canvas / pixel CSS a schermo)
+      // LOGICAL_WIDTH = 1200, LOGICAL_HEIGHT = 1600.
+      const scaleX = LOGICAL_WIDTH / rect.width;
+      const scaleY = LOGICAL_HEIGHT / rect.height;
+
+      // Spostamento logico calibrato in base alla densità di visualizzazione e allo zoom del foglio
+      const logicalDx = (screenDx * scaleX) / scale;
+      const logicalDy = (screenDy * scaleY) / scale;
 
       const shape = detectedShapeRef.current;
       const initParams = initialShapeParamsRef.current;

@@ -19,6 +19,7 @@ export default function MobileHeaderMenu({ initials }: MobileHeaderMenuProps) {
   const menuItems = [
     { href: "/projects", icon: "📐", label: "Note di Cantiere" },
     { href: "/sketches", icon: "🎨", label: "Sketch" },
+    { href: "/3d", icon: "📦", label: "Modellatore 3D (Test)" },
     { href: "/settings", icon: "⚙️", label: "Impostazioni" },
   ];
 
