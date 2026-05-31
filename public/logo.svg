@@ -1,196 +1,111 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <!-- Gradienti per lo sfondo e il personaggio -->
+    <!-- Filtro bagliore (Glow) per la fiamma interna -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <!-- Sfondo profondo sfumato -->
     <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%" fx="30%" fy="30%">
-      <stop offset="0%" stop-color="#4a6984" />
-      <stop offset="70%" stop-color="#2a3d4f" />
-      <stop offset="100%" stop-color="#1b2836" />
+      <stop offset="0%" stop-color="#111827" />
+      <stop offset="70%" stop-color="#0b0f19" />
+      <stop offset="100%" stop-color="#030712" />
     </radialGradient>
-    
+
+    <!-- Gradiente per la fiamma principale -->
     <linearGradient id="fireGrad" x1="0%" y1="100%" x2="0%" y2="0%">
-      <stop offset="0%" stop-color="#ff3c00" />
-      <stop offset="50%" stop-color="#ff9000" />
-      <stop offset="100%" stop-color="#ffdb00" />
+      <stop offset="0%" stop-color="#dc2626" />
+      <stop offset="40%" stop-color="#ea580c" />
+      <stop offset="85%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#fef08a" />
     </linearGradient>
 
+    <!-- Gradiente per il cuore della fiamma -->
     <linearGradient id="innerFireGrad" x1="0%" y1="100%" x2="0%" y2="0%">
-      <stop offset="0%" stop-color="#d82c00" />
-      <stop offset="100%" stop-color="#ff7c00" />
+      <stop offset="0%" stop-color="#ea580c" stop-opacity="0.2" />
+      <stop offset="100%" stop-color="#fef08a" stop-opacity="0.9" />
     </linearGradient>
 
-    <linearGradient id="stoneFront" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#cbd5e1" />
-      <stop offset="100%" stop-color="#94a3b8" />
-    </linearGradient>
-
-    <linearGradient id="stoneTop" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#f1f5f9" />
-      <stop offset="100%" stop-color="#cbd5e1" />
-    </linearGradient>
-
-    <linearGradient id="stoneSide" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#94a3b8" />
-      <stop offset="100%" stop-color="#64748b" />
-    </linearGradient>
-
-    <linearGradient id="pencilWood" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#eab308" />
-      <stop offset="50%" stop-color="#facc15" />
-      <stop offset="100%" stop-color="#ca8a04" />
-    </linearGradient>
-    
-    <linearGradient id="tapeBody" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#334155" />
-      <stop offset="100%" stop-color="#0f172a" />
-    </linearGradient>
-
-    <linearGradient id="tapeYellow" x1="0%" y1="0%" x2="0%" y2="100%">
-      <stop offset="0%" stop-color="#fef08a" />
-      <stop offset="100%" stop-color="#facc15" />
+    <!-- Gradiente per il cubo CAD wireframe -->
+    <linearGradient id="wireframeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#0284c7" />
+      <stop offset="100%" stop-color="#2563eb" />
     </linearGradient>
   </defs>
 
   <!-- 1. Cerchio di sfondo -->
-  <circle cx="256" cy="256" r="230" fill="url(#bgGrad)" stroke="#16202b" stroke-width="12" />
+  <circle cx="256" cy="256" r="230" fill="url(#bgGrad)" stroke="#1e293b" stroke-width="8" />
 
-  <!-- Ombra sotto il personaggio -->
-  <ellipse cx="256" cy="425" rx="100" ry="18" fill="#0f172a" opacity="0.4" />
+  <!-- 2. Griglia di precisione CAD (Sfondo tecnico) -->
+  <!-- Cerchi concentrici di riferimento -->
+  <circle cx="256" cy="256" r="185" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="6,6" opacity="0.15" />
+  <circle cx="256" cy="256" r="130" fill="none" stroke="#38bdf8" stroke-width="1" stroke-dasharray="4,4" opacity="0.12" />
+  <circle cx="256" cy="256" r="75" fill="none" stroke="#38bdf8" stroke-width="0.75" stroke-dasharray="2,2" opacity="0.1" />
 
-  <!-- 2. Gambe e Piedi -->
-  <!-- Gamba Sinistra (vista da noi a sinistra) -->
-  <path d="M210 370 L195 425 H175 C165 425 160 415 165 410 L180 370 Z" fill="#94a3b8" stroke="#1e293b" stroke-width="6" stroke-linejoin="round" />
-  <!-- Stivale Sinistro -->
-  <path d="M195 410 L190 428 H155 C145 428 145 415 155 410 Z" fill="#e2e8f0" stroke="#1e293b" stroke-width="6" stroke-linejoin="round" />
+  <!-- Assi principali cartesiani -->
+  <line x1="50" y1="256" x2="462" y2="256" stroke="#38bdf8" stroke-width="1" opacity="0.15" />
+  <line x1="256" y1="50" x2="256" y2="462" stroke="#38bdf8" stroke-width="1" opacity="0.15" />
 
-  <!-- Gamba Destra (vista da noi a destra) -->
-  <path d="M302 370 L317 425 H337 C347 425 352 415 347 410 L332 370 Z" fill="#64748b" stroke="#1e293b" stroke-width="6" stroke-linejoin="round" />
-  <!-- Stivale Destro -->
-  <path d="M317 410 L322 428 H357 C367 428 367 415 357 410 Z" fill="#cbd5e1" stroke="#1e293b" stroke-width="6" stroke-linejoin="round" />
+  <!-- Assi Isometrici a 30 e 150 gradi -->
+  <line x1="75" y1="151" x2="437" y2="361" stroke="#38bdf8" stroke-width="0.75" stroke-dasharray="3,3" opacity="0.15" />
+  <line x1="75" y1="361" x2="437" y2="151" stroke="#38bdf8" stroke-width="0.75" stroke-dasharray="3,3" opacity="0.15" />
 
+  <!-- Elementi di misura geometrici di sfondo (frecce e nodi) -->
+  <circle cx="256" cy="75" r="4" fill="#38bdf8" opacity="0.4" />
+  <circle cx="256" cy="437" r="4" fill="#38bdf8" opacity="0.4" />
+  <circle cx="75" cy="256" r="4" fill="#38bdf8" opacity="0.4" />
+  <circle cx="462" cy="256" r="4" fill="#38bdf8" opacity="0.4" />
 
-  <!-- 3. Braccia e Strumenti (dietro il corpo) -->
-  <!-- Braccio Sinistro (tiene la matita) -->
-  <path d="M175 290 Q120 280 145 250" fill="none" stroke="#94a3b8" stroke-width="24" stroke-linecap="round" />
-  <!-- Mano/Guanto Sinistro (Arancione) -->
-  <circle cx="145" cy="245" r="16" fill="#f97316" stroke="#1e293b" stroke-width="5" />
-  <!-- Dita Guanto Sinistro -->
-  <circle cx="152" cy="235" r="8" fill="#f97316" stroke="#1e293b" stroke-width="4" />
-  <circle cx="137" cy="245" r="8" fill="#f97316" stroke="#1e293b" stroke-width="4" />
+  <!-- 3. Cubo CAD Wireframe 3D Isometrico (Proiezione tecnica) -->
+  <!-- Linee posteriori del cubo (tratteggiate per mostrare la trasparenza 3D) -->
+  <polygon points="152,312 256,260 360,312" fill="none" stroke="url(#wireframeGrad)" stroke-width="2" stroke-dasharray="4,4" opacity="0.4" />
+  <line x1="256" y1="140" x2="256" y2="260" stroke="url(#wireframeGrad)" stroke-width="2" stroke-dasharray="4,4" opacity="0.4" />
 
-  <!-- La MATITA -->
-  <g transform="translate(115, 130) rotate(-15)">
-    <!-- Fusto matita -->
-    <rect x="12" y="25" width="18" height="100" fill="url(#pencilWood)" stroke="#1e293b" stroke-width="5" rx="3" />
-    <!-- Righe fusto matita -->
-    <line x1="18" y1="25" x2="18" y2="125" stroke="#ca8a04" stroke-width="2" />
-    <line x1="24" y1="25" x2="24" y2="125" stroke="#fef08a" stroke-width="2" />
-    <!-- Legno temperato punta -->
-    <polygon points="12,125 30,125 21,142" fill="#fed7aa" stroke="#1e293b" stroke-width="5" />
-    <!-- Mina grafite -->
-    <polygon points="17,134 25,134 21,142" fill="#334155" />
-    <!-- Colletto metallo gomma -->
-    <rect x="12" y="15" width="18" height="10" fill="#94a3b8" stroke="#1e293b" stroke-width="5" />
-    <!-- Gomma rosa -->
-    <rect x="12" y="5" width="18" height="10" fill="#f43f5e" stroke="#1e293b" stroke-width="5" rx="2" />
-  </g>
+  <!-- 4. La FIAMMA INTERNA (Elemento Antincendio Centrale) -->
+  <!-- Riflesso e alone luminoso dietro la fiamma -->
+  <ellipse cx="256" cy="265" rx="55" ry="75" fill="#ea580c" opacity="0.25" filter="url(#glow)" />
 
+  <!-- Fiamma Esterna Incandescente -->
+  <path d="M256,310 
+           C290,310 310,290 310,260 
+           C310,225 285,205 285,170 
+           C285,170 270,195 256,200 
+           C242,195 227,170 227,170 
+           C227,205 202,225 202,260 
+           C202,290 222,310 256,310 Z" 
+        fill="url(#fireGrad)" 
+        filter="url(#glow)" />
 
-  <!-- Braccio Destro (tiene il metro) -->
-  <path d="M337 290 Q390 280 375 250" fill="none" stroke="#64748b" stroke-width="24" stroke-linecap="round" />
-  <!-- Mano/Guanto Destro (Arancione) -->
-  <circle cx="375" cy="245" r="16" fill="#ea580c" stroke="#1e293b" stroke-width="5" />
-  <!-- Dita Guanto Destro -->
-  <circle cx="367" cy="235" r="8" fill="#ea580c" stroke="#1e293b" stroke-width="4" />
-  <circle cx="383" cy="245" r="8" fill="#ea580c" stroke="#1e293b" stroke-width="4" />
+  <!-- Cuore della Fiamma (Interno luminoso) -->
+  <path d="M256,300 
+           C278,300 292,285 292,263 
+           C292,238 275,223 275,195 
+           C275,195 265,213 256,217 
+           C247,213 237,195 237,195 
+           C237,223 220,238 220,263 
+           C220,285 234,300 256,300 Z" 
+        fill="url(#innerFireGrad)" />
 
-  <!-- Il METRO A NASTRO (Flessometro) -->
-  <g transform="translate(372, 175)">
-    <!-- Nastro esteso verso il basso -->
-    <rect x="-10" y="70" width="12" height="140" fill="url(#tapeYellow)" stroke="#1e293b" stroke-width="5" rx="2" />
-    <!-- Tacche sul nastro -->
-    <line x1="-10" y1="90" x2="-2" y2="90" stroke="#1e293b" stroke-width="2" />
-    <line x1="-10" y1="110" x2="-5" y2="110" stroke="#1e293b" stroke-width="1.5" />
-    <line x1="-10" y1="130" x2="-2" y2="130" stroke="#1e293b" stroke-width="2" />
-    <line x1="-10" y1="150" x2="-5" y2="150" stroke="#1e293b" stroke-width="1.5" />
-    <line x1="-10" y1="170" x2="-2" y2="170" stroke="#1e293b" stroke-width="2" />
-    <line x1="-10" y1="190" x2="-5" y2="190" stroke="#1e293b" stroke-width="1.5" />
-    <!-- Numeri stilizzati rossi sul nastro -->
-    <circle cx="-4" cy="100" r="2" fill="#ef4444" />
-    <circle cx="-4" cy="140" r="2" fill="#ef4444" />
-    <circle cx="-4" cy="180" r="2" fill="#ef4444" />
-    <!-- Gancio metallico finale -->
-    <path d="M-10 210 H-2 V215 H-12 V210 Z" fill="#94a3b8" stroke="#1e293b" stroke-width="3" />
-
-    <!-- Corpo del flessometro -->
-    <rect x="-5" y="30" width="48" height="48" rx="12" fill="url(#tapeBody)" stroke="#1e293b" stroke-width="5" />
-    <!-- Dettaglio giallo del flessometro -->
-    <path d="M5 30 H25 C33 30 38 35 38 43 V48 H5 Z" fill="#eab308" />
-    <!-- Clip metallica nera -->
-    <rect x="12" y="44" width="14" height="20" rx="3" fill="#64748b" stroke="#1e293b" stroke-width="3" />
-    <!-- Pulsante blocco nero -->
-    <rect x="8" y="23" width="12" height="8" rx="2" fill="#0f172a" stroke="#1e293b" stroke-width="2" />
-  </g>
-
-
-  <!-- 4. CORPO (Cubo di Pietra 3D) -->
-  <!-- Faccia Superiore del Cubo -->
-  <polygon points="180,225 240,185 362,185 302,225" fill="url(#stoneTop)" stroke="#1e293b" stroke-width="8" stroke-linejoin="round" />
+  <!-- 5. Linee anteriori principali del Cubo (Wireframe solido) -->
+  <!-- Faccia superiore -->
+  <polygon points="256,140 360,200 256,260 152,200" fill="none" stroke="url(#wireframeGrad)" stroke-width="4.5" stroke-linejoin="round" />
   
-  <!-- Faccia Laterale Destra del Cubo -->
-  <polygon points="302,225 362,185 362,305 302,345" fill="url(#stoneSide)" stroke="#1e293b" stroke-width="8" stroke-linejoin="round" />
-  
-  <!-- Faccia Frontale del Cubo -->
-  <rect x="180" y="225" width="122" height="120" rx="12" fill="url(#stoneFront)" stroke="#1e293b" stroke-width="8" stroke-linejoin="round" />
+  <!-- Spigoli verticali anteriori -->
+  <line x1="152" y1="200" x2="152" y2="312" stroke="url(#wireframeGrad)" stroke-width="4.5" stroke-linecap="round" />
+  <line x1="360" y1="200" x2="360" y2="312" stroke="url(#wireframeGrad)" stroke-width="4.5" stroke-linecap="round" />
+  <line x1="256" y1="260" x2="256" y2="372" stroke="url(#wireframeGrad)" stroke-width="5" stroke-linecap="round" />
 
-  <!-- Dettagli crepe/pietra sul cubo per texture -->
-  <path d="M195 245 L205 240 L200 250" fill="none" stroke="#64748b" stroke-width="3" opacity="0.7" />
-  <path d="M280 325 L290 320 M290 320 L285 330" fill="none" stroke="#475569" stroke-width="3" opacity="0.7" />
-  <path d="M335 240 L345 235" fill="none" stroke="#475569" stroke-width="3" opacity="0.7" />
+  <!-- Faccia inferiore (bordi anteriori) -->
+  <path d="M152,312 L256,372 L360,312" fill="none" stroke="url(#wireframeGrad)" stroke-width="4.5" stroke-linejoin="round" />
 
-  <!-- SCUDO CENTRALIZZATO SUL CORPO -->
-  <g transform="translate(216, 255)">
-    <!-- Profilo Scudo -->
-    <path d="M5 5 H45 C45 5 48 25 25 45 C2 25 5 5 5 5 Z" fill="#cbd5e1" stroke="#1e293b" stroke-width="5" stroke-linejoin="round" />
-    <path d="M9 9 H41 C41 9 43 23 25 39 C7 23 9 9 9 9 Z" fill="#94a3b8" />
-    <!-- Fiamma interna allo scudo -->
-    <path d="M25 32 C29 32 32 28 32 24 C32 17 25 12 25 12 C25 12 18 17 18 24 C18 28 21 32 25 32 Z" fill="url(#innerFireGrad)" />
-  </g>
-
-
-  <!-- 5. TESTA (Fiammella) -->
-  <!-- Ombra della testa sul cubo -->
-  <ellipse cx="241" cy="225" rx="45" ry="10" fill="#475569" opacity="0.5" />
-
-  <!-- Sagoma Fiamma (Testa) -->
-  <g transform="translate(191, 85)">
-    <!-- Profilo Fiamma Esterna -->
-    <path d="M50 145 C90 145 105 115 100 85 C95 55 75 35 75 10 C75 10 60 40 45 45 C30 50 10 70 5 95 C-2 118 10 145 50 145 Z" fill="url(#fireGrad)" stroke="#1e293b" stroke-width="8" stroke-linejoin="round" />
-    
-    <!-- Fiamma Interna per profondità -->
-    <path d="M50 135 C78 135 88 115 85 95 C82 75 68 60 68 40 Q60 60 50 65 Q40 70 28 85 C18 100 22 135 50 135 Z" fill="#facc15" opacity="0.8" />
-    
-    <!-- Occhi grandi stile cartone animato -->
-    <!-- Occhio Sinistro -->
-    <ellipse cx="32" cy="100" rx="11" ry="15" fill="#0f172a" />
-    <!-- Luce dell'occhio sinistro -->
-    <circle cx="29" cy="94" r="4.5" fill="#ffffff" />
-    <circle cx="35" cy="106" r="2" fill="#ffffff" />
-
-    <!-- Occhio Destro -->
-    <ellipse cx="68" cy="100" rx="11" ry="15" fill="#0f172a" />
-    <!-- Luce dell'occhio destro -->
-    <circle cx="65" cy="94" r="4.5" fill="#ffffff" />
-    <circle cx="71" cy="106" r="2" fill="#ffffff" />
-
-    <!-- Sopracciglia simpatiche -->
-    <path d="M22 80 Q32 75 38 83" fill="none" stroke="#0f172a" stroke-width="4.5" stroke-linecap="round" />
-    <path d="M78 80 Q68 75 62 83" fill="none" stroke="#0f172a" stroke-width="4.5" stroke-linecap="round" />
-
-    <!-- Guance rosse sfumate -->
-    <ellipse cx="18" cy="115" rx="8" ry="5" fill="#ef4444" opacity="0.6" />
-    <ellipse cx="82" cy="115" rx="8" ry="5" fill="#ef4444" opacity="0.6" />
-
-    <!-- Bocca sorridente felice -->
-    <path d="M43 118 Q50 125 57 118" fill="none" stroke="#0f172a" stroke-width="5.5" stroke-linecap="round" />
-  </g>
+  <!-- Piccoli punti/nodi di ancoraggio tipici del disegno CAD 3D -->
+  <circle cx="256" cy="140" r="5" fill="#ffffff" stroke="#0284c7" stroke-width="1.5" />
+  <circle cx="360" cy="200" r="5" fill="#ffffff" stroke="#0284c7" stroke-width="1.5" />
+  <circle cx="152" cy="200" r="5" fill="#ffffff" stroke="#0284c7" stroke-width="1.5" />
+  <circle cx="256" cy="260" r="5" fill="#ffffff" stroke="#0284c7" stroke-width="1.5" />
+  <circle cx="152" cy="312" r="5" fill="#ffffff" stroke="#0284c7" stroke-width="1.5" />
+  <circle cx="360" cy="312" r="5" fill="#ffffff" stroke="#0284c7" stroke-width="1.5" />
+  <circle cx="256" cy="372" r="6" fill="#ffffff" stroke="#0284c7" stroke-width="2" />
 </svg>
