@@ -13,6 +13,11 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
   const [beta, setBeta] = useState<number>(0);
   const [gamma, setGamma] = useState<number>(0);
   
+  // Stati per la fotocamera posteriore in background
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [useCamera, setUseCamera] = useState<boolean>(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
   // Offsets per la calibrazione
   const [offsetBeta, setOffsetBeta] = useState<number>(0);
   const [offsetGamma, setOffsetGamma] = useState<number>(0);
@@ -29,6 +34,36 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
 
   // Riferimento per vibrare una sola volta quando entra in bolla
   const lastAlignedRef = useRef(false);
+
+  // Sincronizzazione Stream Video Fotocamera Posteriore
+  useEffect(() => {
+    let activeStream: MediaStream | null = null;
+
+    async function startCamera() {
+      if (!useCamera || typeof navigator === "undefined" || !navigator.mediaDevices) return;
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: false,
+        });
+        activeStream = mediaStream;
+        setStream(mediaStream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+      } catch (err) {
+        console.error("Errore accesso fotocamera posteriore:", err);
+      }
+    }
+
+    startCamera();
+
+    return () => {
+      if (activeStream) {
+        activeStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [useCamera]);
 
   useEffect(() => {
     let nativeListener: any = null;
@@ -145,26 +180,58 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex flex-col items-center justify-between p-6"
-      style={{ background: "rgba(10, 15, 30, 0.95)", backdropFilter: "blur(8px)" }}
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-between p-6 transition-all duration-300"
+      style={{ 
+        background: useCamera ? "rgba(10, 15, 30, 0.5)" : "rgba(10, 15, 30, 0.96)", 
+        backdropFilter: useCamera ? "none" : "blur(8px)" 
+      }}
     >
+      {/* Stream Video Fotocamera Posteriore */}
+      {useCamera && (
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-300"
+          style={{ zIndex: 0, opacity: 0.65 }}
+        />
+      )}
+
       {/* Intestazione */}
-      <div className="w-full max-w-md flex items-center justify-between py-2 border-b border-white/10">
+      <div className="w-full max-w-md flex items-center justify-between py-2 border-b border-white/10 relative z-10">
         <div>
-          <h3 className="text-base font-bold text-white">🟢 Livella a Bolla Digitale</h3>
-          <p className="text-xs text-white/50">Appoggia il telefono su una superficie per misurare</p>
+          <h3 className="text-base font-bold text-white flex items-center gap-1.5 shadow-sm">
+            🟢 Livella a Bolla Digitale
+          </h3>
+          <p className="text-xs text-white/50">Appoggia il telefono o inquadra per allineare</p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white/70 hover:bg-white/10 transition-colors"
-        >
-          Chiudi
-        </button>
+        <div className="flex gap-2">
+          {/* Tasto Switch Fotocamera */}
+          <button
+            type="button"
+            onClick={() => setUseCamera(c => !c)}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white/80 border transition-all active:scale-95 cursor-pointer"
+            style={{
+              background: useCamera ? "rgba(14, 165, 233, 0.2)" : "rgba(255, 255, 255, 0.05)",
+              borderColor: useCamera ? "hsl(199 89% 48%)" : "rgba(255,255,255,0.15)",
+            }}
+            title={useCamera ? "Spegni Fotocamera" : "Accendi Fotocamera"}
+          >
+            📷 {useCamera ? "Camera On" : "Camera Off"}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white/70 hover:bg-white/10 transition-colors cursor-pointer"
+          >
+            Chiudi
+          </button>
+        </div>
       </div>
 
       {/* Grafica Centrale Livella */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 my-6 w-full">
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 my-6 w-full relative z-10">
         {!isSupported ? (
           <div className="text-center p-6 bg-white/5 border border-white/10 rounded-2xl max-w-xs">
             <p className="text-sm text-yellow-500 font-bold mb-2">⚠️ Giroscopio non supportato</p>
@@ -191,24 +258,45 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
           </div>
         ) : (
           <>
+            {/* Grande croce di allineamento gigante ad alto contrasto per inquadrare oggetti reali */}
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden" style={{ zIndex: 5 }}>
+              {/* Linea Orizzontale */}
+              <div 
+                className="absolute w-[85vw] max-w-lg h-[2px] transition-all duration-300"
+                style={{ 
+                  backgroundColor: isAligned ? "hsl(142, 80%, 50%)" : "rgba(255, 255, 255, 0.4)",
+                  boxShadow: isAligned 
+                    ? "0 0 10px hsl(142, 80%, 50%), 0 1px 3px rgba(0,0,0,0.8)" 
+                    : "0 1px 3px rgba(0, 0, 0, 0.8)",
+                }}
+              />
+              {/* Linea Verticale */}
+              <div 
+                className="absolute h-[65vh] max-h-96 w-[2px] transition-all duration-300"
+                style={{ 
+                  backgroundColor: isAligned ? "hsl(142, 80%, 50%)" : "rgba(255, 255, 255, 0.4)",
+                  boxShadow: isAligned 
+                    ? "0 0 10px hsl(142, 80%, 50%), 0 1px 3px rgba(0,0,0,0.8)" 
+                    : "0 1px 3px rgba(0, 0, 0, 0.8)",
+                }}
+              />
+            </div>
+
             {/* Il Mirino Circolare */}
             <div
               className="relative w-48 h-48 rounded-full border-2 flex items-center justify-center transition-all duration-300"
               style={{
-                borderColor: isAligned ? "hsl(142, 60%, 50%)" : "rgba(255, 255, 255, 0.15)",
-                background: isAligned ? "hsl(142, 60%, 50% / 0.05)" : "transparent",
-                boxShadow: isAligned ? "0 0 30px hsl(142, 60%, 50% / 0.25)" : "none",
+                borderColor: isAligned ? "hsl(142, 60%, 50%)" : "rgba(255, 255, 255, 0.25)",
+                background: isAligned ? "hsl(142, 60%, 50% / 0.08)" : "rgba(10, 15, 30, 0.35)",
+                backdropFilter: "blur(2px)",
+                boxShadow: isAligned ? "0 0 35px hsl(142, 60%, 50% / 0.3)" : "none",
               }}
             >
-              {/* Linee a croce (mirino) */}
-              <div className="absolute w-full h-[1px] bg-white/10" />
-              <div className="absolute h-full w-[1px] bg-white/10" />
-
               {/* Cerchio centrale di tolleranza */}
               <div
                 className="absolute w-10 h-10 rounded-full border border-dashed transition-all"
                 style={{
-                  borderColor: isAligned ? "hsl(142, 60%, 50%)" : "rgba(255, 255, 255, 0.3)",
+                  borderColor: isAligned ? "hsl(142, 60%, 50%)" : "rgba(255, 255, 255, 0.35)",
                 }}
               />
 

@@ -69,9 +69,9 @@ export default function SketchEditorClient({
   const [activeLayerId, setActiveLayerId] = useState<string>("rilievo");
 
   // Stati del disegno
-  const [color, setColor] = useState("#ffffff");
+  const [color, setColor] = useState("#000000");
   const [brushSize, setBrushSize] = useState(4);
-  const [tool, setTool] = useState<"pen" | "eraser">("pen");
+  const [tool, setTool] = useState<"pen" | "eraser" | "pan">("pen");
   
   // Stati di salvataggio (Manuale)
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error" | "unsaved">("saved");
@@ -80,6 +80,11 @@ export default function SketchEditorClient({
   // Stati di Zoom e Pan (Multi-touch accelerato GPU)
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+
+  // Riferimenti per Panning ad un dito o mouse
+  const isPanningRef = useRef(false);
+  const startPanRef = useRef({ x: 0, y: 0 });
+  const startPointerRef = useRef({ x: 0, y: 0 });
 
   // Stati dei Pannelli Drawer (destra)
   const [sidebarOpen, setSidebarOpen] = useState(false); // Sidebar rilievi/misure
@@ -137,6 +142,7 @@ export default function SketchEditorClient({
 
   // Colori predefiniti per palette premium
   const premiumColors = [
+    "#000000", // Nero
     "#ffffff", // Bianco
     "#f97316", // Arancione Brand
     "#ef4444", // Rosso
@@ -182,7 +188,27 @@ export default function SketchEditorClient({
         const ctx = rilievoCanvas?.getContext("2d");
         if (ctx && rilievoCanvas) {
           ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
-          ctx.drawImage(img, 0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+          
+          // Mantiene l'aspect ratio originale (tecnica contain centrato)
+          const imgRatio = img.width / img.height;
+          const canvasRatio = LOGICAL_WIDTH / LOGICAL_HEIGHT;
+          
+          let drawWidth = LOGICAL_WIDTH;
+          let drawHeight = LOGICAL_HEIGHT;
+          let offsetX = 0;
+          let offsetY = 0;
+          
+          if (imgRatio > canvasRatio) {
+            // Immagine più larga (orizzontale)
+            drawHeight = LOGICAL_WIDTH / imgRatio;
+            offsetY = (LOGICAL_HEIGHT - drawHeight) / 2;
+          } else {
+            // Immagine più stretta o uguale (verticale)
+            drawWidth = LOGICAL_HEIGHT * imgRatio;
+            offsetX = (LOGICAL_WIDTH - drawWidth) / 2;
+          }
+          
+          ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
           undoStacksRef.current.rilievo = [rilievoCanvas.toDataURL()];
         }
       };
@@ -647,6 +673,16 @@ export default function SketchEditorClient({
     if (!tempCtx) return;
 
     const coords = getCoordinates(e);
+
+    // Gestione Modalità Sposta / Pan
+    if (tool === "pan") {
+      isPanningRef.current = true;
+      startPointerRef.current = { x: e.clientX, y: e.clientY };
+      startPanRef.current = { ...pan };
+      tempCanvas.setPointerCapture(e.pointerId);
+      return;
+    }
+
     isDrawingRef.current = true;
     pointsRef.current = [coords];
     startPointRef.current = coords;
@@ -654,17 +690,42 @@ export default function SketchEditorClient({
     isShapeDetectedRef.current = false;
     detectedShapeRef.current = null;
 
-    tempCtx.beginPath();
-    tempCtx.moveTo(coords.x, coords.y);
-    tempCtx.strokeStyle = tool === "eraser" ? "rgba(255,255,255,0.4)" : color;
-    tempCtx.lineWidth = brushSize;
-    tempCtx.setLineDash(tool === "eraser" ? [10, 10] : []);
+    if (tool === "eraser") {
+      const activeCanvas = layerCanvasRefs[activeLayerId as keyof typeof layerCanvasRefs].current;
+      const activeCtx = activeCanvas?.getContext("2d");
+      if (activeCtx) {
+        activeCtx.save();
+        activeCtx.globalCompositeOperation = "destination-out";
+        activeCtx.lineWidth = brushSize * 2.5;
+        activeCtx.lineCap = "round";
+        activeCtx.lineJoin = "round";
+        activeCtx.beginPath();
+        activeCtx.moveTo(coords.x, coords.y);
+        activeCtx.lineTo(coords.x, coords.y);
+        activeCtx.stroke();
+        activeCtx.restore();
+      }
+
+      // Disegna un cerchio di anteprima della gomma rosso
+      tempCtx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+      tempCtx.beginPath();
+      tempCtx.arc(coords.x, coords.y, brushSize * 1.25, 0, Math.PI * 2);
+      tempCtx.strokeStyle = "rgba(239, 68, 68, 0.8)";
+      tempCtx.lineWidth = 2;
+      tempCtx.stroke();
+    } else {
+      tempCtx.beginPath();
+      tempCtx.moveTo(coords.x, coords.y);
+      tempCtx.strokeStyle = color;
+      tempCtx.lineWidth = brushSize;
+      tempCtx.setLineDash([]);
+    }
 
     tempCanvas.setPointerCapture(e.pointerId);
 
     if (holdTimeoutRef.current) clearTimeout(holdTimeoutRef.current);
     holdTimeoutRef.current = setTimeout(() => {
-      if (isDrawingRef.current && pointsRef.current.length > 5) {
+      if (isDrawingRef.current && pointsRef.current.length > 5 && tool !== "eraser") {
         const shape = detectShape(pointsRef.current);
         if (shape) {
           isShapeDetectedRef.current = true;
@@ -680,6 +741,19 @@ export default function SketchEditorClient({
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLCanvasElement>) {
+    // Gestione Pan in tempo reale con 1 dito o mouse
+    if (tool === "pan") {
+      if (!isPanningRef.current) return;
+      e.preventDefault();
+      const dx = e.clientX - startPointerRef.current.x;
+      const dy = e.clientY - startPointerRef.current.y;
+      setPan({
+        x: startPanRef.current.x + dx,
+        y: startPanRef.current.y + dy,
+      });
+      return;
+    }
+
     if (!isDrawingRef.current || !lastPointRef.current || !startPointRef.current || !e.isPrimary) return;
     e.preventDefault();
 
@@ -689,6 +763,37 @@ export default function SketchEditorClient({
 
     const coords = getCoordinates(e);
     pointsRef.current.push(coords);
+
+    // Se l'utente usa la gomma, cancelliamo in tempo reale
+    if (tool === "eraser") {
+      const activeCanvas = layerCanvasRefs[activeLayerId as keyof typeof layerCanvasRefs].current;
+      const activeCtx = activeCanvas?.getContext("2d");
+      if (activeCtx && lastPointRef.current) {
+        activeCtx.save();
+        activeCtx.globalCompositeOperation = "destination-out";
+        activeCtx.lineWidth = brushSize * 2.5;
+        activeCtx.lineCap = "round";
+        activeCtx.lineJoin = "round";
+        activeCtx.beginPath();
+        activeCtx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
+        activeCtx.lineTo(coords.x, coords.y);
+        activeCtx.stroke();
+        activeCtx.restore();
+      }
+
+      // Disegna un cerchio di anteprima della gomma rosso
+      tempCtx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+      tempCtx.beginPath();
+      tempCtx.arc(coords.x, coords.y, brushSize * 1.25, 0, Math.PI * 2);
+      tempCtx.strokeStyle = "rgba(239, 68, 68, 0.8)";
+      tempCtx.lineWidth = 2;
+      tempCtx.stroke();
+
+      lastPointRef.current = coords;
+      setHasUnsavedChanges(true);
+      setSaveStatus("unsaved");
+      return;
+    }
 
     // Se l'utente si sta muovendo (sta disegnando), riprogrammiamo il timeout di hold
     // Il rilevamento della forma si attiverà solo se l'utente si ferma tenendo premuto per 500ms
@@ -746,6 +851,16 @@ export default function SketchEditorClient({
   }
 
   function handlePointerUp(e: React.PointerEvent<HTMLCanvasElement>) {
+    // Gestione Pan in tempo reale
+    if (tool === "pan") {
+      isPanningRef.current = false;
+      const tempCanvas = tempCanvasRef.current;
+      if (tempCanvas) {
+        tempCanvas.releasePointerCapture(e.pointerId);
+      }
+      return;
+    }
+
     if (!isDrawingRef.current) return;
     e.preventDefault();
 
@@ -763,13 +878,22 @@ export default function SketchEditorClient({
     tempCanvas.releasePointerCapture(e.pointerId);
 
     if (tool === "eraser") {
-      activeCtx.globalCompositeOperation = "destination-out";
-      activeCtx.lineWidth = brushSize * 1.8;
-    } else {
-      activeCtx.globalCompositeOperation = "source-over";
-      activeCtx.strokeStyle = color;
-      activeCtx.lineWidth = brushSize;
+      // Pulisce l'anteprima cerchio rosso
+      tempCtx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+
+      // Salva nello storico
+      undoStacksRef.current[activeLayerId].push(activeCanvas.toDataURL());
+      redoStacksRef.current[activeLayerId] = [];
+
+      // Segna modifiche non salvate
+      setHasUnsavedChanges(true);
+      setSaveStatus("unsaved");
+      return;
     }
+
+    activeCtx.globalCompositeOperation = "source-over";
+    activeCtx.strokeStyle = color;
+    activeCtx.lineWidth = brushSize;
 
     if (isShapeDetectedRef.current && detectedShapeRef.current) {
       drawShapeOnCtx(activeCtx, detectedShapeRef.current);
@@ -784,7 +908,6 @@ export default function SketchEditorClient({
       }
     }
 
-    activeCtx.globalCompositeOperation = "source-over";
     tempCtx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
     // Salva nello storico
@@ -1077,19 +1200,24 @@ export default function SketchEditorClient({
         >
           {/* Strumento Penna / Gomma alternato */}
           <button
-            onClick={() => setTool(tool === "pen" ? "eraser" : "pen")}
+            onClick={() => {
+              if (tool === "pen") setTool("eraser");
+              else if (tool === "eraser") setTool("pan");
+              else setTool("pen");
+            }}
             className="w-10 h-10 rounded-xl flex items-center justify-center text-base active:scale-90 transition-all"
             style={{
-              background: tool === "pen" ? "hsl(220 90% 56% / 0.15)" : "hsl(350 90% 56% / 0.15)",
-              border: "1px solid " + (tool === "pen" ? "hsl(220 90% 56% / 0.3)" : "hsl(350 90% 56% / 0.3)"),
+              background: tool === "pen" ? "hsl(220 90% 56% / 0.15)" : tool === "eraser" ? "hsl(350 90% 56% / 0.15)" : "hsl(142 90% 56% / 0.15)",
+              border: "1px solid " + (tool === "pen" ? "hsl(220 90% 56% / 0.3)" : tool === "eraser" ? "hsl(350 90% 56% / 0.3)" : "hsl(142 90% 56% / 0.3)"),
               color: "white",
             }}
+            title={tool === "pen" ? "Penna" : tool === "eraser" ? "Gomma" : "Sposta"}
           >
-            {tool === "pen" ? "✏️" : "🧼"}
+            {tool === "pen" ? "✏️" : tool === "eraser" ? "🧼" : "🖐️"}
           </button>
 
           {/* Palette Colori Premium Rapida */}
-          {tool !== "eraser" && (
+          {(tool !== "eraser" && tool !== "pan") && (
             <div className="flex items-center gap-1.5 overflow-x-auto max-w-[120px] px-1 scrollbar-none">
               {premiumColors.slice(0, 5).map((hex) => {
                 const isSelected = color === hex;
@@ -1182,7 +1310,7 @@ export default function SketchEditorClient({
 
             <button
               onClick={() => setTool("eraser")}
-              className="w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer text-base"
+              className="w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer text-base hover:bg-white/5"
               style={{
                 background: tool === "eraser" ? "hsl(220 90% 56%)" : "transparent",
                 color: "white",
@@ -1190,6 +1318,45 @@ export default function SketchEditorClient({
               title="Gomma"
             >
               🧼
+            </button>
+
+            <button
+              onClick={() => setTool("pan")}
+              className="w-10 h-10 rounded-xl flex items-center justify-center transition-all cursor-pointer text-base hover:bg-white/5"
+              style={{
+                background: tool === "pan" ? "hsl(220 90% 56%)" : "transparent",
+                color: "white",
+              }}
+              title="Sposta e Ingrandisci Foglio (Pan/Zoom)"
+            >
+              🖐️
+            </button>
+
+            <div className="w-8 h-[1px] bg-white/5 my-1" />
+
+            {/* Controlli Zoom Rapidi per PC */}
+            <button
+              onClick={() => setScale(s => Math.min(4, s + 0.15))}
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer text-xs bg-white/5 hover:bg-white/10 text-white/90 border border-white/5"
+              title="Ingrandisci (Zoom In)"
+            >
+              ＋
+            </button>
+
+            <button
+              onClick={() => setScale(s => Math.max(0.5, s - 0.15))}
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer text-xs bg-white/5 hover:bg-white/10 text-white/90 border border-white/5"
+              title="Rimpicciolisci (Zoom Out)"
+            >
+              －
+            </button>
+
+            <button
+              onClick={() => { setScale(1); setPan({ x: 0, y: 0 }); }}
+              className="w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer text-[10px] bg-white/5 hover:bg-white/10 text-white/90 border border-white/5"
+              title="Resetta Zoom e Centra"
+            >
+              🔄
             </button>
 
             <div className="w-8 h-[1px] bg-white/5 my-1" />
@@ -1329,7 +1496,7 @@ export default function SketchEditorClient({
           <div className="flex gap-2">
             <button
               onClick={() => { setTool("pen"); setToolsOpen(false); }}
-              className="flex-1 py-3.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5"
+              className="flex-1 py-3.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               style={{
                 background: tool === "pen" ? "hsl(220 90% 56%)" : "hsl(220 26% 14%)",
                 color: "white"
@@ -1339,13 +1506,23 @@ export default function SketchEditorClient({
             </button>
             <button
               onClick={() => { setTool("eraser"); setToolsOpen(false); }}
-              className="flex-1 py-3.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5"
+              className="flex-1 py-3.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               style={{
                 background: tool === "eraser" ? "hsl(220 90% 56%)" : "hsl(220 26% 14%)",
                 color: "white"
               }}
             >
               🧼 Gomma
+            </button>
+            <button
+              onClick={() => { setTool("pan"); setToolsOpen(false); }}
+              className="flex-1 py-3.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              style={{
+                background: tool === "pan" ? "hsl(220 90% 56%)" : "hsl(220 26% 14%)",
+                color: "white"
+              }}
+            >
+              🖐️ Sposta
             </button>
           </div>
 

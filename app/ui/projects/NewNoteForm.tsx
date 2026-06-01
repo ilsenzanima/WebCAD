@@ -672,7 +672,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                 <button
                   type="button"
                   onClick={() => setShowCalc(true)}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center text-sm transition-all"
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
                   style={{
                     background: "hsl(220 26% 18%)",
                     border: "1px solid hsl(220 20% 24%)",
@@ -681,6 +681,21 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                   title="Apri Calcolatrice Cantiere"
                 >
                   🧮
+                </button>
+
+                {/* Bottone Livella a Bolla */}
+                <button
+                  type="button"
+                  onClick={() => setShowLivella(true)}
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                  style={{
+                    background: "hsl(220 26% 18%)",
+                    border: "1px solid hsl(220 20% 24%)",
+                    boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
+                  }}
+                  title="Apri Livella a Bolla"
+                >
+                  🟢
                 </button>
 
                 {/* Pulsante "+" con dropdown */}

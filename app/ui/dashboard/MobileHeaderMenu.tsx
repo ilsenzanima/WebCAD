@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
 import CalcolatriceWidget from "./CalcolatriceWidget";
+import GlobalBollaTrigger from "./GlobalBollaTrigger";
 import { APP_VERSION } from "@/lib/version";
 
 interface MobileHeaderMenuProps {
@@ -141,6 +142,11 @@ export default function MobileHeaderMenu({ initials }: MobileHeaderMenuProps) {
                   Calcolatrice
                 </span>
               </button>
+
+              {/* Pulsante Bolla nella Griglia */}
+              <div onClick={() => setIsOpen(false)}>
+                <GlobalBollaTrigger mode="mobile" />
+              </div>
             </div>
 
             {/* Piè di pagina del menu */}

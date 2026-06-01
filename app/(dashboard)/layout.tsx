@@ -7,6 +7,7 @@ import MobileHeaderMenu from "@/app/ui/dashboard/MobileHeaderMenu";
 import UpdateNotifier from "@/app/ui/dashboard/UpdateNotifier";
 import SidebarProfile from "@/app/ui/dashboard/SidebarProfile";
 import GlobalCalcTrigger from "@/app/ui/dashboard/GlobalCalcTrigger";
+import GlobalBollaTrigger from "@/app/ui/dashboard/GlobalBollaTrigger";
 import type { ReactNode } from "react";
 
 const navItems = [
@@ -99,6 +100,8 @@ export default async function DashboardLayout({
             </p>
             {/* Calcolatrice Globale in cima */}
             <GlobalCalcTrigger mode="desktop" />
+            {/* Bolla Globale */}
+            <GlobalBollaTrigger mode="desktop" />
             {bottomNavItems.map((item) => (
               <Link
                 key={item.href}
