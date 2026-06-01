@@ -140,6 +140,13 @@ export async function getAllProjectFieldNotes(
 export async function getFieldNote(
   noteId: string
 ): Promise<FieldNote | null> {
+  // Verifica se noteId è un UUID Postgres valido (36 caratteri, formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+  const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(noteId);
+  if (!isUuid) {
+    console.log(`ℹ️ [getFieldNote] ID temporaneo o non UUID rilevato: "${noteId}". Ritorno null in sicurezza.`);
+    return null;
+  }
+
   const supabase = await createClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)

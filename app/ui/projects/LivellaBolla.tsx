@@ -50,6 +50,10 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
         setStream(mediaStream);
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
+          // Chiamata esplicita a play() per avviare la riproduzione in tutti i browser e webview mobili
+          videoRef.current.play().catch((playErr) => {
+            console.warn("⚠️ [LivellaBolla] L'autoplay del video in background è stato bloccato, riproviamo:", playErr);
+          });
         }
       } catch (err) {
         console.error("Errore accesso fotocamera posteriore:", err);

@@ -694,8 +694,8 @@ export default function SketchEditorClient({
       const activeCanvas = layerCanvasRefs[activeLayerId as keyof typeof layerCanvasRefs].current;
       const activeCtx = activeCanvas?.getContext("2d");
       if (activeCtx) {
-        activeCtx.save();
         activeCtx.globalCompositeOperation = "destination-out";
+        activeCtx.strokeStyle = "rgba(0,0,0,1)"; // Imposta un colore di tracciamento opaco indispensabile per destination-out
         activeCtx.lineWidth = brushSize * 2.5;
         activeCtx.lineCap = "round";
         activeCtx.lineJoin = "round";
@@ -703,7 +703,6 @@ export default function SketchEditorClient({
         activeCtx.moveTo(coords.x, coords.y);
         activeCtx.lineTo(coords.x, coords.y);
         activeCtx.stroke();
-        activeCtx.restore();
       }
 
       // Disegna un cerchio di anteprima della gomma rosso
@@ -769,8 +768,8 @@ export default function SketchEditorClient({
       const activeCanvas = layerCanvasRefs[activeLayerId as keyof typeof layerCanvasRefs].current;
       const activeCtx = activeCanvas?.getContext("2d");
       if (activeCtx && lastPointRef.current) {
-        activeCtx.save();
         activeCtx.globalCompositeOperation = "destination-out";
+        activeCtx.strokeStyle = "rgba(0,0,0,1)"; // Imposta un colore di tracciamento opaco indispensabile per destination-out
         activeCtx.lineWidth = brushSize * 2.5;
         activeCtx.lineCap = "round";
         activeCtx.lineJoin = "round";
@@ -778,7 +777,6 @@ export default function SketchEditorClient({
         activeCtx.moveTo(lastPointRef.current.x, lastPointRef.current.y);
         activeCtx.lineTo(coords.x, coords.y);
         activeCtx.stroke();
-        activeCtx.restore();
       }
 
       // Disegna un cerchio di anteprima della gomma rosso
@@ -878,6 +876,9 @@ export default function SketchEditorClient({
     tempCanvas.releasePointerCapture(e.pointerId);
 
     if (tool === "eraser") {
+      // Ripristina l'operazione di composizione standard sul canvas per sicurezza
+      activeCtx.globalCompositeOperation = "source-over";
+
       // Pulisce l'anteprima cerchio rosso
       tempCtx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
 
@@ -1371,7 +1372,7 @@ export default function SketchEditorClient({
                 value={brushSize}
                 onChange={(e) => setBrushSize(parseInt(e.target.value))}
                 className="h-16 accent-orange-500 cursor-pointer"
-                style={{ writingMode: "bt-lr", WebkitAppearance: "slider-vertical" } as any}
+                style={{ writingMode: "vertical-lr", direction: "rtl" }}
               />
               <span className="text-[9px] font-bold text-white/80">{brushSize}</span>
             </div>

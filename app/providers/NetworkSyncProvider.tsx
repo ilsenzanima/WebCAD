@@ -19,6 +19,7 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
     if (typeof window === "undefined" || !isOnline) return;
 
     const supabase = createClient();
+    let errorCount = 0;
 
     const channel = supabase
       .channel("realtime-sync-channel")
@@ -49,8 +50,20 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
         () => {
           router.refresh();
         }
-      )
-      .subscribe();
+      );
+
+    channel.subscribe((status) => {
+      if (status === "CHANNEL_ERROR") {
+        errorCount++;
+        console.warn(`⚠️ [Supabase Realtime] Errore di connessione (${errorCount}/3).`);
+        if (errorCount >= 3) {
+          console.error("🔴 [Supabase Realtime] Disattivazione automatica realtime a causa di troppi errori di connessione WebSocket.");
+          supabase.removeChannel(channel);
+        }
+      } else if (status === "SUBSCRIBED") {
+        errorCount = 0;
+      }
+    });
 
     return () => {
       supabase.removeChannel(channel);
