@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import type { FieldNote, FieldNoteItem } from "@/app/actions/field-notes";
 
 interface Props {
@@ -12,6 +12,11 @@ interface Props {
 export default function ReportFieldNotes({ notes, levels, onImageClick }: Props) {
   const [filterStatus, setFilterStatus] = useState<"all" | "completed" | "pending">("all");
   const [searchQuery, setSearchQuery] = useState("");
+  
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Mappa id livello -> Livello
   const levelsMap = useMemo(() => {
@@ -294,8 +299,8 @@ export default function ReportFieldNotes({ notes, levels, onImageClick }: Props)
 
                         {/* Metadati in spalla destra */}
                         <div className="text-left md:text-right text-[10px] text-gray-400 self-end md:self-start print:text-gray-600">
-                          <p>Rilevato il: {new Date(note.created_at).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" })}</p>
-                          <p className="mt-1">Ora: {new Date(note.created_at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</p>
+                          <p>Rilevato il: {mounted ? new Date(note.created_at).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</p>
+                          <p className="mt-1">Ora: {mounted ? new Date(note.created_at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "—"}</p>
                         </div>
                       </div>
                     );

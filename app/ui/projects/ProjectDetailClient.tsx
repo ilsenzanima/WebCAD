@@ -467,7 +467,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                   <button 
                     onClick={() => setIsEditingTitle(true)}
                     className="flex-shrink-0 opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity text-xs p-1 rounded-md bg-white/5 hover:bg-white/10"
-                    title={`Rinomina cantiere (Ultima modifica: ${safeFormatDate(project.updated_at)})`}
+                    title={`Rinomina cantiere (Ultima modifica: ${mounted ? safeFormatDate(project.updated_at) : "—"})`}
                   >
                     ✏️
                   </button>
@@ -477,7 +477,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
           </div>
 
           <div className="text-[10px] sm:text-xs flex-shrink-0" style={{ color: "hsl(215 15% 45%)" }}>
-            Ultima modifica: {safeFormatDate(project.updated_at)}
+            Ultima modifica: {mounted ? safeFormatDate(project.updated_at) : "—"}
           </div>
         </div>
       </div>

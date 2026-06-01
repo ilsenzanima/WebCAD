@@ -5,4 +5,4 @@ BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ language 'plpgsql';
+$$ language 'plpgsql' SET search_path = public;

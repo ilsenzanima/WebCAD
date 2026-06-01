@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 interface ReportHeaderProps {
@@ -19,6 +20,11 @@ export default function ReportHeader({
   hasNesting,
   hasOutOfPlumb,
 }: ReportHeaderProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const tabs = [
     { id: "overview", label: "📋 Panoramica", enabled: true },
     { id: "nesting", label: "✂️ Nesting di Taglio", enabled: hasNesting },
@@ -66,7 +72,7 @@ export default function ReportHeader({
             {projectName || "Caricamento..."}
           </h1>
           <p className="text-xs text-gray-400 mt-2 print:text-gray-600">
-            ID Cantiere: {projectId} | Generato il: {new Date().toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" })}
+            ID Cantiere: {projectId} | Generato il: {mounted ? new Date().toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" }) : "—"}
           </p>
         </div>
 

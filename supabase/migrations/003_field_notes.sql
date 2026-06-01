@@ -45,20 +45,30 @@ CREATE POLICY "Utente vede solo il proprio contatore"
   USING  (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
--- Funzione atomica per ottenere il prossimo numero
+-- Funzione atomica per ottenere il prossimo numero (con restrizioni di sicurezza)
 CREATE OR REPLACE FUNCTION next_field_note_number(p_user_id UUID)
 RETURNS INT AS $$
 DECLARE
   v_num INT;
 BEGIN
-  INSERT INTO field_note_counters (user_id, last_num)
+  -- Sicurezza: impedisce a un utente di incrementare il contatore di un altro utente
+  IF auth.uid() IS DISTINCT FROM p_user_id AND auth.role() <> 'service_role' THEN
+    RAISE EXCEPTION 'Non autorizzato a incrementare il contatore di un altro utente.';
+  END IF;
+
+  INSERT INTO public.field_note_counters (user_id, last_num)
   VALUES (p_user_id, 1)
   ON CONFLICT (user_id) DO UPDATE
-    SET last_num = field_note_counters.last_num + 1
+    SET last_num = public.field_note_counters.last_num + 1
   RETURNING last_num INTO v_num;
   RETURN v_num;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- Revoca permessi di esecuzione pubblica
+REVOKE EXECUTE ON FUNCTION public.next_field_note_number(UUID) FROM PUBLIC;
+-- Consente l'esecuzione solo ad utenti autenticati e al service_role
+GRANT EXECUTE ON FUNCTION public.next_field_note_number(UUID) TO authenticated, service_role;
 
 -- ============================================
 -- TABELLA: field_notes (gli appunti)

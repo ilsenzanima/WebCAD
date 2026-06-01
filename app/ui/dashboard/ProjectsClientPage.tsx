@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import NewProjectModal from "./NewProjectModal";
@@ -57,6 +57,11 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [quickAdd, setQuickAdd] = useState<{ projectId: string; type: "nota" | "sketch" | "3d" } | null>(null);
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Gestore per il salvataggio rapido dal pop-up della card
   const handleQuickAddSubmit = async (title: string, pianoName: string) => {
@@ -273,7 +278,13 @@ function ProjectRow({
 }) {
   const gradient = avatarGradient(project.id);
   const initials = getProjectInitials(project.name);
-  const date = safeFormatDate(project.updated_at || project.created_at);
+  
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const date = mounted ? safeFormatDate(project.updated_at || project.created_at) : "—";
 
   return (
     <div

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createSketch, deleteSketch, Sketch } from "@/app/actions/sketches";
@@ -26,6 +26,11 @@ export default function SketchesClientPage({
   const [sketches, setSketches] = useState<Sketch[]>(initialSketches);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFilterProject, setSelectedFilterProject] = useState("");
+  
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   
   // Stati del modale
   const [isOpen, setIsOpen] = useState(false);
@@ -91,6 +96,7 @@ export default function SketchesClientPage({
 
   // Formatta la data
   function formatDate(isoString: string) {
+    if (!mounted) return "—";
     const d = new Date(isoString);
     return d.toLocaleDateString("it-IT", {
       day: "2-digit",

@@ -252,7 +252,7 @@ BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path = public;
 
 CREATE TRIGGER update_projects_updated_at
   BEFORE UPDATE ON projects

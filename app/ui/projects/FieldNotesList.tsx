@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { FieldNote, FieldNoteItem } from "@/app/actions/field-notes";
 import ImageViewerModal from "./ImageViewerModal";
 import ModelViewer from "./ModelViewer";
@@ -67,6 +67,10 @@ export default function FieldNotesList({ notes }: Props) {
 
 function NoteRow({ note }: { note: FieldNote }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const items = note.field_note_items ?? [];
   const hasItems = items.length > 0;
 
@@ -107,13 +111,13 @@ function NoteRow({ note }: { note: FieldNote }) {
             )}
           </div>
           <div className="text-xs mt-0.5" style={{ color: "hsl(215 15% 45%)" }}>
-            {new Date(note.created_at).toLocaleDateString("it-IT", {
+            {mounted ? new Date(note.created_at).toLocaleDateString("it-IT", {
               day: "2-digit",
               month: "short",
               year: "numeric",
               hour: "2-digit",
               minute: "2-digit",
-            })}
+            }) : "—"}
             {hasItems && (
               <span className="ml-2" style={{ color: "hsl(220 70% 60%)" }}>
                 · {items.length} {items.length === 1 ? "voce" : "voci"}

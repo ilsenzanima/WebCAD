@@ -13,9 +13,10 @@ DROP POLICY IF EXISTS "Planimetrie visibili a tutti" ON storage.objects;
 DROP POLICY IF EXISTS "Utenti autenticati possono aggiornare le proprie planimetrie" ON storage.objects;
 DROP POLICY IF EXISTS "Utenti autenticati possono eliminare le proprie planimetrie" ON storage.objects;
 
--- SELECT: chiunque può leggere (bucket pubblico)
-CREATE POLICY "Planimetrie visibili a tutti"
+-- SELECT: solo utenti autenticati possono interrogare i file (il download tramite URL pubblico rimane attivo per tutti)
+CREATE POLICY "Planimetrie visibili agli utenti autenticati"
 ON storage.objects FOR SELECT
+TO authenticated
 USING (bucket_id = 'plans');
 
 -- INSERT: solo utenti autenticati possono caricare
