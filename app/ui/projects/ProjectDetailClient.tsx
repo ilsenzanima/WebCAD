@@ -339,7 +339,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
     );
 
     setQuickAddType(null);
-    router.push(`/projects/${project.id}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
+    router.push(`/projects/${project.id}/tagli/${tempNoteId}`);
   };
 
   // Sincronizza lo stato locale quando cambiano i livelli dello store o le prop
@@ -832,11 +832,11 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                                     
                                     {/* Pulsante Modifica */}
                                     <Link
-                                      href={`/projects/${project.id}/levels/${lvl.id}/appunti/${note.id}/modifica`}
+                                      href={isTaglio ? `/projects/${project.id}/tagli/${note.id}` : `/projects/${project.id}/levels/${lvl.id}/appunti/${note.id}/modifica`}
                                       onClick={(e) => e.stopPropagation()}
                                       className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white transition-all bg-white/5 border border-white/10 hover:bg-white/10"
                                     >
-                                      {isSketchOrDesign ? "✏️ Disegna" : is3D ? "👁 Visualizza" : "✏️ Modifica"}
+                                      {isTaglio ? "✂️ Configura" : isSketchOrDesign ? "✏️ Disegna" : is3D ? "👁 Visualizza" : "✏️ Modifica"}
                                     </Link>
 
                                     {/* Indicatore espansione */}

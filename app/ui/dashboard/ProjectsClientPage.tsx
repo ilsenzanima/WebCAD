@@ -266,7 +266,7 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
     );
 
     setQuickAdd(null);
-    router.push(`/projects/${projectId}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
+    router.push(`/projects/${projectId}/tagli/${tempNoteId}`);
   };
 
   // Ordina i cantieri in ordine alfabetico per nome

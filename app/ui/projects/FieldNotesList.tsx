@@ -167,17 +167,17 @@ function NoteRow({ note }: { note: FieldNote }) {
           {/* Azioni: Modifica */}
           <div className="pt-4 flex justify-end">
             {note.level_id ? (
-               <a
-                 href={`/projects/${note.project_id}/levels/${note.level_id}/appunti/${note.id}/modifica`}
-                 className="px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
-                 style={{
-                   background: "hsl(220 26% 20%)",
-                   color: "hsl(210 40% 90%)",
-                   border: "1px solid hsl(220 20% 26%)",
-                 }}
-               >
-                 ✏️ Modifica Appunto
-               </a>
+                <a
+                  href={note.type_name === "Taglio" ? `/projects/${note.project_id}/tagli/${note.id}` : `/projects/${note.project_id}/levels/${note.level_id}/appunti/${note.id}/modifica`}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
+                  style={{
+                    background: "hsl(220 26% 20%)",
+                    color: "hsl(210 40% 90%)",
+                    border: "1px solid hsl(220 20% 26%)",
+                  }}
+                >
+                  {note.type_name === "Taglio" ? "✂️ Configura Taglio" : "✏️ Modifica Appunto"}
+                </a>
             ) : (
                <span 
                  className="px-4 py-2 rounded-xl text-xs font-semibold"

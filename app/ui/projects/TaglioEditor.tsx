@@ -1,0 +1,872 @@
+"use client";
+
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
+import type { FieldNote, FieldNoteItem, FieldNoteType } from "@/app/actions/field-notes";
+import type { Material } from "@/lib/types/database";
+
+interface Props {
+  projectId: string;
+  noteTypes: FieldNoteType[];
+  initialNote: FieldNote;
+  catalogMaterials: Material[];
+}
+
+interface PieceItem {
+  id: string;
+  b: number;
+  h: number;
+  q: number;
+  unit: "cm" | "mm";
+  refTitle: string;
+}
+
+export default function TaglioEditor({
+  projectId,
+  noteTypes,
+  initialNote,
+  catalogMaterials,
+}: Props) {
+  const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  const hasInitializedRef = useRef(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const cachedNote = useOfflineStore((state) => state.fieldNotes[initialNote.id]);
+  const noteToUse = (mounted && cachedNote) ? cachedNote : initialNote;
+
+  // --- Stati dell'Editor ---
+  const [title, setTitle] = useState("Taglio Parametrico");
+  
+  // Parametri di taglio (fogli di lamiera)
+  const [sheetW, setSheetW] = useState(1200); // mm
+  const [sheetH, setSheetH] = useState(2000); // mm
+  const [kerf, setKerf] = useState(3);       // mm
+  const [margin, setMargin] = useState(0);   // mm
+  
+  // Lista dei pezzi da tagliare
+  const [pieces, setPieces] = useState<PieceItem[]>([]);
+  const [materialFilter, setMaterialFilter] = useState("");
+
+  // Stato per l'inserimento manuale rapido
+  const [newB, setNewB] = useState("");
+  const [newH, setNewH] = useState("");
+  const [newQ, setNewQ] = useState("1");
+  const [newUnit, setNewUnit] = useState<"cm" | "mm">("cm");
+  const [newRef, setNewRef] = useState("Pezzo manuale");
+
+  // --- Inizializzazione ---
+  useEffect(() => {
+    if (noteToUse) {
+      // 1. Estrae il titolo dall'elemento 'nota' con sort_order 0
+      const titleItem = (noteToUse.field_note_items ?? []).find(
+        (i) => i.item_type === "nota" && i.sort_order === 0
+      );
+      if (titleItem?.value_text) {
+        setTitle(titleItem.value_text.replace("Taglio: ", ""));
+      }
+
+      // 2. Estrae la configurazione speciale (se presente)
+      const configItem = (noteToUse.field_note_items ?? []).find(
+        (i) => i.item_type === "nota" && i.value_text?.startsWith("__CONFIG__:")
+      );
+      if (configItem?.value_text) {
+        try {
+          const configJson = JSON.parse(configItem.value_text.replace("__CONFIG__:", ""));
+          if (configJson.sheetW) setSheetW(configJson.sheetW);
+          if (configJson.sheetH) setSheetH(configJson.sheetH);
+          if (configJson.kerf !== undefined) setKerf(configJson.kerf);
+          if (configJson.margin !== undefined) setMargin(configJson.margin);
+        } catch {
+          // fallback
+        }
+      }
+
+      // 3. Estrae il materiale (se presente)
+      const materialItem = (noteToUse.field_note_items ?? []).find(
+        (i) => i.item_type === "materiale"
+      );
+      if (materialItem?.value_text) {
+        setMaterialFilter(materialItem.value_text);
+      }
+
+      // 4. Estrae tutti i pezzi da tagliare 'dim_quadrata'
+      const isNew = !hasInitializedRef.current || (mounted && cachedNote && cachedNote.updated_at !== initialNote.updated_at);
+      if (isNew) {
+        const loadedPieces: PieceItem[] = [];
+        (noteToUse.field_note_items ?? []).forEach((item) => {
+          if (item.item_type === "dim_quadrata") {
+            try {
+              const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
+              if (parsed) {
+                loadedPieces.push({
+                  id: item.id || crypto.randomUUID(),
+                  b: parseFloat(parsed.b) || 0,
+                  h: parseFloat(parsed.h) || 0,
+                  q: parseInt(parsed.q) || 1,
+                  unit: parsed.unit || "cm",
+                  refTitle: parsed.refTitle || "Rilievo",
+                });
+              }
+            } catch {
+              // ignora
+            }
+          }
+        });
+        setPieces(loadedPieces);
+        hasInitializedRef.current = true;
+      }
+    }
+  }, [noteToUse, mounted, cachedNote, initialNote]);
+
+  // --- Handlers dei Pezzi ---
+  const updatePiece = (id: string, key: keyof PieceItem, value: any) => {
+    setPieces((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, [key]: value } : p))
+    );
+  };
+
+  const deletePiece = (id: string) => {
+    setPieces((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const addManualPiece = () => {
+    const bVal = parseFloat(newB);
+    const hVal = parseFloat(newH);
+    const qVal = parseInt(newQ) || 1;
+    if (isNaN(bVal) || isNaN(hVal) || bVal <= 0 || hVal <= 0) {
+      alert("Inserisci quote di Base e Altezza valide e maggiori di zero.");
+      return;
+    }
+
+    const newPiece: PieceItem = {
+      id: crypto.randomUUID(),
+      b: bVal,
+      h: hVal,
+      q: qVal,
+      unit: newUnit,
+      refTitle: newRef.trim() || "Manuale",
+    };
+
+    setPieces((prev) => [...prev, newPiece]);
+    setNewB("");
+    setNewH("");
+    setNewQ("1");
+    setNewRef("Pezzo manuale");
+  };
+
+  // --- Algoritmo Nesting 2D (Ghigliottina First Fit Decreasing) ---
+  interface PlacedPiece {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    label: string;
+    rotated: boolean;
+  }
+
+  interface PackedSheet {
+    placed: PlacedPiece[];
+    usedArea: number;
+    scrapArea: number;
+  }
+
+  interface FreeRect {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }
+
+  interface PlacementCandidate {
+    boardIndex: number;
+    freeRectIndex: number;
+    rotated: boolean;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }
+
+  const nestingResult = useMemo(() => {
+    // 1. Converte tutti i pezzi in millimetri
+    const sheetRequests: { width: number; height: number; label: string }[] = [];
+    pieces.forEach((p) => {
+      const factor = p.unit === "cm" ? 10 : 1;
+      const wMm = Math.round(p.b * factor);
+      const hMm = Math.round(p.h * factor);
+      if (wMm > 0 && hMm > 0) {
+        for (let i = 0; i < p.q; i++) {
+          sheetRequests.push({
+            width: wMm,
+            height: hMm,
+            label: `${p.refTitle} (${p.b}x${p.h} ${p.unit})`,
+          });
+        }
+      }
+    });
+
+    const activeSheetW = sheetW - margin * 2;
+    const activeSheetH = sheetH - margin * 2;
+    const totalBoardArea = sheetW * sheetH;
+
+    if (sheetRequests.length === 0 || activeSheetW <= 0 || activeSheetH <= 0) {
+      return { sheets: [], totalPieces: 0, efficiency: 0 };
+    }
+
+    // Ordina i pezzi per area decrescente
+    const sorted = [...sheetRequests].sort((a, b) => (b.width * b.height) - (a.width * a.height));
+    const sheets: PackedSheet[] = [];
+    const freeRectsByBoard: FreeRect[][] = [];
+
+    const createSheet = (): number => {
+      sheets.push({ placed: [], usedArea: 0, scrapArea: 0 });
+      freeRectsByBoard.push([{ x: margin, y: margin, w: activeSheetW, h: activeSheetH }]);
+      return sheets.length - 1;
+    };
+
+    const tryPlacement = (reqW: number, reqH: number, boardIndex: number, freeRectIndex: number, freeRect: FreeRect, rotated: boolean): PlacementCandidate | null => {
+      const pW = rotated ? reqH : reqW;
+      const pH = rotated ? reqW : reqH;
+      if (pW > freeRect.w || pH > freeRect.h) return null;
+      return { boardIndex, freeRectIndex, rotated, x: freeRect.x, y: freeRect.y, w: pW, h: pH };
+    };
+
+    // FFD algorithm
+    sorted.forEach((req) => {
+      let best: PlacementCandidate | null = null;
+
+      for (let s = 0; s < sheets.length; s++) {
+        const rects = freeRectsByBoard[s];
+        for (let r = 0; r < rects.length; r++) {
+          const fr = rects[r];
+          // Prova normale
+          const candNormal = tryPlacement(req.width, req.height, s, r, fr, false);
+          if (candNormal) {
+            if (!best || candNormal.y < best.y || (candNormal.y === best.y && candNormal.x < best.x)) {
+              best = candNormal;
+            }
+          }
+          // Prova ruotato
+          const candRot = tryPlacement(req.width, req.height, s, r, fr, true);
+          if (candRot) {
+            if (!best || candRot.y < best.y || (candRot.y === best.y && candRot.x < best.x)) {
+              best = candRot;
+            }
+          }
+        }
+      }
+
+      // Se nessun foglio esistente va bene, ne creiamo uno nuovo
+      if (!best) {
+        const s = createSheet();
+        const fr = freeRectsByBoard[s][0];
+        const cand = tryPlacement(req.width, req.height, s, 0, fr, false) || tryPlacement(req.width, req.height, s, 0, fr, true);
+        if (cand) best = cand;
+      }
+
+      if (best) {
+        const s = best.boardIndex;
+        const r = best.freeRectIndex;
+        const fr = freeRectsByBoard[s][r];
+
+        // Rimuove il rettangolo libero consumato
+        freeRectsByBoard[s].splice(r, 1);
+
+        // Aggiunge il pezzo posizionato
+        sheets[s].placed.push({
+          x: best.x,
+          y: best.y,
+          w: best.w,
+          h: best.h,
+          label: req.label,
+          rotated: best.rotated,
+        });
+        sheets[s].usedArea += best.w * best.h;
+
+        // Taglio ghigliottina (split) del rettangolo libero residuo
+        const remW = fr.w - best.w;
+        const remH = fr.h - best.h;
+
+        if (remW > remH) {
+          // Split verticale primario
+          if (remW > 0) {
+            freeRectsByBoard[s].push({
+              x: fr.x + best.w + kerf,
+              y: fr.y,
+              w: remW - kerf,
+              h: fr.h,
+            });
+          }
+          if (remH > 0) {
+            freeRectsByBoard[s].push({
+              x: fr.x,
+              y: fr.y + best.h + kerf,
+              w: best.w,
+              h: remH - kerf,
+            });
+          }
+        } else {
+          // Split orizzontale primario
+          if (remH > 0) {
+            freeRectsByBoard[s].push({
+              x: fr.x,
+              y: fr.y + best.h + kerf,
+              w: fr.w,
+              h: remH - kerf,
+            });
+          }
+          if (remW > 0) {
+            freeRectsByBoard[s].push({
+              x: fr.x + best.w + kerf,
+              y: fr.y,
+              w: remW - kerf,
+              h: best.h,
+            });
+          }
+        }
+      }
+    });
+
+    // Calcola il rendimento totale
+    let totalUsedArea = 0;
+    sheets.forEach((s) => {
+      totalUsedArea += s.usedArea;
+    });
+
+    const efficiency = sheets.length > 0 ? (totalUsedArea / (sheets.length * totalBoardArea)) * 100 : 0;
+
+    return { sheets, totalPieces: sheetRequests.length, efficiency };
+  }, [pieces, sheetW, sheetH, kerf, margin]);
+
+  // --- Salva & Sincronizza ---
+  const handleSave = () => {
+    // 1. Trova il tipo di appunto "Taglio" o crea un fallback
+    const taglioType = noteTypes.find((t) => t.name === "Taglio") || { id: "temp_taglio", name: "Taglio" };
+
+    // 2. Costruisce gli item del database
+    const payloadItems: Omit<FieldNoteItem, "id">[] = [];
+    
+    // - Titolo della nota (sort_order 0)
+    payloadItems.push({
+      item_type: "nota",
+      value_text: `Taglio: ${title.trim() || "Taglio Parametrico"}`,
+      sort_order: 0,
+    });
+
+    // - Configurazione foglio / nesting (sort_order 1)
+    payloadItems.push({
+      item_type: "nota",
+      value_text: `__CONFIG__:${JSON.stringify({ sheetW, sheetH, kerf, margin })}`,
+      sort_order: 1,
+    });
+
+    // - Materiale se selezionato (sort_order 2)
+    if (materialFilter) {
+      payloadItems.push({
+        item_type: "materiale",
+        value_text: materialFilter,
+        sort_order: 2,
+      });
+    }
+
+    // - Tutti i pezzi 'dim_quadrata' (sort_order 3+)
+    let order = 3;
+    pieces.forEach((p) => {
+      payloadItems.push({
+        item_type: "dim_quadrata",
+        value_text: JSON.stringify({
+          b: p.b,
+          h: p.h,
+          q: p.q,
+          unit: p.unit,
+          isCutPiece: true,
+          refTitle: p.refTitle,
+        }),
+        sort_order: order++,
+      });
+    });
+
+    // 3. Salva optimisticamente nello store offline
+    useOfflineStore.getState().saveFieldNoteItemsOptimistic(
+      initialNote.id,
+      projectId,
+      initialNote.level_id || generateTempId(), // level_id
+      payloadItems,
+      "Taglio"
+    );
+
+    router.push(`/projects/${projectId}`);
+  };
+
+  const handleDeletePlan = () => {
+    if (confirm("Sei sicuro di voler eliminare definitivamente questo piano di taglio?")) {
+      useOfflineStore.getState().deleteFieldNoteOptimistic(initialNote.id, projectId);
+      router.push(`/projects/${projectId}`);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* ── Sezione Configurazione Parametri Lastre ── */}
+      <div
+        className="rounded-2xl p-4 sm:p-5 grid grid-cols-2 md:grid-cols-5 gap-4 items-end print:hidden"
+        style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
+      >
+        <div className="col-span-2 md:col-span-1">
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1.5">
+            Nome Configurazione
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl text-xs font-semibold outline-none"
+            style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 22%)", color: "white" }}
+          />
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1.5">
+            Larghezza Foglio (mm)
+          </label>
+          <input
+            type="number"
+            value={sheetW}
+            onChange={(e) => setSheetW(Math.max(1, parseInt(e.target.value) || 0))}
+            className="w-full px-3 py-2 rounded-xl text-xs font-mono outline-none"
+            style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 22%)", color: "white" }}
+          />
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1.5">
+            Altezza Foglio (mm)
+          </label>
+          <input
+            type="number"
+            value={sheetH}
+            onChange={(e) => setSheetH(Math.max(1, parseInt(e.target.value) || 0))}
+            className="w-full px-3 py-2 rounded-xl text-xs font-mono outline-none"
+            style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 22%)", color: "white" }}
+          />
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1.5">
+            Spessore Lama (mm)
+          </label>
+          <input
+            type="number"
+            value={kerf}
+            onChange={(e) => setKerf(Math.max(0, parseInt(e.target.value) || 0))}
+            className="w-full px-3 py-2 rounded-xl text-xs font-mono outline-none"
+            style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 22%)", color: "white" }}
+          />
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1.5">
+            Margini Lamiera (mm)
+          </label>
+          <input
+            type="number"
+            value={margin}
+            onChange={(e) => setMargin(Math.max(0, parseInt(e.target.value) || 0))}
+            className="w-full px-3 py-2 rounded-xl text-xs font-mono outline-none"
+            style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 22%)", color: "white" }}
+          />
+        </div>
+      </div>
+
+      {/* ── Materiale & Riepilogo Efficienza ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Griglia Pezzi da Tagliare */}
+        <div
+          className="md:col-span-2 rounded-2xl p-4 space-y-4 print:p-0 print:border-none"
+          style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
+        >
+          <div className="flex items-center justify-between border-b border-white/5 pb-2 print:hidden">
+            <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+              <span>✂️</span> Griglia Pezzi da Tagliare ({pieces.length})
+            </h3>
+            
+            {/* Selezione Materiale */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase text-white/40">Materiale:</span>
+              <select
+                value={materialFilter}
+                onChange={(e) => setMaterialFilter(e.target.value)}
+                className="px-2 py-1 rounded-lg text-xs outline-none bg-[hsl(220,32%,10%)] border border-[hsl(220,20%,22%)] text-white"
+              >
+                <option value="">Nessuno (Generico)</option>
+                {catalogMaterials.map((m) => (
+                  <option key={m.id} value={m.name}>{m.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Tabella interattiva */}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-xs text-white/80">
+              <thead>
+                <tr className="border-b border-white/5 font-bold uppercase tracking-wider text-white/40">
+                  <th className="py-2.5 px-2">Riferimento</th>
+                  <th className="py-2.5 px-2">Base</th>
+                  <th className="py-2.5 px-2">Altezza</th>
+                  <th className="py-2.5 px-2">Unità</th>
+                  <th className="py-2.5 px-2">Quantità (Q)</th>
+                  <th className="py-2.5 px-2 print:hidden">Azioni</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {pieces.map((p) => (
+                  <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="py-2 px-1">
+                      <input
+                        type="text"
+                        value={p.refTitle}
+                        onChange={(e) => updatePiece(p.id, "refTitle", e.target.value)}
+                        className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-full max-w-[150px] font-medium"
+                      />
+                    </td>
+                    <td className="py-2 px-1">
+                      <input
+                        type="number"
+                        value={p.b}
+                        onChange={(e) => updatePiece(p.id, "b", parseFloat(e.target.value) || 0)}
+                        className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-20 font-mono"
+                      />
+                    </td>
+                    <td className="py-2 px-1">
+                      <input
+                        type="number"
+                        value={p.h}
+                        onChange={(e) => updatePiece(p.id, "h", parseFloat(e.target.value) || 0)}
+                        className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-20 font-mono"
+                      />
+                    </td>
+                    <td className="py-2 px-1">
+                      <select
+                        value={p.unit}
+                        onChange={(e) => updatePiece(p.id, "unit", e.target.value as any)}
+                        className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white cursor-pointer"
+                      >
+                        <option value="cm">cm</option>
+                        <option value="mm">mm</option>
+                      </select>
+                    </td>
+                    <td className="py-2 px-1">
+                      <input
+                        type="number"
+                        value={p.q}
+                        onChange={(e) => updatePiece(p.id, "q", Math.max(1, parseInt(e.target.value) || 1))}
+                        className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-16 font-mono"
+                      />
+                    </td>
+                    <td className="py-2 px-1 print:hidden">
+                      <button
+                        type="button"
+                        onClick={() => deletePiece(p.id)}
+                        className="p-1 px-2.5 rounded-lg text-red-400 hover:bg-red-500/10 border border-red-500/10 font-bold transition-colors"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+                {/* Riga Inserimento Manuale extra */}
+                <tr className="bg-white/[0.01] print:hidden">
+                  <td className="py-3 px-1">
+                    <input
+                      type="text"
+                      placeholder="es. Muro Spalla dx"
+                      value={newRef}
+                      onChange={(e) => setNewRef(e.target.value)}
+                      className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-full max-w-[150px] placeholder-white/30"
+                    />
+                  </td>
+                  <td className="py-3 px-1">
+                    <input
+                      type="number"
+                      placeholder="Larghezza"
+                      value={newB}
+                      onChange={(e) => setNewB(e.target.value)}
+                      className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-20 placeholder-white/30 font-mono"
+                    />
+                  </td>
+                  <td className="py-3 px-1">
+                    <input
+                      type="number"
+                      placeholder="Altezza"
+                      value={newH}
+                      onChange={(e) => setNewH(e.target.value)}
+                      className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-20 placeholder-white/30 font-mono"
+                    />
+                  </td>
+                  <td className="py-3 px-1">
+                    <select
+                      value={newUnit}
+                      onChange={(e) => setNewUnit(e.target.value as any)}
+                      className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white cursor-pointer"
+                    >
+                      <option value="cm">cm</option>
+                      <option value="mm">mm</option>
+                    </select>
+                  </td>
+                  <td className="py-3 px-1">
+                    <input
+                      type="number"
+                      value={newQ}
+                      onChange={(e) => setNewQ(e.target.value)}
+                      className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-16 font-mono"
+                    />
+                  </td>
+                  <td className="py-3 px-1">
+                    <button
+                      type="button"
+                      onClick={addManualPiece}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white transition-all bg-[hsl(220,90%,56%)] hover:bg-[hsl(220,85%,48%)] active:scale-95 cursor-pointer"
+                    >
+                      ＋ Aggiungi
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Dashboard Resa di Nesting */}
+        <div className="space-y-4">
+          <div
+            className="rounded-2xl p-4 sm:p-5 space-y-4 text-white print:hidden"
+            style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
+          >
+            <h3 className="text-sm font-bold border-b border-white/5 pb-2 flex items-center gap-1.5">
+              <span>📊</span> Statistiche Nesting 2D
+            </h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-[hsl(220,32%,10%)] p-3 rounded-xl border border-white/5">
+                <span className="block text-[10px] font-bold uppercase text-white/40">Fogli Richiesti</span>
+                <span className="text-xl font-bold font-mono">{nestingResult.sheets.length}</span>
+              </div>
+
+              <div className="bg-[hsl(220,32%,10%)] p-3 rounded-xl border border-white/5">
+                <span className="block text-[10px] font-bold uppercase text-white/40">Pezzi Totali</span>
+                <span className="text-xl font-bold font-mono">{nestingResult.totalPieces}</span>
+              </div>
+            </div>
+
+            <div className="bg-[hsl(220,32%,10%)] p-4 rounded-xl border border-white/5 space-y-1.5">
+              <span className="block text-[10px] font-bold uppercase text-white/40">Rendimento Lamiera</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-black font-mono text-emerald-400">
+                  {nestingResult.efficiency.toFixed(1)}%
+                </span>
+                <span className="text-xs text-white/50">utilizzato</span>
+              </div>
+              
+              {/* Barra progresso */}
+              <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${nestingResult.efficiency}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Pulsanti di Salvataggio e Stampa */}
+          <div className="flex flex-col gap-3 print:hidden">
+            <button
+              type="button"
+              onClick={handleSave}
+              className="w-full py-3 rounded-xl font-semibold text-white shadow-lg transition-all bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 active:scale-98 cursor-pointer text-sm"
+            >
+              💾 Salva Piano di Taglio
+            </button>
+
+            <button
+              type="button"
+              onClick={() => window.print()}
+              disabled={nestingResult.sheets.length === 0}
+              className="w-full py-3 rounded-xl font-semibold text-white transition-all bg-[hsl(220,26%,20%)] hover:bg-[hsl(220,26%,25%)] border border-white/5 cursor-pointer disabled:opacity-50 text-sm"
+            >
+              🖨️ Stampa / Salva PDF
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDeletePlan}
+              className="w-full py-2.5 rounded-xl text-xs font-bold text-red-400 hover:text-red-300 bg-red-950/10 hover:bg-red-950/20 border border-red-900/20 active:scale-95 transition-all"
+            >
+              🗑️ Elimina Configurazione
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Layout Grafico dei Fogli di Nesting ── */}
+      <div className="space-y-6">
+        <h3 className="text-base font-bold text-white border-b border-white/5 pb-2 print:border-black/10 print:text-black print:text-lg">
+          🔍 Schemi di Taglio (Fogli {nestingResult.sheets.length})
+        </h3>
+
+        {nestingResult.sheets.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 print:grid-cols-1 print:gap-12">
+            {nestingResult.sheets.map((sheet, idx) => {
+              const totalArea = sheetW * sheetH;
+              const wasteArea = totalArea - sheet.usedArea;
+              const yieldPct = totalArea > 0 ? (sheet.usedArea / totalArea) * 100 : 0;
+              
+              return (
+                <div
+                  key={idx}
+                  className="rounded-2xl p-4 sm:p-5 space-y-4 print:p-0 print:border-none"
+                  style={{
+                    background: "hsl(220 26% 14%)",
+                    border: "1px solid hsl(220 20% 20%)",
+                  }}
+                >
+                  {/* Info Foglio */}
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2 print:border-black/10 print:text-black">
+                    <span className="text-sm font-bold text-white print:text-black">
+                      📄 Lastra #{idx + 1} ({sheetW}x{sheetH} mm)
+                    </span>
+                    <span className="text-xs font-mono font-bold text-emerald-400 print:text-black">
+                      Resa: {yieldPct.toFixed(1)}%
+                    </span>
+                  </div>
+
+                  {/* Rendering SVG del Foglio in scala */}
+                  <div className="flex justify-center bg-[hsl(222,47%,6%)] rounded-xl p-3 border border-white/5 print:bg-white print:border-black/10">
+                    <svg
+                      width="100%"
+                      viewBox={`0 0 ${sheetW} ${sheetH}`}
+                      className="max-h-[60vh] max-w-full drop-shadow-xl"
+                    >
+                      {/* Sfondo foglio intero */}
+                      <rect
+                        width={sheetW}
+                        height={sheetH}
+                        rx={8}
+                        fill="hsl(220 32% 10%)"
+                        stroke="hsl(220 20% 25%)"
+                        strokeWidth={6}
+                        className="print:fill-gray-100 print:stroke-black"
+                      />
+
+                      {/* Rettangolo area utile (margine interno) */}
+                      {margin > 0 && (
+                        <rect
+                          x={margin}
+                          y={margin}
+                          width={sheetW - margin * 2}
+                          height={sheetH - margin * 2}
+                          fill="none"
+                          stroke="hsl(220 90% 56% / 0.15)"
+                          strokeWidth={2}
+                          strokeDasharray="8,8"
+                        />
+                      )}
+
+                      {/* Disegno dei pezzi posizionati */}
+                      {sheet.placed.map((piece, pIdx) => (
+                        <g key={pIdx}>
+                          <rect
+                            x={piece.x}
+                            y={piece.y}
+                            width={piece.w}
+                            height={piece.h}
+                            rx={4}
+                            fill="hsl(142 60% 15% / 0.75)"
+                            stroke="hsl(142 60% 55%)"
+                            strokeWidth={3}
+                            className="print:fill-emerald-50 print:stroke-emerald-800"
+                          />
+                          
+                          {/* Testo in scala */}
+                          {piece.w > 120 && piece.h > 80 ? (
+                            <text
+                              x={piece.x + piece.w / 2}
+                              y={piece.y + piece.h / 2}
+                              dominantBaseline="middle"
+                              textAnchor="middle"
+                              fill="#ffffff"
+                              fontSize={Math.max(14, Math.min(32, piece.w / 12))}
+                              fontFamily="monospace"
+                              fontWeight="bold"
+                              className="print:fill-emerald-900"
+                            >
+                              <tspan x={piece.x + piece.w / 2} dy="-0.3em">
+                                {piece.w}x{piece.h}
+                              </tspan>
+                              <tspan x={piece.x + piece.w / 2} dy="1em" fontSize={Math.max(10, Math.min(22, piece.w / 16))} fill="rgba(255,255,255,0.7)" className="print:fill-emerald-800">
+                                {piece.label.split(" (")[0]}
+                              </tspan>
+                            </text>
+                          ) : (
+                            <text
+                              x={piece.x + piece.w / 2}
+                              y={piece.y + piece.h / 2}
+                              dominantBaseline="middle"
+                              textAnchor="middle"
+                              fill="#ffffff"
+                              fontSize={10}
+                              fontFamily="monospace"
+                              className="print:fill-emerald-900"
+                            >
+                              {piece.w}x{piece.h}
+                            </text>
+                          )}
+                        </g>
+                      ))}
+                    </svg>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div
+            className="p-8 rounded-2xl border text-center text-xs italic"
+            style={{ background: "hsl(220 32% 10%)", borderColor: "hsl(220 20% 18%)", color: "hsl(215 15% 40%)" }}
+          >
+            Inserisci quote e pezzi validi per visualizzare gli schemi grafici di taglio.
+          </div>
+        )}
+      </div>
+
+      {/* ── CSS Globale Specializzato per la Stampa PDF ── */}
+      <style jsx global>{`
+        @media print {
+          body {
+            background-color: white !important;
+            color: black !important;
+          }
+          /* Nasconde sidebar, intestazioni del sito, barra di navigazione e pulsanti dell'app */
+          header, footer, nav, aside, .print\\:hidden {
+            display: none !important;
+          }
+          /* Riduce margini della pagina di stampa browser */
+          @page {
+            margin: 1.2cm;
+          }
+          /* Forza sfondi a colori durante la stampa */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
