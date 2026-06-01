@@ -18,6 +18,8 @@ interface SketchEditorClientProps {
       piano: string | null;
     }>;
   }>;
+  onSaveBase64?: (base64: string) => void;
+  onClose?: () => void;
 }
 
 interface Point {
@@ -40,6 +42,8 @@ export default function SketchEditorClient({
   sketch,
   associatedNotes: initialNotes,
   projectsWithLevels,
+  onSaveBase64,
+  onClose,
 }: SketchEditorClientProps) {
   const router = useRouter();
 
@@ -366,6 +370,14 @@ export default function SketchEditorClient({
         });
 
         const base64 = mergeCanvas.toDataURL("image/png");
+        
+        if (onSaveBase64) {
+          onSaveBase64(base64);
+          setSaveStatus("saved");
+          setHasUnsavedChanges(false);
+          return;
+        }
+
         const res = await updateSketch(sketch.id, { image_data: base64 });
         
         if (res.success) {
@@ -881,12 +893,22 @@ export default function SketchEditorClient({
           }}
         >
           <div className="flex items-center gap-3 min-w-0">
-            <Link
-              href="/sketches"
-              className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/5 border border-white/5 text-white/80 hover:bg-white/10 transition-all text-sm flex-shrink-0"
-            >
-              ⬅
-            </Link>
+            {onClose ? (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/5 border border-white/5 text-white/80 hover:bg-white/10 transition-all text-sm flex-shrink-0 cursor-pointer text-white"
+              >
+                ⬅
+              </button>
+            ) : (
+              <Link
+                href="/sketches"
+                className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/5 border border-white/5 text-white/80 hover:bg-white/10 transition-all text-sm flex-shrink-0"
+              >
+                ⬅
+              </Link>
+            )}
             <div className="min-w-0">
               <h2 className="text-white font-bold text-xs md:text-sm truncate leading-snug">
                 {sketchName}
@@ -950,12 +972,14 @@ export default function SketchEditorClient({
             </button>
 
             {/* Impostazioni Sketch */}
-            <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-white/80 hover:bg-white/10 transition-all text-xs cursor-pointer"
-            >
-              ⚙️
-            </button>
+            {!onClose && (
+              <button
+                onClick={() => setIsSettingsOpen(true)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 text-white/80 hover:bg-white/10 transition-all text-xs cursor-pointer"
+              >
+                ⚙️
+              </button>
+            )}
           </div>
         </div>
 

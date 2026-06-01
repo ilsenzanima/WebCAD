@@ -12,7 +12,7 @@ import {
 } from "@/app/actions/field-notes";
 import PlanimetriaMappa from "./PlanimetriaMappa";
 import PhotoQuotaEditor from "./PhotoQuotaEditor";
-import FreehandSketchEditor from "./FreehandSketchEditor";
+import SketchEditorClient from "@/app/ui/sketches/SketchEditorClient";
 import ModelViewer from "./ModelViewer";
 import LivellaBolla from "./LivellaBolla";
 import CalcolatriceWidget from "@/app/ui/dashboard/CalcolatriceWidget";
@@ -864,20 +864,32 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         />
       )}
 
-      {/* Modale FreehandSketchEditor per Disegno Libero / Sketch */}
+      {/* Modale SketchEditorClient per Disegno Libero / Sketch con Riconoscimento Forme */}
       {editingSketchId && editingSketchUrl && (
-        <FreehandSketchEditor
-          imageUrl={editingSketchUrl}
-          onSave={(newUrl) => {
-            updateItem(editingSketchId, { value_text: newUrl });
-            setEditingSketchId(null);
-            setEditingSketchUrl(null);
-          }}
-          onClose={() => {
-            setEditingSketchId(null);
-            setEditingSketchUrl(null);
-          }}
-        />
+        <div className="fixed inset-0 z-[100] flex flex-col bg-black">
+          <SketchEditorClient
+            sketch={{
+              id: editingSketchId,
+              name: isSketch ? "Disegno Foglio Millimetrato" : "Annotazione su Foto",
+              user_id: "",
+              level_id: levelId,
+              image_data: editingSketchUrl,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }}
+            associatedNotes={[]}
+            projectsWithLevels={[]}
+            onSaveBase64={(newUrl) => {
+              updateItem(editingSketchId, { value_text: newUrl });
+              setEditingSketchId(null);
+              setEditingSketchUrl(null);
+            }}
+            onClose={() => {
+              setEditingSketchId(null);
+              setEditingSketchUrl(null);
+            }}
+          />
+        </div>
       )}
 
       {/* Modale Visualizzatore 3D GLB/GLTF */}
