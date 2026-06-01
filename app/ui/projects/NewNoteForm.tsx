@@ -368,10 +368,10 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         })),
       };
 
-      if (!isOnline) {
-        // Salvataggio offline ottimistico
+      if (!isOnline || levelId.startsWith("temp_") || (initialNote && initialNote.id.startsWith("temp_"))) {
+        // Salvataggio offline ottimistico (in coda) per preservare la risoluzione referenziale dei Temp ID
         const noteId = initialNote ? initialNote.id : `temp-note-${Date.now()}`;
-        saveFieldNoteItemsOptimistic(noteId, projectId, levelId, payload.items);
+        saveFieldNoteItemsOptimistic(noteId, projectId, levelId, payload.items, finalType.name);
         router.push(`/projects/${projectId}`);
         return;
       }

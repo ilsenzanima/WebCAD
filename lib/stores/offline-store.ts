@@ -133,15 +133,17 @@ export const useOfflineStore = create<OfflineState>()(
           levels: { ...state.levels, [tempId]: [] }, // Inizializza livelli vuoti
         }));
 
-        // Accoda operazione se siamo offline
-        if (!get().isOnline) {
-          const op: SyncOperation = {
-            id: generateTempId(),
-            action: "CREATE_PROJECT",
-            payload: { tempId, name },
-            timestamp: Date.now(),
-          };
-          set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+        // Accoda operazione
+        const op: SyncOperation = {
+          id: generateTempId(),
+          action: "CREATE_PROJECT",
+          payload: { tempId, name },
+          timestamp: Date.now(),
+        };
+        set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+
+        if (get().isOnline) {
+          get().syncOfflineData();
         }
       },
 
@@ -157,14 +159,16 @@ export const useOfflineStore = create<OfflineState>()(
           };
         });
 
-        if (!get().isOnline) {
-          const op: SyncOperation = {
-            id: generateTempId(),
-            action: "RENAME_PROJECT",
-            payload: { projectId, newName },
-            timestamp: Date.now(),
-          };
-          set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+        const op: SyncOperation = {
+          id: generateTempId(),
+          action: "RENAME_PROJECT",
+          payload: { projectId, newName },
+          timestamp: Date.now(),
+        };
+        set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+
+        if (get().isOnline) {
+          get().syncOfflineData();
         }
       },
 
@@ -177,14 +181,16 @@ export const useOfflineStore = create<OfflineState>()(
           return { projects: newProjects, levels: newLevels };
         });
 
-        if (!get().isOnline) {
-          const op: SyncOperation = {
-            id: generateTempId(),
-            action: "DELETE_PROJECT",
-            payload: { projectId },
-            timestamp: Date.now(),
-          };
-          set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+        const op: SyncOperation = {
+          id: generateTempId(),
+          action: "DELETE_PROJECT",
+          payload: { projectId },
+          timestamp: Date.now(),
+        };
+        set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+
+        if (get().isOnline) {
+          get().syncOfflineData();
         }
       },
 
@@ -210,14 +216,16 @@ export const useOfflineStore = create<OfflineState>()(
           };
         });
 
-        if (!get().isOnline) {
-          const op: SyncOperation = {
-            id: generateTempId(),
-            action: "ADD_LEVEL",
-            payload: { tempId, projectId, name, elevationZ, drawingType, piano },
-            timestamp: Date.now(),
-          };
-          set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+        const op: SyncOperation = {
+          id: generateTempId(),
+          action: "ADD_LEVEL",
+          payload: { tempId, projectId, name, elevationZ, drawingType, piano },
+          timestamp: Date.now(),
+        };
+        set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+
+        if (get().isOnline) {
+          get().syncOfflineData();
         }
       },
 
@@ -235,14 +243,16 @@ export const useOfflineStore = create<OfflineState>()(
           };
         });
 
-        if (!get().isOnline) {
-          const op: SyncOperation = {
-            id: generateTempId(),
-            action: "TOGGLE_LEVEL_COMPLETED",
-            payload: { levelId, projectId, completed },
-            timestamp: Date.now(),
-          };
-          set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+        const op: SyncOperation = {
+          id: generateTempId(),
+          action: "TOGGLE_LEVEL_COMPLETED",
+          payload: { levelId, projectId, completed },
+          timestamp: Date.now(),
+        };
+        set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+
+        if (get().isOnline) {
+          get().syncOfflineData();
         }
       },
 
@@ -282,14 +292,16 @@ export const useOfflineStore = create<OfflineState>()(
           };
         });
 
-        if (!get().isOnline) {
-          const op: SyncOperation = {
-            id: generateTempId(),
-            action: "SAVE_NOTE_ITEMS",
-            payload: { noteId, projectId, levelId, items, typeName: typeName ?? "Appunti Cantiere" },
-            timestamp: Date.now(),
-          };
-          set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+        const op: SyncOperation = {
+          id: generateTempId(),
+          action: "SAVE_NOTE_ITEMS",
+          payload: { noteId, projectId, levelId, items, typeName: typeName ?? "Appunti Cantiere" },
+          timestamp: Date.now(),
+        };
+        set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+
+        if (get().isOnline) {
+          get().syncOfflineData();
         }
       },
 
@@ -300,14 +312,16 @@ export const useOfflineStore = create<OfflineState>()(
           return { fieldNotes: newNotes };
         });
 
-        if (!get().isOnline) {
-          const op: SyncOperation = {
-            id: generateTempId(),
-            action: "DELETE_NOTE",
-            payload: { noteId, projectId },
-            timestamp: Date.now(),
-          };
-          set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+        const op: SyncOperation = {
+          id: generateTempId(),
+          action: "DELETE_NOTE",
+          payload: { noteId, projectId },
+          timestamp: Date.now(),
+        };
+        set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+
+        if (get().isOnline) {
+          get().syncOfflineData();
         }
       },
 
@@ -366,14 +380,16 @@ export const useOfflineStore = create<OfflineState>()(
           };
         });
 
-        if (!get().isOnline) {
-          const op: SyncOperation = {
-            id: generateTempId(),
-            action: "UPDATE_NOTE_TEXT",
-            payload: { levelId, text },
-            timestamp: Date.now(),
-          };
-          set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+        const op: SyncOperation = {
+          id: generateTempId(),
+          action: "UPDATE_NOTE_TEXT",
+          payload: { levelId, text },
+          timestamp: Date.now(),
+        };
+        set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
+
+        if (get().isOnline) {
+          get().syncOfflineData();
         }
       },
 
