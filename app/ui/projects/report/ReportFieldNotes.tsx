@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useEffect } from "react";
 import type { FieldNote, FieldNoteItem } from "@/app/actions/field-notes";
-import ModelViewer from "../ModelViewer";
 
 interface Props {
   notes: FieldNote[];
@@ -24,9 +23,6 @@ const is3DModelUrl = (url?: string | null) => {
 export default function ReportFieldNotes({ notes, levels, onImageClick }: Props) {
   const [filterStatus, setFilterStatus] = useState<"all" | "completed" | "pending">("all");
   const [searchQuery, setSearchQuery] = useState("");
-  
-  // Stato per la modale interattiva 3D
-  const [active3DModelUrl, setActive3DModelUrl] = useState<string | null>(null);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -332,17 +328,19 @@ export default function ReportFieldNotes({ notes, levels, onImageClick }: Props)
                               .map((item) => renderNoteItem(item, has3DModel))}
                           </div>
 
-                          {/* Se c'è un modello 3D, mostriamo il visualizzatore interattivo premium */}
+                          {/* Se c'è un modello 3D, mostriamo l'azione di download del modello CAD */}
                           {has3DModel && model3dItem?.value_text && (
                             <div className="pt-2.5 print:hidden">
-                              <button
-                                type="button"
-                                onClick={() => setActive3DModelUrl(model3dItem.value_text!)}
-                                className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transition-colors shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+                              <a
+                                href={model3dItem.value_text}
+                                download="modello_cad.glb"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 transition-colors shadow-md items-center gap-1.5 cursor-pointer active:scale-95"
                               >
-                                <span>🖥️</span>
-                                <span>Apri Visualizzatore 3D Interattivo</span>
-                              </button>
+                                <span>📥</span>
+                                <span>Scarica Modello CAD (GLB)</span>
+                              </a>
                             </div>
                           )}
                         </div>
@@ -361,28 +359,6 @@ export default function ReportFieldNotes({ notes, levels, onImageClick }: Props)
           })
         )}
       </div>
-
-      {/* Modale Visualizzatore 3D Interattivo a Schermo Intero */}
-      {active3DModelUrl && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 print:hidden">
-          <div className="bg-[#090b11] border border-white/10 rounded-3xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col shadow-2xl relative animate-fade-in">
-            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-black/30">
-              <span className="text-sm font-bold text-white flex items-center gap-1.5">
-                <span>🧊</span> Modello CAD 3D Interattivo del Cantiere
-              </span>
-              <button
-                onClick={() => setActive3DModelUrl(null)}
-                className="px-3.5 py-1.5 rounded-xl bg-red-600/90 hover:bg-red-700 text-white font-extrabold text-xs transition-all shadow-md cursor-pointer active:scale-95"
-              >
-                Chiudi ✕
-              </button>
-            </div>
-            <div className="flex-1 overflow-hidden p-3 bg-[#07080c]">
-              <ModelViewer modelUrl={active3DModelUrl} />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

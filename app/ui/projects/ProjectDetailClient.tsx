@@ -307,9 +307,9 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
           } else if (item.item_type === "dim_quadrata" && item.value_text) {
             try {
               const parsed = JSON.parse(item.value_text);
-              items.push(`◻ Sezione: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"}`);
+              items.push(`✂️ Pezzo: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"} (Qtà: ${parsed.q || 1})`);
             } catch {
-              items.push(`◻ Sezione Quadrata`);
+              items.push(`✂️ Pezzo da tagliare`);
             }
           } else if (item.item_type === "dim_cubica" && item.value_text) {
             try {
@@ -802,12 +802,22 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                                               icon = "🎨";
                                               break;
                                             case "dim_quadrata":
-                                              desc = `Dimensione Quadrata: ${valNum} ${valUnit}`;
-                                              icon = "📐";
+                                              try {
+                                                const parsed = valText ? JSON.parse(valText) : {};
+                                                desc = `Pezzo da tagliare: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"} (Qtà: ${parsed.q || 1})`;
+                                              } catch {
+                                                desc = `Pezzo da tagliare: ${valNum || 0} ${valUnit || "cm"}`;
+                                              }
+                                              icon = "✂️";
                                               break;
                                             case "dim_cubica":
-                                              desc = `Dimensione Cubica: ${valNum} ${valUnit}`;
-                                              icon = "📦";
+                                              try {
+                                                const parsed = valText ? JSON.parse(valText) : {};
+                                                desc = `Sezione 3D: ${parsed.b || 0} x ${parsed.h || 0} x ${parsed.d || 0} ${parsed.unit || "cm"}`;
+                                              } catch {
+                                                desc = `Dimensione Cubica: ${valNum || 0} ${valUnit || "cm"}`;
+                                              }
+                                              icon = "⬛";
                                               break;
                                             case "materiale":
                                               desc = `Materiale: ${valText}`;

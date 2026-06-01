@@ -13,7 +13,6 @@ import {
 import PlanimetriaMappa from "./PlanimetriaMappa";
 import PhotoQuotaEditor from "./PhotoQuotaEditor";
 import SketchEditorClient from "@/app/ui/sketches/SketchEditorClient";
-import ModelViewer from "./ModelViewer";
 import LivellaBolla from "./LivellaBolla";
 import CalcolatriceWidget from "@/app/ui/dashboard/CalcolatriceWidget";
 import { useOfflineStore } from "@/lib/stores/offline-store";
@@ -48,7 +47,7 @@ const ITEM_LABELS: Record<ItemType, string> = {
   dipintura: "Dipintura",
   nota: "Nota libera",
   foto: "Foto",
-  dim_quadrata: "◻ Dimensioni quadrate",
+  dim_quadrata: "✂️ Pezzo da tagliare",
   dim_cubica: "⬛ Dimensioni cubiche",
   posizione: "📍 Segna posizione",
   materiale: "📦 Materiale",
@@ -63,6 +62,7 @@ interface CompositeValue {
   b?: number | null;
   h?: number | null;
   d?: number | null;
+  q?: number | null;
   unit: "mm" | "cm";
 }
 
@@ -133,9 +133,6 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
       }
     }
   }, [noteToUse, mounted, cachedNote, initialNote]);
-
-
-  const [activeModel3DUrl, setActiveModel3DUrl] = useState<string | null>(null);
 
   // Stato per l'autofocus dell'ultimo elemento inserito
   const [lastAddedId, setLastAddedId] = useState<string | null>(null);
@@ -633,21 +630,21 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                         </button>
                       </div>
 
-                      <div className="rounded-2xl overflow-hidden border border-white/10">
-                        <ModelViewer
-                          modelUrl={model3dItem.value_text}
-                          onSnapshotTaken={(newSnapshot) => {
-                            const newItems = [...items];
-                            // Inseriamo sempre un nuovo screenshot con inclusione abilitata di default
-                            newItems.push({
-                              id: crypto.randomUUID(),
-                              item_type: "foto",
-                              value_text: newSnapshot,
-                              value_bool: true,
-                            });
-                            setItems(newItems);
-                          }}
-                        />
+                      <div className="rounded-2xl p-4 border border-sky-500/20 bg-sky-500/5 text-center space-y-2">
+                        <span className="text-2xl">📦</span>
+                        <p className="text-xs font-bold text-white">Modello CAD 3D Allegato con Successo</p>
+                        <p className="text-[10px] text-white/50">
+                          Il file CAD è memorizzato nel cloud ed è pronto per essere scaricato.
+                        </p>
+                        <a 
+                          href={model3dItem.value_text!}
+                          download="modello_cad.glb"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block mt-1 px-3 py-1.5 rounded-lg text-[10px] font-extrabold text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-all cursor-pointer"
+                        >
+                          📥 Scarica Modello CAD (GLB)
+                        </a>
                       </div>
                     </div>
 
@@ -944,7 +941,6 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                       setEditingSketchId(id);
                       setEditingSketchUrl(url);
                     }}
-                    onOpen3DModel={setActiveModel3DUrl}
                     lastAddedId={lastAddedId}
                   />
                 );
@@ -1036,22 +1032,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         </div>
       )}
 
-      {/* Modale Visualizzatore 3D GLB/GLTF */}
-      {activeModel3DUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="bg-[#090b11] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl relative animate-fade-in">
-            <button
-              onClick={() => setActiveModel3DUrl(null)}
-              className="absolute top-4 right-4 z-50 px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs transition-all cursor-pointer shadow-lg active:scale-95"
-            >
-              ✕ Chiudi
-            </button>
-            <div className="flex-1 overflow-hidden p-2">
-              <ModelViewer modelUrl={activeModel3DUrl} />
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Calcolatrice Cantiere con Importazione */}
       <CalcolatriceWidget
@@ -1074,7 +1055,6 @@ function ItemRow({
   catalogMaterials = [],
   onEditFoto,
   onDrawFoto,
-  onOpen3DModel,
   lastAddedId,
 }: {
   item: NoteItemDraft;
@@ -1083,7 +1063,6 @@ function ItemRow({
   catalogMaterials?: Material[];
   onEditFoto?: (id: string, url: string) => void;
   onDrawFoto?: (id: string, url: string) => void;
-  onOpen3DModel?: (url: string) => void;
   lastAddedId?: string | null;
 }) {
   const label = ITEM_LABELS[item.item_type];
@@ -1137,7 +1116,7 @@ function ItemRow({
       >
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold" style={{ color: "hsl(215 20% 65%)" }}>
-            {item.item_type === "dim_quadrata" ? "◻ Sezione 2D" : "⬛ Sezione 3D"}
+            {item.item_type === "dim_quadrata" ? "✂️ Pezzo da tagliare" : "⬛ Sezione 3D"}
           </span>
           <div className="flex items-center gap-1.5">
             <button
@@ -1190,6 +1169,21 @@ function ItemRow({
               style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
             />
           </div>
+          {item.item_type === "dim_quadrata" && (
+            <div className="flex items-center gap-1 w-20 flex-shrink-0">
+              <span className="text-[10px] text-gray-500">Q:</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={cv.q ?? 1}
+                onChange={(e) => updateComposite({ q: e.target.value ? parseInt(e.target.value) : 1 })}
+                placeholder="Qtà"
+                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(142 60% 75%)" }}
+              />
+            </div>
+          )}
           {isDim3D && (
             <div className="flex items-center gap-1 flex-1 min-w-0">
               <span className="text-[10px] text-gray-500">P:</span>
@@ -1341,13 +1335,16 @@ function ItemRow({
             <div className="flex items-center gap-2 min-w-0">
               <div className="relative inline-block flex-shrink-0">
                 {is3DModelUrl(item.value_text) ? (
-                  <div 
-                    onClick={() => onOpen3DModel?.(item.value_text!)}
+                  <a 
+                    href={item.value_text}
+                    download="modello_cad.glb"
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="h-8 w-8 rounded-lg flex items-center justify-center bg-sky-500/15 text-sky-400 text-sm font-bold border border-sky-500/30 cursor-pointer hover:bg-sky-500/25 transition-all" 
-                    title="Clicca per visualizzare il modello 3D"
+                    title="Clicca per scaricare il modello CAD"
                   >
                     📦
-                  </div>
+                  </a>
                 ) : (
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img 
@@ -1373,18 +1370,20 @@ function ItemRow({
               </div>
               
               {is3DModelUrl(item.value_text) ? (
-                <button
-                  type="button"
-                  onClick={() => onOpen3DModel?.(item.value_text!)}
-                  className="px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap cursor-pointer"
+                <a
+                  href={item.value_text}
+                  download="modello_cad.glb"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1 shadow-sm"
                   style={{
                     background: "hsl(220 90% 56% / 0.15)",
                     color: "hsl(220 90% 70%)",
                     border: "1px solid hsl(220 90% 56% / 0.3)",
                   }}
                 >
-                  👁 Visualizza 3D
-                </button>
+                  📥 Scarica CAD
+                </a>
               ) : (
                 <div className="flex flex-wrap items-center gap-2 pt-0.5">
                   <button

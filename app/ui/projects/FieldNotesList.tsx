@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import type { FieldNote, FieldNoteItem } from "@/app/actions/field-notes";
 import ImageViewerModal from "./ImageViewerModal";
-import ModelViewer from "./ModelViewer";
 
 const is3DModelUrl = (url?: string | null) => {
   if (!url) return false;
@@ -22,7 +21,7 @@ const ITEM_LABELS: Record<FieldNoteItem["item_type"], string> = {
   dipintura: "Dipintura",
   nota: "Nota",
   foto: "Foto",
-  dim_quadrata: "◻ Dimensioni",
+  dim_quadrata: "✂️ Pezzo da tagliare",
   dim_cubica: "⬛ Dim. cubiche",
   posizione: "📍 Posizione",
   materiale: "📦 Materiale",
@@ -201,7 +200,6 @@ function NoteRow({ note }: { note: FieldNote }) {
 
 function ItemDetail({ item }: { item: FieldNoteItem }) {
   const [isZoomed, setIsZoomed] = useState(false);
-  const [is3DOpen, setIs3DOpen] = useState(false);
   
   const label = ITEM_LABELS[item.item_type];
   const isMeasure = (MEASURE_TYPES as readonly string[]).includes(item.item_type);
@@ -224,23 +222,28 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
           <>
             {is3DModelUrl(item.value_text) ? (
               <div className="flex items-center gap-3">
-                <div 
-                  onClick={() => setIs3DOpen(true)}
+                <a 
+                  href={item.value_text}
+                  download="modello_cad.glb"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="h-16 w-16 rounded-lg flex flex-col items-center justify-center bg-sky-500/10 text-sky-400 text-xs font-bold border border-sky-500/30 cursor-pointer hover:bg-sky-500/20 hover:scale-105 transition-all self-start flex-shrink-0 gap-1 shadow-md shadow-sky-500/5"
-                  title="Visualizza Modello 3D"
+                  title="Scarica Modello CAD"
                 >
                   <span className="text-2xl">📦</span>
-                </div>
+                </a>
                 <div>
-                  <p className="text-[10px] text-white font-bold">Modello 3D Esterno</p>
+                  <p className="text-[10px] text-white font-bold">Modello 3D / CAD Allegato</p>
                   <p className="text-[9px] text-white/40 mt-0.5 font-mono">Formato: GLB / GLTF</p>
-                  <button
-                    type="button"
-                    onClick={() => setIs3DOpen(true)}
-                    className="mt-1.5 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-all cursor-pointer"
+                  <a
+                    href={item.value_text}
+                    download="modello_cad.glb"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-1.5 px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-all cursor-pointer"
                   >
-                    👁 Visualizza 3D
-                  </button>
+                    📥 Scarica File CAD
+                  </a>
                 </div>
               </div>
             ) : (
@@ -261,23 +264,6 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
                 onClose={() => setIsZoomed(false)}
                 title="Foto Appunto"
               />
-            )}
-
-            {/* Modal Visualizzatore 3D GLB/GLTF */}
-            {is3DOpen && is3DModelUrl(item.value_text) && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-                <div className="bg-[#090b11] border border-white/10 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl relative animate-fade-in">
-                  <button
-                    onClick={() => setIs3DOpen(false)}
-                    className="absolute top-4 right-4 z-50 px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs transition-all cursor-pointer shadow-lg active:scale-95"
-                  >
-                    ✕ Chiudi
-                  </button>
-                  <div className="flex-1 overflow-hidden p-2">
-                    <ModelViewer modelUrl={item.value_text} />
-                  </div>
-                </div>
-              </div>
             )}
           </>
         ) : (
@@ -347,7 +333,7 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
             const cv = item.value_text ? JSON.parse(item.value_text) : {};
             const u = cv.unit ?? "cm";
             if (item.item_type === "dim_quadrata") {
-              return <span className="text-xs font-mono">{cv.b ?? "—"}{u} × {cv.h ?? "—"}{u}</span>;
+              return <span className="text-xs font-mono">{cv.b ?? "—"}{u} × {cv.h ?? "—"}{u} {cv.q ? `(Qtà: ${cv.q})` : ""}</span>;
             }
             return <span className="text-xs font-mono">{cv.b ?? "—"}{u} × {cv.h ?? "—"}{u} × {cv.d ?? "—"}{u}</span>;
           } catch { return <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>—</span>; }

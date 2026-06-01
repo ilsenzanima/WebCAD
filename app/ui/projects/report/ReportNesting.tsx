@@ -11,12 +11,15 @@ interface SheetMaterialRequest {
   label: string;
 }
 
+import type { FieldNote } from "@/app/actions/field-notes";
+
 interface Props {
   allWalls: any[];
   all3DBoxes: any[];
+  notes?: FieldNote[];
 }
 
-export default function ReportNesting({ allWalls, all3DBoxes }: Props) {
+export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Props) {
   const commercialProfileLen = 3000; // Profilo standard da 3m (3000mm)
   const commercialSheetW = 1200; // Lastra standard 1200mm
   const commercialSheetH = 2000; // Lastra standard 2000mm
@@ -46,6 +49,38 @@ export default function ReportNesting({ allWalls, all3DBoxes }: Props) {
         label: `Lastra ${w.levelName || "Cassonetto"} (${lenMm}x${currentPieceLen}mm)`,
       });
     }
+  });
+
+  // A.2 Estrazione materiali dalle Note di Cantiere ("Pezzi da Tagliare")
+  notes.forEach((note) => {
+    (note.field_note_items ?? []).forEach((item) => {
+      if (item.item_type === "dim_quadrata" && item.value_text) {
+        try {
+          const parsed = JSON.parse(item.value_text);
+          const b = parseFloat(parsed.b);
+          const h = parseFloat(parsed.h);
+          const q = parseInt(parsed.q) || 1;
+          const unit = parsed.unit || "cm";
+
+          if (!isNaN(b) && !isNaN(h) && b > 0 && h > 0) {
+            // Conversione in mm (1 cm = 10 mm)
+            const factor = unit === "cm" ? 10 : 1;
+            const wMm = Math.round(b * factor);
+            const hMm = Math.round(h * factor);
+
+            for (let i = 0; i < q; i++) {
+              sheetRequests.push({
+                width: wMm,
+                height: hMm,
+                label: `Nota #${note.note_number} (${wMm}x${hMm}mm)`,
+              });
+            }
+          }
+        } catch (e) {
+          // Ignora errori di parsing o valori malformati
+        }
+      }
+    });
   });
 
   // B. Algoritmo Nesting 1D (First Fit Decreasing)

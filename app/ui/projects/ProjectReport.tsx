@@ -84,7 +84,10 @@ export default function ProjectReport({ projectId }: Props) {
   }, [projectId]);
 
   // Controlli per l'abilitazione delle tab
-  const hasNesting = allWalls.length > 0;
+  const hasPiecesInNotes = allNotes.some((note) =>
+    (note.field_note_items ?? []).some((item) => item.item_type === "dim_quadrata")
+  );
+  const hasNesting = allWalls.length > 0 || hasPiecesInNotes;
   
   // Un appunto è considerato un rilievo fuori bolla se contiene i parametri di inclinazione o la marcatura della livella
   const hasOutOfPlumb = allNotes.some((note) => {
@@ -127,7 +130,7 @@ export default function ProjectReport({ projectId }: Props) {
           )}
 
           {activeTab === "nesting" && hasNesting && (
-            <ReportNesting allWalls={allWalls} all3DBoxes={all3DBoxes} />
+            <ReportNesting allWalls={allWalls} all3DBoxes={all3DBoxes} notes={allNotes} />
           )}
 
           {activeTab === "outOfPlumb" && hasOutOfPlumb && (
@@ -162,7 +165,7 @@ export default function ProjectReport({ projectId }: Props) {
           {/* B. Nesting Ottimizzazione di Taglio */}
           {hasNesting && (
             <div className="break-inside-avoid pt-8 border-t border-gray-200">
-              <ReportNesting allWalls={allWalls} all3DBoxes={all3DBoxes} />
+              <ReportNesting allWalls={allWalls} all3DBoxes={all3DBoxes} notes={allNotes} />
             </div>
           )}
 
