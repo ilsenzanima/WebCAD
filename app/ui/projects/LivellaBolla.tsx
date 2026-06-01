@@ -5,7 +5,7 @@ import { Motion } from "@capacitor/motion";
 import { Capacitor } from "@capacitor/core";
 
 interface LivellaBollaProps {
-  onCapture: (text: string) => void;
+  onCapture: (text: string, photoBase64?: string | null) => void;
   onClose: () => void;
 }
 
@@ -171,10 +171,169 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
     setOffsetGamma(0);
   }
 
-  // Conferma e invia il testo formattato al form
+  // Conferma e invia il testo formattato e l'immagine generata al form
   function handleConfirm() {
     const text = `📐 Livella a Bolla: Inclinazione Beta = ${effBeta > 0 ? "+" : ""}${effBeta}°, Gamma = ${effGamma > 0 ? "+" : ""}${effGamma}°`;
-    onCapture(text);
+    
+    // Se la fotocamera è attiva, sta riproducendo ed abbiamo il video, generiamo l'immagine unificata!
+    if (useCamera && isVideoPlaying && videoRef.current) {
+      try {
+        const video = videoRef.current;
+        const canvas = document.createElement("canvas");
+        
+        // Risoluzione nativa del video
+        const w = video.videoWidth || 1280;
+        const h = video.videoHeight || 720;
+        canvas.width = w;
+        canvas.height = h;
+        
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          // 1. Disegna il frame corrente della fotocamera
+          ctx.drawImage(video, 0, 0, w, h);
+          
+          // 2. Aggiunge una patina scura uniforme per far risaltare il reticolo ad alto contrasto
+          ctx.fillStyle = "rgba(10, 15, 30, 0.25)";
+          ctx.fillRect(0, 0, w, h);
+          
+          const greenColor = "rgb(16, 185, 129)";
+          const whiteColor = "rgba(255, 255, 255, 0.75)";
+          const strokeColor = isAligned ? greenColor : whiteColor;
+          
+          const cx = w / 2;
+          const cy = h / 2;
+          
+          // 3. Disegna la croce gigante ad alto contrasto
+          ctx.lineWidth = Math.max(3, Math.round(w / 400));
+          ctx.lineCap = "round";
+          
+          // Ombreggiatura per contrasto elevato
+          ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
+          ctx.shadowBlur = 10;
+          ctx.strokeStyle = strokeColor;
+          
+          // Linea Orizzontale
+          ctx.beginPath();
+          ctx.moveTo(cx - w * 0.35, cy);
+          ctx.lineTo(cx + w * 0.35, cy);
+          ctx.stroke();
+          
+          // Linea Verticale
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - h * 0.35);
+          ctx.lineTo(cx, cy + h * 0.35);
+          ctx.stroke();
+          
+          ctx.shadowBlur = 0; // Ripristina ombra
+          
+          // 4. Disegna il mirino circolare centrale
+          const radius = Math.min(w, h) * 0.18;
+          ctx.lineWidth = Math.max(2, Math.round(w / 500));
+          ctx.strokeStyle = strokeColor;
+          ctx.fillStyle = isAligned ? "rgba(16, 185, 129, 0.08)" : "rgba(10, 15, 30, 0.3)";
+          
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+          ctx.fill();
+          ctx.stroke();
+          
+          // Cerchio di tolleranza interno tratteggiato
+          ctx.strokeStyle = isAligned ? greenColor : "rgba(255, 255, 255, 0.35)";
+          ctx.setLineDash([8, 8]);
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius * 0.25, 0, 2 * Math.PI);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          
+          // 5. Calcola e disegna la bolla galleggiante
+          const maxDisp = radius * 0.75;
+          const sens = radius / 16; // 16 gradi massimo spostamento
+          
+          const moveX = Math.max(-maxDisp, Math.min(maxDisp, effGamma * sens));
+          const moveY = Math.max(-maxDisp, Math.min(maxDisp, effBeta * sens));
+          
+          const bx = cx + moveX;
+          const by = cy + moveY;
+          const br = radius * 0.18;
+          
+          const grad = ctx.createRadialGradient(bx - br * 0.3, by - br * 0.3, br * 0.1, bx, by, br);
+          if (isAligned) {
+            grad.addColorStop(0, "rgb(52, 211, 153)");
+            grad.addColorStop(1, "rgb(4, 120, 87)");
+          } else {
+            grad.addColorStop(0, "rgb(56, 189, 248)");
+            grad.addColorStop(1, "rgb(2, 132, 199)");
+          }
+          
+          ctx.fillStyle = grad;
+          ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.arc(bx, by, br, 0, 2 * Math.PI);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          
+          // 6. Box informativo con i gradi
+          const boxW = Math.max(300, Math.round(w * 0.35));
+          const boxH = Math.max(80, Math.round(h * 0.14));
+          const boxX = (w - boxW) / 2;
+          const boxY = h - boxH - Math.max(30, Math.round(h * 0.05));
+          
+          ctx.fillStyle = "rgba(10, 15, 30, 0.85)";
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect ? ctx.roundRect(boxX, boxY, boxW, boxH, 16) : ctx.rect(boxX, boxY, boxW, boxH);
+          ctx.fill();
+          ctx.stroke();
+          
+          // Testi e gradi
+          ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
+          ctx.font = `bold ${Math.round(boxH * 0.13)}px sans-serif`;
+          ctx.textAlign = "center";
+          
+          ctx.fillText("BECCHEGGIO (Y)", boxX + boxW * 0.25, boxY + boxH * 0.3);
+          ctx.fillText("ROLLIO (X)", boxX + boxW * 0.75, boxY + boxH * 0.3);
+          
+          ctx.fillStyle = isAligned ? greenColor : "rgb(255, 255, 255)";
+          ctx.font = `bold ${Math.round(boxH * 0.28)}px sans-serif`;
+          
+          const textBeta = `${effBeta > 0 ? "+" : ""}${effBeta}°`;
+          const textGamma = `${effGamma > 0 ? "+" : ""}${effGamma}°`;
+          ctx.fillText(textBeta, boxX + boxW * 0.25, boxY + boxH * 0.7);
+          ctx.fillText(textGamma, boxX + boxW * 0.75, boxY + boxH * 0.7);
+          
+          // Linea separatrice
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+          ctx.beginPath();
+          ctx.moveTo(boxX + boxW * 0.5, boxY + boxH * 0.2);
+          ctx.lineTo(boxX + boxW * 0.5, boxY + boxH * 0.8);
+          ctx.stroke();
+          
+          // Watermark WebCAD in alto a sinistra
+          ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+          ctx.font = `bold ${Math.round(h * 0.024)}px sans-serif`;
+          ctx.textAlign = "left";
+          ctx.fillText("📐 WebCAD Bolla Digitale", 25, 40);
+          
+          // Stato In Bolla
+          if (isAligned) {
+            ctx.fillStyle = greenColor;
+            ctx.font = `bold ${Math.round(boxH * 0.15)}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.fillText("✓ RILEVAMENTO IN BOLLA", cx, boxY - 15);
+          }
+        }
+        
+        const photoData = canvas.toDataURL("image/jpeg", 0.9);
+        onCapture(text, photoData);
+      } catch (err) {
+        console.error("Errore generazione foto bolla:", err);
+        onCapture(text, null);
+      }
+    } else {
+      onCapture(text, null);
+    }
   }
 
   // Calcola lo spostamento della bolla sul mirino grafico

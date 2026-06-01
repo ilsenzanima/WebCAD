@@ -260,14 +260,33 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   // --- Errori ---
   const [error, setError] = useState<string | null>(null);
 
-  // Gestore per catturare l'inclinazione della livella ed inserirla come nota
-  function handleCaptureLivella(text: string) {
-    const draft: NoteItemDraft = {
-      id: crypto.randomUUID(),
-      item_type: "nota",
-      value_text: text,
-    };
-    setItems((prev) => [...prev, draft]);
+  // Gestore per catturare l'inclinazione della livella ed inserirla come nota + foto unificata
+  function handleCaptureLivella(text: string, photoBase64?: string | null) {
+    if (photoBase64) {
+      // Inserisce lo snapshot fotografico della bolla (tipo foto)
+      const fotoDraft: NoteItemDraft = {
+        id: crypto.randomUUID(),
+        item_type: "foto",
+        value_text: photoBase64,
+      };
+      
+      // Inserisce la nota descrittiva dell'allineamento (tipo nota)
+      const notaDraft: NoteItemDraft = {
+        id: crypto.randomUUID(),
+        item_type: "nota",
+        value_text: text,
+      };
+      
+      setItems((prev) => [...prev, fotoDraft, notaDraft]);
+    } else {
+      // Inserisce solo il testo descrittivo se non è disponibile lo stream video
+      const draft: NoteItemDraft = {
+        id: crypto.randomUUID(),
+        item_type: "nota",
+        value_text: text,
+      };
+      setItems((prev) => [...prev, draft]);
+    }
     setShowLivella(false);
   }
 
