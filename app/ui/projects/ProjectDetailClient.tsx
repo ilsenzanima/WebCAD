@@ -123,6 +123,8 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   const levelsToUse = mounted && cachedLevels && cachedLevels.length > 0 ? cachedLevels : drawings;
   const cachedFieldNotes = useOfflineStore((state) => state.fieldNotes);
 
+  const [activeTab, setActiveTab] = useState<"note" | "tagli">("note");
+
   // Unisce le note caricate dal server con quelle presenti nello store offline per questo progetto
   const projectNotes = useMemo(() => {
     if (!mounted) return notesList; // Durante SSR/idratazione iniziale, usa solo i dati del server per evitare discrepanze UI
@@ -137,17 +139,26 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
     return Object.values(allNotesMap);
   }, [notesList, cachedFieldNotes, project.id, mounted]);
 
+  const standardNotes = useMemo(() => {
+    return projectNotes.filter((n) => n.type_name !== "Taglio");
+  }, [projectNotes]);
+
+  const taglioNotes = useMemo(() => {
+    return projectNotes.filter((n) => n.type_name === "Taglio");
+  }, [projectNotes]);
+
   // Raggruppa le note per livello
   const notesByLevel = useMemo(() => {
     const map: Record<string, FieldNote[]> = {};
-    projectNotes.forEach((note) => {
+    const notesToGroup = activeTab === "note" ? standardNotes : [];
+    notesToGroup.forEach((note) => {
       if (note.level_id) {
         if (!map[note.level_id]) map[note.level_id] = [];
         map[note.level_id].push(note);
       }
     });
     return map;
-  }, [projectNotes]);
+  }, [standardNotes, activeTab]);
 
   // Inizializza la cache dello store all'avvio
   useEffect(() => {
@@ -671,307 +682,402 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
         </div>
       </div>
 
-      {/* ── Elenco Note Raggruppate per Piano ───────────────────────────── */}
+      {/* ── Tab Switcher di Navigazione Interna ── */}
+      <div className="px-4 sm:px-8 pt-4 pb-0 flex gap-2 border-b border-white/5 print:hidden">
+        <button
+          type="button"
+          onClick={() => setActiveTab("note")}
+          className={`pb-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            activeTab === "note"
+              ? "border-[hsl(220,90%,56%)] text-white"
+              : "border-transparent text-white/40 hover:text-white/70"
+          }`}
+        >
+          📝 Appunti & Disegni
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("tagli")}
+          className={`pb-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            activeTab === "tagli"
+              ? "border-[hsl(220,90%,56%)] text-white"
+              : "border-transparent text-white/40 hover:text-white/70"
+          }`}
+        >
+          ✂️ Piani di Taglio ({taglioNotes.length})
+        </button>
+      </div>
+
+      {/* ── Contenuto Schede ── */}
       <div className="flex-1 p-4 sm:p-8 space-y-6 sm:space-y-8 overflow-y-auto">
-        {groupedNotes.sortedPiani.length > 0 ? (
-          groupedNotes.sortedPiani.map((pianoName) => (
-            <div key={pianoName} className="space-y-2.5">
-              {/* Intestazione del Piano */}
-              <h3
-                className="text-xs font-extrabold uppercase tracking-wider pl-1 border-b pb-1.5"
-                style={{ color: "hsl(220 90% 70%)", borderColor: "hsl(220 20% 16%)" }}
-              >
-                🏢 {pianoName}
-              </h3>
+        {activeTab === "note" ? (
+          groupedNotes.sortedPiani.length > 0 ? (
+            groupedNotes.sortedPiani.map((pianoName) => (
+              <div key={pianoName} className="space-y-2.5">
+                {/* Intestazione del Piano */}
+                <h3
+                  className="text-xs font-extrabold uppercase tracking-wider pl-1 border-b pb-1.5"
+                  style={{ color: "hsl(220 90% 70%)", borderColor: "hsl(220 20% 16%)" }}
+                >
+                  🏢 {pianoName}
+                </h3>
 
-              {/* Elenco Livelli di questo Piano */}
-              <div
-                className="rounded-2xl overflow-hidden divide-y flex flex-col"
-                style={{
-                  background: "hsl(220 26% 14% / 0.5)",
-                  border: "1px solid hsl(220 20% 18%)",
-                  borderColor: "hsl(220 20% 16%)",
-                }}
-              >
-                {groupedNotes.groups[pianoName].map((lvl) => {
-                  const levelNotesList = notesByLevel[lvl.id] ?? [];
-                  
-                  return (
-                    <div key={lvl.id} className="p-4 space-y-3">
-                      {/* Titolo Livello */}
-                      <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-white">{lvl.name}</span>
-                          <span className="text-[10px] text-white/40">({levelNotesList.length} elementi)</span>
+                {/* Elenco Livelli di questo Piano */}
+                <div
+                  className="rounded-2xl overflow-hidden divide-y flex flex-col"
+                  style={{
+                    background: "hsl(220 26% 14% / 0.5)",
+                    border: "1px solid hsl(220 20% 18%)",
+                    borderColor: "hsl(220 20% 16%)",
+                  }}
+                >
+                  {groupedNotes.groups[pianoName].map((lvl) => {
+                    const levelNotesList = notesByLevel[lvl.id] ?? [];
+                    
+                    return (
+                      <div key={lvl.id} className="p-4 space-y-3">
+                        {/* Titolo Livello */}
+                        <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-white">{lvl.name}</span>
+                            <span className="text-[10px] text-white/40">({levelNotesList.length} elementi)</span>
+                          </div>
                         </div>
-                      </div>
 
-                      {/* Lista elementi del livello */}
-                      {levelNotesList.length > 0 ? (
-                        <div className="space-y-2.5 pt-1">
-                          {levelNotesList.map((note) => {
-                            const typeName = note.type_name || "Appunti Cantiere";
-                            
-                            const is3DModelUrl = (url?: string | null) => {
-                              if (!url) return false;
-                              return url.startsWith("data:model/") || url.startsWith("data:application/octet-stream") || url.startsWith("data:application/x-gltf") || url.endsWith(".glb") || url.endsWith(".gltf");
-                            };
+                        {/* Lista elementi del livello */}
+                        {levelNotesList.length > 0 ? (
+                          <div className="space-y-2.5 pt-1">
+                            {levelNotesList.map((note) => {
+                              const typeName = note.type_name || "Appunti Cantiere";
+                              
+                              const is3DModelUrl = (url?: string | null) => {
+                                if (!url) return false;
+                                return url.startsWith("data:model/") || url.startsWith("data:application/octet-stream") || url.startsWith("data:application/x-gltf") || url.endsWith(".glb") || url.endsWith(".gltf");
+                              };
 
-                            const has3DModel = note.field_note_items?.some(i => i.item_type === "foto" && is3DModelUrl(i.value_text));
-                            
-                            // Troviamo eventuali foto o snapshot per la preview (prendiamo la prima foto che non è un modello 3D)
-                            const fotoItem = note.field_note_items?.find(i => i.item_type === "foto" && !is3DModelUrl(i.value_text));
-                            const previewUrl = fotoItem?.value_text;
-                            
-                            // Determinazione tag dinamico Disegno in presenza di foto normali
-                            const hasFotoNormal = note.field_note_items?.some(i => i.item_type === "foto" && !is3DModelUrl(i.value_text));
-                            const isTaglio = typeName === "Taglio";
-                            const isSketchOrDesign = (typeName === "Sketch" || hasFotoNormal) && !has3DModel;
-                            
-                            const is3D = typeName === "Report 3D" || has3DModel;
-                            
-                            const displayIcon = isTaglio ? "✂️" : is3D ? "🧊" : isSketchOrDesign ? "🎨" : "📝";
-                            const displayTag = isTaglio ? "Taglio" : is3D ? "3D" : isSketchOrDesign ? "Disegno" : "Nota";
-                            
-                            const titleItem = note.field_note_items?.find(i => i.item_type === "nota");
-                            const noteTitle = titleItem?.value_text || `Appunto #${note.note_number}`;
-                            
-                            const isExpanded = !!expandedNotes[note.id];
-                            const isNoteCompleted = localCompletedNotes[note.id] !== undefined 
-                              ? localCompletedNotes[note.id] 
-                              : !!note.completed;
-                            
-                            return (
-                              <div 
-                                key={note.id} 
-                                onClick={() => setExpandedNotes(prev => ({ ...prev, [note.id]: !prev[note.id] }))}
-                                className="p-3.5 bg-white/[0.015] border border-white/5 rounded-xl flex flex-col gap-1 hover:bg-white/[0.03] transition-colors cursor-pointer select-none"
-                                style={{
-                                  borderColor: isNoteCompleted ? "hsl(142 60% 40% / 0.15)" : "hsl(220 20% 20% / 0.25)",
-                                }}
-                              >
-                                <div className="flex items-center justify-between gap-3 w-full">
-                                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                                    {/* Spunta Completato (Punto 2) */}
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleToggleNoteCompleted(note.id, isNoteCompleted);
-                                      }}
-                                      className="w-5 h-5 rounded-full flex items-center justify-center border transition-all flex-shrink-0 cursor-pointer"
-                                      style={{
-                                        background: isNoteCompleted ? "hsl(142 60% 40% / 0.2)" : "transparent",
-                                        borderColor: isNoteCompleted ? "hsl(142 60% 40%)" : "rgba(255, 255, 255, 0.25)",
-                                        color: isNoteCompleted ? "hsl(142 60% 55%)" : "transparent"
-                                      }}
-                                      title={isNoteCompleted ? "Segna come da completare" : "Segna come completato"}
-                                    >
-                                      <span className="text-[10px] font-bold">✓</span>
-                                    </button>
-
-                                    {/* Icona in base al tipo */}
-                                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-base flex-shrink-0">
-                                      {displayIcon}
+                              const has3DModel = note.field_note_items?.some(i => i.item_type === "foto" && is3DModelUrl(i.value_text));
+                              
+                              // Troviamo eventuali foto o snapshot per la preview (prendiamo la prima foto che non è un modello 3D)
+                              const fotoItem = note.field_note_items?.find(i => i.item_type === "foto" && !is3DModelUrl(i.value_text));
+                              const previewUrl = fotoItem?.value_text;
+                              
+                              // Determinazione tag dinamico Disegno in presenza di foto normali
+                              const hasFotoNormal = note.field_note_items?.some(i => i.item_type === "foto" && !is3DModelUrl(i.value_text));
+                              const isTaglio = typeName === "Taglio";
+                              const isSketchOrDesign = (typeName === "Sketch" || hasFotoNormal) && !has3DModel;
+                              
+                              const is3D = typeName === "Report 3D" || has3DModel;
+                              
+                              const displayIcon = isTaglio ? "✂️" : is3D ? "🧊" : isSketchOrDesign ? "🎨" : "📝";
+                              const displayTag = isTaglio ? "Taglio" : is3D ? "3D" : isSketchOrDesign ? "Disegno" : "Nota";
+                              
+                              const titleItem = note.field_note_items?.find(i => i.item_type === "nota");
+                              const noteTitle = titleItem?.value_text || `Appunto #${note.note_number}`;
+                              
+                              const isExpanded = !!expandedNotes[note.id];
+                              const isNoteCompleted = localCompletedNotes[note.id] !== undefined 
+                                ? localCompletedNotes[note.id] 
+                                : !!note.completed;
+                              
+                              return (
+                                <div 
+                                  key={note.id} 
+                                  onClick={() => setExpandedNotes(prev => ({ ...prev, [note.id]: !prev[note.id] }))}
+                                  className="p-3.5 bg-white/[0.015] border border-white/5 rounded-xl flex flex-col gap-1 hover:bg-white/[0.03] transition-colors cursor-pointer select-none"
+                                  style={{
+                                    borderColor: isNoteCompleted ? "hsl(142 60% 40% / 0.15)" : "hsl(220 20% 20% / 0.25)",
+                                  }}
+                                >
+                                  <div className="flex items-center justify-between gap-3 w-full">
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                      {/* Spunta Completato */}
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleToggleNoteCompleted(note.id, isNoteCompleted);
+                                        }}
+                                        className="w-5 h-5 rounded-lg flex items-center justify-center border font-bold text-xs transition-colors hover:bg-white/5"
+                                        style={{
+                                          borderColor: isNoteCompleted ? "hsl(142 60% 45%)" : "hsl(220 20% 22%)",
+                                          background: isNoteCompleted ? "hsl(142 60% 15% / 0.3)" : "transparent",
+                                          color: isNoteCompleted ? "hsl(142 60% 55%)" : "transparent",
+                                        }}
+                                      >
+                                        ✓
+                                      </button>
+                                      
+                                      <div className="min-w-0 flex-1">
+                                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                                          <span>{displayIcon}</span>
+                                          <span className="truncate">{noteTitle}</span>
+                                          <span 
+                                            className="px-1.5 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wider"
+                                            style={{
+                                              background: is3D 
+                                                ? "rgba(168, 85, 247, 0.15)" 
+                                                : isSketchOrDesign 
+                                                ? "rgba(245, 158, 11, 0.15)" 
+                                                : isTaglio
+                                                ? "rgba(16, 185, 129, 0.15)"
+                                                : "rgba(14, 165, 233, 0.15)",
+                                              color: is3D ? "#c084fc" : isSketchOrDesign ? "#fbbf24" : isTaglio ? "#10b981" : "#38bdf8",
+                                            }}
+                                          >
+                                            {displayTag}
+                                          </span>
+                                        </div>
+                                        <div className="text-[10px] text-white/30 mt-0.5 font-medium">
+                                          Appunto #{note.note_number} · {mounted ? new Date(note.created_at).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                                        </div>
+                                      </div>
                                     </div>
                                     
-                                    {/* Testo e tipo */}
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className={`text-white text-xs font-bold break-words min-w-0 ${isNoteCompleted ? "line-through opacity-50" : ""}`}>
-                                          {noteTitle}
-                                        </span>
-                                        <span className="text-[8px] uppercase font-mono px-1.5 py-0.5 rounded-full font-extrabold"
-                                          style={{
-                                            background: isSketchOrDesign ? "rgba(245, 158, 11, 0.15)" : is3D ? "rgba(168, 85, 247, 0.15)" : "rgba(14, 165, 233, 0.15)",
-                                            color: isSketchOrDesign ? "#fbbf24" : is3D ? "#c084fc" : "#38bdf8",
-                                            border: `1px solid ${isSketchOrDesign ? "rgba(245, 158, 11, 0.3)" : is3D ? "rgba(168, 85, 247, 0.3)" : "rgba(14, 165, 233, 0.3)"}`
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                      {/* Anteprima grafica fluttuante compatta */}
+                                      {previewUrl && !isExpanded && (
+                                        <div 
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setActiveLightboxUrl(previewUrl);
                                           }}
+                                          className="w-10 h-10 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center flex-shrink-0 cursor-zoom-in"
                                         >
-                                          {displayTag}
-                                        </span>
-                                        {isNoteCompleted && (
-                                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                            COMPLETATO
-                                          </span>
-                                        )}
-                                      </div>
+                                          <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
+                                        </div>
+                                      )}
                                       
-                                      {/* Sotto-dettagli compatti (se non espanso) */}
-                                      {!isExpanded && (
-                                        <div className="text-[10px] text-white/40 mt-1 break-words leading-relaxed">
-                                          {(note.field_note_items ?? [])
-                                            .filter(i => i.item_type !== "nota" && i.item_type !== "foto")
-                                            .map(i => {
-                                              if (i.item_type === "base") return `↔ ${i.value_num}${i.value_unit || "cm"}`;
-                                              if (i.item_type === "altezza") return `↕ ${i.value_num}${i.value_unit || "cm"}`;
-                                              if (i.item_type === "spessore") return `↗ ${i.value_num}${i.value_unit || "cm"}`;
-                                              if (i.item_type === "materiale") return `📦 ${i.value_text}`;
-                                              return "";
-                                            })
-                                            .filter(Boolean)
-                                            .join(" · ") || (isSketchOrDesign ? "Disegno a mano libera / quotato" : is3D ? "Modello 3D esterno con snapshot" : "Nessuna misura")}
+                                      {/* Pulsante Modifica */}
+                                      <Link
+                                        href={isTaglio ? `/projects/${project.id}/tagli/${note.id}` : `/projects/${project.id}/levels/${lvl.id}/appunti/${note.id}/modifica`}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white transition-all bg-white/5 border border-white/10 hover:bg-white/10"
+                                      >
+                                        {isTaglio ? "✂️ Configura" : isSketchOrDesign ? "✏️ Disegna" : is3D ? "👁 Visualizza" : "✏️ Modifica"}
+                                      </Link>
+
+                                      {/* Indicatore espansione */}
+                                      <span className="text-[10px] text-white/30 transition-transform duration-200" style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
+                                        ▼
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Sezione Espandibile Accordion */}
+                                  {isExpanded && (
+                                    <div 
+                                      className="mt-3.5 pt-3.5 border-t border-white/5 space-y-3.5 w-full text-left"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                        {(note.field_note_items ?? [])
+                                          .filter(i => i.item_type !== "foto")
+                                          .sort((a, b) => a.sort_order - b.sort_order)
+                                          .map((item) => {
+                                            let desc = "";
+                                            if (item.item_type === "nota" && item.value_text) {
+                                              desc = `📝 ${item.value_text}`;
+                                            } else if (item.item_type === "materiale" && item.value_text) {
+                                              desc = `📦 Materiale: ${item.value_text}`;
+                                            } else if (item.item_type === "base" && item.value_num != null) {
+                                              desc = `↔ Larghezza: ${item.value_num} ${item.value_unit || "cm"}`;
+                                            } else if (item.item_type === "altezza" && item.value_num != null) {
+                                              desc = `↕ Altezza: ${item.value_num} ${item.value_unit || "cm"}`;
+                                            } else if (item.item_type === "spessore" && item.value_num != null) {
+                                              desc = `↗ Spessore: ${item.value_num} ${item.value_unit || "cm"}`;
+                                            } else if (item.item_type === "lana_interna") {
+                                              desc = `✓ Lana Interna: ${item.value_bool ? "Presente" : "Non presente"}`;
+                                            } else if (item.item_type === "dipintura") {
+                                              desc = `✓ Dipintura: ${item.value_bool ? "Presente" : "Non presente"}`;
+                                            } else if (item.item_type === "dim_quadrata" && item.value_text) {
+                                              try {
+                                                const cv = JSON.parse(item.value_text);
+                                                if (cv.isCutPiece || (cv.q !== undefined && cv.q !== null)) {
+                                                  desc = `✂️ Pezzo da taglio: ${cv.b || 0}x${cv.h || 0} ${cv.unit || "cm"} (Qtà: ${cv.q || 1})`;
+                                                } else {
+                                                  desc = `📐 Dimensione: ${cv.b || 0}x${cv.h || 0} ${cv.unit || "cm"}`;
+                                                }
+                                              } catch { desc = "📐 Dimensione quadrata"; }
+                                            } else if (item.item_type === "dim_cubica" && item.value_text) {
+                                              try {
+                                                const cv = JSON.parse(item.value_text);
+                                                desc = `⬛ Volume: ${cv.b || 0}x${cv.h || 0}x${cv.d || 0} ${cv.unit || "cm"}`;
+                                              } catch { desc = "⬛ Dimensione Cubica"; }
+                                            } else if (item.item_type === "posizione" && item.value_text) {
+                                              try {
+                                                const { x, y } = JSON.parse(item.value_text);
+                                                desc = `📍 Posizione: x:${x}% y:${y}%`;
+                                              } catch { desc = "📍 Posizione planimetria"; }
+                                            }
+                                            if (!desc) return null;
+                                            return (
+                                              <div 
+                                                key={item.id} 
+                                                className="px-3 py-2 rounded-lg"
+                                                style={{ background: "hsl(220 32% 10% / 0.4)", border: "1px solid hsl(220 20% 16%)" }}
+                                              >
+                                                {desc}
+                                              </div>
+                                            );
+                                          })}
+                                      </div>
+
+                                      {/* Foto Allegata in Accordion */}
+                                      {note.field_note_items?.some(i => i.item_type === "foto") && (
+                                        <div className="space-y-2">
+                                          <div className="text-[10px] font-bold uppercase tracking-wider text-white/30">Allegati Visivi</div>
+                                          <div className="flex flex-wrap gap-2">
+                                            {note.field_note_items
+                                              ?.filter(i => i.item_type === "foto")
+                                              .map((foto) => {
+                                                const is3D = is3DModelUrl(foto.value_text);
+                                                if (is3D) {
+                                                  return (
+                                                    <div 
+                                                      key={foto.id}
+                                                      className="p-3 rounded-xl border flex flex-col gap-2 bg-[hsl(220,32%,10%)] border-[hsl(220,20%,18%)] w-full max-w-xs"
+                                                    >
+                                                      <span className="text-xs font-bold text-white flex items-center gap-1.5">🧊 Modello CAD 3D (.glb)</span>
+                                                      <a 
+                                                        href={foto.value_text || "#"} 
+                                                        download={`pezzo_${foto.id.substring(0,6)}.glb`}
+                                                        className="px-3 py-1.5 rounded-lg text-center font-semibold text-xs text-white bg-blue-600 hover:bg-blue-500 transition-colors w-full"
+                                                      >
+                                                        ⬇ Scarica File CAD
+                                                      </a>
+                                                    </div>
+                                                  );
+                                                }
+                                                return (
+                                                  <div 
+                                                    key={foto.id} 
+                                                    onClick={() => setActiveLightboxUrl(foto.value_text || null)}
+                                                    className="w-24 h-24 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center cursor-zoom-in group relative"
+                                                  >
+                                                    <img src={foto.value_text || ""} alt="Allegato" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold">
+                                                      INGRANDISCI
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
+                                          </div>
                                         </div>
                                       )}
                                     </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-2 flex-shrink-0">
-                                    {/* Anteprima grafica fluttuante compatta (se presente) */}
-                                    {previewUrl && !isExpanded && (
-                                      <div 
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setActiveLightboxUrl(previewUrl);
-                                        }}
-                                        className="w-10 h-10 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center flex-shrink-0 cursor-zoom-in"
-                                      >
-                                        <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
-                                      </div>
-                                    )}
-                                    
-                                    {/* Pulsante Modifica */}
-                                    <Link
-                                      href={isTaglio ? `/projects/${project.id}/tagli/${note.id}` : `/projects/${project.id}/levels/${lvl.id}/appunti/${note.id}/modifica`}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white transition-all bg-white/5 border border-white/10 hover:bg-white/10"
-                                    >
-                                      {isTaglio ? "✂️ Configura" : isSketchOrDesign ? "✏️ Disegna" : is3D ? "👁 Visualizza" : "✏️ Modifica"}
-                                    </Link>
-
-                                    {/* Indicatore espansione */}
-                                    <span className="text-[10px] text-white/30 transition-transform duration-200" style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
-                                      ▼
-                                    </span>
-                                  </div>
+                                  )}
                                 </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div className="py-4 text-center text-xs text-white/30 italic">
+                            Nessun appunto registrato in questo livello.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="p-12 text-center rounded-2xl" style={{ border: "1px dashed hsl(220 20% 24%)", background: "hsl(220 26% 14%)" }}>
+              <p className="text-sm" style={{ color: "hsl(215 15% 50%)" }}>Nessun appunto o disegno trovato.</p>
+            </div>
+          )
+        ) : (
+          /* ── Tab Tagli Raggruppati ── */
+          <div className="space-y-4">
+            {taglioNotes.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {taglioNotes.map((note) => {
+                  const titleItem = note.field_note_items?.find(i => i.item_type === "nota" && i.sort_order === 0);
+                  const noteTitle = titleItem?.value_text?.replace("Taglio: ", "") || `Taglio #${note.note_number}`;
+                  
+                  const materialItem = note.field_note_items?.find(i => i.item_type === "materiale");
+                  const matName = materialItem?.value_text || "Generico";
 
-                                {/* Sezione Espandibile Accordion (Punto 4 e 5) */}
-                                {isExpanded && (
-                                  <div 
-                                    className="mt-3.5 pt-3.5 border-t border-white/5 space-y-3.5 w-full text-left"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                                      {(note.field_note_items ?? [])
-                                        .filter(i => i.item_type !== "foto")
-                                        .sort((a, b) => a.sort_order - b.sort_order)
-                                        .map((item) => {
-                                          let desc = "";
-                                          let icon = "📝";
-                                          const valNum = item.value_num;
-                                          const valUnit = item.value_unit || "mm";
-                                          const valBool = item.value_bool;
-                                          const valText = item.value_text || "";
+                  const piecesCount = (note.field_note_items ?? []).filter(i => i.item_type === "dim_quadrata").length;
+                  
+                  const formattedDate = mounted ? new Date(note.created_at).toLocaleDateString("it-IT", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }) : "—";
 
-                                          switch (item.item_type) {
-                                            case "base":
-                                              desc = `Base: ${valNum} ${valUnit}`;
-                                              icon = "↔";
-                                              break;
-                                            case "altezza":
-                                              desc = `Altezza: ${valNum} ${valUnit}`;
-                                              icon = "↕";
-                                              break;
-                                            case "spessore":
-                                              desc = `Spessore: ${valNum} ${valUnit}`;
-                                              icon = "↗";
-                                              break;
-                                            case "lana_interna":
-                                              desc = `Lana Interna: ${valBool ? "Sì" : "No"}`;
-                                              icon = "🔥";
-                                              break;
-                                            case "dipintura":
-                                              desc = `Dipintura: ${valBool ? "Sì" : "No"}`;
-                                              icon = "🎨";
-                                              break;
-                                            case "dim_quadrata":
-                                              try {
-                                                const parsed = valText ? JSON.parse(valText) : {};
-                                                if (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null)) {
-                                                  desc = `Pezzo da tagliare: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"} (Qtà: ${parsed.q})`;
-                                                  icon = "✂️";
-                                                } else {
-                                                  desc = `Dimensione quadrata: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"}`;
-                                                  icon = "📐";
-                                                }
-                                              } catch {
-                                                desc = `Dimensione quadrata: ${valNum || 0} ${valUnit || "cm"}`;
-                                                icon = "📐";
-                                              }
-                                              break;
-                                            case "dim_cubica":
-                                              try {
-                                                const parsed = valText ? JSON.parse(valText) : {};
-                                                desc = `Sezione 3D: ${parsed.b || 0} x ${parsed.h || 0} x ${parsed.d || 0} ${parsed.unit || "cm"}`;
-                                              } catch {
-                                                desc = `Dimensione Cubica: ${valNum || 0} ${valUnit || "cm"}`;
-                                              }
-                                              icon = "⬛";
-                                              break;
-                                            case "materiale":
-                                              desc = `Materiale: ${valText}`;
-                                              icon = "🪵";
-                                              break;
-                                            case "nota":
-                                              desc = valText;
-                                              icon = "📝";
-                                              break;
-                                            case "posizione":
-                                              desc = `Posizione: ${valText}`;
-                                              icon = "📍";
-                                              break;
-                                            default:
-                                              desc = `${item.item_type}: ${valText || valNum || ""}`;
-                                          }
-
-                                          return (
-                                            <div 
-                                              key={item.id} 
-                                              className="flex items-start gap-2.5 px-3 py-2 rounded-xl border border-white/5 bg-white/[0.015]"
-                                              style={{ color: "hsl(210 40% 90%)" }}
-                                            >
-                                              <span className="w-5 h-5 rounded bg-white/5 flex items-center justify-center text-[10px] font-mono flex-shrink-0">
-                                                {icon}
-                                              </span>
-                                              <span className="break-words whitespace-pre-wrap leading-snug text-xs">{desc}</span>
-                                            </div>
-                                          );
-                                        })}
-                                    </div>
-
-                                    {/* Immagine Allegata in Grande */}
-                                    {previewUrl && (
-                                      <div className="space-y-1.5 pt-1">
-                                        <span className="text-[9px] uppercase font-extrabold text-white/40 tracking-wider">📸 Allegato Visivo (Clicca per ingrandire)</span>
-                                        <div 
-                                          onClick={() => setActiveLightboxUrl(previewUrl)}
-                                          className="w-full max-w-md h-48 rounded-xl overflow-hidden border border-white/10 bg-black/25 flex items-center justify-center cursor-zoom-in hover:border-white/20 transition-all shadow-inner"
-                                        >
-                                          <img src={previewUrl} alt="Visualizzazione" className="w-full h-full object-contain hover:scale-[1.015] transition-transform duration-300" />
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
+                  return (
+                    <div 
+                      key={note.id}
+                      onClick={() => router.push(`/projects/${project.id}/tagli/${note.id}`)}
+                      className="p-5 bg-white/[0.015] border border-white/5 rounded-2xl flex flex-col justify-between gap-4 hover:bg-white/[0.03] transition-all cursor-pointer select-none"
+                      style={{ borderColor: "hsl(220 20% 20% / 0.25)" }}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span
+                            className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                            style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10b981", border: "1px solid rgba(16, 185, 129, 0.2)" }}
+                          >
+                            ✂️ Nesting Plan
+                          </span>
+                          <span className="text-[10px] text-white/40">{formattedDate}</span>
                         </div>
-                      ) : (
-                        <p className="text-[11px] text-white/30 italic py-2">
-                          Nessun elemento ancora inserito. Clicca su Aggiungi in alto o usa i pulsanti rapidi sulla card.
-                        </p>
-                      )}
+                        <h4 className="text-sm font-bold text-white leading-snug">
+                          {noteTitle}
+                        </h4>
+                        <div className="flex items-center gap-4 text-xs text-white/50 pt-1">
+                          <span className="flex items-center gap-1">📦 <strong className="text-white/80 font-semibold">{matName}</strong></span>
+                          <span className="flex items-center gap-1">✂️ <strong className="text-white/80 font-semibold">{piecesCount}</strong> {piecesCount === 1 ? "pezzo" : "pezzi"}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-end gap-2 border-t border-white/5 pt-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm("Sei sicuro di voler eliminare questo piano di taglio?")) {
+                              useOfflineStore.getState().deleteFieldNoteOptimistic(note.id, project.id);
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-xl text-xs font-semibold text-red-400 hover:bg-red-500/10 border border-red-500/10 transition-colors"
+                        >
+                          Elimina
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/projects/${project.id}/tagli/${note.id}`);
+                          }}
+                          className="px-4 py-1.5 rounded-xl text-xs font-semibold text-white transition-all bg-[hsl(220,90%,56%)] hover:bg-[hsl(220,85%,48%)] active:scale-95 cursor-pointer"
+                        >
+                          Configura →
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
-          ))
-        ) : (
-          <div className="p-12 text-center rounded-2xl" style={{ border: "1px dashed hsl(220 20% 24%)", background: "hsl(220 26% 14%)" }}>
-            <p className="text-sm" style={{ color: "hsl(215 15% 50%)" }}>Nessun elemento corrispondente alla ricerca.</p>
+            ) : (
+              <div className="py-16 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.01]">
+                <div className="text-3xl mb-3">✂️</div>
+                <h4 className="text-sm font-bold text-white mb-1">Nessun piano di taglio creato</h4>
+                <p className="text-xs text-white/40 max-w-xs mx-auto mb-4">
+                  Crea un piano di taglio ottimizzato per ridurre lo sfrido di lamiera o profilati.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setQuickAddType("taglio")}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-[hsl(220,90%,56%)] hover:bg-[hsl(220,85%,48%)] active:scale-95 cursor-pointer"
+                >
+                  Crea Primo Taglio
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

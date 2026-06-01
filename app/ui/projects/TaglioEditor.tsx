@@ -30,7 +30,7 @@ export default function TaglioEditor({
 }: Props) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const hasInitializedRef = useRef(false);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -61,44 +61,44 @@ export default function TaglioEditor({
 
   // --- Inizializzazione ---
   useEffect(() => {
-    if (noteToUse) {
-      // 1. Estrae il titolo dall'elemento 'nota' con sort_order 0
-      const titleItem = (noteToUse.field_note_items ?? []).find(
-        (i) => i.item_type === "nota" && i.sort_order === 0
-      );
-      if (titleItem?.value_text) {
-        setTitle(titleItem.value_text.replace("Taglio: ", ""));
-      }
-
-      // 2. Estrae la configurazione speciale (se presente)
-      const configItem = (noteToUse.field_note_items ?? []).find(
-        (i) => i.item_type === "nota" && i.value_text?.startsWith("__CONFIG__:")
-      );
-      if (configItem?.value_text) {
-        try {
-          const configJson = JSON.parse(configItem.value_text.replace("__CONFIG__:", ""));
-          if (configJson.sheetW) setSheetW(configJson.sheetW);
-          if (configJson.sheetH) setSheetH(configJson.sheetH);
-          if (configJson.kerf !== undefined) setKerf(configJson.kerf);
-          if (configJson.margin !== undefined) setMargin(configJson.margin);
-        } catch {
-          // fallback
+    if (mounted && !initialized) {
+      const noteSource = cachedNote || initialNote;
+      if (noteSource) {
+        // 1. Estrae il titolo dall'elemento 'nota' con sort_order 0
+        const titleItem = (noteSource.field_note_items ?? []).find(
+          (i) => i.item_type === "nota" && i.sort_order === 0
+        );
+        if (titleItem?.value_text) {
+          setTitle(titleItem.value_text.replace("Taglio: ", ""));
         }
-      }
 
-      // 3. Estrae il materiale (se presente)
-      const materialItem = (noteToUse.field_note_items ?? []).find(
-        (i) => i.item_type === "materiale"
-      );
-      if (materialItem?.value_text) {
-        setMaterialFilter(materialItem.value_text);
-      }
+        // 2. Estrae la configurazione speciale (se presente)
+        const configItem = (noteSource.field_note_items ?? []).find(
+          (i) => i.item_type === "nota" && i.value_text?.startsWith("__CONFIG__:")
+        );
+        if (configItem?.value_text) {
+          try {
+            const configJson = JSON.parse(configItem.value_text.replace("__CONFIG__:", ""));
+            if (configJson.sheetW) setSheetW(configJson.sheetW);
+            if (configJson.sheetH) setSheetH(configJson.sheetH);
+            if (configJson.kerf !== undefined) setKerf(configJson.kerf);
+            if (configJson.margin !== undefined) setMargin(configJson.margin);
+          } catch {
+            // fallback
+          }
+        }
 
-      // 4. Estrae tutti i pezzi da tagliare 'dim_quadrata'
-      const isNew = !hasInitializedRef.current || (mounted && cachedNote && cachedNote.updated_at !== initialNote.updated_at);
-      if (isNew) {
+        // 3. Estrae il materiale (se presente)
+        const materialItem = (noteSource.field_note_items ?? []).find(
+          (i) => i.item_type === "materiale"
+        );
+        if (materialItem?.value_text) {
+          setMaterialFilter(materialItem.value_text);
+        }
+
+        // 4. Estrae tutti i pezzi da tagliare 'dim_quadrata'
         const loadedPieces: PieceItem[] = [];
-        (noteToUse.field_note_items ?? []).forEach((item) => {
+        (noteSource.field_note_items ?? []).forEach((item) => {
           if (item.item_type === "dim_quadrata") {
             try {
               const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
@@ -118,10 +118,10 @@ export default function TaglioEditor({
           }
         });
         setPieces(loadedPieces);
-        hasInitializedRef.current = true;
+        setInitialized(true);
       }
     }
-  }, [noteToUse, mounted, cachedNote, initialNote]);
+  }, [mounted, cachedNote, initialNote, initialized]);
 
   // --- Handlers dei Pezzi ---
   const updatePiece = (id: string, key: keyof PieceItem, value: any) => {
@@ -395,7 +395,7 @@ export default function TaglioEditor({
     useOfflineStore.getState().saveFieldNoteItemsOptimistic(
       initialNote.id,
       projectId,
-      initialNote.level_id || generateTempId(), // level_id
+      noteToUse.level_id || initialNote.level_id || generateTempId(), // level_id
       payloadItems,
       "Taglio"
     );

@@ -451,15 +451,6 @@ export const useOfflineStore = create<OfflineState>()(
                   
                   if (!error && data) {
                     idMap[resolvedPayload.tempId] = data.id;
-
-                    // Crea anche il livello di default se eravamo offline
-                    await supabase.from("levels").insert({
-                      project_id: data.id,
-                      name: "Piano Terra (2D)",
-                      elevation_z: 0,
-                      drawing_type: "2d_wall",
-                      piano: "Generico",
-                    });
                   } else {
                     console.error("Errore sync CREATE_PROJECT:", error);
                   }

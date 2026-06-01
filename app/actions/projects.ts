@@ -59,21 +59,7 @@ export async function createProject(customName?: string) {
     throw new Error("Impossibile creare il progetto");
   }
 
-  // Creazione del primo disegno base associato al progetto
-  const { error: levelError } = await supabase.from("levels").insert({
-    project_id: data.id,
-    name: "Piano Terra (2D)",
-    elevation_z: 0,
-    scale_ratio: null,
-    plan_image_url: null,
-    drawing_type: "2d_wall",
-  } as any);
-
-  if (levelError) {
-    console.error("Errore creazione level 0:", levelError);
-  }
-
-  // Redirigi alla pagina di dettaglio del progetto
+  // Revalidate and redirect
   revalidatePath("/projects");
   redirect(`/projects/${data.id}`);
 }
