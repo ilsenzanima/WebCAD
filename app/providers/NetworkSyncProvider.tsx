@@ -2,14 +2,61 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { useOfflineStore } from "@/lib/stores/offline-store";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 const NetworkSyncContext = createContext<{ isOnline: boolean }>({ isOnline: true });
 
 export const useNetworkStatus = () => useContext(NetworkSyncContext);
 
 export default function NetworkSyncProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const { isOnline, setOnlineStatus, syncOfflineData, offlineQueue, isSyncing } = useOfflineStore();
   const [showSyncSuccess, setShowSyncSuccess] = useState(false);
+
+  // Sottoscrizione Supabase Realtime per sincronizzazione in tempo reale bidirezionale
+  useEffect(() => {
+    if (typeof window === "undefined" || !isOnline) return;
+
+    const supabase = createClient();
+
+    const channel = supabase
+      .channel("realtime-sync-channel")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "projects" },
+        () => {
+          router.refresh();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "levels" },
+        () => {
+          router.refresh();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "field_notes" },
+        () => {
+          router.refresh();
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "field_note_items" },
+        () => {
+          router.refresh();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isOnline, router]);
+
 
   useEffect(() => {
     // Gestione connettività di rete
@@ -18,6 +65,7 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
       // Avvia la sincronizzazione automatica quando torna online
       syncOfflineData().then(() => {
         setShowSyncSuccess(true);
+        router.refresh();
         setTimeout(() => setShowSyncSuccess(false), 3000);
       });
     };
@@ -33,8 +81,14 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
       setOnlineStatus(window.navigator.onLine);
       
       // Se all'avvio siamo online ed abbiamo operazioni in coda, sincronizziamo
-      if (window.navigator.onLine && offlineQueue.length > 0) {
-        syncOfflineData();
+      if (window.navigator.onLine) {
+        if (offlineQueue.length > 0) {
+          syncOfflineData().then(() => {
+            router.refresh();
+          });
+        } else {
+          router.refresh(); // Forza l'aggiornamento dei dati all'avvio su cellulare per evitare cache rigide
+        }
       }
     }
 
@@ -44,7 +98,7 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
         window.removeEventListener("offline", handleOffline);
       }
     };
-  }, [setOnlineStatus, syncOfflineData, offlineQueue.length]);
+  }, [setOnlineStatus, syncOfflineData, offlineQueue.length, router]);
 
   return (
     <NetworkSyncContext.Provider value={{ isOnline }}>

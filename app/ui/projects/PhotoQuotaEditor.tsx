@@ -14,23 +14,20 @@ interface QuotaLine {
   startY: number;
   endX: number;
   endY: number;
-  axis: "x" | "y" | "z" | "neutral";
+  color: string;  // Colore esadecimale della quota
   valueText: string;
 }
 
-const AXIS_COLORS = {
-  x: "hsl(0, 100%, 50%)",       // Rosso
-  y: "hsl(120, 100%, 40%)",      // Verde
-  z: "hsl(220, 100%, 55%)",      // Blu
-  neutral: "hsl(45, 100%, 50%)", // Giallo
-};
-
-const AXIS_LABELS = {
-  x: "Asse X (Rosso)",
-  y: "Asse Y (Verde)",
-  z: "Asse Z (Blu)",
-  neutral: "Libera (Giallo)",
-};
+const COLORS = [
+  { value: "#ef4444", label: "Rosso" },
+  { value: "#22c55e", label: "Verde" },
+  { value: "#3b82f6", label: "Blu" },
+  { value: "#eab308", label: "Giallo" },
+  { value: "#f97316", label: "Arancione" },
+  { value: "#a855f7", label: "Viola" },
+  { value: "#ffffff", label: "Bianco" },
+  { value: "#000000", label: "Nero" },
+];
 
 // Funzione helper per disegnare un segmento di quota completo di frecce e testo
 function drawSingleLine(
@@ -112,7 +109,7 @@ function drawSingleLine(
 
 export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuotaEditorProps) {
   const [lines, setLines] = useState<QuotaLine[]>([]);
-  const [currentAxis, setCurrentAxis] = useState<"x" | "y" | "z" | "neutral">("neutral");
+  const [currentColor, setCurrentColor] = useState("#ef4444"); // Rosso di default
   
   // Stati di disegno
   const [isDrawing, setIsDrawing] = useState(false);
@@ -161,28 +158,14 @@ export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuo
 
     // Disegna tutte le linee salvate
     lines.forEach((line) => {
-      drawSingleLine(ctx, line.startX, line.startY, line.endX, line.endY, AXIS_COLORS[line.axis], line.valueText);
+      drawSingleLine(ctx, line.startX, line.startY, line.endX, line.endY, line.color, line.valueText);
     });
 
     // Disegna la linea che si sta tracciando in tempo reale
     if (isDrawing && startPt && currentPt) {
-      // Se premiamo un asse specifico, vincoliamo la linea ad essere ortogonale
-      let endX = currentPt.x;
-      let endY = currentPt.y;
-      
-      if (currentAxis === "x") {
-        endY = startPt.y; // Forza orizzontale
-      } else if (currentAxis === "y") {
-        endX = startPt.x; // Forza verticale
-      } else if (currentAxis === "z") {
-        // Linea inclinata prospettica a 45 gradi
-        const dx = currentPt.x - startPt.x;
-        endY = startPt.y + (dx * 0.5); // Rapporto fisso per profondità
-      }
-
-      drawSingleLine(ctx, startPt.x, startPt.y, endX, endY, AXIS_COLORS[currentAxis], "", true);
+      drawSingleLine(ctx, startPt.x, startPt.y, currentPt.x, currentPt.y, currentColor, "", true);
     }
-  }, [lines, isDrawing, startPt, currentPt, currentAxis]);
+  }, [lines, isDrawing, startPt, currentPt, currentColor]);
 
   // Caricamento dell'immagine
   useEffect(() => {
@@ -199,8 +182,6 @@ export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuo
   useEffect(() => {
     redraw();
   }, [redraw]);
-
-
 
   // Converte le coordinate dello schermo/touch in coordinate reali dell'immagine
   function getCanvasCoords(clientX: number, clientY: number): { x: number; y: number } | null {
@@ -243,18 +224,8 @@ export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuo
 
     setIsDrawing(false);
 
-    // Calcola il punto finale vincolato dall'asse
-    let endX = currentPt.x;
-    let endY = currentPt.y;
-
-    if (currentAxis === "x") {
-      endY = startPt.y;
-    } else if (currentAxis === "y") {
-      endX = startPt.x;
-    } else if (currentAxis === "z") {
-      const dx = currentPt.x - startPt.x;
-      endY = startPt.y + (dx * 0.5);
-    }
+    const endX = currentPt.x;
+    const endY = currentPt.y;
 
     // Ignora tocchi/click accidentali (troppo corti)
     const dist = Math.hypot(endX - startPt.x, endY - startPt.y);
@@ -293,7 +264,7 @@ export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuo
     const newLine: QuotaLine = {
       id: crypto.randomUUID(),
       ...pendingLine,
-      axis: currentAxis,
+      color: currentColor,
       valueText: inputValue.trim(),
     };
 
@@ -423,35 +394,32 @@ export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuo
         )}
       </div>
 
-      {/* Pannello Controlli e Assi in fondo */}
+      {/* Pannello Controlli e Palette Colori in fondo */}
       <div className="w-full max-w-4xl bg-white/5 border border-white/10 rounded-2xl p-4 space-y-4">
-        {/* Scelta Asse / Direzione */}
+        {/* Scelta Colore della Quota */}
         <div>
           <label className="block text-xs font-semibold text-white/50 mb-2">
-            Seleziona asse di riferimento per la quota:
+            Seleziona il colore per la linea di quota:
           </label>
-          <div className="grid grid-cols-4 gap-2">
-            {(Object.keys(AXIS_LABELS) as Array<keyof typeof AXIS_LABELS>).map((axis) => {
-              const isSelected = currentAxis === axis;
-              const color = AXIS_COLORS[axis];
+          <div className="flex items-center gap-3.5 flex-wrap bg-black/20 p-3.5 rounded-2xl border border-white/5 justify-center sm:justify-start">
+            {COLORS.map((c) => {
+              const isSelected = currentColor === c.value;
               return (
                 <button
-                  key={axis}
+                  key={c.value}
                   type="button"
-                  onClick={() => setCurrentAxis(axis)}
-                  className="py-2.5 px-1 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-1.5 border"
+                  onClick={() => setCurrentColor(c.value)}
+                  className="w-8 h-8 rounded-full border transition-all active:scale-90 flex items-center justify-center cursor-pointer"
                   style={{
-                    background: isSelected ? `${color}15` : "transparent",
-                    borderColor: isSelected ? color : "transparent",
-                    color: isSelected ? "white" : "white/60",
+                    backgroundColor: c.value,
+                    borderColor: isSelected ? "white" : "transparent",
+                    boxShadow: isSelected
+                      ? `0 0 10px ${c.value === "#ffffff" ? "rgba(255,255,255,0.8)" : c.value}`
+                      : "none",
+                    borderWidth: isSelected ? "2px" : "1px",
                   }}
-                >
-                  <span
-                    className="w-3.5 h-3.5 rounded-full flex-shrink-0"
-                    style={{ background: color, boxShadow: isSelected ? `0 0 8px ${color}` : "none" }}
-                  />
-                  <span className="text-[10px] text-center">{AXIS_LABELS[axis]}</span>
-                </button>
+                  title={c.label}
+                />
               );
             })}
           </div>
@@ -464,7 +432,7 @@ export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuo
               type="button"
               onClick={handleUndo}
               disabled={lines.length === 0}
-              className="px-3 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-40"
+              className="px-3 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer"
               style={{
                 background: "hsl(220, 26%, 16%)",
                 border: "1px solid hsl(220, 20%, 24%)",
@@ -477,7 +445,7 @@ export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuo
               type="button"
               onClick={() => setLines([])}
               disabled={lines.length === 0}
-              className="px-3 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-40"
+              className="px-3 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-40 cursor-pointer"
               style={{
                 background: "hsl(0, 60%, 20% / 0.3)",
                 border: "1px solid hsl(0, 60% / 0.15)",
@@ -491,7 +459,7 @@ export default function PhotoQuotaEditor({ imageUrl, onSave, onClose }: PhotoQuo
           <button
             type="button"
             onClick={handleSaveFinal}
-            className="px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all shadow-lg"
+            className="px-5 py-2.5 rounded-xl text-xs font-bold text-white transition-all shadow-lg cursor-pointer"
             style={{
               background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
               boxShadow: "0 4px 15px hsl(220 90% 56% / 0.25)",

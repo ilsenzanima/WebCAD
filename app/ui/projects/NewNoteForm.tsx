@@ -93,34 +93,47 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
+  const [mounted, setMounted] = useState(false);
+  const hasInitializedRef = useRef(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const cachedNote = useOfflineStore((state) => state.fieldNotes[initialNote?.id ?? ""]);
-  const noteToUse = cachedNote || initialNote;
+  const noteToUse = (mounted && cachedNote) ? cachedNote : initialNote;
 
   // --- Voci misure ---
   const [items, setItems] = useState<NoteItemDraft[]>([]);
 
   useEffect(() => {
-    if (noteToUse?.field_note_items && noteToUse.field_note_items.length > 0 && items.length === 0) {
-      setItems(
-        noteToUse.field_note_items.map((item) => {
-          const isComposite = item.item_type === "dim_quadrata" || item.item_type === "dim_cubica";
-          let composite: CompositeValue | undefined;
-          if (isComposite && item.value_text) {
-            try { composite = JSON.parse(item.value_text); } catch { composite = { unit: "cm" }; }
-          }
-          return {
-            id: item.id || crypto.randomUUID(),
-            item_type: item.item_type,
-            value_num: item.value_num,
-            value_unit: (item.value_unit as "mm" | "cm") ?? "cm",
-            value_bool: item.value_bool ?? true,
-            value_text: isComposite ? undefined : (item.value_text ?? undefined),
-            composite,
-          };
-        })
-      );
+    if (noteToUse?.field_note_items && noteToUse.field_note_items.length > 0) {
+      const shouldInitialize = !hasInitializedRef.current || (mounted && cachedNote && cachedNote.updated_at !== initialNote?.updated_at);
+
+      if (shouldInitialize) {
+        setItems(
+          noteToUse.field_note_items.map((item) => {
+            const isComposite = item.item_type === "dim_quadrata" || item.item_type === "dim_cubica";
+            let composite: CompositeValue | undefined;
+            if (isComposite && item.value_text) {
+              try { composite = JSON.parse(item.value_text); } catch { composite = { unit: "cm" }; }
+            }
+            return {
+              id: item.id || crypto.randomUUID(),
+              item_type: item.item_type,
+              value_num: item.value_num,
+              value_unit: (item.value_unit as "mm" | "cm") ?? "cm",
+              value_bool: item.value_bool ?? true,
+              value_text: isComposite ? undefined : (item.value_text ?? undefined),
+              composite,
+            };
+          })
+        );
+        hasInitializedRef.current = true;
+      }
     }
-  }, [noteToUse, items.length]);
+  }, [noteToUse, mounted, cachedNote, initialNote]);
+
 
   const [activeModel3DUrl, setActiveModel3DUrl] = useState<string | null>(null);
 

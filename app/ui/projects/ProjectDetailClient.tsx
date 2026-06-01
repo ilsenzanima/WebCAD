@@ -80,13 +80,20 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   const renameProjectOptimistic = useOfflineStore((state) => state.renameProjectOptimistic);
   const toggleLevelCompletedOptimistic = useOfflineStore((state) => state.toggleLevelCompletedOptimistic);
 
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Leggi dinamicamente dallo store offline
   const cachedLevels = useOfflineStore((state) => state.levels[project.id]);
-  const levelsToUse = cachedLevels && cachedLevels.length > 0 ? cachedLevels : drawings;
+  const levelsToUse = mounted && cachedLevels && cachedLevels.length > 0 ? cachedLevels : drawings;
   const cachedFieldNotes = useOfflineStore((state) => state.fieldNotes);
 
   // Unisce le note caricate dal server con quelle presenti nello store offline per questo progetto
   const projectNotes = useMemo(() => {
+    if (!mounted) return notesList; // Durante SSR/idratazione iniziale, usa solo i dati del server per evitare discrepanze UI
+
     const allNotesMap: Record<string, FieldNote> = {};
     notesList.forEach(n => { allNotesMap[n.id] = n; });
     Object.values(cachedFieldNotes).forEach(n => {
@@ -95,7 +102,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
       }
     });
     return Object.values(allNotesMap);
-  }, [notesList, cachedFieldNotes, project.id]);
+  }, [notesList, cachedFieldNotes, project.id, mounted]);
 
   // Raggruppa le note per livello
   const notesByLevel = useMemo(() => {

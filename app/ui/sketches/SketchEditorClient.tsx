@@ -47,6 +47,9 @@ export default function SketchEditorClient({
 }: SketchEditorClientProps) {
   const router = useRouter();
 
+  // TODO: Da rivedere qualche piccolo ritocco da fare sullo sketch (es. miglioramenti grafici, gesture), da affrontare dopo aver completato l'inserimento dei report per il 3D
+
+
   // Riferimenti ai Canvas dei livelli e overlay
   const containerRef = useRef<HTMLDivElement>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
