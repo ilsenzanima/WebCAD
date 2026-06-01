@@ -197,7 +197,13 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   const typeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (noteToUse) {
+    if (mounted && cachedNote) {
+      if (cachedNote.type_name) {
+        setTypeFilter(cachedNote.type_name);
+        const found = noteTypes.find((t) => t.name.toLowerCase() === cachedNote.type_name!.toLowerCase());
+        if (found) setSelectedType(found);
+      }
+    } else if (noteToUse) {
       if (noteToUse.type_name && !typeFilter) {
         setTypeFilter(noteToUse.type_name);
       }
@@ -209,7 +215,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         if (found) setSelectedType(found);
       }
     }
-  }, [noteToUse, noteTypes, typeFilter, selectedType]);
+  }, [noteToUse, noteTypes, typeFilter, selectedType, mounted, cachedNote]);
 
   // Auto-inizializzazione per Sketch e Report 3D
   useEffect(() => {

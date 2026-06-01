@@ -197,16 +197,12 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
     const { projectId } = quickAdd;
 
     const cachedLevels = useOfflineStore.getState().levels[projectId] ?? [];
-    let level = cachedLevels.find((l) => l.name.toLowerCase() === "generico" || l.name.toLowerCase() === "tagli");
+    let level = cachedLevels.find((l) => l.name.toLowerCase() === "generico" || l.name.toLowerCase() === "tagli" || l.name.toLowerCase() === "taglio");
     let levelId = level?.id;
 
     if (!levelId) {
-      if (cachedLevels.length > 0) {
-        levelId = cachedLevels[0].id;
-      } else {
-        levelId = generateTempId();
-        useOfflineStore.getState().addLevelOptimistic(levelId, projectId, "Generico", 0, "2d_wall", "Generico");
-      }
+      levelId = generateTempId();
+      useOfflineStore.getState().addLevelOptimistic(levelId, projectId, "Generico", 0, "2d_wall", "Generico");
     }
 
     const tempNoteId = generateTempId();

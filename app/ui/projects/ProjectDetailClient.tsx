@@ -269,17 +269,13 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   }, [projectNotes]);
 
   const handleQuickAddTaglioSubmit = async (title: string, selectedNoteIds: string[]) => {
-    // 1. Usa un livello chiamato "Generico" o "Tagli" o il primo disponibile
-    let level = localDrawings.find((l) => l.name.toLowerCase() === "generico" || l.name.toLowerCase() === "tagli");
+    // 1. Usa un livello chiamato "Generico", "Tagli" o "Taglio"
+    let level = localDrawings.find((l) => l.name.toLowerCase() === "generico" || l.name.toLowerCase() === "tagli" || l.name.toLowerCase() === "taglio");
     let levelId = level?.id;
 
     if (!levelId) {
-      if (localDrawings.length > 0) {
-        levelId = localDrawings[0].id;
-      } else {
-        levelId = generateTempId();
-        addLevelOptimistic(levelId, project.id, "Generico", 0, "2d_wall", "Generico");
-      }
+      levelId = generateTempId();
+      addLevelOptimistic(levelId, project.id, "Generico", 0, "2d_wall", "Generico");
     }
 
     // 2. Crea la nota di tipo "Taglio"
@@ -729,12 +725,13 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                             
                             // Determinazione tag dinamico Disegno in presenza di foto normali
                             const hasFotoNormal = note.field_note_items?.some(i => i.item_type === "foto" && !is3DModelUrl(i.value_text));
+                            const isTaglio = typeName === "Taglio";
                             const isSketchOrDesign = (typeName === "Sketch" || hasFotoNormal) && !has3DModel;
                             
                             const is3D = typeName === "Report 3D" || has3DModel;
                             
-                            const displayIcon = is3D ? "🧊" : isSketchOrDesign ? "🎨" : "📝";
-                            const displayTag = is3D ? "3D" : isSketchOrDesign ? "Disegno" : "Nota";
+                            const displayIcon = isTaglio ? "✂️" : is3D ? "🧊" : isSketchOrDesign ? "🎨" : "📝";
+                            const displayTag = isTaglio ? "Taglio" : is3D ? "3D" : isSketchOrDesign ? "Disegno" : "Nota";
                             
                             const titleItem = note.field_note_items?.find(i => i.item_type === "nota");
                             const noteTitle = titleItem?.value_text || `Appunto #${note.note_number}`;
