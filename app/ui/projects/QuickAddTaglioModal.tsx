@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import type { FieldNote } from "@/app/actions/field-notes";
 
 interface Props {
   onClose: () => void;
-  onSubmit: (title: string, piano: string, selectedNoteIds: string[]) => Promise<void>;
-  existingPiani?: string[];
+  onSubmit: (title: string, selectedNoteIds: string[]) => Promise<void>;
   notesWithCuts: FieldNote[];
 }
 
@@ -36,26 +35,11 @@ const getNoteTitle = (note: FieldNote) => {
 export default function QuickAddTaglioModal({
   onClose,
   onSubmit,
-  existingPiani = [],
   notesWithCuts,
 }: Props) {
   const [title, setTitle] = useState("");
-  const [piano, setPiano] = useState("");
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
-  const [showPianiDropdown, setShowPianiDropdown] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Chiude il dropdown se si clicca fuori
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowPianiDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -77,16 +61,11 @@ export default function QuickAddTaglioModal({
       alert("Seleziona almeno un appunto da includere nel taglio.");
       return;
     }
-    const finalPiano = piano.trim() || "Generico";
     const finalTitle = title.trim() || "Taglio Parametrico";
     setIsSubmitting(true);
-    await onSubmit(finalTitle, finalPiano, selectedNoteIds);
+    await onSubmit(finalTitle, selectedNoteIds);
     setIsSubmitting(false);
   };
-
-  const filteredPiani = existingPiani.filter((p) =>
-    p.toLowerCase().includes(piano.toLowerCase())
-  );
 
   const isAllSelected = notesWithCuts.length > 0 && selectedNoteIds.length === notesWithCuts.length;
 
@@ -133,70 +112,6 @@ export default function QuickAddTaglioModal({
               onFocus={(e) => (e.currentTarget.style.borderColor = "hsl(220 90% 56%)")}
               onBlur={(e) => (e.currentTarget.style.borderColor = "hsl(220 20% 20%)")}
             />
-          </div>
-
-          {/* Piano / Livello */}
-          <div className="relative flex-shrink-0" ref={dropdownRef}>
-            <label className="block text-xs font-semibold mb-1.5 uppercase tracking-wider text-white/50">
-              Piano / Livello di Destinazione
-            </label>
-            <input
-              type="text"
-              required
-              value={piano}
-              onChange={(e) => {
-                setPiano(e.target.value);
-                setShowPianiDropdown(true);
-              }}
-              onFocus={() => setShowPianiDropdown(true)}
-              placeholder="Scrivi o seleziona un piano..."
-              className="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all"
-              style={{
-                background: "hsl(220 32% 10%)",
-                border: "1px solid hsl(220 20% 20%)",
-                color: "hsl(210 40% 96%)",
-              }}
-              onFocusCapture={(e) => (e.currentTarget.style.borderColor = "hsl(220 90% 56%)")}
-              onBlurCapture={(e) => (e.currentTarget.style.borderColor = "hsl(220 20% 20%)")}
-              autoComplete="off"
-            />
-
-            {/* Dropdown piani */}
-            {showPianiDropdown && existingPiani.length > 0 && (
-              <div
-                className="absolute left-0 right-0 mt-1 rounded-xl overflow-hidden z-50 border max-h-32 overflow-y-auto"
-                style={{
-                  background: "hsl(220 26% 14%)",
-                  borderColor: "hsl(220 20% 22%)",
-                  boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
-                }}
-              >
-                {filteredPiani.length > 0 ? (
-                  filteredPiani.map((p, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        setPiano(p);
-                        setShowPianiDropdown(false);
-                      }}
-                      className="w-full text-left px-4 py-2 text-xs hover:bg-white/5 transition-colors text-white/80"
-                      style={{ borderBottom: idx < filteredPiani.length - 1 ? "1px solid hsl(220 20% 18%)" : "none" }}
-                    >
-                      🏢 {p}
-                    </button>
-                  ))
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowPianiDropdown(false)}
-                    className="w-full text-left px-4 py-2 text-xs text-white/40 italic"
-                  >
-                    Crea come nuovo piano
-                  </button>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Selezione Note con Misure di Taglio */}

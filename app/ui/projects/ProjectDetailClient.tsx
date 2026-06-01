@@ -268,15 +268,18 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
     );
   }, [projectNotes]);
 
-  const handleQuickAddTaglioSubmit = async (title: string, pianoName: string, selectedNoteIds: string[]) => {
-    // 1. Controlla se il livello esiste già offline
-    let level = localDrawings.find((l) => l.name.toLowerCase() === pianoName.toLowerCase());
+  const handleQuickAddTaglioSubmit = async (title: string, selectedNoteIds: string[]) => {
+    // 1. Usa un livello chiamato "Generico" o "Tagli" o il primo disponibile
+    let level = localDrawings.find((l) => l.name.toLowerCase() === "generico" || l.name.toLowerCase() === "tagli");
     let levelId = level?.id;
 
     if (!levelId) {
-      // Crea il livello optimisticamente
-      levelId = generateTempId();
-      addLevelOptimistic(levelId, project.id, pianoName, 0, "2d_wall", pianoName);
+      if (localDrawings.length > 0) {
+        levelId = localDrawings[0].id;
+      } else {
+        levelId = generateTempId();
+        addLevelOptimistic(levelId, project.id, "Generico", 0, "2d_wall", "Generico");
+      }
     }
 
     // 2. Crea la nota di tipo "Taglio"
@@ -1016,7 +1019,6 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
 
       {quickAddType === "taglio" && (
         <QuickAddTaglioModal
-          existingPiani={existingPiani}
           notesWithCuts={notesWithCuts}
           onClose={() => setQuickAddType(null)}
           onSubmit={handleQuickAddTaglioSubmit}
