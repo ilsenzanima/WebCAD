@@ -6,6 +6,7 @@ import {
   createFieldNote,
   updateFieldNote,
   createNoteType,
+  deleteFieldNote,
   type FieldNoteType,
   type FieldNoteItem,
   type FieldNote,
@@ -151,6 +152,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   const setCatalogMaterialsCache = useOfflineStore((state) => state.setCatalogMaterialsCache);
   const setNoteTypesCache = useOfflineStore((state) => state.setNoteTypesCache);
   const saveFieldNoteItemsOptimistic = useOfflineStore((state) => state.saveFieldNoteItemsOptimistic);
+  const deleteFieldNoteOptimistic = useOfflineStore((state) => state.deleteFieldNoteOptimistic);
 
   // Carica i materiali e i tipi di note nella cache offline
   useEffect(() => {
@@ -404,7 +406,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
           value_bool: BOOL_TYPES.includes(item.item_type) ? (item.value_bool ?? true) : null,
           // nota, foto e posizione usano value_text; composite salvano JSON in value_text
           value_text:
-            (item.item_type === "nota" || item.item_type === "foto" || item.item_type === "posizione")
+            (item.item_type === "nota" || item.item_type === "foto" || item.item_type === "posizione" || item.item_type === "materiale")
               ? (item.value_text ?? null)
               : COMPOSITE_TYPES.includes(item.item_type)
               ? JSON.stringify(item.composite ?? {})
@@ -429,6 +431,28 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         router.push(`/projects/${projectId}`);
       } else {
         setError(res.error ?? "Errore durante il salvataggio");
+      }
+    });
+  }
+
+  function handleDelete() {
+    if (!initialNote) return;
+    const confermata = window.confirm("Sei sicuro di voler eliminare definitivamente questo appunto?");
+    if (!confermata) return;
+
+    setError(null);
+    startTransition(async () => {
+      if (!isOnline || initialNote.id.startsWith("temp_")) {
+        deleteFieldNoteOptimistic(initialNote.id, projectId);
+        router.push(`/projects/${projectId}`);
+        return;
+      }
+
+      const res = await deleteFieldNote(initialNote.id, projectId);
+      if (res.success) {
+        router.push(`/projects/${projectId}`);
+      } else {
+        setError(res.error ?? "Errore durante l'eliminazione dell'appunto");
       }
     });
   }
@@ -800,56 +824,6 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                         boxShadow: "0 12px 30px rgba(0,0,0,0.5)",
                       }}
                     >
-                      {/* Caricamento Modello 3D */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const input = document.createElement("input");
-                          input.type = "file";
-                          input.accept = ".glb,.gltf";
-                          input.onchange = (e) => {
-                            const file = (e.target as HTMLInputElement).files?.[0];
-                            if (!file) return;
-                            const reader = new FileReader();
-                            reader.onload = (evt) => {
-                              const resultUrl = evt.target?.result as string;
-                              const newItems = [...items];
-                              const existingModelIndex = newItems.findIndex(i => i.item_type === "foto" && is3DModelUrl(i.value_text));
-                              if (existingModelIndex > -1) {
-                                newItems[existingModelIndex].value_text = resultUrl;
-                              } else {
-                                newItems.push({ id: crypto.randomUUID(), item_type: "foto", value_text: resultUrl });
-                              }
-                              
-                              // Impostiamo il tipo dell'appunto a "Report 3D" per allineamento
-                              setTypeFilter("Report 3D");
-                              const foundType = noteTypes.find(t => t.name === "Report 3D");
-                              if (foundType) {
-                                setSelectedType(foundType);
-                              }
-
-                              // Assicura che esista una nota per il titolo del report
-                              const hasNota = newItems.some(i => i.item_type === "nota");
-                              if (!hasNota) {
-                                newItems.push({ id: crypto.randomUUID(), item_type: "nota", value_text: "" });
-                              }
-                              
-                              setItems(newItems);
-                              setShowItemDropdown(false);
-                            };
-                            reader.readAsDataURL(file);
-                          };
-                          input.click();
-                        }}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors font-bold flex items-center gap-1.5"
-                        style={{
-                          color: "hsl(270, 75%, 75%)",
-                          borderBottom: "1px solid hsl(220 20% 18%)",
-                        }}
-                      >
-                        <span>🧊</span> Carica 3D (.glb/.gltf)
-                      </button>
-
                       {/* Voci Standard del Menu "+" */}
                       <button
                         type="button"
@@ -894,22 +868,18 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                       <button
                         type="button"
                         onClick={() => addItem("dim_quadrata")}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)] font-semibold"
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
                         style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
                       >
-                        📐 Dimensione quadrata (Rif.)
+                        📐 Dimensione quadrata
                       </button>
                       <button
                         type="button"
                         onClick={() => addItem("dim_quadrata", { isCutPiece: true })}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-emerald-500/10 transition-colors font-bold"
-                        style={{ 
-                          color: "hsl(142, 70%, 55%)",
-                          borderBottom: "1px solid hsl(220 20% 18%)",
-                          background: "hsl(142 60% 5% / 0.2)"
-                        }}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
                       >
-                        ✂️ Pezzo da tagliare (Nesting)
+                        ✂️ Pezzo da tagliare
                       </button>
                       <button
                         type="button"
@@ -949,11 +919,8 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                           setShowLivella(true);
                           setShowItemDropdown(false);
                         }}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors font-bold"
-                        style={{
-                          color: "hsl(142, 60%, 75%)",
-                          borderTop: "1px solid hsl(220 20% 18%)",
-                        }}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                        style={{ borderTop: "1px solid hsl(220 20% 18%)" }}
                       >
                         🟢 Livella a Bolla
                       </button>
@@ -1046,33 +1013,48 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
       </div>
 
       {/* ── Pulsanti ── */}
-      <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-3 sm:justify-end pb-8">
-        <button
-          type="button"
-          onClick={() => router.push(`/projects/${projectId}`)}
-          disabled={isPending}
-          className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
-          style={{
-            background: "hsl(220 26% 14%)",
-            border: "1px solid hsl(220 20% 24%)",
-            color: "hsl(215 20% 65%)",
-          }}
-        >
-          Indietro
-        </button>
+      <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-3 sm:justify-between pb-8">
+        <div>
+          {initialNote && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={isPending}
+              className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-semibold transition-all text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-950/40 border border-red-900/30 active:scale-95 disabled:opacity-50"
+            >
+              {isPending ? "Eliminazione..." : "Elimina Appunto"}
+            </button>
+          )}
+        </div>
 
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={isPending || (!selectedType && !typeFilter.trim())}
-          className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 disabled:opacity-50"
-          style={{
-            background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-            boxShadow: "0 4px 16px hsl(220 90% 56% / 0.3)",
-          }}
-        >
-          {isPending ? "Salvataggio..." : "Salva Appunto"}
-        </button>
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-3">
+          <button
+            type="button"
+            onClick={() => router.push(`/projects/${projectId}`)}
+            disabled={isPending}
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-all"
+            style={{
+              background: "hsl(220 26% 14%)",
+              border: "1px solid hsl(220 20% 24%)",
+              color: "hsl(215 20% 65%)",
+            }}
+          >
+            Indietro
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isPending || (!selectedType && !typeFilter.trim())}
+            className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 disabled:opacity-50"
+            style={{
+              background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+              boxShadow: "0 4px 16px hsl(220 90% 56% / 0.3)",
+            }}
+          >
+            {isPending ? "Salvataggio..." : "Salva Appunto"}
+          </button>
+        </div>
       </div>
 
       {/* Modale Livella a Bolla */}
