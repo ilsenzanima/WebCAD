@@ -12,6 +12,7 @@ import {
 } from "@/app/actions/field-notes";
 import PlanimetriaMappa from "./PlanimetriaMappa";
 import PhotoQuotaEditor from "./PhotoQuotaEditor";
+import FreehandSketchEditor from "./FreehandSketchEditor";
 import ModelViewer from "./ModelViewer";
 import LivellaBolla from "./LivellaBolla";
 import CalcolatriceWidget from "@/app/ui/dashboard/CalcolatriceWidget";
@@ -240,6 +241,8 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   const [showLivella, setShowLivella] = useState(false);
   const [editingFotoId, setEditingFotoId] = useState<string | null>(null);
   const [editingFotoUrl, setEditingFotoUrl] = useState<string | null>(null);
+  const [editingSketchId, setEditingSketchId] = useState<string | null>(null);
+  const [editingSketchUrl, setEditingSketchUrl] = useState<string | null>(null);
 
   // --- Errori ---
   const [error, setError] = useState<string | null>(null);
@@ -502,8 +505,8 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                         type="button"
                         onClick={() => {
                           if (sketchFotoItem) {
-                            setEditingFotoId(sketchFotoItem.id);
-                            setEditingFotoUrl(sketchFotoItem.value_text!);
+                            setEditingSketchId(sketchFotoItem.id);
+                            setEditingSketchUrl(sketchFotoItem.value_text!);
                           }
                         }}
                         className="px-6 py-2.5 rounded-xl text-xs font-bold text-white transition-all bg-amber-500 hover:bg-amber-600 active:scale-95 flex items-center gap-2 cursor-pointer shadow-md"
@@ -793,6 +796,10 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                       setEditingFotoId(id);
                       setEditingFotoUrl(url);
                     }}
+                    onDrawFoto={(id, url) => {
+                      setEditingSketchId(id);
+                      setEditingSketchUrl(url);
+                    }}
                     onOpen3DModel={setActiveModel3DUrl}
                     lastAddedId={lastAddedId}
                   />
@@ -857,6 +864,22 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         />
       )}
 
+      {/* Modale FreehandSketchEditor per Disegno Libero / Sketch */}
+      {editingSketchId && editingSketchUrl && (
+        <FreehandSketchEditor
+          imageUrl={editingSketchUrl}
+          onSave={(newUrl) => {
+            updateItem(editingSketchId, { value_text: newUrl });
+            setEditingSketchId(null);
+            setEditingSketchUrl(null);
+          }}
+          onClose={() => {
+            setEditingSketchId(null);
+            setEditingSketchUrl(null);
+          }}
+        />
+      )}
+
       {/* Modale Visualizzatore 3D GLB/GLTF */}
       {activeModel3DUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
@@ -894,6 +917,7 @@ function ItemRow({
   onRemove,
   catalogMaterials = [],
   onEditFoto,
+  onDrawFoto,
   onOpen3DModel,
   lastAddedId,
 }: {
@@ -902,6 +926,7 @@ function ItemRow({
   onRemove: () => void;
   catalogMaterials?: Material[];
   onEditFoto?: (id: string, url: string) => void;
+  onDrawFoto?: (id: string, url: string) => void;
   onOpen3DModel?: (url: string) => void;
   lastAddedId?: string | null;
 }) {
@@ -1205,14 +1230,24 @@ function ItemRow({
                   👁 Visualizza 3D
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => onEditFoto?.(item.id, item.value_text!)}
-                  className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap bg-amber-500 hover:bg-amber-600 active:scale-95 text-white flex items-center gap-1 cursor-pointer shadow-sm"
-                  title="Apri e modifica questa foto/disegno con lo strumento sketch"
-                >
-                  <span>✏️</span> Modifica con Sketch
-                </button>
+                <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => onEditFoto?.(item.id, item.value_text!)}
+                    className="px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold transition-all whitespace-nowrap bg-sky-600 hover:bg-sky-700 active:scale-95 text-white flex items-center gap-1 cursor-pointer shadow-sm"
+                    title="Quota questa foto con linee d'asse e misure"
+                  >
+                    <span>📐</span> Quota Foto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDrawFoto?.(item.id, item.value_text!)}
+                    className="px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold transition-all whitespace-nowrap bg-amber-500 hover:bg-amber-600 active:scale-95 text-white flex items-center gap-1 cursor-pointer shadow-sm"
+                    title="Disegna a mano libera sopra questa foto"
+                  >
+                    <span>✏️</span> Disegna su Foto
+                  </button>
+                </div>
               )}
             </div>
           ) : (
