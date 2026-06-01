@@ -675,7 +675,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                                     {/* Testo e tipo */}
                                     <div className="min-w-0 flex-1">
                                       <div className="flex items-center gap-2 flex-wrap">
-                                        <span className={`text-white text-xs font-bold truncate ${isNoteCompleted ? "line-through opacity-50" : ""}`}>
+                                        <span className={`text-white text-xs font-bold break-words min-w-0 ${isNoteCompleted ? "line-through opacity-50" : ""}`}>
                                           {noteTitle}
                                         </span>
                                         <span className="text-[8px] uppercase font-mono px-1.5 py-0.5 rounded-full font-extrabold"
@@ -696,7 +696,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                                       
                                       {/* Sotto-dettagli compatti (se non espanso) */}
                                       {!isExpanded && (
-                                        <div className="text-[10px] text-white/40 mt-1 truncate">
+                                        <div className="text-[10px] text-white/40 mt-1 break-words leading-relaxed">
                                           {(note.field_note_items ?? [])
                                             .filter(i => i.item_type !== "nota" && i.item_type !== "foto")
                                             .map(i => {
@@ -809,13 +809,13 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                                           return (
                                             <div 
                                               key={item.id} 
-                                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-white/5 bg-white/[0.015]"
+                                              className="flex items-start gap-2.5 px-3 py-2 rounded-xl border border-white/5 bg-white/[0.015]"
                                               style={{ color: "hsl(210 40% 90%)" }}
                                             >
                                               <span className="w-5 h-5 rounded bg-white/5 flex items-center justify-center text-[10px] font-mono flex-shrink-0">
                                                 {icon}
                                               </span>
-                                              <span className="truncate">{desc}</span>
+                                              <span className="break-words whitespace-pre-wrap leading-snug text-xs">{desc}</span>
                                             </div>
                                           );
                                         })}
