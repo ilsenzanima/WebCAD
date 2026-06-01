@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { getNoteTypes, getFieldNotes } from "@/app/actions/field-notes";
 import LevelNewNoteForm from "@/app/ui/projects/LevelNewNoteForm";
+import type { Material } from "@/lib/types/database";
 
 export default async function LevelNewFieldNotePage({
   params,
@@ -36,12 +37,31 @@ export default async function LevelNewFieldNotePage({
 
   if (!level) return notFound();
 
-  const { getMaterials } = await import("@/app/actions/materials");
-  const [noteTypes, levelNotes, catalogMaterials] = await Promise.all([
+  const { getUserTags } = await import("@/app/actions/settings");
+  const [noteTypes, levelNotes, tags] = await Promise.all([
     getNoteTypes(),
     getFieldNotes(levelId),
-    getMaterials(),
+    getUserTags("material_category"),
   ]);
+
+  const catalogMaterials = tags.map((tag) => ({
+    id: tag.id,
+    name: tag.name,
+    user_id: tag.user_id,
+    description: null,
+    category: "material_category",
+    length_mm: null,
+    width_mm: null,
+    thickness_mm: null,
+    unit_cost: null,
+    unit: "unità",
+    stock_qty: null,
+    supplier: null,
+    sku: null,
+    is_active: true,
+    created_at: tag.created_at,
+    updated_at: tag.created_at,
+  } as Material));
 
   // Calcola il prossimo numero di nota (massimo + 1 tra le note del livello, o 1 se nessuna)
   const nextNoteNumber = levelNotes.length > 0

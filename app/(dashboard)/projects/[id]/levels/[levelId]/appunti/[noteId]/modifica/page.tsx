@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { getNoteTypes, getFieldNote } from "@/app/actions/field-notes";
 import LevelNewNoteForm from "@/app/ui/projects/LevelNewNoteForm";
+import type { Material } from "@/lib/types/database";
 
 export default async function EditFieldNotePage({
   params,
@@ -41,14 +42,33 @@ export default async function EditFieldNotePage({
   }
 
   const { getFieldNotes } = await import("@/app/actions/field-notes");
-  const { getMaterials } = await import("@/app/actions/materials");
+  const { getUserTags } = await import("@/app/actions/settings");
 
-  const [noteTypes, dbNote, levelNotes, catalogMaterials] = await Promise.all([
+  const [noteTypes, dbNote, levelNotes, tags] = await Promise.all([
     getNoteTypes(),
     getFieldNote(noteId).catch(() => null),
     getFieldNotes(levelId).catch(() => []),
-    getMaterials().catch(() => []),
+    getUserTags("material_category").catch(() => []),
   ]);
+
+  const catalogMaterials = tags.map((tag) => ({
+    id: tag.id,
+    name: tag.name,
+    user_id: tag.user_id,
+    description: null,
+    category: "material_category",
+    length_mm: null,
+    width_mm: null,
+    thickness_mm: null,
+    unit_cost: null,
+    unit: "unità",
+    stock_qty: null,
+    supplier: null,
+    sku: null,
+    is_active: true,
+    created_at: tag.created_at,
+    updated_at: tag.created_at,
+  } as Material));
 
   const note = dbNote || {
     id: noteId,

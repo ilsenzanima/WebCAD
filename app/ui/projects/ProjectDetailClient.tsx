@@ -7,6 +7,7 @@ import { updateProjectNotes, renameProject, toggleLevelCompleted } from "@/app/a
 import ProjectActionsMenu from "@/app/ui/dashboard/ProjectActionsMenu";
 import QuickAddModal from "./QuickAddModal";
 import type { FieldNote } from "@/app/actions/field-notes";
+import { toggleFieldNoteCompleted } from "@/app/actions/field-notes";
 import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
 
 
@@ -71,6 +72,37 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   const [searchQuery, setSearchQuery] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  // Stati per accordion note, lightbox foto e completamento singola nota
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
+  const [activeLightboxUrl, setActiveLightboxUrl] = useState<string | null>(null);
+  const [localCompletedNotes, setLocalCompletedNotes] = useState<Record<string, boolean>>({});
+
+  const handleToggleNoteCompleted = (noteId: string, currentCompleted: boolean) => {
+    const nextCompleted = !currentCompleted;
+    setLocalCompletedNotes((prev) => ({ ...prev, [noteId]: nextCompleted }));
+
+    if (!isOnline) {
+      // Aggiorna localmente lo store offline se la nota è presente nella cache
+      const cached = cachedFieldNotes[noteId];
+      if (cached) {
+        useOfflineStore.getState().setFieldNotesCache([
+          { ...cached, completed: nextCompleted } as FieldNote
+        ]);
+      }
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await toggleFieldNoteCompleted(noteId, nextCompleted);
+      if (res.success) {
+        router.refresh();
+      } else {
+        setLocalCompletedNotes((prev) => ({ ...prev, [noteId]: currentCompleted }));
+        alert("Errore durante l'aggiornamento dello stato della nota: " + res.error);
+      }
+    });
+  };
+
   // Store offline Zustand
   const isOnline = useOfflineStore((state) => state.isOnline);
   const setProjectsCache = useOfflineStore((state) => state.setProjectsCache);
@@ -127,9 +159,6 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
 
   // Stato note locali (completamento)
   const [localDrawings, setLocalDrawings] = useState<Drawing[]>(levelsToUse as Drawing[]);
-
-  // Stato per gli accordion aperti (dropdown note)
-  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
 
   // Stato per le note autosave in calce
   const [notes, setNotes] = useState(project.notes ?? "");
@@ -576,25 +605,12 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                   
                   return (
                     <div key={lvl.id} className="p-4 space-y-3">
-                      {/* Titolo Livello con stato di completamento */}
+                      {/* Titolo Livello */}
                       <div className="flex items-center justify-between border-b border-white/5 pb-2">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-bold text-white">{lvl.name}</span>
                           <span className="text-[10px] text-white/40">({levelNotesList.length} elementi)</span>
                         </div>
-                        {/* Toggle completato */}
-                        <button
-                          type="button"
-                          onClick={() => handleToggleCompleted(lvl.id, !!lvl.completed)}
-                          className="px-2.5 py-1 rounded-md text-[10px] font-bold transition-all border border-white/10"
-                          style={{
-                            background: lvl.completed ? "hsl(142 60% 40%/0.15)" : "transparent",
-                            borderColor: lvl.completed ? "hsl(142 60% 35%)" : "hsl(220 20% 22%)",
-                            color: lvl.completed ? "hsl(142 60% 70%)" : "white/60",
-                          }}
-                        >
-                          {lvl.completed ? "✓ Completato" : "Segna Completato"}
-                        </button>
                       </div>
 
                       {/* Lista elementi del livello */}
@@ -602,82 +618,223 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                         <div className="space-y-2.5 pt-1">
                           {levelNotesList.map((note) => {
                             const typeName = note.type_name || "Appunti Cantiere";
-                            const titleItem = note.field_note_items?.find(i => i.item_type === "nota");
-                            const noteTitle = titleItem?.value_text || `Appunto #${note.note_number}`;
                             
                             // Troviamo eventuali foto o snapshot per la preview
                             const fotoItem = note.field_note_items?.find(i => i.item_type === "foto");
                             const previewUrl = fotoItem?.value_text;
                             
+                            // Determinazione tag dinamico Disegno in presenza di foto (Punto 1)
+                            const hasFoto = note.field_note_items?.some(i => i.item_type === "foto");
+                            const isSketchOrDesign = typeName === "Sketch" || hasFoto;
+                            
+                            const displayIcon = isSketchOrDesign ? "🎨" : typeName === "Report 3D" ? "📦" : "📝";
+                            const displayTag = isSketchOrDesign ? "Disegno" : typeName === "Report 3D" ? "3D" : "Nota";
+                            
+                            const titleItem = note.field_note_items?.find(i => i.item_type === "nota");
+                            const noteTitle = titleItem?.value_text || `Appunto #${note.note_number}`;
+                            
+                            const isExpanded = !!expandedNotes[note.id];
+                            const isNoteCompleted = localCompletedNotes[note.id] !== undefined 
+                              ? localCompletedNotes[note.id] 
+                              : !!note.completed;
+                            
                             return (
                               <div 
                                 key={note.id} 
-                                className="p-3 bg-white/[0.015] border border-white/5 rounded-xl flex items-center justify-between gap-3.5 hover:bg-white/[0.03] transition-colors"
+                                onClick={() => setExpandedNotes(prev => ({ ...prev, [note.id]: !prev[note.id] }))}
+                                className="p-3.5 bg-white/[0.015] border border-white/5 rounded-xl flex flex-col gap-1 hover:bg-white/[0.03] transition-colors cursor-pointer select-none"
+                                style={{
+                                  borderColor: isNoteCompleted ? "hsl(142 60% 40% / 0.15)" : "hsl(220 20% 20% / 0.25)",
+                                }}
                               >
-                                <div className="flex items-center gap-3 min-w-0 flex-1">
-                                  {/* Icona in base al tipo */}
-                                  <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-base flex-shrink-0">
-                                    {typeName === "Sketch" ? "🎨" : typeName === "Report 3D" ? "📦" : "📝"}
-                                  </div>
-                                  
-                                  {/* Testo e tipo */}
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-white text-xs font-bold truncate">{noteTitle}</span>
-                                      <span className="text-[9px] uppercase font-mono px-1.5 py-0.5 rounded-full"
-                                        style={{
-                                          background: typeName === "Sketch" ? "rgba(245, 158, 11, 0.15)" : typeName === "Report 3D" ? "rgba(168, 85, 247, 0.15)" : "rgba(14, 165, 233, 0.15)",
-                                          color: typeName === "Sketch" ? "#fbbf24" : typeName === "Report 3D" ? "#c084fc" : "#38bdf8",
-                                          border: `1px solid ${typeName === "Sketch" ? "rgba(245, 158, 11, 0.3)" : typeName === "Report 3D" ? "rgba(168, 85, 247, 0.3)" : "rgba(14, 165, 233, 0.3)"}`
-                                        }}
-                                      >
-                                        {typeName === "Sketch" ? "Sketch" : typeName === "Report 3D" ? "3D" : "Nota"}
-                                      </span>
+                                <div className="flex items-center justify-between gap-3 w-full">
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    {/* Spunta Completato (Punto 2) */}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleToggleNoteCompleted(note.id, isNoteCompleted);
+                                      }}
+                                      className="w-5 h-5 rounded-full flex items-center justify-center border transition-all flex-shrink-0 cursor-pointer"
+                                      style={{
+                                        background: isNoteCompleted ? "hsl(142 60% 40% / 0.2)" : "transparent",
+                                        borderColor: isNoteCompleted ? "hsl(142 60% 40%)" : "rgba(255, 255, 255, 0.25)",
+                                        color: isNoteCompleted ? "hsl(142 60% 55%)" : "transparent"
+                                      }}
+                                      title={isNoteCompleted ? "Segna come da completare" : "Segna come completato"}
+                                    >
+                                      <span className="text-[10px] font-bold">✓</span>
+                                    </button>
+
+                                    {/* Icona in base al tipo */}
+                                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-base flex-shrink-0">
+                                      {displayIcon}
                                     </div>
                                     
-                                    {/* Sotto-dettagli (se ci sono) */}
-                                    {typeName === "Appunti Cantiere" && (
-                                      <p className="text-[10px] text-white/40 mt-1 truncate">
-                                        {(note.field_note_items ?? [])
-                                          .filter(i => i.item_type !== "nota" && i.item_type !== "foto")
-                                          .map(i => {
-                                            if (i.item_type === "base") return `↔ ${i.value_num}${i.value_unit || "cm"}`;
-                                            if (i.item_type === "altezza") return `↕ ${i.value_num}${i.value_unit || "cm"}`;
-                                            if (i.item_type === "spessore") return `↗ ${i.value_num}${i.value_unit || "cm"}`;
-                                            if (i.item_type === "materiale") return `📦 ${i.value_text}`;
-                                            return "";
-                                          })
-                                          .filter(Boolean)
-                                          .join(" · ") || "Nessuna misura inserita"}
-                                      </p>
+                                    {/* Testo e tipo */}
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <span className={`text-white text-xs font-bold truncate ${isNoteCompleted ? "line-through opacity-50" : ""}`}>
+                                          {noteTitle}
+                                        </span>
+                                        <span className="text-[8px] uppercase font-mono px-1.5 py-0.5 rounded-full font-extrabold"
+                                          style={{
+                                            background: isSketchOrDesign ? "rgba(245, 158, 11, 0.15)" : typeName === "Report 3D" ? "rgba(168, 85, 247, 0.15)" : "rgba(14, 165, 233, 0.15)",
+                                            color: isSketchOrDesign ? "#fbbf24" : typeName === "Report 3D" ? "#c084fc" : "#38bdf8",
+                                            border: `1px solid ${isSketchOrDesign ? "rgba(245, 158, 11, 0.3)" : typeName === "Report 3D" ? "rgba(168, 85, 247, 0.3)" : "rgba(14, 165, 233, 0.3)"}`
+                                          }}
+                                        >
+                                          {displayTag}
+                                        </span>
+                                        {isNoteCompleted && (
+                                          <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                            COMPLETATO
+                                          </span>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Sotto-dettagli compatti (se non espanso) */}
+                                      {!isExpanded && (
+                                        <div className="text-[10px] text-white/40 mt-1 truncate">
+                                          {(note.field_note_items ?? [])
+                                            .filter(i => i.item_type !== "nota" && i.item_type !== "foto")
+                                            .map(i => {
+                                              if (i.item_type === "base") return `↔ ${i.value_num}${i.value_unit || "cm"}`;
+                                              if (i.item_type === "altezza") return `↕ ${i.value_num}${i.value_unit || "cm"}`;
+                                              if (i.item_type === "spessore") return `↗ ${i.value_num}${i.value_unit || "cm"}`;
+                                              if (i.item_type === "materiale") return `📦 ${i.value_text}`;
+                                              return "";
+                                            })
+                                            .filter(Boolean)
+                                            .join(" · ") || (isSketchOrDesign ? "Disegno a mano libera / quotato" : typeName === "Report 3D" ? "Modello 3D esterno con snapshot" : "Nessuna misura")}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2 flex-shrink-0">
+                                    {/* Anteprima grafica fluttuante compatta (se presente) */}
+                                    {previewUrl && !isExpanded && (
+                                      <div 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setActiveLightboxUrl(previewUrl);
+                                        }}
+                                        className="w-10 h-10 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center flex-shrink-0 cursor-zoom-in"
+                                      >
+                                        <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
+                                      </div>
                                     )}
                                     
-                                    {typeName === "Sketch" && (
-                                      <p className="text-[10px] text-amber-400/60 mt-1">Disegno a mano libera / quotato</p>
-                                    )}
-                                    
-                                    {typeName === "Report 3D" && (
-                                      <p className="text-[10px] text-purple-400/60 mt-1">Modello 3D esterno con snapshot</p>
-                                    )}
+                                    {/* Pulsante Modifica */}
+                                    <Link
+                                      href={`/projects/${project.id}/levels/${lvl.id}/appunti/${note.id}/modifica`}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white transition-all bg-white/5 border border-white/10 hover:bg-white/10"
+                                    >
+                                      {isSketchOrDesign ? "✏️ Disegna" : typeName === "Report 3D" ? "👁 Visualizza" : "✏️ Modifica"}
+                                    </Link>
+
+                                    {/* Indicatore espansione */}
+                                    <span className="text-[10px] text-white/30 transition-transform duration-200" style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
+                                      ▼
+                                    </span>
                                   </div>
                                 </div>
-                                
-                                {/* Anteprima grafica fluttuante (se presente) */}
-                                {previewUrl && (
-                                  <div className="w-10 h-10 rounded-lg overflow-hidden border border-white/10 bg-white/5 flex items-center justify-center flex-shrink-0">
-                                    <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
+
+                                {/* Sezione Espandibile Accordion (Punto 4 e 5) */}
+                                {isExpanded && (
+                                  <div 
+                                    className="mt-3.5 pt-3.5 border-t border-white/5 space-y-3.5 w-full text-left"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                      {(note.field_note_items ?? [])
+                                        .filter(i => i.item_type !== "foto")
+                                        .sort((a, b) => a.sort_order - b.sort_order)
+                                        .map((item) => {
+                                          let desc = "";
+                                          let icon = "📝";
+                                          const valNum = item.value_num;
+                                          const valUnit = item.value_unit || "mm";
+                                          const valBool = item.value_bool;
+                                          const valText = item.value_text || "";
+
+                                          switch (item.item_type) {
+                                            case "base":
+                                              desc = `Base: ${valNum} ${valUnit}`;
+                                              icon = "↔";
+                                              break;
+                                            case "altezza":
+                                              desc = `Altezza: ${valNum} ${valUnit}`;
+                                              icon = "↕";
+                                              break;
+                                            case "spessore":
+                                              desc = `Spessore: ${valNum} ${valUnit}`;
+                                              icon = "↗";
+                                              break;
+                                            case "lana_interna":
+                                              desc = `Lana Interna: ${valBool ? "Sì" : "No"}`;
+                                              icon = "🔥";
+                                              break;
+                                            case "dipintura":
+                                              desc = `Dipintura: ${valBool ? "Sì" : "No"}`;
+                                              icon = "🎨";
+                                              break;
+                                            case "dim_quadrata":
+                                              desc = `Dimensione Quadrata: ${valNum} ${valUnit}`;
+                                              icon = "📐";
+                                              break;
+                                            case "dim_cubica":
+                                              desc = `Dimensione Cubica: ${valNum} ${valUnit}`;
+                                              icon = "📦";
+                                              break;
+                                            case "materiale":
+                                              desc = `Materiale: ${valText}`;
+                                              icon = "🪵";
+                                              break;
+                                            case "nota":
+                                              desc = valText;
+                                              icon = "📝";
+                                              break;
+                                            case "posizione":
+                                              desc = `Posizione: ${valText}`;
+                                              icon = "📍";
+                                              break;
+                                            default:
+                                              desc = `${item.item_type}: ${valText || valNum || ""}`;
+                                          }
+
+                                          return (
+                                            <div 
+                                              key={item.id} 
+                                              className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-white/5 bg-white/[0.015]"
+                                              style={{ color: "hsl(210 40% 90%)" }}
+                                            >
+                                              <span className="w-5 h-5 rounded bg-white/5 flex items-center justify-center text-[10px] font-mono flex-shrink-0">
+                                                {icon}
+                                              </span>
+                                              <span className="truncate">{desc}</span>
+                                            </div>
+                                          );
+                                        })}
+                                    </div>
+
+                                    {/* Immagine Allegata in Grande */}
+                                    {previewUrl && (
+                                      <div className="space-y-1.5 pt-1">
+                                        <span className="text-[9px] uppercase font-extrabold text-white/40 tracking-wider">📸 Allegato Visivo (Clicca per ingrandire)</span>
+                                        <div 
+                                          onClick={() => setActiveLightboxUrl(previewUrl)}
+                                          className="w-full max-w-md h-48 rounded-xl overflow-hidden border border-white/10 bg-black/25 flex items-center justify-center cursor-zoom-in hover:border-white/20 transition-all shadow-inner"
+                                        >
+                                          <img src={previewUrl} alt="Visualizzazione" className="w-full h-full object-contain hover:scale-[1.015] transition-transform duration-300" />
+                                        </div>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
-                                
-                                {/* Azioni della nota */}
-                                <div className="flex-shrink-0">
-                                  <Link
-                                    href={`/projects/${project.id}/levels/${lvl.id}/appunti/${note.id}/modifica`}
-                                    className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white transition-all bg-white/5 border border-white/10 hover:bg-white/10"
-                                  >
-                                    {typeName === "Sketch" ? "✏️ Disegna" : typeName === "Report 3D" ? "👁 Visualizza" : "✏️ Modifica"}
-                                  </Link>
-                                </div>
                               </div>
                             );
                           })}
@@ -749,6 +906,24 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
           onClose={() => setQuickAddType(null)}
           onSubmit={handleQuickAddSubmit}
         />
+      )}
+
+      {/* Lightbox Pieno Schermo */}
+      {activeLightboxUrl && (
+        <div 
+          onClick={() => setActiveLightboxUrl(null)}
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 cursor-zoom-out transition-all duration-300"
+        >
+          <div className="relative max-w-5xl max-h-[90vh] overflow-hidden flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <img src={activeLightboxUrl} alt="Visualizzazione pieno schermo" className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" />
+            <button
+              onClick={() => setActiveLightboxUrl(null)}
+              className="absolute top-4 right-4 z-50 px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs transition-all shadow-lg cursor-pointer"
+            >
+              Chiudi ✕
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -32,6 +32,7 @@ export interface FieldNote {
   note_number: number;
   type_id: string | null;
   type_name: string | null;
+  completed?: boolean;
   created_at: string;
   updated_at: string;
   field_note_items?: FieldNoteItem[];
@@ -111,7 +112,7 @@ export async function getFieldNotes(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("field_notes")
-    .select("id, project_id, level_id, note_number, type_id, type_name, created_at, updated_at, field_note_items(id, item_type, value_num, value_unit, value_bool, value_text, sort_order)")
+    .select("id, project_id, level_id, note_number, type_id, type_name, completed, created_at, updated_at, field_note_items(id, item_type, value_num, value_unit, value_bool, value_text, sort_order)")
     .eq("level_id", levelId)
     .order("note_number", { ascending: true });
 
@@ -129,7 +130,7 @@ export async function getAllProjectFieldNotes(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("field_notes")
-    .select("id, project_id, level_id, note_number, type_id, type_name, created_at, updated_at, field_note_items(id, item_type, value_num, value_unit, value_bool, value_text, sort_order)")
+    .select("id, project_id, level_id, note_number, type_id, type_name, completed, created_at, updated_at, field_note_items(id, item_type, value_num, value_unit, value_bool, value_text, sort_order)")
     .eq("project_id", projectId)
     .order("note_number", { ascending: true });
 
@@ -151,7 +152,7 @@ export async function getFieldNote(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("field_notes")
-    .select("id, project_id, level_id, note_number, type_id, type_name, created_at, updated_at, field_note_items(*)")
+    .select("id, project_id, level_id, note_number, type_id, type_name, completed, created_at, updated_at, field_note_items(*)")
     .eq("id", noteId)
     .single();
 
@@ -529,4 +530,27 @@ export async function updateLevelNoteText(
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, error: message };
   }
+}
+
+export async function toggleFieldNoteCompleted(
+  noteId: string,
+  completed: boolean
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autenticato" };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from("field_notes")
+    .update({ completed })
+    .eq("id", noteId)
+    .eq("user_id", user.id);
+
+  if (error) {
+    console.error("🔴 [toggleFieldNoteCompleted] error:", error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
 }

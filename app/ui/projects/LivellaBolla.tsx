@@ -19,9 +19,29 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
   const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  // Stati per il calcolo fuori bolla
+  const [lengthValue, setLengthValue] = useState<number>(50);
+  const [lengthUnit, setLengthUnit] = useState<"cm" | "m">("cm");
+
   // Offsets per la calibrazione
   const [offsetBeta, setOffsetBeta] = useState<number>(0);
   const [offsetGamma, setOffsetGamma] = useState<number>(0);
+
+  // Calcolo fuori bolla in tempo reale: delta = L * sin(angolo)
+  const lengthInMm = lengthUnit === "cm" ? lengthValue * 10 : lengthValue * 1000;
+  const fueraBollaY = lengthInMm * Math.sin(((beta - offsetBeta) * Math.PI) / 180);
+  const fueraBollaX = lengthInMm * Math.sin(((gamma - offsetGamma) * Math.PI) / 180);
+
+  const formatOffset = (valInMm: number) => {
+    const absVal = Math.abs(valInMm);
+    if (absVal === 0) return "0 mm";
+    if (absVal < 10) {
+      return `${valInMm > 0 ? "+" : ""}${valInMm.toFixed(1)} mm`;
+    } else {
+      const valInCm = valInMm / 10;
+      return `${valInMm > 0 ? "+" : ""}${valInCm.toFixed(1)} cm`;
+    }
+  };
 
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isSupported, setIsSupported] = useState<boolean>(true);
@@ -171,9 +191,13 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
     setOffsetGamma(0);
   }
 
-  // Conferma e invia il testo formattato e l'immagine generata al form
+  // Conferma e invia il testo formattato e l'immagine generata al form con calcoli fuori bolla
   function handleConfirm() {
-    const text = `📐 Livella a Bolla: Inclinazione Beta = ${effBeta > 0 ? "+" : ""}${effBeta}°, Gamma = ${effGamma > 0 ? "+" : ""}${effGamma}°`;
+    const fuoriBollaYStr = formatOffset(fueraBollaY);
+    const fuoriBollaXStr = formatOffset(fueraBollaX);
+    
+    // Testo ultra dettagliato per la nota di cantiere
+    const text = `📐 Livella a Bolla: Inclinazione Beta = ${effBeta > 0 ? "+" : ""}${effBeta}°, Gamma = ${effGamma > 0 ? "+" : ""}${effGamma}° (Fuori Bolla su ${lengthValue}${lengthUnit}: Y = ${fuoriBollaYStr}, X = ${fuoriBollaXStr})`;
     
     // Se la fotocamera è attiva, sta riproducendo ed abbiamo il video, generiamo l'immagine unificata!
     if (useCamera && isVideoPlaying && videoRef.current) {
@@ -274,12 +298,12 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
           ctx.shadowBlur = 0;
           
           // 6. Box informativo con i gradi
-          const boxW = Math.max(300, Math.round(w * 0.35));
-          const boxH = Math.max(80, Math.round(h * 0.14));
+          const boxW = Math.max(320, Math.round(w * 0.36));
+          const boxH = Math.max(90, Math.round(h * 0.15));
           const boxX = (w - boxW) / 2;
           const boxY = h - boxH - Math.max(30, Math.round(h * 0.05));
           
-          ctx.fillStyle = "rgba(10, 15, 30, 0.85)";
+          ctx.fillStyle = "rgba(10, 15, 30, 0.88)";
           ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
           ctx.lineWidth = 2;
           ctx.beginPath();
@@ -289,25 +313,31 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
           
           // Testi e gradi
           ctx.fillStyle = "rgba(255, 255, 255, 0.45)";
-          ctx.font = `bold ${Math.round(boxH * 0.13)}px sans-serif`;
+          ctx.font = `bold ${Math.round(boxH * 0.12)}px sans-serif`;
           ctx.textAlign = "center";
           
-          ctx.fillText("BECCHEGGIO (Y)", boxX + boxW * 0.25, boxY + boxH * 0.3);
-          ctx.fillText("ROLLIO (X)", boxX + boxW * 0.75, boxY + boxH * 0.3);
+          ctx.fillText("BECCHEGGIO (Y)", boxX + boxW * 0.25, boxY + boxH * 0.22);
+          ctx.fillText("ROLLIO (X)", boxX + boxW * 0.75, boxY + boxH * 0.22);
           
           ctx.fillStyle = isAligned ? greenColor : "rgb(255, 255, 255)";
-          ctx.font = `bold ${Math.round(boxH * 0.28)}px sans-serif`;
+          ctx.font = `bold ${Math.round(boxH * 0.25)}px sans-serif`;
           
           const textBeta = `${effBeta > 0 ? "+" : ""}${effBeta}°`;
           const textGamma = `${effGamma > 0 ? "+" : ""}${effGamma}°`;
-          ctx.fillText(textBeta, boxX + boxW * 0.25, boxY + boxH * 0.7);
-          ctx.fillText(textGamma, boxX + boxW * 0.75, boxY + boxH * 0.7);
+          ctx.fillText(textBeta, boxX + boxW * 0.25, boxY + boxH * 0.52);
+          ctx.fillText(textGamma, boxX + boxW * 0.75, boxY + boxH * 0.52);
           
+          // Stampa dei calcoli millimetrici/centimetrici nel box
+          ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+          ctx.font = `bold ${Math.round(boxH * 0.12)}px sans-serif`;
+          ctx.fillText(`Fuori bolla su ${lengthValue} ${lengthUnit}: ${fuoriBollaYStr}`, boxX + boxW * 0.25, boxY + boxH * 0.85);
+          ctx.fillText(`Fuori bolla su ${lengthValue} ${lengthUnit}: ${fuoriBollaXStr}`, boxX + boxW * 0.75, boxY + boxH * 0.85);
+
           // Linea separatrice
           ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
           ctx.beginPath();
-          ctx.moveTo(boxX + boxW * 0.5, boxY + boxH * 0.2);
-          ctx.lineTo(boxX + boxW * 0.5, boxY + boxH * 0.8);
+          ctx.moveTo(boxX + boxW * 0.5, boxY + boxH * 0.15);
+          ctx.lineTo(boxX + boxW * 0.5, boxY + boxH * 0.85);
           ctx.stroke();
           
           // Watermark WebCAD in alto a sinistra
@@ -529,13 +559,52 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
       </div>
 
       {/* Controlli inferiori */}
-      <div className="w-full max-w-md flex flex-col gap-4 bg-white/5 border border-white/10 rounded-2xl p-4">
+      <div className="w-full max-w-md flex flex-col gap-3.5 bg-white/5 border border-white/10 rounded-2xl p-4">
+        {isSupported && hasPermission && (
+          /* Calcolatore Fuori Bolla premium interattivo */
+          <div className="border-b border-white/5 pb-3.5 mb-1.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase font-bold text-white/50 tracking-wider">📏 Lunghezza Rilievo</span>
+              <span className="text-[10px] font-bold text-sky-400 font-mono">
+                Y: {formatOffset(fueraBollaY)} · X: {formatOffset(fueraBollaX)}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="number"
+                value={lengthValue}
+                onChange={(e) => setLengthValue(Math.max(1, parseFloat(e.target.value) || 0))}
+                className="flex-1 px-3 py-2 rounded-xl text-xs outline-none bg-white/5 border border-white/10 text-white font-mono text-center"
+              />
+              <div className="flex rounded-xl overflow-hidden border border-white/10 bg-white/5 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setLengthUnit("cm")}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${lengthUnit === "cm" ? "bg-sky-500 text-white" : "text-white/60 hover:text-white"}`}
+                >
+                  cm
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLengthUnit("m")}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${lengthUnit === "m" ? "bg-sky-500 text-white" : "text-white/60 hover:text-white"}`}
+                >
+                  m
+                </button>
+              </div>
+            </div>
+            <p className="text-[9px] text-white/40 leading-snug">
+              Inserisci la distanza dal punto di appoggio (es. 50cm) per stimare di quanti mm/cm la struttura pende in tempo reale.
+            </p>
+          </div>
+        )}
+
         {isSupported && hasPermission && (
           <div className="flex gap-2">
             <button
               type="button"
               onClick={handleCalibrate}
-              className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-white/10 text-white/80 hover:bg-white/5 transition-all"
+              className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-white/10 text-white/80 hover:bg-white/5 transition-all cursor-pointer"
             >
               🎯 Calibra (Azzera)
             </button>
@@ -543,7 +612,7 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
               <button
                 type="button"
                 onClick={handleResetCalibration}
-                className="px-3 py-2.5 rounded-xl text-xs font-semibold border border-red-500/30 text-red-400 hover:bg-red-500/5 transition-all"
+                className="px-3 py-2.5 rounded-xl text-xs font-semibold border border-red-500/30 text-red-400 hover:bg-red-500/5 transition-all cursor-pointer"
                 title="Resetta calibrazione"
               >
                 ✕
@@ -556,13 +625,13 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
           type="button"
           onClick={handleConfirm}
           disabled={!isSupported || !hasPermission}
-          className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all shadow-lg disabled:opacity-50"
+          className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all shadow-lg disabled:opacity-50 cursor-pointer"
           style={{
             background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
             boxShadow: "0 4px 15px hsl(220 90% 56% / 0.25)",
           }}
         >
-          📥 Registra come Nota
+          📸 Scatta e Registra Nota
         </button>
       </div>
     </div>
