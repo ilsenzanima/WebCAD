@@ -489,11 +489,13 @@ export default function SketchEditorClient({
   }
 
   // Conversione Coordinate da CSS a Logiche
+  // Usa offsetX/Y + offsetWidth/Height per essere immune alla transition-transform CSS del
+  // contenitore padre (workspaceRef): getBoundingClientRect() durante le animazioni di
+  // pan/zoom restituisce coordinate intermedie causando drift progressivo nel tratto.
   function getCoordinates(e: React.PointerEvent<HTMLCanvasElement>): Point {
     const canvas = e.currentTarget;
-    const rect = canvas.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * LOGICAL_WIDTH;
-    const y = ((e.clientY - rect.top) / rect.height) * LOGICAL_HEIGHT;
+    const x = (e.nativeEvent.offsetX / canvas.offsetWidth) * LOGICAL_WIDTH;
+    const y = (e.nativeEvent.offsetY / canvas.offsetHeight) * LOGICAL_HEIGHT;
     return { x, y };
   }
 
@@ -1125,7 +1127,7 @@ export default function SketchEditorClient({
           {/* FOGLIO DA DISEGNO 3:4 CON OMBRA E SCALATURA GPU FLUIDISSIMA */}
           <div
             ref={workspaceRef}
-            className="relative shadow-[0_25px_60px_rgba(0,0,0,0.6)] border border-white/10 rounded-3xl overflow-hidden aspect-[3/4] transition-transform duration-75 ease-out"
+            className="relative shadow-[0_25px_60px_rgba(0,0,0,0.6)] border border-white/10 rounded-3xl overflow-hidden aspect-[3/4]"
             style={{
               width: "92%",
               height: "92%",
