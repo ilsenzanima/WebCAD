@@ -21,7 +21,7 @@ const ITEM_LABELS: Record<FieldNoteItem["item_type"], string> = {
   dipintura: "Dipintura",
   nota: "Nota",
   foto: "Foto",
-  dim_quadrata: "✂️ Pezzo da tagliare",
+  dim_quadrata: "📐 Dim. quadrata",
   dim_cubica: "⬛ Dim. cubiche",
   posizione: "📍 Posizione",
   materiale: "📦 Materiale",
@@ -284,7 +284,16 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
       }}
     >
       <span className="text-xs font-medium" style={{ color: "hsl(215 20% 55%)" }}>
-        {label}
+        {item.item_type === "dim_quadrata" && (() => {
+          try {
+            const cv = item.value_text ? JSON.parse(item.value_text) : {};
+            if (cv.isCutPiece || (cv.q !== undefined && cv.q !== null)) {
+              return "✂️ Pezzo da tagliare";
+            }
+          } catch { /* noop */ }
+          return "📐 Dim. quadrata";
+        })()}
+        {item.item_type !== "dim_quadrata" && label}
       </span>
 
       <span className="text-sm font-semibold" style={{ color: "hsl(210 40% 90%)" }}>

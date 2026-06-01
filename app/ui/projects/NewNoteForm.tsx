@@ -47,7 +47,7 @@ const ITEM_LABELS: Record<ItemType, string> = {
   dipintura: "Dipintura",
   nota: "Nota libera",
   foto: "Foto",
-  dim_quadrata: "✂️ Pezzo da tagliare",
+  dim_quadrata: "📐 Dimensione quadrata",
   dim_cubica: "⬛ Dimensioni cubiche",
   posizione: "📍 Segna posizione",
   materiale: "📦 Materiale",
@@ -64,6 +64,7 @@ interface CompositeValue {
   d?: number | null;
   q?: number | null;
   unit: "mm" | "cm";
+  isCutPiece?: boolean;
 }
 
 // ============================================
@@ -116,7 +117,15 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
             const isComposite = item.item_type === "dim_quadrata" || item.item_type === "dim_cubica";
             let composite: CompositeValue | undefined;
             if (isComposite && item.value_text) {
-              try { composite = JSON.parse(item.value_text); } catch { composite = { unit: "cm" }; }
+              try {
+                const parsed = JSON.parse(item.value_text);
+                composite = {
+                  ...parsed,
+                  isCutPiece: parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null),
+                };
+              } catch {
+                composite = { unit: "cm" };
+              }
             }
             return {
               id: item.id || crypto.randomUUID(),
@@ -315,7 +324,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   // Handlers voci
   // ============================================
 
-  function addItem(itemType: ItemType) {
+  function addItem(itemType: ItemType, options?: { isCutPiece?: boolean }) {
     const newId = crypto.randomUUID();
     const draft: NoteItemDraft = {
       id: newId,
@@ -324,7 +333,14 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
       value_bool: true,
       // per dimensioni composite inizializziamo subito il composite
       composite: COMPOSITE_TYPES.includes(itemType)
-        ? { b: null, h: null, d: null, unit: "cm" }
+        ? { 
+            b: null, 
+            h: null, 
+            d: null, 
+            q: options?.isCutPiece ? 1 : null, 
+            unit: "cm",
+            isCutPiece: options?.isCutPiece 
+          }
         : undefined,
     };
     setItems((prev) => [...prev, draft]);
@@ -834,20 +850,99 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                         <span>🧊</span> Carica 3D (.glb/.gltf)
                       </button>
 
-                      {(Object.keys(ITEM_LABELS) as ItemType[]).filter(type => type !== "posizione").map((type) => (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => addItem(type)}
-                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors"
-                          style={{
-                            color: "hsl(210 40% 90%)",
-                            borderBottom: "1px solid hsl(220 20% 18%)",
-                          }}
-                        >
-                          {ITEM_LABELS[type]}
-                        </button>
-                      ))}
+                      {/* Voci Standard del Menu "+" */}
+                      <button
+                        type="button"
+                        onClick={() => addItem("nota")}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                      >
+                        📝 Nota libera
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addItem("foto")}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                      >
+                        📷 Foto o disegno
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addItem("base")}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                      >
+                        ↔ Misura orizzontale
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addItem("altezza")}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                      >
+                        ↕ Misura verticale
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addItem("spessore")}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                      >
+                        ↗ Spessore
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addItem("dim_quadrata")}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)] font-semibold"
+                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                      >
+                        📐 Dimensione quadrata (Rif.)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addItem("dim_quadrata", { isCutPiece: true })}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-emerald-500/10 transition-colors font-bold"
+                        style={{ 
+                          color: "hsl(142, 70%, 55%)",
+                          borderBottom: "1px solid hsl(220 20% 18%)",
+                          background: "hsl(142 60% 5% / 0.2)"
+                        }}
+                      >
+                        ✂️ Pezzo da tagliare (Nesting)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addItem("dim_cubica")}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                      >
+                        ⬛ Dimensioni cubiche
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addItem("materiale")}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                      >
+                        📦 Materiale
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addItem("lana_interna")}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                      >
+                        🔥 Lana interna
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => addItem("dipintura")}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                      >
+                        🎨 Dipintura
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -1115,8 +1210,10 @@ function ItemRow({
         }}
       >
         <div className="flex items-center justify-between">
-          <span className="text-xs font-bold" style={{ color: "hsl(215 20% 65%)" }}>
-            {item.item_type === "dim_quadrata" ? "✂️ Pezzo da tagliare" : "⬛ Sezione 3D"}
+          <span className="text-xs font-bold" style={{ color: cv.isCutPiece ? "hsl(142 70% 55%)" : "hsl(215 20% 65%)" }}>
+            {item.item_type === "dim_quadrata" 
+              ? (cv.isCutPiece ? "✂️ Pezzo da tagliare" : "📐 Dimensione quadrata") 
+              : "⬛ Sezione 3D"}
           </span>
           <div className="flex items-center gap-1.5">
             <button
@@ -1169,7 +1266,7 @@ function ItemRow({
               style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
             />
           </div>
-          {item.item_type === "dim_quadrata" && (
+          {item.item_type === "dim_quadrata" && cv.isCutPiece && (
             <div className="flex items-center gap-1 w-20 flex-shrink-0">
               <span className="text-[10px] text-gray-500">Q:</span>
               <input

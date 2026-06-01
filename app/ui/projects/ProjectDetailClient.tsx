@@ -307,9 +307,13 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
           } else if (item.item_type === "dim_quadrata" && item.value_text) {
             try {
               const parsed = JSON.parse(item.value_text);
-              items.push(`✂️ Pezzo: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"} (Qtà: ${parsed.q || 1})`);
+              if (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null)) {
+                items.push(`✂️ Pezzo: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"} (Qtà: ${parsed.q || 1})`);
+              } else {
+                items.push(`📐 Dim: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"}`);
+              }
             } catch {
-              items.push(`✂️ Pezzo da tagliare`);
+              items.push(`📐 Dimensione quadrata`);
             }
           } else if (item.item_type === "dim_cubica" && item.value_text) {
             try {
@@ -804,11 +808,17 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                                             case "dim_quadrata":
                                               try {
                                                 const parsed = valText ? JSON.parse(valText) : {};
-                                                desc = `Pezzo da tagliare: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"} (Qtà: ${parsed.q || 1})`;
+                                                if (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null)) {
+                                                  desc = `Pezzo da tagliare: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"} (Qtà: ${parsed.q})`;
+                                                  icon = "✂️";
+                                                } else {
+                                                  desc = `Dimensione quadrata: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"}`;
+                                                  icon = "📐";
+                                                }
                                               } catch {
-                                                desc = `Pezzo da tagliare: ${valNum || 0} ${valUnit || "cm"}`;
+                                                desc = `Dimensione quadrata: ${valNum || 0} ${valUnit || "cm"}`;
+                                                icon = "📐";
                                               }
-                                              icon = "✂️";
                                               break;
                                             case "dim_cubica":
                                               try {

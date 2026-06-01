@@ -160,13 +160,24 @@ export default function ReportFieldNotes({ notes, levels, onImageClick }: Props)
       case "dim_quadrata":
         try {
           const parsed = JSON.parse(item.value_text || "{}");
+          if (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null)) {
+            return (
+              <div key={item.id} className="text-xs text-gray-400 print:text-gray-700">
+                ✂️ <span className="font-semibold text-gray-300 print:text-black">Pezzo da tagliare:</span> {parsed.b || 0} x {parsed.h || 0} {parsed.unit || "cm"} <span className="text-emerald-400 font-bold print:text-black">(Qtà: {parsed.q || 1})</span>
+              </div>
+            );
+          }
           return (
             <div key={item.id} className="text-xs text-gray-400 print:text-gray-700">
-              ◻ <span className="font-semibold text-gray-300 print:text-black">Sezione Cassonetto:</span> {parsed.b || 0} x {parsed.h || 0} {parsed.unit || "cm"}
+              📐 <span className="font-semibold text-gray-300 print:text-black">Dimensione quadrata:</span> {parsed.b || 0} x {parsed.h || 0} {parsed.unit || "cm"}
             </div>
           );
         } catch {
-          return null;
+          return (
+            <div key={item.id} className="text-xs text-gray-400 print:text-gray-700">
+              📐 <span className="font-semibold text-gray-300 print:text-black">Dimensione quadrata:</span> {item.value_num || 0} {item.value_unit || "cm"}
+            </div>
+          );
         }
       case "dim_cubica":
         try {

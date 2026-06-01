@@ -57,6 +57,10 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
       if (item.item_type === "dim_quadrata" && item.value_text) {
         try {
           const parsed = JSON.parse(item.value_text);
+          // Estraiamo solo se è esplicitamente un pezzo da tagliare per il nesting
+          const isCut = parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null);
+          if (!isCut) return;
+
           const b = parseFloat(parsed.b);
           const h = parseFloat(parsed.h);
           const q = parseInt(parsed.q) || 1;

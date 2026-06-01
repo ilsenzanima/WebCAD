@@ -85,7 +85,17 @@ export default function ProjectReport({ projectId }: Props) {
 
   // Controlli per l'abilitazione delle tab
   const hasPiecesInNotes = allNotes.some((note) =>
-    (note.field_note_items ?? []).some((item) => item.item_type === "dim_quadrata")
+    (note.field_note_items ?? []).some((item) => {
+      if (item.item_type === "dim_quadrata" && item.value_text) {
+        try {
+          const parsed = JSON.parse(item.value_text);
+          return parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null);
+        } catch {
+          return false;
+        }
+      }
+      return false;
+    })
   );
   const hasNesting = allWalls.length > 0 || hasPiecesInNotes;
   

@@ -393,10 +393,24 @@ export async function getLevelNoteText(levelId: string): Promise<string> {
             desc = `Dipintura: ${valBool ? "Sì" : "No"}`;
             break;
           case "dim_quadrata":
-            desc = `Dimensione Quadrata: ${valNum} ${valUnit || "mq"}`;
+            try {
+              const parsed = valText ? JSON.parse(valText) : {};
+              if (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null)) {
+                desc = `Pezzo da tagliare: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"} (Qtà: ${parsed.q})`;
+              } else {
+                desc = `Dimensione Quadrata: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"}`;
+              }
+            } catch {
+              desc = `Dimensione Quadrata: ${valNum || 0} ${valUnit || "cm"}`;
+            }
             break;
           case "dim_cubica":
-            desc = `Dimensione Cubica: ${valNum} ${valUnit || "mc"}`;
+            try {
+              const parsed = valText ? JSON.parse(valText) : {};
+              desc = `Sezione 3D: ${parsed.b || 0} x ${parsed.h || 0} x ${parsed.d || 0} ${parsed.unit || "cm"}`;
+            } catch {
+              desc = `Dimensione Cubica: ${valNum || 0} ${valUnit || "cm"}`;
+            }
             break;
           case "materiale":
             desc = `Materiale: ${valText}`;
