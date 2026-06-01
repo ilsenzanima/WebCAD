@@ -610,6 +610,10 @@ export const useOfflineStore = create<OfflineState>()(
         noteTypes: state.noteTypes,
         offlineQueue: state.offlineQueue,
       }),
+      // CRITICO: evita che Zustand idrati automaticamente il localStorage durante il rendering SSR.
+      // L'idratazione viene eseguita manualmente nel NetworkSyncProvider (lato client) per
+      // prevenire il mismatch HTML server/client che causa React Error #418.
+      skipHydration: true,
     }
   )
 );

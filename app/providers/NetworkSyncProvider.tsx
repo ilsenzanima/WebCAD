@@ -8,7 +8,6 @@ import { createClient } from "@/lib/supabase/client";
 const NetworkSyncContext = createContext<{ isOnline: boolean }>({ isOnline: true });
 
 export const useNetworkStatus = () => useContext(NetworkSyncContext);
-
 export default function NetworkSyncProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { isOnline, setOnlineStatus, syncOfflineData, offlineQueue, isSyncing } = useOfflineStore();
@@ -16,7 +15,11 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
   // Previene il mismatch di idratazione React #418:
   // i banner condizionali (offline/syncing) vengono renderizzati solo lato client dopo il mount
   const [clientMounted, setClientMounted] = useState(false);
-  useEffect(() => { setClientMounted(true); }, []);
+  useEffect(() => {
+    // Idratazione manuale lato client per evitare hydration mismatch
+    useOfflineStore.persist.rehydrate();
+    setClientMounted(true);
+  }, []);
 
   // Sottoscrizione Supabase Realtime per sincronizzazione in tempo reale bidirezionale
   useEffect(() => {

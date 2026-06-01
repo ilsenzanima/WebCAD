@@ -2,34 +2,38 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { useProjectStore } from "@/lib/stores/project-store";
 import { getWalls, get3DBox } from "@/app/actions/projects";
+import { getAllProjectFieldNotes } from "@/app/actions/field-notes";
+import type { FieldNote } from "@/app/actions/field-notes";
+
+// Import dei componenti modulari del report
+import ReportHeader from "./report/ReportHeader";
+import ReportOverview from "./report/ReportOverview";
+import ReportNesting from "./report/ReportNesting";
+import ReportFieldNotes from "./report/ReportFieldNotes";
+import ReportOutOfPlumb from "./report/ReportOutOfPlumb";
 
 interface Props {
   projectId: string;
-}
-
-// Interfacce per Distinta Materiali (BoM)
-interface LinearMaterialRequest {
-  length: number; // in mm
-  label: string;
-}
-
-interface SheetMaterialRequest {
-  width: number; // in mm
-  height: number; // in mm
-  label: string;
 }
 
 export default function ProjectReport({ projectId }: Props) {
   const [isPending, startTransition] = useTransition();
   const [projectData, setProjectData] = useState<any>(null);
   
-  // Dati geometrici raccolti dai disegni del progetto
+  // Dati geometrici
   const [allWalls, setAllWalls] = useState<any[]>([]);
   const [all3DBoxes, setAll3DBoxes] = useState<any[]>([]);
+  
+  // Appunti e note di cantiere
+  const [allNotes, setAllNotes] = useState<FieldNote[]>([]);
+  const [allLevels, setAllLevels] = useState<any[]>([]);
 
-  // Caricamento asincrono di tutti i disegni e geometrie del progetto
+  // Stati per la navigazione e visualizzazione
+  const [activeTab, setActiveTab] = useState<string>("overview");
+  const [activeLightboxUrl, setActiveLightboxUrl] = useState<string | null>(null);
+
+  // Caricamento dei dati del cantiere
   useEffect(() => {
     if (!projectId) return;
 
@@ -40,18 +44,23 @@ export default function ProjectReport({ projectId }: Props) {
       // 1. Carica info progetto
       const { data: proj } = (await supabase
         .from("projects")
-        .select("name, notes, created_at, updated_at")
+        .select("id, name, notes, created_at, updated_at")
         .eq("id", projectId)
         .single()) as any;
       if (proj) setProjectData(proj);
 
-      // 2. Carica tutti i disegni (levels)
+      // 2. Carica tutti gli appunti e note del cantiere
+      const notesList = await getAllProjectFieldNotes(projectId);
+      setAllNotes(notesList);
+
+      // 3. Carica tutti i disegni (levels)
       const { data: levels } = (await supabase
         .from("levels")
-        .select("id, name, drawing_type")
+        .select("id, name, drawing_type, piano")
         .eq("project_id", projectId)) as any;
 
       if (levels && levels.length > 0) {
+        setAllLevels(levels);
         const loadedWalls: any[] = [];
         const loaded3D: any[] = [];
 
@@ -74,511 +83,135 @@ export default function ProjectReport({ projectId }: Props) {
     loadData();
   }, [projectId]);
 
-  // ============================================================
-  // CALCOLO DISTINTA BASE (BoM)
-  // ============================================================
+  // Controlli per l'abilitazione delle tab
+  const hasNesting = allWalls.length > 0;
   
-  const commercialProfileLen = 3000; // Profilo standard da 3m (3000mm)
-  const commercialSheetW = 1200; // Lastra standard 1200mm
-  const commercialSheetH = 2000; // Lastra standard 2000mm
-  const bladeThickness = 3; // Spessore lama (Kerf) in mm
-
-  const linearRequests: LinearMaterialRequest[] = [];
-  const sheetRequests: SheetMaterialRequest[] = [];
-
-  // A. Estrazione materiali dalle Lastre 2D estruse in 3D
-  allWalls.forEach((w) => {
-    const dx = w.x2 - w.x1;
-    const dy = w.y2 - w.y1;
-    const lenMm = Math.round(Math.sqrt(dx * dx + dy * dy) * 10); // in mm (1px = 10mm)
-    
-    // Le lastre del cassonetto sono caratterizzate da:
-    // - Una larghezza pari a lenMm (sezione frontale)
-    // - Una lunghezza pari alla profondità di estrusione w.height (es: 3000mm)
-    // Se la lunghezza di estrusione supera l'altezza del pannello commerciale (commercialSheetH = 2000mm),
-    // spezziamo il pezzo longitudinalmente (es. un pezzo da 2000mm e uno da 1000mm).
-    let remainingLength = w.height || 3000;
-    while (remainingLength > 0) {
-      const currentPieceLen = Math.min(remainingLength, commercialSheetH);
-      remainingLength -= currentPieceLen;
-      sheetRequests.push({
-        width: lenMm,
-        height: currentPieceLen,
-        label: `Lastra ${w.levelName || "Cassonetto"} (${lenMm}x${currentPieceLen}mm)`,
-      });
-    }
+  // Un appunto è considerato un rilievo fuori bolla se contiene i parametri di inclinazione o la marcatura della livella
+  const hasOutOfPlumb = allNotes.some((note) => {
+    return (note.field_note_items ?? []).some(
+      (item) =>
+        item.item_type === "nota" &&
+        (item.value_text?.includes("📐 Livella a Bolla") ||
+          item.value_text?.includes("Beta =") ||
+          item.value_text?.includes("Gamma ="))
+    );
   });
 
-  // B. Rimosso calcolo fisso vecchi cavedi 3D (ora le lastre 3D derivano interamente dal 2D estruso)
-
-  // ============================================================
-  // ALGORITMO NESTING 1D (FIRST FIT DECREASING)
-  // ============================================================
-  
-  interface PackedBar {
-    cuts: number[];
-    labels: string[];
-    usedLength: number;
-    remLen: number;
-  }
-
-  const pack1D = (): PackedBar[] => {
-    // Ordina richieste in modo decrescente
-    const sorted = [...linearRequests].sort((a, b) => b.length - a.length);
-    const bars: PackedBar[] = [];
-
-    sorted.forEach((req) => {
-      // Se il pezzo supera i 3m, lo tagliamo a pezzi commerciali e avanziamo avviso
-      let remainingToCut = req.length;
-      while (remainingToCut > 0) {
-        const currentCut = Math.min(remainingToCut, commercialProfileLen - bladeThickness);
-        remainingToCut -= currentCut;
-
-        let placed = false;
-        // Cerca una barra esistente
-        for (const bar of bars) {
-          if (bar.remLen >= currentCut + bladeThickness) {
-            bar.cuts.push(currentCut);
-            bar.labels.push(req.label);
-            bar.usedLength += currentCut + bladeThickness;
-            bar.remLen -= currentCut + bladeThickness;
-            placed = true;
-            break;
-          }
-        }
-
-        // Se non trova spazio, crea nuova barra
-        if (!placed) {
-          bars.push({
-            cuts: [currentCut],
-            labels: [req.label],
-            usedLength: currentCut + bladeThickness,
-            remLen: commercialProfileLen - (currentCut + bladeThickness),
-          });
-        }
-      }
-    });
-
-    return bars;
-  };
-
-  const packedBars = pack1D();
-
-  // ============================================================
-  // ALGORITMO NESTING 2D (SEMPLIFICATO GRIGLIA / GHIGLIOTTINA)
-  // ============================================================
-
-  interface PlacedSheet {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    label: string;
-  }
-
-  interface PackedBoard {
-    placed: PlacedSheet[];
-    usedArea: number;
-  }
-
-  interface FreeRect {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-  }
-
-  interface PlacementCandidate {
-    boardIndex: number;
-    freeRectIndex: number;
-    rotated: boolean;
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-  }
-
-  const pack2D = (): PackedBoard[] => {
-    // Ordina lastre richieste per area decrescente
-    const sorted = [...sheetRequests].sort((a, b) => (b.width * b.height) - (a.width * a.height));
-    const boards: PackedBoard[] = [];
-    const freeRectsByBoard: FreeRect[][] = [];
-
-    const createBoard = (): number => {
-      boards.push({
-        placed: [],
-        usedArea: 0,
-      });
-      freeRectsByBoard.push([
-        { x: 0, y: 0, w: commercialSheetW, h: commercialSheetH },
-      ]);
-      return boards.length - 1;
-    };
-
-    const tryMakeCandidate = (
-      reqW: number,
-      reqH: number,
-      boardIndex: number,
-      freeRectIndex: number,
-      freeRect: FreeRect,
-      rotated: boolean
-    ): PlacementCandidate | null => {
-      const pieceW = rotated ? reqH : reqW;
-      const pieceH = rotated ? reqW : reqH;
-
-      if (pieceW > freeRect.w || pieceH > freeRect.h) {
-        return null;
-      }
-
-      return {
-        boardIndex,
-        freeRectIndex,
-        rotated,
-        x: freeRect.x,
-        y: freeRect.y,
-        w: pieceW,
-        h: pieceH,
-      };
-    };
-
-    const isBetterBottomLeft = (a: PlacementCandidate, b: PlacementCandidate): boolean => {
-      if (a.y !== b.y) return a.y < b.y;
-      if (a.x !== b.x) return a.x < b.x;
-      const aShortSide = Math.min(a.w, a.h);
-      const bShortSide = Math.min(b.w, b.h);
-      return aShortSide > bShortSide;
-    };
-
-    const splitFreeRectGuillotine = (freeRect: FreeRect, piece: PlacementCandidate): FreeRect[] => {
-      const rightStrip: FreeRect | null = freeRect.w - piece.w > 0
-        ? {
-            x: freeRect.x + piece.w + bladeThickness,
-            y: freeRect.y,
-            w: freeRect.w - piece.w - bladeThickness,
-            h: piece.h,
-          }
-        : null;
-
-      const bottomStrip: FreeRect | null = freeRect.h - piece.h > 0
-        ? {
-            x: freeRect.x,
-            y: freeRect.y + piece.h + bladeThickness,
-            w: freeRect.w,
-            h: freeRect.h - piece.h - bladeThickness,
-          }
-        : null;
-
-      const leftovers: FreeRect[] = [];
-      if (rightStrip && rightStrip.w > 0 && rightStrip.h > 0) leftovers.push(rightStrip);
-      if (bottomStrip && bottomStrip.w > 0 && bottomStrip.h > 0) leftovers.push(bottomStrip);
-      return leftovers;
-    };
-
-    sorted.forEach((req) => {
-      // Se un pezzo è più grande del pannello standard, lo forziamo a stare dentro
-      const reqW = Math.min(req.width, commercialSheetW);
-      const reqH = Math.min(req.height, commercialSheetH);
-      let bestCandidate: PlacementCandidate | null = null;
-
-      for (let bIdx = 0; bIdx < freeRectsByBoard.length; bIdx++) {
-        const freeRects = freeRectsByBoard[bIdx];
-        for (let rIdx = 0; rIdx < freeRects.length; rIdx++) {
-          const fr = freeRects[rIdx];
-          const candidates = [
-            tryMakeCandidate(reqW, reqH, bIdx, rIdx, fr, false),
-            tryMakeCandidate(reqW, reqH, bIdx, rIdx, fr, true),
-          ].filter((c): c is PlacementCandidate => c !== null);
-
-          for (const cand of candidates) {
-            if (!bestCandidate || isBetterBottomLeft(cand, bestCandidate)) {
-              bestCandidate = cand;
-            }
-          }
-        }
-      }
-
-      if (!bestCandidate) {
-        const newBoardIndex = createBoard();
-        const baseFreeRect = freeRectsByBoard[newBoardIndex][0];
-        bestCandidate =
-          tryMakeCandidate(reqW, reqH, newBoardIndex, 0, baseFreeRect, false) ??
-          tryMakeCandidate(reqW, reqH, newBoardIndex, 0, baseFreeRect, true);
-      }
-
-      if (!bestCandidate) {
-        return;
-      }
-
-      const board = boards[bestCandidate.boardIndex];
-      const freeRects = freeRectsByBoard[bestCandidate.boardIndex];
-      const targetFreeRect = freeRects[bestCandidate.freeRectIndex];
-      if (!board || !targetFreeRect) {
-        return;
-      }
-
-      board.placed.push({
-        x: bestCandidate.x,
-        y: bestCandidate.y,
-        w: bestCandidate.w,
-        h: bestCandidate.h,
-        label: req.label,
-      });
-      board.usedArea += bestCandidate.w * bestCandidate.h;
-
-      freeRects.splice(bestCandidate.freeRectIndex, 1);
-      freeRects.push(...splitFreeRectGuillotine(targetFreeRect, bestCandidate));
-    });
-
-    return boards;
-  };
-
-  const packedBoards = pack2D();
-
-  // Statistiche finali
-  const totalProfilesCount = packedBars.length;
-  const totalSheetsCount = packedBoards.length;
-
-  const totalUsedProfileMm = packedBars.reduce((acc, b) => acc + (commercialProfileLen - b.remLen), 0);
-  const totalProfileSfrido = totalProfilesCount > 0 
-    ? Math.round(((totalProfilesCount * commercialProfileLen - totalUsedProfileMm) / (totalProfilesCount * commercialProfileLen)) * 100)
-    : 0;
-
-  const totalBoardArea = commercialSheetW * commercialSheetH;
-  const totalUsedSheetArea = packedBoards.reduce((acc, b) => acc + b.usedArea, 0);
-  const totalSheetSfrido = totalSheetsCount > 0
-    ? Math.round(((totalSheetsCount * totalBoardArea - totalUsedSheetArea) / (totalSheetsCount * totalBoardArea)) * 100)
-    : 0;
+  // Statistiche per il riepilogo
+  const totalNotes = allNotes.length;
+  const completedNotesCount = allNotes.filter((n) => n.completed).length;
 
   return (
-    <div className="min-h-screen bg-[hsl(228_39%_6%)] text-white p-4 sm:p-8 w-full overflow-y-auto">
-      
-      {/* ── Navbar Report ── */}
-      <div 
-        className="max-w-5xl mx-auto flex items-center justify-between mb-8 pb-4 border-b print:hidden"
-        style={{ borderColor: "hsl(220 20% 16%)" }}
-      >
-        <div className="flex items-center gap-3">
-          <Link
-            href={`/projects/${projectId}`}
-            className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-white transition-colors"
-          >
-            ← Torna al Progetto
-          </Link>
-          <span className="text-gray-400">/</span>
-          <span className="text-sm font-semibold text-gray-300">Report & Nesting di Taglio</span>
+    <div className="min-h-screen bg-[hsl(228_39%_6%)] text-white p-4 sm:p-8 w-full overflow-y-auto print:bg-white print:text-black print:p-0">
+      <div className="max-w-5xl mx-auto space-y-8">
+        
+        {/* Intestazione e Controlli del Report */}
+        <ReportHeader
+          projectName={projectData?.name ?? "Caricamento cantiere..."}
+          projectId={projectId}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          hasNesting={hasNesting}
+          hasOutOfPlumb={hasOutOfPlumb}
+        />
+
+        {/* ── SEZIONE 1: WEB TABS (Visualizzazione a schede sullo schermo) ── */}
+        <div className="w-full space-y-6 print:hidden">
+          {activeTab === "overview" && (
+            <ReportOverview
+              projectNotes={projectData?.notes}
+              totalLevels={allLevels.length}
+              totalNotes={totalNotes}
+              completedNotesCount={completedNotesCount}
+            />
+          )}
+
+          {activeTab === "nesting" && hasNesting && (
+            <ReportNesting allWalls={allWalls} all3DBoxes={all3DBoxes} />
+          )}
+
+          {activeTab === "outOfPlumb" && hasOutOfPlumb && (
+            <ReportOutOfPlumb
+              notes={allNotes}
+              levels={allLevels}
+              onImageClick={setActiveLightboxUrl}
+            />
+          )}
+
+          {activeTab === "notes" && (
+            <ReportFieldNotes
+              notes={allNotes}
+              levels={allLevels}
+              onImageClick={setActiveLightboxUrl}
+            />
+          )}
         </div>
 
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-colors shadow-lg cursor-pointer"
-        >
-          🖨️ Stampa Report / Salva PDF
-        </button>
+        {/* ── SEZIONE 2: STAMPA SEQUENZIALE CONTINUA (Attivata solo da window.print()) ── */}
+        <div className="hidden print:block space-y-12 w-full">
+          {/* A. Panoramica del Progetto */}
+          <div className="break-inside-avoid">
+            <ReportOverview
+              projectNotes={projectData?.notes}
+              totalLevels={allLevels.length}
+              totalNotes={totalNotes}
+              completedNotesCount={completedNotesCount}
+            />
+          </div>
+
+          {/* B. Nesting Ottimizzazione di Taglio */}
+          {hasNesting && (
+            <div className="break-inside-avoid pt-8 border-t border-gray-200">
+              <ReportNesting allWalls={allWalls} all3DBoxes={all3DBoxes} />
+            </div>
+          )}
+
+          {/* C. Rilievi Fuori Bolla */}
+          {hasOutOfPlumb && (
+            <div className="break-inside-avoid pt-8 border-t border-gray-200">
+              <ReportOutOfPlumb
+                notes={allNotes}
+                levels={allLevels}
+                onImageClick={setActiveLightboxUrl}
+              />
+            </div>
+          )}
+
+          {/* D. Registro Appunti di Cantiere */}
+          <div className="break-inside-avoid pt-8 border-t border-gray-200">
+            <ReportFieldNotes
+              notes={allNotes}
+              levels={allLevels}
+              onImageClick={setActiveLightboxUrl}
+            />
+          </div>
+        </div>
+
       </div>
 
-      {/* ── CONTENITORE STAMPABILE DEL REPORT ── */}
-      <div className="max-w-5xl mx-auto space-y-8 print:text-black print:bg-white">
-        
-        {/* Intestazione / Header Report */}
-        <div 
-          className="p-6 sm:p-8 rounded-3xl border flex flex-col md:flex-row justify-between items-start md:items-center gap-6 print:border-none print:p-0"
-          style={{
-            background: "hsl(220 26% 12% / 0.4)",
-            borderColor: "hsl(220 20% 20%)",
-          }}
+      {/* Modale Lightbox Premium per ingrandire gli snapshot */}
+      {activeLightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md cursor-pointer animate-fade-in print:hidden"
+          onClick={() => setActiveLightboxUrl(null)}
         >
-          <div>
-            <span className="text-xs uppercase font-bold text-orange-400 tracking-wider">Report Ufficiale Progetto</span>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white mt-1 print:text-black">
-              {projectData?.name ?? "Caricamento..."}
-            </h1>
-            <p className="text-xs text-gray-400 mt-2 print:text-gray-600">
-              ID Progetto: {projectId} | Rilevato il: {new Date().toLocaleDateString("it-IT")}
-            </p>
-          </div>
-          
-          <div className="text-left md:text-right text-xs text-gray-400 print:text-gray-600">
-            <p className="font-semibold text-white print:text-black">WebCAD Antincendio Optimizer</p>
-            <p className="mt-1">Calcoli basati su standard commerciali Europei</p>
-            <p className="mt-1">Kerf (Lama): {bladeThickness} mm</p>
-          </div>
-        </div>
-
-        {/* Sezione Note / Appunti di Cantiere */}
-        {projectData?.notes && (
-          <div 
-            className="p-6 rounded-3xl border print:border-none print:p-0"
-            style={{
-              background: "hsl(220 26% 12% / 0.2)",
-              borderColor: "hsl(220 20% 16%)",
-            }}
-          >
-            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-3 print:text-black">
-              📋 Note & Appunti di Cantiere
-            </h3>
-            <p className="text-sm leading-relaxed text-gray-300 whitespace-pre-wrap print:text-gray-800">
-              {projectData.notes}
-            </p>
-          </div>
-        )}
-
-        {/* Sintesi Computo Metrico (BoM) */}
-        <div 
-          className="p-6 rounded-3xl border print:border-none print:p-0"
-          style={{
-            background: "hsl(220 26% 12% / 0.2)",
-            borderColor: "hsl(220 20% 16%)",
-          }}
-        >
-          <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4 print:text-black">
-            📊 Sintesi Quantità & Computo Materiali
-          </h3>
-          
-          <div className={`grid grid-cols-1 ${totalProfilesCount > 0 ? "md:grid-cols-2" : ""} gap-4`}>
-            {/* Profili Lineari */}
-            {totalProfilesCount > 0 && (
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/5 print:border-gray-200 print:text-black">
-                <span className="text-xs uppercase font-bold text-gray-400">Profili & Montanti (1D)</span>
-                <div className="text-3xl font-extrabold text-orange-400 mt-1">{totalProfilesCount} <span className="text-lg font-medium text-white print:text-black">Barre</span></div>
-                <p className="text-xs text-gray-400 mt-2 print:text-gray-600">
-                  Lunghezza singola: 3000 mm | Sfrido Stimato: <span className="font-bold text-white print:text-black">{totalProfileSfrido}%</span>
-                </p>
-              </div>
-            )}
-            
-            {/* Lastre di Rivestimento */}
-            <div className="p-4 rounded-2xl bg-white/5 border border-white/5 print:border-gray-200 print:text-black">
-              <span className="text-xs uppercase font-bold text-gray-400">Lastre di Rivestimento (2D)</span>
-              <div className="text-3xl font-extrabold text-blue-400 mt-1">{totalSheetsCount} <span className="text-lg font-medium text-white print:text-black">Pannelli</span></div>
-              <p className="text-xs text-gray-400 mt-2 print:text-gray-600">
-                Dimensione standard: 2000 x 1200 mm | Sfrido Stimato: <span className="font-bold text-white print:text-black">{totalSheetSfrido}%</span>
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* ── OTTIMIZZATORE DI TAGLIO 1D (Barre) ── */}
-        {totalProfilesCount > 0 && (
-          <div className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 print:text-black">
-            ✂️ Nesting di Taglio 1D: Barre Profili & Montanti (3000mm)
-          </h3>
-
-          <div className="space-y-4">
-            {packedBars.map((bar, barIdx) => {
-              return (
-                <div 
-                  key={barIdx} 
-                  className="p-5 rounded-2xl border bg-white/5 border-white/5 print:border-gray-300 print:text-black"
-                >
-                  <div className="flex justify-between items-center text-xs font-semibold text-gray-400 mb-3 print:text-black">
-                    <span>BARRA COMMERCIALE #{barIdx + 1}</span>
-                    <span>Sfrido residuo: {bar.remLen} mm</span>
-                  </div>
-
-                  {/* Barra visualizzata graficamente */}
-                  <div className="w-full h-8 bg-white/10 rounded-lg overflow-hidden flex relative border border-white/10">
-                    {bar.cuts.map((cut, cutIdx) => {
-                      const widthPct = (cut / commercialProfileLen) * 100;
-                      const segment = (
-                        <div
-                          key={cutIdx}
-                          className="h-full flex items-center justify-center text-[10px] font-bold border-r border-black/40 text-white truncate"
-                          style={{
-                            width: `${widthPct}%`,
-                            background: "linear-gradient(180deg, hsl(16, 100%, 58%), hsl(0, 84%, 50%))",
-                          }}
-                          title={`${bar.labels[cutIdx]}: ${cut}mm`}
-                        >
-                          {Math.round(cut)}mm
-                        </div>
-                      );
-                      return segment;
-                    })}
-                    {/* Quota sfrido grigia a fine barra */}
-                    <div 
-                      className="h-full bg-white/5 text-gray-500 flex items-center justify-center text-[9px] font-bold"
-                      style={{ width: `${(bar.remLen / commercialProfileLen) * 100}%` }}
-                    >
-                      {bar.remLen > 0 ? `${bar.remLen}mm` : ""}
-                    </div>
-                  </div>
-
-                  {/* Dettaglio tagli */}
-                  <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-gray-400 print:text-gray-700">
-                    {bar.cuts.map((cut, idx) => (
-                      <span key={idx} className="bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
-                        📍 {bar.labels[idx]}: <strong className="text-white print:text-black">{Math.round(cut)} mm</strong>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="relative max-w-5xl max-h-[90vh] p-4 flex flex-col items-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={activeLightboxUrl}
+              alt="Dettaglio rilievo"
+              className="max-w-full max-h-[80vh] object-contain rounded-2xl border border-white/10 shadow-2xl"
+            />
+            <button
+              onClick={() => setActiveLightboxUrl(null)}
+              className="absolute top-6 right-6 text-white text-3xl font-light hover:scale-110 transition-transform bg-white/5 hover:bg-white/10 px-4 py-2 rounded-full cursor-pointer"
+            >
+              ×
+            </button>
+            <p className="text-white/60 text-xs mt-4">Fai clic in un punto qualsiasi per chiudere</p>
           </div>
         </div>
       )}
-
-        {/* ── OTTIMIZZATORE DI TAGLIO 2D (Lastre) ── */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 print:text-black">
-            ✂️ Nesting di Taglio 2D: Lastre Silicato / Cartongesso (2000x1200mm)
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {packedBoards.map((board, boardIdx) => (
-              <div 
-                key={boardIdx}
-                className="p-5 rounded-3xl border bg-white/5 border-white/5 flex flex-col items-center print:border-gray-300 print:text-black"
-              >
-                <div className="w-full flex justify-between items-center text-xs font-semibold text-gray-400 mb-4 print:text-black">
-                  <span>PANNELLO COMMERCIALE #{boardIdx + 1}</span>
-                  <span>Sfrido: {Math.round(((totalBoardArea - board.usedArea) / totalBoardArea) * 100)}%</span>
-                </div>
-
-                {/* Rappresentazione grafica in scala del pannello 2000x1200 */}
-                {/* Usiamo un aspect ratio coerente per il disegno: W=1200, H=2000 -> scala 0.15 */}
-                <div 
-                  className="relative bg-white/5 rounded-2xl overflow-hidden border border-white/10"
-                  style={{
-                    width: `${commercialSheetW * 0.18}px`,
-                    height: `${commercialSheetH * 0.18}px`,
-                  }}
-                >
-                  {board.placed.map((p, idx) => (
-                    <div
-                      key={idx}
-                      className="absolute border border-black/45 flex flex-col items-center justify-center p-1 text-[9px] font-bold text-white leading-tight overflow-hidden truncate"
-                      style={{
-                        left: `${p.x * 0.18}px`,
-                        top: `${p.y * 0.18}px`,
-                        width: `${p.w * 0.18}px`,
-                        height: `${p.h * 0.18}px`,
-                        background: "linear-gradient(135deg, hsl(220, 90%, 56%), hsl(215, 85% 45%))",
-                      }}
-                      title={`${p.label}: ${p.w}x${p.h}mm`}
-                    >
-                      <span className="truncate max-w-full">{p.w}x{p.h}</span>
-                      <span className="text-[7px] opacity-60 truncate max-w-full">{p.label.split(" ")[0]}</span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Lista pezzi tagliati in questo pannello */}
-                <div className="w-full mt-4 space-y-1.5 text-[10px] text-gray-400 border-t pt-3 border-white/5 print:text-gray-700">
-                  {board.placed.map((p, idx) => (
-                    <div key={idx} className="flex justify-between">
-                      <span>• {p.label}:</span>
-                      <span className="font-semibold text-white print:text-black">{p.w} x {p.h} mm</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-      </div>
     </div>
   );
 }
