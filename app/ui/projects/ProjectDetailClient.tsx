@@ -514,6 +514,16 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
           />
         </div>
 
+        {/* Pulsante Report & Ottimizzazione */}
+        <Link
+          href={`/projects/${project.id}/report`}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95 whitespace-nowrap cursor-pointer"
+        >
+          <span>📊</span>
+          <span className="hidden sm:inline">Report Cantiere</span>
+          <span className="sm:hidden">Report</span>
+        </Link>
+
         {/* Pulsante Dropdown Aggiungi ＋ */}
         <div className="relative">
           <button
@@ -619,16 +629,25 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                           {levelNotesList.map((note) => {
                             const typeName = note.type_name || "Appunti Cantiere";
                             
-                            // Troviamo eventuali foto o snapshot per la preview
-                            const fotoItem = note.field_note_items?.find(i => i.item_type === "foto");
+                            const is3DModelUrl = (url?: string | null) => {
+                              if (!url) return false;
+                              return url.startsWith("data:model/") || url.startsWith("data:application/octet-stream") || url.startsWith("data:application/x-gltf") || url.endsWith(".glb") || url.endsWith(".gltf");
+                            };
+
+                            const has3DModel = note.field_note_items?.some(i => i.item_type === "foto" && is3DModelUrl(i.value_text));
+                            
+                            // Troviamo eventuali foto o snapshot per la preview (prendiamo la prima foto che non è un modello 3D)
+                            const fotoItem = note.field_note_items?.find(i => i.item_type === "foto" && !is3DModelUrl(i.value_text));
                             const previewUrl = fotoItem?.value_text;
                             
-                            // Determinazione tag dinamico Disegno in presenza di foto (Punto 1)
-                            const hasFoto = note.field_note_items?.some(i => i.item_type === "foto");
-                            const isSketchOrDesign = typeName === "Sketch" || hasFoto;
+                            // Determinazione tag dinamico Disegno in presenza di foto normali
+                            const hasFotoNormal = note.field_note_items?.some(i => i.item_type === "foto" && !is3DModelUrl(i.value_text));
+                            const isSketchOrDesign = (typeName === "Sketch" || hasFotoNormal) && !has3DModel;
                             
-                            const displayIcon = isSketchOrDesign ? "🎨" : typeName === "Report 3D" ? "📦" : "📝";
-                            const displayTag = isSketchOrDesign ? "Disegno" : typeName === "Report 3D" ? "3D" : "Nota";
+                            const is3D = typeName === "Report 3D" || has3DModel;
+                            
+                            const displayIcon = is3D ? "🧊" : isSketchOrDesign ? "🎨" : "📝";
+                            const displayTag = is3D ? "3D" : isSketchOrDesign ? "Disegno" : "Nota";
                             
                             const titleItem = note.field_note_items?.find(i => i.item_type === "nota");
                             const noteTitle = titleItem?.value_text || `Appunto #${note.note_number}`;
@@ -680,9 +699,9 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                                         </span>
                                         <span className="text-[8px] uppercase font-mono px-1.5 py-0.5 rounded-full font-extrabold"
                                           style={{
-                                            background: isSketchOrDesign ? "rgba(245, 158, 11, 0.15)" : typeName === "Report 3D" ? "rgba(168, 85, 247, 0.15)" : "rgba(14, 165, 233, 0.15)",
-                                            color: isSketchOrDesign ? "#fbbf24" : typeName === "Report 3D" ? "#c084fc" : "#38bdf8",
-                                            border: `1px solid ${isSketchOrDesign ? "rgba(245, 158, 11, 0.3)" : typeName === "Report 3D" ? "rgba(168, 85, 247, 0.3)" : "rgba(14, 165, 233, 0.3)"}`
+                                            background: isSketchOrDesign ? "rgba(245, 158, 11, 0.15)" : is3D ? "rgba(168, 85, 247, 0.15)" : "rgba(14, 165, 233, 0.15)",
+                                            color: isSketchOrDesign ? "#fbbf24" : is3D ? "#c084fc" : "#38bdf8",
+                                            border: `1px solid ${isSketchOrDesign ? "rgba(245, 158, 11, 0.3)" : is3D ? "rgba(168, 85, 247, 0.3)" : "rgba(14, 165, 233, 0.3)"}`
                                           }}
                                         >
                                           {displayTag}
@@ -707,7 +726,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                                               return "";
                                             })
                                             .filter(Boolean)
-                                            .join(" · ") || (isSketchOrDesign ? "Disegno a mano libera / quotato" : typeName === "Report 3D" ? "Modello 3D esterno con snapshot" : "Nessuna misura")}
+                                            .join(" · ") || (isSketchOrDesign ? "Disegno a mano libera / quotato" : is3D ? "Modello 3D esterno con snapshot" : "Nessuna misura")}
                                         </div>
                                       )}
                                     </div>
@@ -733,7 +752,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                                       onClick={(e) => e.stopPropagation()}
                                       className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white transition-all bg-white/5 border border-white/10 hover:bg-white/10"
                                     >
-                                      {isSketchOrDesign ? "✏️ Disegna" : typeName === "Report 3D" ? "👁 Visualizza" : "✏️ Modifica"}
+                                      {isSketchOrDesign ? "✏️ Disegna" : is3D ? "👁 Visualizza" : "✏️ Modifica"}
                                     </Link>
 
                                     {/* Indicatore espansione */}

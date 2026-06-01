@@ -637,44 +637,90 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                           modelUrl={model3dItem.value_text}
                           onSnapshotTaken={(newSnapshot) => {
                             const newItems = [...items];
-                            const existingSnapshotIndex = newItems.findIndex(i => i.item_type === "foto" && !is3DModelUrl(i.value_text));
-                            if (existingSnapshotIndex > -1) {
-                              newItems[existingSnapshotIndex].value_text = newSnapshot;
-                            } else {
-                              newItems.push({ id: crypto.randomUUID(), item_type: "foto", value_text: newSnapshot });
-                            }
+                            // Inseriamo sempre un nuovo screenshot con inclusione abilitata di default
+                            newItems.push({
+                              id: crypto.randomUUID(),
+                              item_type: "foto",
+                              value_text: newSnapshot,
+                              value_bool: true,
+                            });
                             setItems(newItems);
                           }}
                         />
                       </div>
                     </div>
 
-                    {snapshotItem?.value_text && (
-                      <div className="p-4 rounded-2xl border border-white/10 bg-white/[0.015] space-y-2 animate-fade-in">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-white">📸 Snapshot Quotato Attivo</span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (snapshotItem) {
-                                setEditingFotoId(snapshotItem.id);
-                                setEditingFotoUrl(snapshotItem.value_text!);
-                              }
-                            }}
-                            className="text-[10px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer"
-                          >
-                            ✏️ Modifica Quote Snapshot
-                          </button>
+                    {(() => {
+                      const snapshotItems = items.filter(i => i.item_type === "foto" && !is3DModelUrl(i.value_text));
+                      if (snapshotItems.length === 0) return null;
+                      return (
+                        <div className="space-y-3">
+                          <label className="block text-xs font-semibold text-white/60 uppercase">
+                            📸 Snapshot Acquisiti ({snapshotItems.length})
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {snapshotItems.map((item) => {
+                              const isIncluded = item.value_bool !== false;
+                              return (
+                                <div
+                                  key={item.id}
+                                  className="p-4 rounded-2xl border border-white/10 bg-white/[0.015] flex flex-col justify-between gap-3 animate-fade-in"
+                                >
+                                  <div className="relative group rounded-xl overflow-hidden border border-white/5 bg-white p-1.5 flex items-center justify-center h-28">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={item.value_text || ""}
+                                      alt="Snapshot 3D"
+                                      className="max-h-full object-contain rounded"
+                                    />
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/5 pt-2.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          updateItem(item.id, { value_bool: !isIncluded });
+                                        }}
+                                        className={`px-2.5 py-1.5 rounded-lg text-[9px] font-bold cursor-pointer transition-all border ${
+                                          isIncluded
+                                            ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                            : "bg-white/5 text-white/40 border-white/5 hover:text-white"
+                                        }`}
+                                        title={isIncluded ? "Clicca per escludere dal report" : "Clicca per includere nel report"}
+                                      >
+                                        {isIncluded ? "✓ Nel Report" : "🙈 Escluso"}
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingFotoId(item.id);
+                                          setEditingFotoUrl(item.value_text!);
+                                        }}
+                                        className="p-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 rounded-lg text-[9px] font-bold cursor-pointer transition-colors"
+                                        title="Modifica quote grafiche"
+                                      >
+                                        ✏️ Quota
+                                      </button>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => removeItem(item.id)}
+                                      className="p-1.5 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded-lg text-[9px] font-bold cursor-pointer transition-colors"
+                                      title="Elimina snapshot"
+                                    >
+                                      🗑️ Rimuovi
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                        <div className="relative group rounded-xl overflow-hidden border border-white/5 bg-white p-2 max-w-sm mx-auto">
-                          <img
-                            src={snapshotItem.value_text}
-                            alt="Snapshot 3D"
-                            className="max-h-[220px] object-contain rounded"
-                          />
-                        </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 )}
               </div>

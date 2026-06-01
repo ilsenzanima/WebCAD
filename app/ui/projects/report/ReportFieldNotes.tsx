@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import type { FieldNote, FieldNoteItem } from "@/app/actions/field-notes";
+import ModelViewer from "../ModelViewer";
 
 interface Props {
   notes: FieldNote[];
@@ -9,10 +10,24 @@ interface Props {
   onImageClick: (url: string) => void;
 }
 
+const is3DModelUrl = (url?: string | null) => {
+  if (!url) return false;
+  return (
+    url.startsWith("data:model/") ||
+    url.startsWith("data:application/octet-stream") ||
+    url.startsWith("data:application/x-gltf") ||
+    url.endsWith(".glb") ||
+    url.endsWith(".gltf")
+  );
+};
+
 export default function ReportFieldNotes({ notes, levels, onImageClick }: Props) {
   const [filterStatus, setFilterStatus] = useState<"all" | "completed" | "pending">("all");
   const [searchQuery, setSearchQuery] = useState("");
   
+  // Stato per la modale interattiva 3D
+  const [active3DModelUrl, setActive3DModelUrl] = useState<string | null>(null);
+
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
@@ -73,13 +88,15 @@ export default function ReportFieldNotes({ notes, levels, onImageClick }: Props)
     return { groups, sortedLevelIds };
   }, [notes, filterStatus, searchQuery, levelsMap]);
 
-  // Controlla se una nota contiene immagini
+  // Controlla se una nota contiene immagini normali (non modelli 3D) e incluse nel report
   const hasImages = (note: FieldNote) => {
-    return (note.field_note_items ?? []).some((item) => item.item_type === "foto" && item.value_text);
+    return (note.field_note_items ?? []).some(
+      (item) => item.item_type === "foto" && item.value_text && !is3DModelUrl(item.value_text) && item.value_bool !== false
+    );
   };
 
   // Formatta l'item della nota
-  const renderNoteItem = (item: FieldNoteItem) => {
+  const renderNoteItem = (item: FieldNoteItem, is3DNote: boolean) => {
     switch (item.item_type) {
       case "nota":
         return (
@@ -89,6 +106,17 @@ export default function ReportFieldNotes({ notes, levels, onImageClick }: Props)
         );
       case "foto":
         if (!item.value_text) return null;
+        
+        // Se è un modello 3D, non visualizziamo la preview Base64 vuota nella lista note
+        if (is3DModelUrl(item.value_text)) {
+          return null;
+        }
+
+        // Se l'utente ha scelto di ESCLUDERE lo screenshot dal report, lo nascondiamo completamente!
+        if (is3DNote && item.value_bool === false) {
+          return null;
+        }
+
         return (
           <div key={item.id} className="mt-2.5">
             <div className="text-[10px] text-gray-400 font-semibold mb-1 print:text-gray-600">📷 SNAPSHOT DI RISCONTRO:</div>
@@ -239,23 +267,31 @@ export default function ReportFieldNotes({ notes, levels, onImageClick }: Props)
                 {/* Elenco note del livello */}
                 <div className="grid grid-cols-1 gap-4">
                   {levelNotes.map((note) => {
-                    const isSketch = note.type_name === "Sketch";
-                    const is3d = note.type_name === "Report 3D";
+                    const typeName = note.type_name || "Appunti Cantiere";
+                    
+                    // Rileva se c'è un modello 3D salvato nell'appunto
+                    const model3dItem = (note.field_note_items ?? []).find(
+                      (item) => item.item_type === "foto" && is3DModelUrl(item.value_text)
+                    );
+                    const has3DModel = !!model3dItem;
+                    
+                    // Rileva foto normali
                     const noteHasPics = hasImages(note);
+                    const isSketch = typeName === "Sketch";
 
-                    // Determina il tag badge
-                    let badgeLabel = note.type_name || "Nota";
+                    // Determina il tag badge con priorità assoluta per il 3D
+                    let badgeLabel = typeName;
                     let badgeBg = "bg-orange-500/10 text-orange-400 border-orange-500/10";
                     let badgeIcon = "📝";
 
-                    if (isSketch || noteHasPics) {
+                    if (has3DModel || typeName === "Report 3D") {
+                      badgeLabel = "Report 3D";
+                      badgeBg = "bg-purple-500/10 text-purple-400 border-purple-500/10 print:text-purple-700";
+                      badgeIcon = "🧊";
+                    } else if (isSketch || noteHasPics) {
                       badgeLabel = "Disegno";
                       badgeBg = "bg-blue-500/10 text-blue-400 border-blue-500/10 print:text-blue-700";
                       badgeIcon = "🎨";
-                    } else if (is3d) {
-                      badgeLabel = "Report 3D";
-                      badgeBg = "bg-purple-500/10 text-purple-400 border-purple-500/10 print:text-purple-700";
-                      badgeIcon = "📦";
                     }
 
                     return (
@@ -293,8 +329,22 @@ export default function ReportFieldNotes({ notes, levels, onImageClick }: Props)
                           <div className="space-y-2">
                             {(note.field_note_items ?? [])
                               .sort((a, b) => a.sort_order - b.sort_order)
-                              .map((item) => renderNoteItem(item))}
+                              .map((item) => renderNoteItem(item, has3DModel))}
                           </div>
+
+                          {/* Se c'è un modello 3D, mostriamo il visualizzatore interattivo premium */}
+                          {has3DModel && model3dItem?.value_text && (
+                            <div className="pt-2.5 print:hidden">
+                              <button
+                                type="button"
+                                onClick={() => setActive3DModelUrl(model3dItem.value_text!)}
+                                className="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transition-colors shadow-md flex items-center gap-1.5 cursor-pointer active:scale-95"
+                              >
+                                <span>🖥️</span>
+                                <span>Apri Visualizzatore 3D Interattivo</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
 
                         {/* Metadati in spalla destra */}
@@ -311,6 +361,28 @@ export default function ReportFieldNotes({ notes, levels, onImageClick }: Props)
           })
         )}
       </div>
+
+      {/* Modale Visualizzatore 3D Interattivo a Schermo Intero */}
+      {active3DModelUrl && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 print:hidden">
+          <div className="bg-[#090b11] border border-white/10 rounded-3xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col shadow-2xl relative animate-fade-in">
+            <div className="p-4 border-b border-white/5 flex justify-between items-center bg-black/30">
+              <span className="text-sm font-bold text-white flex items-center gap-1.5">
+                <span>🧊</span> Modello CAD 3D Interattivo del Cantiere
+              </span>
+              <button
+                onClick={() => setActive3DModelUrl(null)}
+                className="px-3.5 py-1.5 rounded-xl bg-red-600/90 hover:bg-red-700 text-white font-extrabold text-xs transition-all shadow-md cursor-pointer active:scale-95"
+              >
+                Chiudi ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden p-3 bg-[#07080c]">
+              <ModelViewer modelUrl={active3DModelUrl} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
