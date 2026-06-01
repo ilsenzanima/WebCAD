@@ -405,115 +405,51 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         </div>
       )}
 
-      {/* ── Tipo appunto ── */}
+      {/* ── Tipo appunto (Automatico e Leggibile) ── */}
       <div
-        className="rounded-2xl p-4 space-y-2"
+        className="rounded-2xl p-4 flex items-center justify-between gap-4"
         style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
       >
-        <label className="block text-sm font-semibold text-white">
-          Tipo di appunto <span style={{ color: "hsl(0 80% 60%)" }}>*</span>
-        </label>
-
-        <div className="relative">
-          {/* Wrapper per evitare crash con estensioni di autofill */}
-          <div className="w-full relative">
-            <input
-              ref={typeInputRef}
-              type="text"
-              value={typeFilter}
-              onChange={(e) => {
-                const val = e.target.value;
-                setTypeFilter(val);
-                
-                // Auto-matching case-insensitive
-                const match = allTypes.find((t) => t.name.toLowerCase() === val.trim().toLowerCase());
-                if (match) {
-                  setSelectedType(match);
-                } else {
-                  setSelectedType(null);
-                }
-                setShowTypeDropdown(true);
-              }}
-              onFocus={() => setShowTypeDropdown(true)}
-              onBlur={() => setTimeout(() => setShowTypeDropdown(false), 180)}
-              placeholder="Cerca o digita un tipo..."
-              className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
-              style={{
-                background: "hsl(220 32% 10%)",
-                border: "1px solid hsl(220 20% 22%)",
-                color: "hsl(210 40% 96%)",
-              }}
-              data-1p-ignore
-              autoComplete="off"
-              name="typeFilter"
-            />
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-white/40 mb-1">
+            Tipo di Appunto
+          </label>
+          <div className="text-sm font-bold text-white flex items-center gap-2">
+            {isSketch ? (
+              <>
+                <span className="text-base">🎨</span>
+                <span>Sketch (Disegno / Schema)</span>
+              </>
+            ) : isReport3D ? (
+              <>
+                <span className="text-base">📦</span>
+                <span>Report 3D (Modello CAD)</span>
+              </>
+            ) : (
+              <>
+                <span className="text-base">📝</span>
+                <span>Nota di Cantiere (Misure)</span>
+              </>
+            )}
           </div>
-
-          {showTypeDropdown && (
-            <div
-              className="absolute left-0 right-0 mt-1 rounded-xl overflow-hidden z-50"
-              style={{
-                background: "hsl(220 26% 14%)",
-                border: "1px solid hsl(220 20% 22%)",
-                boxShadow: "0 12px 30px rgba(0,0,0,0.5)",
-                maxHeight: "220px",
-                overflowY: "auto",
-              }}
-            >
-              {filteredTypes.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onMouseDown={() => selectType(t)}
-                  className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors"
-                  style={{ color: "hsl(210 40% 90%)" }}
-                >
-                  {t.name}
-                </button>
-              ))}
-
-              {noMatch && (
-                <div className="px-4 py-3 border-t" style={{ borderColor: "hsl(220 20% 22%)" }}>
-                  <p className="text-xs mb-2" style={{ color: "hsl(215 15% 50%)" }}>
-                    Nessun tipo trovato per &quot;{typeFilter}&quot;
-                  </p>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault(); // Previene onBlur dell'input!
-                      handleQuickCreateType();
-                    }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      handleQuickCreateType();
-                    }}
-                    disabled={isCreatingType}
-                    className="text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
-                    style={{
-                      background: "hsl(220 90% 56% / 0.15)",
-                      color: "hsl(220 90% 70%)",
-                      border: "1px solid hsl(220 90% 56% / 0.3)",
-                    }}
-                  >
-                    {isCreatingType ? "Creazione..." : `＋ Aggiungi "${typeFilter}"`}
-                  </button>
-                </div>
-              )}
-
-              {filteredTypes.length === 0 && !noMatch && (
-                <div className="px-4 py-3 text-xs text-center" style={{ color: "hsl(215 15% 45%)" }}>
-                  Inizia a digitare per cercare...
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
-        {selectedType && (
-          <div className="flex items-center gap-2 text-xs" style={{ color: "hsl(142 60% 55%)" }}>
-            ✓ Tipo selezionato: <strong>{selectedType.name}</strong>
-          </div>
-        )}
+        <div
+          className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full font-mono"
+          style={{
+            background: isSketch
+              ? "rgba(245, 158, 11, 0.15)"
+              : isReport3D
+              ? "rgba(168, 85, 247, 0.15)"
+              : "rgba(14, 165, 233, 0.15)",
+            color: isSketch ? "#fbbf24" : isReport3D ? "#c084fc" : "#38bdf8",
+            border: `1px solid ${
+              isSketch ? "rgba(245, 158, 11, 0.3)" : isReport3D ? "rgba(168, 85, 247, 0.3)" : "rgba(14, 165, 233, 0.3)"
+            }`,
+          }}
+        >
+          {isSketch ? "Sketch" : isReport3D ? "Report 3D" : "Nota"}
+        </div>
       </div>
 
 
@@ -570,9 +506,9 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                             setEditingFotoUrl(sketchFotoItem.value_text!);
                           }
                         }}
-                        className="px-6 py-2.5 rounded-xl text-xs font-bold text-white transition-all bg-amber-500 hover:bg-amber-600 active:scale-95 flex items-center gap-2 cursor-pointer"
+                        className="px-6 py-2.5 rounded-xl text-xs font-bold text-white transition-all bg-amber-500 hover:bg-amber-600 active:scale-95 flex items-center gap-2 cursor-pointer shadow-md"
                       >
-                        📐 Apri Lavagna / Disegna
+                        ✏️ Modifica con Sketch
                       </button>
                     </div>
                   ) : (
@@ -1242,8 +1178,12 @@ function ItemRow({
                 )}
                 <button
                   type="button"
-                  onClick={() => onChange({ value_text: undefined })}
-                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] shadow-md transition-all animate-fade-in"
+                  onClick={() => {
+                    if (window.confirm("Sei sicuro di voler rimuovere questa foto/disegno?")) {
+                      onChange({ value_text: undefined });
+                    }
+                  }}
+                  className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[8px] shadow-md transition-all animate-fade-in cursor-pointer"
                   style={{ background: "hsl(0 70% 50%)", color: "white" }}
                   title="Rimuovi"
                 >
@@ -1255,7 +1195,7 @@ function ItemRow({
                 <button
                   type="button"
                   onClick={() => onOpen3DModel?.(item.value_text!)}
-                  className="px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap"
+                  className="px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap cursor-pointer"
                   style={{
                     background: "hsl(220 90% 56% / 0.15)",
                     color: "hsl(220 90% 70%)",
@@ -1268,14 +1208,10 @@ function ItemRow({
                 <button
                   type="button"
                   onClick={() => onEditFoto?.(item.id, item.value_text!)}
-                  className="px-2 py-1 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap"
-                  style={{
-                    background: "hsl(220 90% 56% / 0.15)",
-                    color: "hsl(220 90% 70%)",
-                    border: "1px solid hsl(220 90% 56% / 0.3)",
-                  }}
+                  className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold transition-all whitespace-nowrap bg-amber-500 hover:bg-amber-600 active:scale-95 text-white flex items-center gap-1 cursor-pointer shadow-sm"
+                  title="Apri e modifica questa foto/disegno con lo strumento sketch"
                 >
-                  📐 Quote
+                  <span>✏️</span> Modifica con Sketch
                 </button>
               )}
             </div>
@@ -1349,8 +1285,12 @@ function ItemRow({
       {/* Rimuovi */}
       <button
         type="button"
-        onClick={onRemove}
-        className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all flex-shrink-0 text-red-400 bg-red-950/20 border border-red-900/30"
+        onClick={() => {
+          if (window.confirm("Sei sicuro di voler rimuovere questa voce dal foglio delle misure?")) {
+            onRemove();
+          }
+        }}
+        className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all flex-shrink-0 text-red-400 bg-red-950/20 border border-red-900/30 cursor-pointer"
         title="Rimuovi voce"
       >
         ✕
