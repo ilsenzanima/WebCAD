@@ -7,6 +7,7 @@ import NewProjectModal from "./NewProjectModal";
 import QuickAddModal from "@/app/ui/projects/QuickAddModal";
 import QuickAddTaglioModal from "@/app/ui/projects/QuickAddTaglioModal";
 import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
+import { getAllProjectFieldNotes, type FieldNote } from "@/app/actions/field-notes";
 
 interface Project {
   id: string;
@@ -63,6 +64,40 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const [loadedNotes, setLoadedNotes] = useState<FieldNote[]>([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+
+  useEffect(() => {
+    if (quickAdd && quickAdd.type === "taglio") {
+      const fetchNotes = async () => {
+        setLoadingNotes(true);
+        try {
+          const onlineNotes = await getAllProjectFieldNotes(quickAdd.projectId);
+          
+          const cachedFieldNotes = useOfflineStore.getState().fieldNotes;
+          const allNotesMap: Record<string, FieldNote> = {};
+          
+          onlineNotes.forEach(n => { allNotesMap[n.id] = n; });
+          
+          Object.values(cachedFieldNotes).forEach(n => {
+            if (n.project_id === quickAdd.projectId) {
+              allNotesMap[n.id] = n;
+            }
+          });
+          
+          setLoadedNotes(Object.values(allNotesMap));
+        } catch (err) {
+          console.error("Errore nel caricamento degli appunti per il taglio:", err);
+        } finally {
+          setLoadingNotes(false);
+        }
+      };
+      fetchNotes();
+    } else {
+      setLoadedNotes([]);
+    }
+  }, [quickAdd]);
 
   // Gestore per il salvataggio rapido dal pop-up della card
   const handleQuickAddSubmit = async (title: string, pianoName: string) => {
@@ -138,19 +173,17 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
     }
   };
 
-  const getProjectNotesWithCuts = (pId: string) => {
-    const cachedFieldNotes = useOfflineStore.getState().fieldNotes;
-    return Object.values(cachedFieldNotes).filter(
+  const getProjectNotesWithCuts = () => {
+    return loadedNotes.filter(
       (note) =>
-        note.project_id === pId &&
         (note.field_note_items ?? []).some(
           (item) =>
             item.item_type === "dim_quadrata" &&
-            item.value_text &&
+            (item.value_text || item.composite) &&
             (() => {
               try {
-                const parsed = JSON.parse(item.value_text);
-                return parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null);
+                const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
+                return parsed && (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null));
               } catch {
                 return false;
               }
@@ -183,8 +216,7 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
     ];
 
     let order = 1;
-    const cachedFieldNotes = useOfflineStore.getState().fieldNotes;
-    const projectNotes = Object.values(cachedFieldNotes).filter((n) => n.project_id === projectId);
+    const projectNotes = loadedNotes;
 
     const getNoteTitle = (note: any) => {
       const notaText = (note.field_note_items ?? []).find((i: any) => i.item_type === "nota")?.value_text;
@@ -197,10 +229,10 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
       if (sourceNote && sourceNote.field_note_items) {
         const sourceTitle = getNoteTitle(sourceNote);
         sourceNote.field_note_items.forEach((item) => {
-          if (item.item_type === "dim_quadrata" && item.value_text) {
+          if (item.item_type === "dim_quadrata") {
             try {
-              const parsed = JSON.parse(item.value_text);
-              if (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null)) {
+              const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
+              if (parsed && (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null))) {
                 initialItems.push({
                   id: generateTempId(),
                   item_type: "dim_quadrata" as const,
@@ -211,13 +243,19 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
             } catch {
               // ignora
             }
-          } else if (item.item_type === "materiale" && item.value_text) {
-            initialItems.push({
-              id: generateTempId(),
-              item_type: "materiale" as const,
-              value_text: item.value_text,
-              sort_order: order++,
-            });
+          } else if (item.item_type === "materiale" && (item.value_text || item.composite)) {
+            let matText = item.value_text;
+            if (!matText && item.composite) {
+              matText = typeof item.composite === "string" ? item.composite : (item.composite.name || JSON.stringify(item.composite));
+            }
+            if (matText) {
+              initialItems.push({
+                id: generateTempId(),
+                item_type: "materiale" as const,
+                value_text: matText,
+                sort_order: order++,
+              });
+            }
           }
         });
       }
@@ -259,7 +297,8 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
 
       {quickAdd && quickAdd.type === "taglio" && (
         <QuickAddTaglioModal
-          notesWithCuts={getProjectNotesWithCuts(quickAdd.projectId)}
+          notesWithCuts={getProjectNotesWithCuts()}
+          isLoading={loadingNotes}
           onClose={() => setQuickAdd(null)}
           onSubmit={handleQuickAddTaglioSubmit}
         />

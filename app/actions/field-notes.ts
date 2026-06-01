@@ -22,6 +22,7 @@ export interface FieldNoteItem {
   // misure composite JSON: { b, h, d?, unit }
   value_text?: string | null;
   value_bool?: boolean | null;
+  composite?: any;
   sort_order: number;
 }
 

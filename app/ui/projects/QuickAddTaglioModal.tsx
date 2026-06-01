@@ -7,15 +7,16 @@ interface Props {
   onClose: () => void;
   onSubmit: (title: string, selectedNoteIds: string[]) => Promise<void>;
   notesWithCuts: FieldNote[];
+  isLoading?: boolean;
 }
 
 const getNoteCutsSummary = (note: FieldNote) => {
   const cuts: string[] = [];
   (note.field_note_items ?? []).forEach((item) => {
-    if (item.item_type === "dim_quadrata" && item.value_text) {
+    if (item.item_type === "dim_quadrata" && (item.value_text || item.composite)) {
       try {
-        const parsed = JSON.parse(item.value_text);
-        if (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null)) {
+        const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
+        if (parsed && (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null))) {
           cuts.push(`${parsed.b ?? "?"}x${parsed.h ?? "?"} ${parsed.unit ?? "cm"} (x${parsed.q ?? 1})`);
         }
       } catch {
@@ -36,6 +37,7 @@ export default function QuickAddTaglioModal({
   onClose,
   onSubmit,
   notesWithCuts,
+  isLoading = false,
 }: Props) {
   const [title, setTitle] = useState("");
   const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([]);
@@ -140,7 +142,12 @@ export default function QuickAddTaglioModal({
                 borderColor: "hsl(220 20% 20%)",
               }}
             >
-              {notesWithCuts.length > 0 ? (
+              {isLoading ? (
+                <div className="py-8 text-center text-xs text-white/60 flex flex-col items-center justify-center gap-2">
+                  <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span>Caricamento appunti in corso...</span>
+                </div>
+              ) : notesWithCuts.length > 0 ? (
                 notesWithCuts.map((note) => {
                   const isChecked = selectedNoteIds.includes(note.id);
                   return (

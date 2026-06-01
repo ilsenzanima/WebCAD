@@ -255,11 +255,11 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
       (note.field_note_items ?? []).some(
         (item) =>
           item.item_type === "dim_quadrata" &&
-          item.value_text &&
+          (item.value_text || item.composite) &&
           (() => {
             try {
-              const parsed = JSON.parse(item.value_text);
-              return parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null);
+              const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
+              return parsed && (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null));
             } catch {
               return false;
             }
@@ -289,33 +289,46 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
       { id: generateTempId(), item_type: "nota" as const, value_text: `Taglio: ${title}`, sort_order: 0 },
     ];
 
+    const getNoteTitle = (note: any) => {
+      const notaText = (note.field_note_items ?? []).find((i: any) => i.item_type === "nota")?.value_text;
+      if (notaText?.trim()) return notaText;
+      return `Appunto #${note.note_number ?? "Senza Numero"}`;
+    };
+
     let order = 1;
     // Raccoglie gli elementi 'dim_quadrata' (pezzo da tagliare) e materiali correlati dalle note selezionate
     selectedNoteIds.forEach((noteId) => {
       const sourceNote = projectNotes.find((n) => n.id === noteId);
       if (sourceNote && sourceNote.field_note_items) {
+        const sourceTitle = getNoteTitle(sourceNote);
         sourceNote.field_note_items.forEach((item) => {
-          if (item.item_type === "dim_quadrata" && item.value_text) {
+          if (item.item_type === "dim_quadrata") {
             try {
-              const parsed = JSON.parse(item.value_text);
-              if (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null)) {
+              const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
+              if (parsed && (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null))) {
                 initialItems.push({
                   id: generateTempId(),
                   item_type: "dim_quadrata" as const,
-                  value_text: item.value_text,
+                  value_text: JSON.stringify({ ...parsed, refTitle: sourceTitle }),
                   sort_order: order++,
                 });
               }
             } catch {
               // ignora
             }
-          } else if (item.item_type === "materiale" && item.value_text) {
-            initialItems.push({
-              id: generateTempId(),
-              item_type: "materiale" as const,
-              value_text: item.value_text,
-              sort_order: order++,
-            });
+          } else if (item.item_type === "materiale" && (item.value_text || item.composite)) {
+            let matText = item.value_text;
+            if (!matText && item.composite) {
+              matText = typeof item.composite === "string" ? item.composite : (item.composite.name || JSON.stringify(item.composite));
+            }
+            if (matText) {
+              initialItems.push({
+                id: generateTempId(),
+                item_type: "materiale" as const,
+                value_text: matText,
+                sort_order: order++,
+              });
+            }
           }
         });
       }
