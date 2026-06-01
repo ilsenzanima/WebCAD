@@ -16,6 +16,7 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
   // Stati per la fotocamera posteriore in background
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [useCamera, setUseCamera] = useState<boolean>(true);
+  const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   // Offsets per la calibrazione
@@ -38,6 +39,7 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
   // Sincronizzazione Stream Video Fotocamera Posteriore
   useEffect(() => {
     let activeStream: MediaStream | null = null;
+    setIsVideoPlaying(false);
 
     async function startCamera() {
       if (!useCamera || typeof navigator === "undefined" || !navigator.mediaDevices) return;
@@ -63,6 +65,7 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
     startCamera();
 
     return () => {
+      setIsVideoPlaying(false);
       if (activeStream) {
         activeStream.getTracks().forEach((track) => track.stop());
       }
@@ -186,10 +189,20 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
     <div
       className="fixed inset-0 z-[100] flex flex-col items-center justify-between p-6 transition-all duration-300"
       style={{ 
-        background: useCamera ? "rgba(10, 15, 30, 0.5)" : "rgba(10, 15, 30, 0.96)", 
-        backdropFilter: useCamera ? "none" : "blur(8px)" 
+        background: useCamera && isVideoPlaying ? "rgba(10, 15, 30, 0.45)" : "rgba(10, 15, 30, 0.96)", 
+        backdropFilter: useCamera && isVideoPlaying ? "none" : "blur(8px)" 
       }}
     >
+      {/* CSS protettivo per nascondere qualsiasi controllo nativo o icona play di fallback dei browser mobili */}
+      <style dangerouslySetInnerHTML={{__html: `
+        video::-webkit-media-controls {
+          display: none !important;
+        }
+        video::-webkit-media-controls-start-playback-button {
+          display: none !important;
+        }
+      `}} />
+
       {/* Stream Video Fotocamera Posteriore */}
       {useCamera && (
         <video
@@ -197,8 +210,13 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
           autoPlay
           playsInline
           muted
-          className="absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-300"
-          style={{ zIndex: 0, opacity: 0.65 }}
+          onPlaying={() => setIsVideoPlaying(true)}
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-500"
+          style={{ 
+            zIndex: 0, 
+            opacity: isVideoPlaying ? 0.65 : 0,
+            background: "transparent"
+          }}
         />
       )}
 
