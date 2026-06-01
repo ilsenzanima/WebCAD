@@ -30,6 +30,7 @@ interface OfflineState {
   fieldNotes: Record<string, FieldNote>; // key: noteId -> dettagli appunto
   catalogMaterials: Material[];
   noteTypes: FieldNoteType[];
+  tempIdMap: Record<string, string>;
 
   // Coda offline
   offlineQueue: SyncOperation[];
@@ -77,6 +78,7 @@ export const useOfflineStore = create<OfflineState>()(
       noteTypes: [],
       offlineQueue: [],
       isSyncing: false,
+      tempIdMap: {},
 
       setOnlineStatus: (status) => set({ isOnline: status }),
 
@@ -396,39 +398,44 @@ export const useOfflineStore = create<OfflineState>()(
       // --- ENGINE DI SINCRONIZZAZIONE (SYNC ENGINE) ---
 
       syncOfflineData: async () => {
-        const queue = get().offlineQueue;
-        if (queue.length === 0 || get().isSyncing) return;
-
+        if (get().isSyncing) return;
         set({ isSyncing: true });
 
-        // Mappa di risoluzione degli ID temporanei a reali
-        const idMap: Record<string, string> = {};
+        try {
+          // Importa Server Actions dinamicamente sul client
+          const { createProject, renameProject, deleteProject, addLevel, toggleLevelCompleted } = await import("@/app/actions/projects");
+          const { updateFieldNote, createFieldNote, deleteFieldNote, updateLevelNoteText } = await import("@/app/actions/field-notes");
 
-        const resolveIds = (obj: any): any => {
-          if (!obj) return obj;
-          if (typeof obj === "string") {
-            return idMap[obj] ?? obj;
+          const queue = get().offlineQueue;
+          if (queue.length === 0) {
+            set({ isSyncing: false });
+            return;
           }
-          if (Array.isArray(obj)) {
-            return obj.map(resolveIds);
-          }
-          if (typeof obj === "object") {
-            const res: any = {};
-            for (const key in obj) {
-              res[key] = resolveIds(obj[key]);
+
+          // Mappa di risoluzione degli ID temporanei a reali, ereditata dallo stato persistente
+          const idMap: Record<string, string> = { ...get().tempIdMap };
+
+          const resolveIds = (obj: any): any => {
+            if (!obj) return obj;
+            if (typeof obj === "string") {
+              return idMap[obj] ?? obj;
             }
-            return res;
-          }
-          return obj;
-        };
+            if (Array.isArray(obj)) {
+              return obj.map(resolveIds);
+            }
+            if (typeof obj === "object") {
+              const res: any = {};
+              for (const key in obj) {
+                res[key] = resolveIds(obj[key]);
+              }
+              return res;
+            }
+            return obj;
+          };
 
-        // Importa Server Actions dinamicamente sul client
-        const { createProject, renameProject, deleteProject, addLevel, toggleLevelCompleted } = await import("@/app/actions/projects");
-        const { updateFieldNote, createFieldNote, deleteFieldNote, updateLevelNoteText } = await import("@/app/actions/field-notes");
-
-        // Elabora in ordine sequenziale (FIFO)
-        for (const op of queue) {
-          const resolvedPayload = resolveIds(op.payload);
+          // Elabora in ordine sequenziale (FIFO)
+          for (const op of queue) {
+            const resolvedPayload = resolveIds(op.payload);
           try {
             switch (op.action) {
               case "CREATE_PROJECT": {
@@ -451,6 +458,7 @@ export const useOfflineStore = create<OfflineState>()(
                   
                   if (!error && data) {
                     idMap[resolvedPayload.tempId] = data.id;
+                    set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.tempId]: data.id } }));
                   } else {
                     console.error("Errore sync CREATE_PROJECT:", error);
                   }
@@ -483,6 +491,7 @@ export const useOfflineStore = create<OfflineState>()(
 
                 if (!error && data) {
                   idMap[resolvedPayload.tempId] = data.id;
+                  set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.tempId]: data.id } }));
                 } else {
                   console.error("Errore sync ADD_LEVEL:", error);
                 }
@@ -518,6 +527,7 @@ export const useOfflineStore = create<OfflineState>()(
 
                   if (!error && newNote) {
                     idMap[resolvedPayload.noteId] = newNote.id;
+                    set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.noteId]: newNote.id } }));
                     realNoteId = newNote.id;
                   } else {
                     console.error("Errore creazione field_notes in sync:", error);
@@ -585,7 +595,11 @@ export const useOfflineStore = create<OfflineState>()(
             isSyncing: false,
           };
         });
-      },
+      } catch (err) {
+        console.error("Errore generico in syncOfflineData:", err);
+        set({ isSyncing: false });
+      }
+    },
 
       clearQueue: () => set({ offlineQueue: [] }),
     }),
@@ -600,6 +614,7 @@ export const useOfflineStore = create<OfflineState>()(
         catalogMaterials: state.catalogMaterials,
         noteTypes: state.noteTypes,
         offlineQueue: state.offlineQueue,
+        tempIdMap: state.tempIdMap,
       }),
       // CRITICO: evita che Zustand idrati automaticamente il localStorage durante il rendering SSR.
       // L'idratazione viene eseguita manualmente nel NetworkSyncProvider (lato client) per
