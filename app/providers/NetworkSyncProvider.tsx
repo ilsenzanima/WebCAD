@@ -21,6 +21,42 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
     setClientMounted(true);
   }, []);
 
+  // Gestione pulsante indietro nativo per Capacitor (Android / iOS)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let backButtonListener: any = null;
+
+    const setupBackButton = async () => {
+      const isCapacitor = (window as any).Capacitor;
+      if (!isCapacitor) return;
+
+      try {
+        const { App } = await import("@capacitor/app");
+        backButtonListener = await App.addListener("backButton", () => {
+          const path = window.location.pathname;
+          // Se siamo nella dashboard principale, sul login o sulla root, chiudiamo l'applicazione
+          if (path === "/projects" || path === "/" || path === "/login") {
+            App.exitApp();
+          } else {
+            // Altrimenti torniamo indietro nella history del browser
+            window.history.back();
+          }
+        });
+      } catch (err) {
+        console.warn("Impossibile registrare il listener del tasto indietro nativo:", err);
+      }
+    };
+
+    setupBackButton();
+
+    return () => {
+      if (backButtonListener) {
+        backButtonListener.remove();
+      }
+    };
+  }, []);
+
   // Sottoscrizione Supabase Realtime per sincronizzazione in tempo reale bidirezionale
   useEffect(() => {
     if (typeof window === "undefined" || !isOnline) return;

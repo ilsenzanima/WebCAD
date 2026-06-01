@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { updateProjectNotes, renameProject, toggleLevelCompleted } from "@/app/actions/projects";
 import ProjectActionsMenu from "@/app/ui/dashboard/ProjectActionsMenu";
 import QuickAddModal from "./QuickAddModal";
+import QuickAddTaglioModal from "./QuickAddTaglioModal";
 import type { FieldNote } from "@/app/actions/field-notes";
 import { toggleFieldNoteCompleted } from "@/app/actions/field-notes";
 import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
@@ -174,7 +175,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
 
   // Stati per inserimento rapido dropdown e modale
   const [showAddMenu, setShowAddMenu] = useState(false);
-  const [quickAddType, setQuickAddType] = useState<"nota" | "sketch" | "3d" | null>(null);
+  const [quickAddType, setQuickAddType] = useState<"nota" | "sketch" | "taglio" | null>(null);
 
   // Gestore per l'inserimento rapido dal dettaglio del progetto
   const handleQuickAddSubmit = async (title: string, pianoName: string) => {
@@ -245,22 +246,88 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
       
       setQuickAddType(null);
       router.push(`/projects/${project.id}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
-    } else if (quickAddType === "3d") {
-      const initialItems = [
-        { item_type: "nota" as const, value_text: title, sort_order: 0 }
-      ];
-      
-      useOfflineStore.getState().saveFieldNoteItemsOptimistic(
-        tempNoteId,
-        project.id,
-        levelId,
-        initialItems,
-        "Report 3D"
-      );
-      
-      setQuickAddType(null);
-      router.push(`/projects/${project.id}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
     }
+  };
+
+  // Filtra le note del progetto che contengono elementi con pezzi da tagliare (nesting)
+  const notesWithCuts = useMemo(() => {
+    return projectNotes.filter((note) =>
+      (note.field_note_items ?? []).some(
+        (item) =>
+          item.item_type === "dim_quadrata" &&
+          item.value_text &&
+          (() => {
+            try {
+              const parsed = JSON.parse(item.value_text);
+              return parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null);
+            } catch {
+              return false;
+            }
+          })()
+      )
+    );
+  }, [projectNotes]);
+
+  const handleQuickAddTaglioSubmit = async (title: string, pianoName: string, selectedNoteIds: string[]) => {
+    // 1. Controlla se il livello esiste già offline
+    let level = localDrawings.find((l) => l.name.toLowerCase() === pianoName.toLowerCase());
+    let levelId = level?.id;
+
+    if (!levelId) {
+      // Crea il livello optimisticamente
+      levelId = generateTempId();
+      addLevelOptimistic(levelId, project.id, pianoName, 0, "2d_wall", pianoName);
+    }
+
+    // 2. Crea la nota di tipo "Taglio"
+    const tempNoteId = generateTempId();
+
+    const initialItems: any[] = [
+      { id: generateTempId(), item_type: "nota" as const, value_text: `Taglio: ${title}`, sort_order: 0 },
+    ];
+
+    let order = 1;
+    // Raccoglie gli elementi 'dim_quadrata' (pezzo da tagliare) e materiali correlati dalle note selezionate
+    selectedNoteIds.forEach((noteId) => {
+      const sourceNote = projectNotes.find((n) => n.id === noteId);
+      if (sourceNote && sourceNote.field_note_items) {
+        sourceNote.field_note_items.forEach((item) => {
+          if (item.item_type === "dim_quadrata" && item.value_text) {
+            try {
+              const parsed = JSON.parse(item.value_text);
+              if (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null)) {
+                initialItems.push({
+                  id: generateTempId(),
+                  item_type: "dim_quadrata" as const,
+                  value_text: item.value_text,
+                  sort_order: order++,
+                });
+              }
+            } catch {
+              // ignora
+            }
+          } else if (item.item_type === "materiale" && item.value_text) {
+            initialItems.push({
+              id: generateTempId(),
+              item_type: "materiale" as const,
+              value_text: item.value_text,
+              sort_order: order++,
+            });
+          }
+        });
+      }
+    });
+
+    useOfflineStore.getState().saveFieldNoteItemsOptimistic(
+      tempNoteId,
+      project.id,
+      levelId,
+      initialItems,
+      "Taglio"
+    );
+
+    setQuickAddType(null);
+    router.push(`/projects/${project.id}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
   };
 
   // Sincronizza lo stato locale quando cambiano i livelli dello store o le prop
@@ -576,11 +643,11 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                 type="button"
                 onClick={() => {
                   setShowAddMenu(false);
-                  setQuickAddType("3d");
+                  setQuickAddType("taglio");
                 }}
                 className="w-full text-left px-4 py-2.5 text-xs hover:bg-white/5 transition-colors text-white/90 border-t border-white/5 flex items-center gap-2"
               >
-                <span>📦</span> Report 3D (CAD)
+                <span>✂️</span> Crea Taglio (Nesting)
               </button>
             </div>
           )}
@@ -938,12 +1005,21 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
       </div>
 
       {/* Modale Inserimento Rapido */}
-      {quickAddType && (
+      {quickAddType && quickAddType !== "taglio" && (
         <QuickAddModal
           type={quickAddType}
           existingPiani={existingPiani}
           onClose={() => setQuickAddType(null)}
           onSubmit={handleQuickAddSubmit}
+        />
+      )}
+
+      {quickAddType === "taglio" && (
+        <QuickAddTaglioModal
+          existingPiani={existingPiani}
+          notesWithCuts={notesWithCuts}
+          onClose={() => setQuickAddType(null)}
+          onSubmit={handleQuickAddTaglioSubmit}
         />
       )}
 
