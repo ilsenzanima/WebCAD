@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import NewProjectModal from "./NewProjectModal";
 import QuickAddModal from "@/app/ui/projects/QuickAddModal";
+import QuickAddTaglioModal from "@/app/ui/projects/QuickAddTaglioModal";
 import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
 
 interface Project {
@@ -56,7 +57,7 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [quickAdd, setQuickAdd] = useState<{ projectId: string; type: "nota" | "sketch" | "3d" } | null>(null);
+  const [quickAdd, setQuickAdd] = useState<{ projectId: string; type: "nota" | "sketch" | "taglio" } | null>(null);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -134,22 +135,104 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
       
       setQuickAdd(null);
       router.push(`/projects/${projectId}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
-    } else if (type === "3d") {
-      const initialItems = [
-        { item_type: "nota" as const, value_text: title, sort_order: 0 }
-      ];
-      
-      useOfflineStore.getState().saveFieldNoteItemsOptimistic(
-        tempNoteId,
-        projectId,
-        levelId,
-        initialItems,
-        "Report 3D"
-      );
-      
-      setQuickAdd(null);
-      router.push(`/projects/${projectId}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
     }
+  };
+
+  const getProjectNotesWithCuts = (pId: string) => {
+    const cachedFieldNotes = useOfflineStore.getState().fieldNotes;
+    return Object.values(cachedFieldNotes).filter(
+      (note) =>
+        note.project_id === pId &&
+        (note.field_note_items ?? []).some(
+          (item) =>
+            item.item_type === "dim_quadrata" &&
+            item.value_text &&
+            (() => {
+              try {
+                const parsed = JSON.parse(item.value_text);
+                return parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null);
+              } catch {
+                return false;
+              }
+            })()
+        )
+    );
+  };
+
+  const handleQuickAddTaglioSubmit = async (title: string, selectedNoteIds: string[]) => {
+    if (!quickAdd) return;
+    const { projectId } = quickAdd;
+
+    const cachedLevels = useOfflineStore.getState().levels[projectId] ?? [];
+    let level = cachedLevels.find((l) => l.name.toLowerCase() === "generico" || l.name.toLowerCase() === "tagli");
+    let levelId = level?.id;
+
+    if (!levelId) {
+      if (cachedLevels.length > 0) {
+        levelId = cachedLevels[0].id;
+      } else {
+        levelId = generateTempId();
+        useOfflineStore.getState().addLevelOptimistic(levelId, projectId, "Generico", 0, "2d_wall", "Generico");
+      }
+    }
+
+    const tempNoteId = generateTempId();
+
+    const initialItems: any[] = [
+      { id: generateTempId(), item_type: "nota" as const, value_text: `Taglio: ${title}`, sort_order: 0 },
+    ];
+
+    let order = 1;
+    const cachedFieldNotes = useOfflineStore.getState().fieldNotes;
+    const projectNotes = Object.values(cachedFieldNotes).filter((n) => n.project_id === projectId);
+
+    const getNoteTitle = (note: any) => {
+      const notaText = (note.field_note_items ?? []).find((i: any) => i.item_type === "nota")?.value_text;
+      if (notaText?.trim()) return notaText;
+      return `Appunto #${note.note_number ?? "Senza Numero"}`;
+    };
+
+    selectedNoteIds.forEach((noteId) => {
+      const sourceNote = projectNotes.find((n) => n.id === noteId);
+      if (sourceNote && sourceNote.field_note_items) {
+        const sourceTitle = getNoteTitle(sourceNote);
+        sourceNote.field_note_items.forEach((item) => {
+          if (item.item_type === "dim_quadrata" && item.value_text) {
+            try {
+              const parsed = JSON.parse(item.value_text);
+              if (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null)) {
+                initialItems.push({
+                  id: generateTempId(),
+                  item_type: "dim_quadrata" as const,
+                  value_text: JSON.stringify({ ...parsed, refTitle: sourceTitle }),
+                  sort_order: order++,
+                });
+              }
+            } catch {
+              // ignora
+            }
+          } else if (item.item_type === "materiale" && item.value_text) {
+            initialItems.push({
+              id: generateTempId(),
+              item_type: "materiale" as const,
+              value_text: item.value_text,
+              sort_order: order++,
+            });
+          }
+        });
+      }
+    });
+
+    useOfflineStore.getState().saveFieldNoteItemsOptimistic(
+      tempNoteId,
+      projectId,
+      levelId,
+      initialItems,
+      "Taglio"
+    );
+
+    setQuickAdd(null);
+    router.push(`/projects/${projectId}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
   };
 
   // Ordina i cantieri in ordine alfabetico per nome
@@ -165,12 +248,20 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
     <>
       <NewProjectModal open={isModalOpen} onClose={() => setIsModalOpen(false)} />
 
-      {quickAdd && (
+      {quickAdd && quickAdd.type !== "taglio" && (
         <QuickAddModal
           type={quickAdd.type}
           existingPiani={currentProjectLevels}
           onClose={() => setQuickAdd(null)}
           onSubmit={handleQuickAddSubmit}
+        />
+      )}
+
+      {quickAdd && quickAdd.type === "taglio" && (
+        <QuickAddTaglioModal
+          notesWithCuts={getProjectNotesWithCuts(quickAdd.projectId)}
+          onClose={() => setQuickAdd(null)}
+          onSubmit={handleQuickAddTaglioSubmit}
         />
       )}
 
@@ -274,7 +365,7 @@ function ProjectRow({
   onQuickAdd 
 }: { 
   project: Project; 
-  onQuickAdd: (type: "nota" | "sketch" | "3d") => void; 
+  onQuickAdd: (type: "nota" | "sketch" | "taglio") => void; 
 }) {
   const gradient = avatarGradient(project.id);
   const initials = getProjectInitials(project.name);
@@ -336,12 +427,12 @@ function ProjectRow({
         </button>
         <button
           type="button"
-          onClick={() => onQuickAdd("3d")}
-          className="px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all border border-purple-500/10 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 active:scale-95 cursor-pointer flex items-center gap-1.5"
-          title="Carica o visualizza un modello 3D"
+          onClick={() => onQuickAdd("taglio")}
+          className="px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all border border-emerald-500/10 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 active:scale-95 cursor-pointer flex items-center gap-1.5"
+          title="Crea un piano di taglio ottimizzato (Nesting)"
         >
-          <span>📦</span>
-          <span>3D</span>
+          <span>✂️</span>
+          <span>Taglio</span>
         </button>
 
         <div className="w-[1.5px] h-5 bg-white/10 mx-1 hidden sm:block" />

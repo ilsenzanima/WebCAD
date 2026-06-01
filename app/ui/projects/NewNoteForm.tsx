@@ -66,6 +66,7 @@ interface CompositeValue {
   q?: number | null;
   unit: "mm" | "cm";
   isCutPiece?: boolean;
+  refTitle?: string;
 }
 
 // ============================================
@@ -465,6 +466,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   const isSketch = typeFilter === "Sketch" || selectedType?.name === "Sketch";
   const has3DModel = items.some(i => i.item_type === "foto" && is3DModelUrl(i.value_text));
   const isReport3D = typeFilter === "Report 3D" || selectedType?.name === "Report 3D" || has3DModel;
+  const isTaglio = typeFilter === "Taglio" || selectedType?.name === "Taglio";
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -498,6 +500,11 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                 <span className="text-base">📦</span>
                 <span>Report 3D (Modello CAD)</span>
               </>
+            ) : isTaglio ? (
+              <>
+                <span className="text-base">✂️</span>
+                <span>Taglio Raggruppato (Nesting)</span>
+              </>
             ) : (
               <>
                 <span className="text-base">📝</span>
@@ -514,14 +521,16 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
               ? "rgba(245, 158, 11, 0.15)"
               : isReport3D
               ? "rgba(168, 85, 247, 0.15)"
+              : isTaglio
+              ? "rgba(16, 185, 129, 0.15)"
               : "rgba(14, 165, 233, 0.15)",
-            color: isSketch ? "#fbbf24" : isReport3D ? "#c084fc" : "#38bdf8",
+            color: isSketch ? "#fbbf24" : isReport3D ? "#c084fc" : isTaglio ? "#10b981" : "#38bdf8",
             border: `1px solid ${
-              isSketch ? "rgba(245, 158, 11, 0.3)" : isReport3D ? "rgba(168, 85, 247, 0.3)" : "rgba(14, 165, 233, 0.3)"
+              isSketch ? "rgba(245, 158, 11, 0.3)" : isReport3D ? "rgba(168, 85, 247, 0.3)" : isTaglio ? "rgba(16, 185, 129, 0.3)" : "rgba(14, 165, 233, 0.3)"
             }`,
           }}
         >
-          {isSketch ? "Sketch" : isReport3D ? "Report 3D" : "Nota"}
+          {isSketch ? "Sketch" : isReport3D ? "Report 3D" : isTaglio ? "Taglio" : "Nota"}
         </div>
       </div>
 
@@ -787,146 +796,150 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                 </button>
 
                 {/* Bottone Livella a Bolla */}
-                <button
-                  type="button"
-                  onClick={() => setShowLivella(true)}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center text-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                  style={{
-                    background: "hsl(220 26% 18%)",
-                    border: "1px solid hsl(220 20% 24%)",
-                    boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
-                  }}
-                  title="Apri Livella a Bolla"
-                >
-                  🟢
-                </button>
-
-                {/* Pulsante "+" con dropdown */}
-                <div className="relative">
+              {!isTaglio && (
+                <>
                   <button
                     type="button"
-                    onClick={() => setShowItemDropdown((p) => !p)}
-                    className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-lg transition-all"
+                    onClick={() => setShowLivella(true)}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
                     style={{
-                      background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-                      boxShadow: "0 4px 12px hsl(220 90% 56% / 0.3)",
+                      background: "hsl(220 26% 18%)",
+                      border: "1px solid hsl(220 20% 24%)",
+                      boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
                     }}
+                    title="Apri Livella a Bolla"
                   >
-                    ＋
+                    🟢
                   </button>
 
-                  {showItemDropdown && (
-                    <div
-                      className="absolute right-0 mt-1 w-44 rounded-xl overflow-hidden z-50"
+                  {/* Pulsante "+" con dropdown */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowItemDropdown((p) => !p)}
+                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-lg transition-all"
                       style={{
-                        background: "hsl(220 26% 14%)",
-                        border: "1px solid hsl(220 20% 22%)",
-                        boxShadow: "0 12px 30px rgba(0,0,0,0.5)",
+                        background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+                        boxShadow: "0 4px 12px hsl(220 90% 56% / 0.3)",
                       }}
                     >
-                      {/* Voci Standard del Menu "+" */}
-                      <button
-                        type="button"
-                        onClick={() => addItem("nota")}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
-                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
-                      >
-                        📝 Nota libera
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => addItem("foto")}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
-                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
-                      >
-                        📷 Foto o disegno
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => addItem("base")}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
-                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
-                      >
-                        ↔ Misura orizzontale
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => addItem("altezza")}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
-                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
-                      >
-                        ↕ Misura verticale
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => addItem("spessore")}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
-                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
-                      >
-                        ↗ Spessore
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => addItem("dim_quadrata")}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
-                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
-                      >
-                        📐 Dimensione quadrata
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => addItem("dim_quadrata", { isCutPiece: true })}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
-                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
-                      >
-                        ✂️ Pezzo da tagliare
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => addItem("dim_cubica")}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
-                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
-                      >
-                        ⬛ Dimensioni cubiche
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => addItem("materiale")}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
-                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
-                      >
-                        📦 Materiale
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => addItem("lana_interna")}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
-                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
-                      >
-                        🔥 Lana interna
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => addItem("dipintura")}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
-                        style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
-                      >
-                        🎨 Dipintura
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowLivella(true);
-                          setShowItemDropdown(false);
+                      ＋
+                    </button>
+
+                    {showItemDropdown && (
+                      <div
+                        className="absolute right-0 mt-1 w-44 rounded-xl overflow-hidden z-50"
+                        style={{
+                          background: "hsl(220 26% 14%)",
+                          border: "1px solid hsl(220 20% 22%)",
+                          boxShadow: "0 12px 30px rgba(0,0,0,0.5)",
                         }}
-                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
-                        style={{ borderTop: "1px solid hsl(220 20% 18%)" }}
                       >
-                        🟢 Livella a Bolla
-                      </button>
-                    </div>
-                  )}
-                </div>
+                        {/* Voci Standard del Menu "+" */}
+                        <button
+                          type="button"
+                          onClick={() => addItem("nota")}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          📝 Nota libera
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addItem("foto")}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          📷 Foto o disegno
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addItem("base")}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          ↔ Misura orizzontale
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addItem("altezza")}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          ↕ Misura verticale
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addItem("spessore")}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          ↗ Spessore
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addItem("dim_quadrata")}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          📐 Dimensione quadrata
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addItem("dim_quadrata", { isCutPiece: true })}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          ✂️ Pezzo da tagliare
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addItem("dim_cubica")}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          ⬛ Dimensioni cubiche
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addItem("materiale")}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          📦 Materiale
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addItem("lana_interna")}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          🔥 Lana interna
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addItem("dipintura")}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          🎨 Dipintura
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowLivella(true);
+                            setShowItemDropdown(false);
+                          }}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderTop: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          🟢 Livella a Bolla
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
               </div>
             </div>
 
@@ -1011,6 +1024,13 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
           </>
         )}
       </div>
+
+      {/* Anteprima Nesting per note di tipo Taglio */}
+      {isTaglio && (
+        <div className="mb-6">
+          <NestingPreview items={items} />
+        </div>
+      )}
 
       {/* ── Pulsanti ── */}
       <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-3 sm:justify-between pb-8">
@@ -1122,6 +1142,230 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
 }
 
 // ============================================
+// Sotto-componente: Anteprima Nesting 2D per Tagli
+// ============================================
+function NestingPreview({ items }: { items: NoteItemDraft[] }) {
+  const commercialSheetW = 1200; // Lastra standard 1200mm
+  const commercialSheetH = 2000; // Lastra standard 2000mm
+  const bladeThickness = 3; // Spessore lama (Kerf) in mm
+  const totalBoardArea = commercialSheetW * commercialSheetH;
+
+  interface SheetMaterialRequest {
+    width: number;
+    height: number;
+    label: string;
+  }
+
+  const sheetRequests: SheetMaterialRequest[] = [];
+
+  items.forEach((item, idx) => {
+    if (item.item_type === "dim_quadrata" && item.composite) {
+      const cv = item.composite;
+      const b = parseFloat(cv.b as any);
+      const h = parseFloat(cv.h as any);
+      const q = parseInt(cv.q as any) || 1;
+      const unit = cv.unit || "cm";
+
+      if (!isNaN(b) && !isNaN(h) && b > 0 && h > 0) {
+        const factor = unit === "cm" ? 10 : 1;
+        const wMm = Math.round(b * factor);
+        const hMm = Math.round(h * factor);
+
+        for (let i = 0; i < q; i++) {
+          sheetRequests.push({
+            width: wMm,
+            height: hMm,
+            label: cv.refTitle ? `${cv.refTitle} (${wMm}x${hMm}mm)` : `Pezzo #${idx + 1} (${wMm}x${hMm}mm)`,
+          });
+        }
+      }
+    }
+  });
+
+  if (sheetRequests.length === 0) {
+    return (
+      <div className="p-6 rounded-2xl border text-center text-xs italic" style={{ background: "hsl(220 32% 10%)", borderColor: "hsl(220 20% 18%)", color: "hsl(215 15% 40%)" }}>
+        Nessun pezzo da tagliare inserito con misure valide per l'ottimizzazione del nesting.
+      </div>
+    );
+  }
+
+  // --- Algoritmo Ghigliottina 2D ---
+  interface PlacedSheet {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    label: string;
+  }
+
+  interface PackedBoard {
+    placed: PlacedSheet[];
+    usedArea: number;
+  }
+
+  interface FreeRect {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }
+
+  interface PlacementCandidate {
+    boardIndex: number;
+    freeRectIndex: number;
+    rotated: boolean;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }
+
+  const pack2D = (): PackedBoard[] => {
+    const sorted = [...sheetRequests].sort((a, b) => (b.width * b.height) - (a.width * a.height));
+    const boards: PackedBoard[] = [];
+    const freeRectsByBoard: FreeRect[][] = [];
+
+    const createBoard = (): number => {
+      boards.push({ placed: [], usedArea: 0 });
+      freeRectsByBoard.push([{ x: 0, y: 0, w: commercialSheetW, h: commercialSheetH }]);
+      return boards.length - 1;
+    };
+
+    const tryMakeCandidate = (reqW: number, reqH: number, boardIndex: number, freeRectIndex: number, freeRect: FreeRect, rotated: boolean): PlacementCandidate | null => {
+      const pieceW = rotated ? reqH : reqW;
+      const pieceH = rotated ? reqW : reqH;
+      if (pieceW > freeRect.w || pieceH > freeRect.h) return null;
+      return { boardIndex, freeRectIndex, rotated, x: freeRect.x, y: freeRect.y, w: pieceW, h: pieceH };
+    };
+
+    const isBetterBottomLeft = (a: PlacementCandidate, b: PlacementCandidate): boolean => {
+      if (a.y !== b.y) return a.y < b.y;
+      if (a.x !== b.x) return a.x < b.x;
+      const aShortSide = Math.min(a.w, a.h);
+      const bShortSide = Math.min(b.w, b.h);
+      return aShortSide > bShortSide;
+    };
+
+    const splitFreeRectGuillotine = (freeRect: FreeRect, piece: PlacementCandidate): FreeRect[] => {
+      const rightStrip: FreeRect | null = freeRect.w - piece.w > 0
+        ? { x: freeRect.x + piece.w + bladeThickness, y: freeRect.y, w: freeRect.w - piece.w - bladeThickness, h: piece.h }
+        : null;
+      const bottomStrip: FreeRect | null = freeRect.h - piece.h > 0
+        ? { x: freeRect.x, y: freeRect.y + piece.h + bladeThickness, w: freeRect.w, h: freeRect.h - piece.h - bladeThickness }
+        : null;
+      const leftovers: FreeRect[] = [];
+      if (rightStrip && rightStrip.w > 0 && rightStrip.h > 0) leftovers.push(rightStrip);
+      if (bottomStrip && bottomStrip.w > 0 && bottomStrip.h > 0) leftovers.push(bottomStrip);
+      return leftovers;
+    };
+
+    sorted.forEach((req) => {
+      const reqW = Math.min(req.width, commercialSheetW);
+      const reqH = Math.min(req.height, commercialSheetH);
+      let bestCandidate: PlacementCandidate | null = null;
+
+      for (let bIdx = 0; bIdx < freeRectsByBoard.length; bIdx++) {
+        const freeRects = freeRectsByBoard[bIdx];
+        for (let rIdx = 0; rIdx < freeRects.length; rIdx++) {
+          const fr = freeRects[rIdx];
+          const candidates = [
+            tryMakeCandidate(reqW, reqH, bIdx, rIdx, fr, false),
+            tryMakeCandidate(reqW, reqH, bIdx, rIdx, fr, true),
+          ].filter((c): c is PlacementCandidate => c !== null);
+
+          for (const cand of candidates) {
+            if (!bestCandidate || isBetterBottomLeft(cand, bestCandidate)) {
+              bestCandidate = cand;
+            }
+          }
+        }
+      }
+
+      if (!bestCandidate) {
+        const newBoardIndex = createBoard();
+        const baseFreeRect = freeRectsByBoard[newBoardIndex][0];
+        bestCandidate = tryMakeCandidate(reqW, reqH, newBoardIndex, 0, baseFreeRect, false) ?? tryMakeCandidate(reqW, reqH, newBoardIndex, 0, baseFreeRect, true);
+      }
+
+      if (!bestCandidate) return;
+
+      const board = boards[bestCandidate.boardIndex];
+      const freeRects = freeRectsByBoard[bestCandidate.boardIndex];
+      const targetFreeRect = freeRects[bestCandidate.freeRectIndex];
+      if (!board || !targetFreeRect) return;
+
+      board.placed.push({ x: bestCandidate.x, y: bestCandidate.y, w: bestCandidate.w, h: bestCandidate.h, label: req.label });
+      board.usedArea += bestCandidate.w * bestCandidate.h;
+
+      freeRects.splice(bestCandidate.freeRectIndex, 1);
+      freeRects.push(...splitFreeRectGuillotine(targetFreeRect, bestCandidate));
+    });
+
+    return boards;
+  };
+
+  const packedBoards = pack2D();
+  const totalSheetsCount = packedBoards.length;
+  const totalUsedSheetArea = packedBoards.reduce((acc, b) => acc + b.usedArea, 0);
+  const totalSheetSfrido = totalSheetsCount > 0 ? Math.round(((totalSheetsCount * totalBoardArea - totalUsedSheetArea) / (totalSheetsCount * totalBoardArea)) * 100) : 0;
+
+  return (
+    <div className="space-y-5 p-5 rounded-2xl border" style={{ background: "hsl(220 26% 12% / 0.15)", borderColor: "hsl(220 20% 18%)" }}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <h3 className="text-xs font-extrabold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+          <span>✂️</span> Ottimizzazione Nesting 2D (Pannelli 2000x1200mm)
+        </h3>
+        <div className="self-start px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-950/30 text-emerald-400 border border-emerald-900/30">
+          Sfrido stimato: {totalSheetSfrido}% ({totalSheetsCount} {totalSheetsCount === 1 ? "foglio" : "fogli"})
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {packedBoards.map((board, idx) => (
+          <div key={idx} className="p-4 rounded-xl border flex flex-col items-center" style={{ background: "hsl(220 32% 10%)", borderColor: "hsl(220 20% 20%)" }}>
+            <div className="w-full flex justify-between items-center text-[10px] text-gray-500 font-bold mb-3">
+              <span>FOGLIO #{idx + 1}</span>
+              <span>Utilizzo: {Math.round((board.usedArea / totalBoardArea) * 100)}%</span>
+            </div>
+
+            <div 
+              className="relative bg-white/5 rounded-xl overflow-hidden border border-white/10"
+              style={{
+                width: `${commercialSheetW * 0.15}px`,
+                height: `${commercialSheetH * 0.15}px`,
+              }}
+            >
+              {board.placed.map((p, pIdx) => (
+                <div
+                  key={pIdx}
+                  className="absolute border border-black/40 flex flex-col items-center justify-center p-0.5 text-[8px] font-extrabold text-white leading-tight overflow-hidden truncate"
+                  style={{
+                    left: `${p.x * 0.15}px`,
+                    top: `${p.y * 0.15}px`,
+                    width: `${p.w * 0.15}px`,
+                    height: `${p.h * 0.15}px`,
+                    background: "linear-gradient(135deg, hsl(220, 90%, 56%), hsl(215, 85%, 45%))",
+                  }}
+                  title={p.label}
+                >
+                  <span className="truncate max-w-full">{p.w}x{p.h}</span>
+                  {p.label && (
+                    <span className="text-[6.5px] opacity-60 truncate max-w-full">
+                      {p.label.split(" ")[0]}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============================================
 // Sotto-componente: singola voce
 // ============================================
 
@@ -1192,10 +1436,17 @@ function ItemRow({
         }}
       >
         <div className="flex items-center justify-between">
-          <span className="text-xs font-bold" style={{ color: cv.isCutPiece ? "hsl(142 70% 55%)" : "hsl(215 20% 65%)" }}>
-            {item.item_type === "dim_quadrata" 
-              ? (cv.isCutPiece ? "✂️ Pezzo da tagliare" : "📐 Dimensione quadrata") 
-              : "⬛ Sezione 3D"}
+          <span className="text-xs font-bold flex items-center gap-1.5" style={{ color: cv.isCutPiece ? "hsl(142 70% 55%)" : "hsl(215 20% 65%)" }}>
+            <span>
+              {item.item_type === "dim_quadrata" 
+                ? (cv.isCutPiece ? "✂️ Pezzo da tagliare" : "📐 Dimensione quadrata") 
+                : "⬛ Sezione 3D"}
+            </span>
+            {cv.refTitle && (
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-white/5 text-white/50 border border-white/10 uppercase tracking-wider">
+                Rif: {cv.refTitle}
+              </span>
+            )}
           </span>
           <div className="flex items-center gap-1.5">
             <button
