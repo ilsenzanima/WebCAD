@@ -426,7 +426,8 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   // ============================================
 
   const isSketch = typeFilter === "Sketch" || selectedType?.name === "Sketch";
-  const isReport3D = typeFilter === "Report 3D" || selectedType?.name === "Report 3D";
+  const has3DModel = items.some(i => i.item_type === "foto" && is3DModelUrl(i.value_text));
+  const isReport3D = typeFilter === "Report 3D" || selectedType?.name === "Report 3D" || has3DModel;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -786,6 +787,56 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                         boxShadow: "0 12px 30px rgba(0,0,0,0.5)",
                       }}
                     >
+                      {/* Caricamento Modello 3D */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const input = document.createElement("input");
+                          input.type = "file";
+                          input.accept = ".glb,.gltf";
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = (evt) => {
+                              const resultUrl = evt.target?.result as string;
+                              const newItems = [...items];
+                              const existingModelIndex = newItems.findIndex(i => i.item_type === "foto" && is3DModelUrl(i.value_text));
+                              if (existingModelIndex > -1) {
+                                newItems[existingModelIndex].value_text = resultUrl;
+                              } else {
+                                newItems.push({ id: crypto.randomUUID(), item_type: "foto", value_text: resultUrl });
+                              }
+                              
+                              // Impostiamo il tipo dell'appunto a "Report 3D" per allineamento
+                              setTypeFilter("Report 3D");
+                              const foundType = noteTypes.find(t => t.name === "Report 3D");
+                              if (foundType) {
+                                setSelectedType(foundType);
+                              }
+
+                              // Assicura che esista una nota per il titolo del report
+                              const hasNota = newItems.some(i => i.item_type === "nota");
+                              if (!hasNota) {
+                                newItems.push({ id: crypto.randomUUID(), item_type: "nota", value_text: "" });
+                              }
+                              
+                              setItems(newItems);
+                              setShowItemDropdown(false);
+                            };
+                            reader.readAsDataURL(file);
+                          };
+                          input.click();
+                        }}
+                        className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors font-bold flex items-center gap-1.5"
+                        style={{
+                          color: "hsl(270, 75%, 75%)",
+                          borderBottom: "1px solid hsl(220 20% 18%)",
+                        }}
+                      >
+                        <span>🧊</span> Carica 3D (.glb/.gltf)
+                      </button>
+
                       {(Object.keys(ITEM_LABELS) as ItemType[]).filter(type => type !== "posizione").map((type) => (
                         <button
                           key={type}
