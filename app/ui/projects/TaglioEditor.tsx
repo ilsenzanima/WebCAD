@@ -290,11 +290,9 @@ export default function TaglioEditor({
       return result;
     };
 
-    // Algoritmo MaxRects con euristica Best Short Side Fit
+    // Algoritmo MaxRects con euristica Top-Left a cascata (compattazione ad angolo)
     sorted.forEach((req) => {
       let bestSheetIdx = -1;
-      let bestRectIdx = -1;
-      let bestScore = Infinity;
       let bestX = 0;
       let bestY = 0;
       let bestW = 0;
@@ -309,34 +307,64 @@ export default function TaglioEditor({
 
           // Prova orientamento normale
           if (req.width <= fr.w && req.height <= fr.h) {
-            const leftW = fr.w - req.width;
-            const leftH = fr.h - req.height;
-            const score = Math.min(leftW, leftH); // Euristica BSSF
-            if (score < bestScore) {
-              bestScore = score;
+            const candX = fr.x;
+            const candY = fr.y;
+            const candW = req.width;
+            const candH = req.height;
+
+            let isBetter = false;
+            if (bestSheetIdx === -1) {
+              isBetter = true;
+            } else if (s !== bestSheetIdx) {
+              isBetter = s < bestSheetIdx;
+            } else if (candY !== bestY) {
+              isBetter = candY < bestY;
+            } else if (candX !== bestX) {
+              isBetter = candX < bestX;
+            } else if (candH !== bestH) {
+              isBetter = candH < bestH;
+            } else {
+              isBetter = candW < bestW;
+            }
+
+            if (isBetter) {
               bestSheetIdx = s;
-              bestRectIdx = r;
-              bestX = fr.x;
-              bestY = fr.y;
-              bestW = req.width;
-              bestH = req.height;
+              bestX = candX;
+              bestY = candY;
+              bestW = candW;
+              bestH = candH;
               bestRotated = false;
             }
           }
 
           // Prova orientamento ruotato
           if (req.height <= fr.w && req.width <= fr.h) {
-            const leftW = fr.w - req.height;
-            const leftH = fr.h - req.width;
-            const score = Math.min(leftW, leftH);
-            if (score < bestScore) {
-              bestScore = score;
+            const candX = fr.x;
+            const candY = fr.y;
+            const candW = req.height;
+            const candH = req.width;
+
+            let isBetter = false;
+            if (bestSheetIdx === -1) {
+              isBetter = true;
+            } else if (s !== bestSheetIdx) {
+              isBetter = s < bestSheetIdx;
+            } else if (candY !== bestY) {
+              isBetter = candY < bestY;
+            } else if (candX !== bestX) {
+              isBetter = candX < bestX;
+            } else if (candH !== bestH) {
+              isBetter = candH < bestH;
+            } else {
+              isBetter = candW < bestW;
+            }
+
+            if (isBetter) {
               bestSheetIdx = s;
-              bestRectIdx = r;
-              bestX = fr.x;
-              bestY = fr.y;
-              bestW = req.height;
-              bestH = req.width;
+              bestX = candX;
+              bestY = candY;
+              bestW = candW;
+              bestH = candH;
               bestRotated = true;
             }
           }

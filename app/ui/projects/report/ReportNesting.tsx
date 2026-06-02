@@ -239,14 +239,12 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
       return result;
     };
 
-    // Algoritmo MaxRects con euristica Best Short Side Fit
+    // Algoritmo MaxRects con euristica Top-Left a cascata (compattazione ad angolo)
     sorted.forEach((req) => {
       const reqW = Math.min(req.width, commercialSheetW);
       const reqH = Math.min(req.height, commercialSheetH);
 
       let bestBoardIdx = -1;
-      let bestRectIdx = -1;
-      let bestScore = Infinity;
       let bestX = 0;
       let bestY = 0;
       let bestW = 0;
@@ -261,34 +259,64 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
 
           // Prova orientamento normale
           if (reqW <= fr.w && reqH <= fr.h) {
-            const leftW = fr.w - reqW;
-            const leftH = fr.h - reqH;
-            const score = Math.min(leftW, leftH); // Euristica BSSF
-            if (score < bestScore) {
-              bestScore = score;
+            const candX = fr.x;
+            const candY = fr.y;
+            const candW = reqW;
+            const candH = reqH;
+
+            let isBetter = false;
+            if (bestBoardIdx === -1) {
+              isBetter = true;
+            } else if (s !== bestBoardIdx) {
+              isBetter = s < bestBoardIdx;
+            } else if (candY !== bestY) {
+              isBetter = candY < bestY;
+            } else if (candX !== bestX) {
+              isBetter = candX < bestX;
+            } else if (candH !== bestH) {
+              isBetter = candH < bestH;
+            } else {
+              isBetter = candW < bestW;
+            }
+
+            if (isBetter) {
               bestBoardIdx = s;
-              bestRectIdx = r;
-              bestX = fr.x;
-              bestY = fr.y;
-              bestW = reqW;
-              bestH = reqH;
+              bestX = candX;
+              bestY = candY;
+              bestW = candW;
+              bestH = candH;
               bestRotated = false;
             }
           }
 
           // Prova orientamento ruotato
           if (reqH <= fr.w && reqW <= fr.h) {
-            const leftW = fr.w - reqH;
-            const leftH = fr.h - reqW;
-            const score = Math.min(leftW, leftH);
-            if (score < bestScore) {
-              bestScore = score;
+            const candX = fr.x;
+            const candY = fr.y;
+            const candW = reqH;
+            const candH = reqW;
+
+            let isBetter = false;
+            if (bestBoardIdx === -1) {
+              isBetter = true;
+            } else if (s !== bestBoardIdx) {
+              isBetter = s < bestBoardIdx;
+            } else if (candY !== bestY) {
+              isBetter = candY < bestY;
+            } else if (candX !== bestX) {
+              isBetter = candX < bestX;
+            } else if (candH !== bestH) {
+              isBetter = candH < bestH;
+            } else {
+              isBetter = candW < bestW;
+            }
+
+            if (isBetter) {
               bestBoardIdx = s;
-              bestRectIdx = r;
-              bestX = fr.x;
-              bestY = fr.y;
-              bestW = reqH;
-              bestH = reqW;
+              bestX = candX;
+              bestY = candY;
+              bestW = candW;
+              bestH = candH;
               bestRotated = true;
             }
           }
