@@ -51,6 +51,7 @@ export default function TaglioEditor({
   // Lista dei pezzi da tagliare
   const [pieces, setPieces] = useState<PieceItem[]>([]);
   const [materialFilter, setMaterialFilter] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
   // Stato per l'inserimento manuale rapido
   const [newB, setNewB] = useState("");
@@ -406,6 +407,7 @@ export default function TaglioEditor({
 
   // --- Salva & Sincronizza ---
   const handleSave = () => {
+    setSaveStatus("saving");
     // 1. Trova il tipo di appunto "Taglio" o crea un fallback
     const taglioType = noteTypes.find((t) => t.name === "Taglio") || { id: "temp_taglio", name: "Taglio" };
 
@@ -461,7 +463,10 @@ export default function TaglioEditor({
       "Taglio"
     );
 
-    router.push(`/projects/${projectId}`);
+    setSaveStatus("saved");
+    setTimeout(() => {
+      setSaveStatus("idle");
+    }, 3000);
   };
 
   const handleDeletePlan = () => {
@@ -479,7 +484,7 @@ export default function TaglioEditor({
         style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
       >
         <div className="col-span-2 md:col-span-1">
-          <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1.5">
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1">
             Nome Configurazione
           </label>
           <input
@@ -488,7 +493,11 @@ export default function TaglioEditor({
             onChange={(e) => setTitle(e.target.value)}
             className="w-full px-3 py-2 rounded-xl text-xs font-semibold outline-none"
             style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 22%)", color: "white" }}
+            placeholder="es. Piano Primo, Lotto A"
           />
+          <span className="block mt-1 text-[9px] text-white/30 leading-tight">
+            Identifica questo specifico piano di taglio (es: "Cucina", "Spalle").
+          </span>
         </div>
 
         <div>
@@ -750,9 +759,24 @@ export default function TaglioEditor({
             <button
               type="button"
               onClick={handleSave}
-              className="w-full py-3 rounded-xl font-semibold text-white shadow-lg transition-all bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 active:scale-98 cursor-pointer text-sm"
+              disabled={saveStatus === "saving"}
+              className={`w-full py-3 rounded-xl font-semibold text-white shadow-lg transition-all active:scale-98 cursor-pointer text-sm ${
+                saveStatus === "saved"
+                  ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20"
+                  : "bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400"
+              }`}
             >
-              💾 Salva Piano di Taglio
+              {saveStatus === "saving" && "💾 Salvataggio in corso..."}
+              {saveStatus === "saved" && "✅ Piano Salvato con Successo!"}
+              {saveStatus === "idle" && "💾 Salva Piano di Taglio"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push(`/projects/${projectId}`)}
+              className="w-full py-2.5 rounded-xl text-xs font-semibold text-white/50 hover:text-white bg-white/5 hover:bg-white/10 transition-colors"
+            >
+              ← Torna al Dettaglio Progetto
             </button>
 
             <button
