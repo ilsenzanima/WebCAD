@@ -539,6 +539,7 @@ export const useOfflineStore = create<OfflineState>()(
                 await updateFieldNote(realNoteId, {
                   project_id: realProjId,
                   level_id: realLvlId,
+                  type_name: resolvedPayload.typeName,
                   items: resolvedPayload.items,
                 });
                 break;
