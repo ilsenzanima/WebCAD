@@ -215,8 +215,9 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
     const projectNotes = loadedNotes;
 
     const getNoteTitle = (note: any) => {
+      if (note.type_name?.trim()) return note.type_name.trim();
       const notaText = (note.field_note_items ?? []).find((i: any) => i.item_type === "nota")?.value_text;
-      if (notaText?.trim()) return notaText;
+      if (notaText?.trim()) return notaText.trim();
       return `Appunto #${note.note_number ?? "Senza Numero"}`;
     };
 

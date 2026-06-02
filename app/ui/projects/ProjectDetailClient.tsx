@@ -303,8 +303,9 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
     ];
 
     const getNoteTitle = (note: any) => {
+      if (note.type_name?.trim()) return note.type_name.trim();
       const notaText = (note.field_note_items ?? []).find((i: any) => i.item_type === "nota")?.value_text;
-      if (notaText?.trim()) return notaText;
+      if (notaText?.trim()) return notaText.trim();
       return `Appunto #${note.note_number ?? "Senza Numero"}`;
     };
 
@@ -788,8 +789,8 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                               const displayIcon = isTaglio ? "✂️" : is3D ? "🧊" : isSketchOrDesign ? "🎨" : "📝";
                               const displayTag = isTaglio ? "Taglio" : is3D ? "3D" : isSketchOrDesign ? "Disegno" : "Nota";
                               
-                              const titleItem = note.field_note_items?.find(i => i.item_type === "nota");
-                              const noteTitle = titleItem?.value_text || `Appunto #${note.note_number}`;
+                              const titleItem = note.field_note_items?.find((i: any) => i.item_type === "nota");
+                              const noteTitle = note.type_name?.trim() || titleItem?.value_text?.trim() || `Appunto #${note.note_number}`;
                               
                               const isExpanded = !!expandedNotes[note.id];
                               const isNoteCompleted = localCompletedNotes[note.id] !== undefined 

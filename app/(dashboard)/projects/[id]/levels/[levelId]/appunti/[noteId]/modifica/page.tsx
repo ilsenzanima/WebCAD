@@ -82,12 +82,9 @@ export default async function EditFieldNotePage({
     field_note_items: [],
   };
 
-  // Trova il titolo personalizzato: cerca prima item di tipo 'title', poi 'nota' con sort_order 0, poi qualsiasi 'nota'
-  const titleItem =
-    note.field_note_items?.find((i: any) => i.item_type === "title") ||
-    note.field_note_items?.find((i: any) => i.item_type === "nota" && i.sort_order === 0) ||
-    note.field_note_items?.find((i: any) => i.item_type === "nota" && i.value_text?.trim());
-  const noteTitle = (titleItem?.value_text?.trim()) || (note as any).name?.trim() || `Appunto #${note.note_number}`;
+  // Titolo: type_name (impostato dall'utente) → testo item 'nota' → numero progressivo
+  const notaItem = note.field_note_items?.find((i: any) => i.item_type === "nota" && i.value_text?.trim());
+  const noteTitle = (note as any).type_name?.trim() || notaItem?.value_text?.trim() || `Appunto #${note.note_number}`;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto w-full animate-fade-in pb-4">
