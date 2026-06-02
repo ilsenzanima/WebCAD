@@ -82,6 +82,12 @@ export default async function EditFieldNotePage({
     field_note_items: [],
   };
 
+  // Trova il titolo personalizzato impostato dall'utente all'interno degli item
+  const titleItem = note.field_note_items?.find(
+    (i: any) => i.item_type === "nota" && i.sort_order === 0
+  ) || note.field_note_items?.find((i: any) => i.item_type === "nota");
+  const noteTitle = titleItem?.value_text?.trim() || `Appunto #${note.note_number}`;
+
   return (
     <div className="flex flex-col h-full overflow-y-auto w-full animate-fade-in pb-4">
       <div className="px-4 sm:px-8 py-4 sm:py-6 space-y-3 sm:space-y-4">
@@ -94,10 +100,10 @@ export default async function EditFieldNotePage({
           <Link href={`/projects/${id}`} className="hover:text-white transition-colors">{project.name}</Link>
           <span>/</span>
           <Link href={`/projects/${id}/levels/${levelId}/appunti`} className="hover:text-white transition-colors">
-            {level.name} — Appunti
+            {level.name}
           </Link>
           <span>/</span>
-          <span className="text-white">Modifica #{note.note_number}</span>
+          <span className="text-white">{noteTitle}</span>
         </div>
 
         <div>
@@ -114,7 +120,7 @@ export default async function EditFieldNotePage({
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-bold text-white">
-            ✏️ Modifica Appunto #{note.note_number}
+            ✏️ Modifica {noteTitle}
           </h1>
         </div>
       </div>

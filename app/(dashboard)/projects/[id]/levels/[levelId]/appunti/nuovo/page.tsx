@@ -92,7 +92,7 @@ export default async function LevelNewFieldNotePage({
             href={`/projects/${id}/levels/${levelId}/appunti`}
             className="hover:text-white transition-colors"
           >
-            {level.name} — Appunti
+            {level.name}
           </Link>
           <span>/</span>
           <span className="text-white">Nuovo</span>
