@@ -73,6 +73,8 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   const [searchQuery, setSearchQuery] = useState("");
   const [isPending, startTransition] = useTransition();
 
+  const [activePdfViewerUrl, setActivePdfViewerUrl] = useState<{ url: string; title: string } | null>(null);
+
   // Stati per accordion note, lightbox foto e completamento singola nota
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
   const [activeLightboxUrl, setActiveLightboxUrl] = useState<string | null>(null);
@@ -1150,7 +1152,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                   return (
                     <div 
                       key={note.id}
-                      onClick={handleDownload}
+                      onClick={() => setActivePdfViewerUrl({ url: pdfBase64, title: noteTitle })}
                       className="p-5 bg-white/[0.015] border border-white/5 rounded-2xl flex flex-col justify-between gap-4 hover:bg-white/[0.03] transition-all cursor-pointer select-none"
                       style={{ borderColor: "hsl(220 20% 20% / 0.25)" }}
                     >
@@ -1204,6 +1206,59 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                 </p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Lightbox PDF Pieno Schermo */}
+        {activePdfViewerUrl && (
+          <div className="fixed inset-0 z-[110] flex flex-col bg-black/95 backdrop-blur-md p-4 transition-all duration-300">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10 mb-4 print:hidden">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">📕 {activePdfViewerUrl.title}</h3>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!activePdfViewerUrl.url) {
+                      alert("File PDF non disponibile o vuoto.");
+                      return;
+                    }
+                    try {
+                      const pureBase64 = activePdfViewerUrl.url.includes("base64,") ? activePdfViewerUrl.url.split("base64,")[1] : activePdfViewerUrl.url;
+                      const byteCharacters = atob(pureBase64);
+                      const byteNumbers = new Array(byteCharacters.length);
+                      for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                      }
+                      const byteArray = new Uint8Array(byteNumbers);
+                      const blob = new Blob([byteArray], { type: "application/pdf" });
+                      
+                      const link = document.createElement("a");
+                      link.href = URL.createObjectURL(blob);
+                      const cleanFilename = activePdfViewerUrl.title.trim().replace(/[^a-z0-9]/gi, "_").toLowerCase() || "piano_di_taglio";
+                      link.download = `${cleanFilename}.pdf`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    } catch (err) {
+                      console.error("Errore durante il download del PDF:", err);
+                      alert("Errore durante il download del file PDF.");
+                    }
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs transition-colors shadow-lg cursor-pointer"
+                >
+                  ⬇ Scarica PDF
+                </button>
+                <button
+                  onClick={() => setActivePdfViewerUrl(null)}
+                  className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs transition-colors shadow-lg cursor-pointer"
+                >
+                  Chiudi ✕
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 w-full h-full overflow-hidden bg-white/5 rounded-xl">
+              <embed src={activePdfViewerUrl.url} type="application/pdf" className="w-full h-full rounded-xl" />
+            </div>
           </div>
         )}
       </div>

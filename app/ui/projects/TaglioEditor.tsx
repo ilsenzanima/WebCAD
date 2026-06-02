@@ -523,20 +523,29 @@ export default function TaglioEditor({
         grouped[ref].push(p);
       });
 
-      // 4. Creazione del container temporaneo offscreen a contrasto per la stampa
-      const tempDiv = document.createElement("div");
-      tempDiv.id = "temp-pdf-export-container";
-      tempDiv.style.position = "absolute";
-      tempDiv.style.left = "-9999px";
-      tempDiv.style.top = "-9999px";
-      tempDiv.style.width = "750px"; // Larghezza fissa adatta per A4
-      tempDiv.style.background = "#ffffff";
-      tempDiv.style.color = "#000000";
-      tempDiv.style.padding = "35px";
-      tempDiv.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+      // 4. Creazione documento jsPDF
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
 
-      // 5. Costruzione dell'intestazione e della distinta
-      let htmlContent = `
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      // 5. Creazione di Pagina 1: Dettagli + Distinta pezzi
+      const page1Div = document.createElement("div");
+      page1Div.id = "temp-pdf-page1-container";
+      page1Div.style.position = "absolute";
+      page1Div.style.left = "-9999px";
+      page1Div.style.top = "-9999px";
+      page1Div.style.width = "750px"; // Larghezza fissa adatta per A4
+      page1Div.style.background = "#ffffff";
+      page1Div.style.color = "#000000";
+      page1Div.style.padding = "35px";
+      page1Div.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+
+      let page1Html = `
         <div style="border-bottom: 3px solid #1e3a8a; padding-bottom: 12px; margin-bottom: 20px;">
           <h1 style="margin: 0; color: #1e3a8a; font-size: 24px; font-weight: 800; text-transform: uppercase;">Report Schema di Taglio (Nesting)</h1>
           <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: #4b5563;">
@@ -561,9 +570,8 @@ export default function TaglioEditor({
           <h2 style="margin: 0 0 10px 0; font-size: 14px; color: #0f172a; font-weight: 700; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px;">✂️ Distinta dei Pezzi da Tagliare (Raggruppati per Riferimento)</h2>
       `;
 
-      // Aggiunge tabelle separate per ciascun riferimento
       for (const refName in grouped) {
-        htmlContent += `
+        page1Html += `
           <div style="margin-bottom: 18px; page-break-inside: avoid;">
             <h3 style="margin: 6px 0; font-size: 12px; color: #1e40af; font-weight: 700; display: flex; items-center: center; gap: 4px;">📍 Riferimento: ${refName}</h3>
             <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
@@ -578,7 +586,7 @@ export default function TaglioEditor({
         `;
 
         grouped[refName].forEach((p) => {
-          htmlContent += `
+          page1Html += `
             <tr style="border-bottom: 1px solid #e2e8f0;">
               <td style="padding: 6px 8px; border: 1px solid #e2e8f0; font-family: monospace; font-weight: bold;">${p.b} x ${p.h}</td>
               <td style="padding: 6px 8px; border: 1px solid #e2e8f0; font-family: monospace; font-weight: 700;">${p.q}</td>
@@ -587,168 +595,188 @@ export default function TaglioEditor({
           `;
         });
 
-        htmlContent += `
+        page1Html += `
               </tbody>
             </table>
           </div>
         `;
       }
 
-      htmlContent += `</div>`;
-      tempDiv.innerHTML = htmlContent;
+      page1Html += `</div>`;
+      page1Div.innerHTML = page1Html;
+      document.body.appendChild(page1Div);
 
-      // 6. Generazione e inserimento degli SVG di nesting in scala ad alto contrasto per la stampa
-      nestingResult.sheets.forEach((sheet, idx) => {
-        const totalArea = sheetW * sheetH;
-        const yieldPct = totalArea > 0 ? (sheet.usedArea / totalArea) * 100 : 0;
-
-        const sheetDiv = document.createElement("div");
-        sheetDiv.style.marginTop = "35px";
-        sheetDiv.style.pageBreakInside = "avoid";
-
-        sheetDiv.innerHTML = `
-          <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; font-weight: bold; font-size: 13px; color: #0f172a;">
-            <span>📄 Lastra #${idx + 1} (${sheetW}x${sheetH} mm)</span>
-            <span style="color: #059669; font-family: monospace;">Resa Lastra: ${yieldPct.toFixed(1)}%</span>
-          </div>
-        `;
-
-        const svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svgElement.setAttribute("width", "100%");
-        svgElement.setAttribute("viewBox", `0 0 ${sheetW} ${sheetH}`);
-        svgElement.style.maxHeight = "480px";
-        svgElement.style.border = "1px solid #cbd5e1";
-        svgElement.style.borderRadius = "8px";
-        svgElement.style.background = "#fafafa";
-
-        // Sfondo commerciale
-        const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-        bgRect.setAttribute("width", sheetW.toString());
-        bgRect.setAttribute("height", sheetH.toString());
-        bgRect.setAttribute("fill", "#f3f4f6");
-        bgRect.setAttribute("stroke", "#9ca3af");
-        bgRect.setAttribute("stroke-width", "5");
-        svgElement.appendChild(bgRect);
-
-        // Margine di taglio
-        if (margin > 0) {
-          const marginRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-          marginRect.setAttribute("x", margin.toString());
-          marginRect.setAttribute("y", margin.toString());
-          marginRect.setAttribute("width", (sheetW - margin * 2).toString());
-          marginRect.setAttribute("height", (sheetH - margin * 2).toString());
-          marginRect.setAttribute("fill", "none");
-          marginRect.setAttribute("stroke", "#3b82f6");
-          marginRect.setAttribute("stroke-width", "2");
-          marginRect.setAttribute("stroke-dasharray", "6,6");
-          marginRect.style.opacity = "0.5";
-          svgElement.appendChild(marginRect);
-        }
-
-        // Posizionamento pezzi
-        sheet.placed.forEach((piece) => {
-          const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
-
-          // Rettangolo pezzo
-          const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-          rect.setAttribute("x", piece.x.toString());
-          rect.setAttribute("y", piece.y.toString());
-          rect.setAttribute("width", piece.w.toString());
-          rect.setAttribute("height", piece.h.toString());
-          rect.setAttribute("fill", "#ecfdf5"); // Sfondo verde
-          rect.setAttribute("stroke", "#059669"); // Bordo verde scuro
-          rect.setAttribute("stroke-width", "3");
-          rect.setAttribute("rx", "4");
-          g.appendChild(rect);
-
-          // Testi interni
-          const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-          text.setAttribute("x", (piece.x + piece.w / 2).toString());
-          text.setAttribute("y", (piece.y + piece.h / 2).toString());
-          text.setAttribute("dominant-baseline", "middle");
-          text.setAttribute("text-anchor", "middle");
-          text.setAttribute("fill", "#064e3b");
-          text.setAttribute("font-family", "monospace");
-          text.setAttribute("font-weight", "bold");
-
-          if (piece.w > 120 && piece.h > 80) {
-            text.setAttribute("font-size", Math.max(14, Math.min(28, piece.w / 12)).toString());
-            
-            const tspanDim = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
-            tspanDim.setAttribute("x", (piece.x + piece.w / 2).toString());
-            tspanDim.setAttribute("dy", "-0.3em");
-            tspanDim.textContent = `${piece.w}x${piece.h}`;
-            text.appendChild(tspanDim);
-
-            const tspanLabel = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
-            tspanLabel.setAttribute("x", (piece.x + piece.w / 2).toString());
-            tspanLabel.setAttribute("dy", "1.1em");
-            tspanLabel.setAttribute("font-size", Math.max(9, Math.min(18, piece.w / 16)).toString());
-            tspanLabel.setAttribute("fill", "#047857");
-            tspanLabel.textContent = piece.label.split(" (")[0];
-            text.appendChild(tspanLabel);
-          } else {
-            text.setAttribute("font-size", "10");
-            text.textContent = `${piece.w}x${piece.h}`;
-          }
-
-          g.appendChild(text);
-          svgElement.appendChild(g);
-        });
-
-        sheetDiv.appendChild(svgElement);
-        tempDiv.appendChild(sheetDiv);
-      });
-
-      document.body.appendChild(tempDiv);
-
-      // 7. Renderizzazione DOM su Canvas ad alta densità
-      const canvas = await html2canvas(tempDiv, {
-        scale: 2,
+      const canvas1 = await html2canvas(page1Div, {
+        scale: 1.3,
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
       });
 
-      // Rimuoviamo il container temporaneo
-      document.body.removeChild(tempDiv);
+      const imgData1 = canvas1.toDataURL("image/jpeg", 0.65);
+      document.body.removeChild(page1Div);
 
-      const imgData = canvas.toDataURL("image/jpeg", 0.95);
+      const heightInPdf1 = (canvas1.height * (pdfWidth - 20)) / canvas1.width;
+      pdf.addImage(imgData1, "JPEG", 10, 10, pdfWidth - 20, heightInPdf1);
 
-      // 8. Creazione documento jsPDF
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
+      // 6. Generazione e inserimento degli SVG di nesting a coppie (2 lastre per pagina, affiancate)
+      const sheets = nestingResult.sheets;
+      for (let i = 0; i < sheets.length; i += 2) {
+        const pair = sheets.slice(i, i + 2);
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      
-      const imgWidth = canvas.width;
-      const imgHeight = canvas.height;
-      
-      // Calcolo paginazione proporzionale
-      const ratio = (pdfWidth - 20) / (imgWidth / 2);
-      const heightInPdf = (imgHeight / 2) * ratio;
+        const sheetsDiv = document.createElement("div");
+        sheetsDiv.id = `temp-pdf-sheets-container-${i}`;
+        sheetsDiv.style.position = "absolute";
+        sheetsDiv.style.left = "-9999px";
+        sheetsDiv.style.top = "-9999px";
+        sheetsDiv.style.width = "750px";
+        sheetsDiv.style.background = "#ffffff";
+        sheetsDiv.style.color = "#000000";
+        sheetsDiv.style.padding = "35px";
+        sheetsDiv.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
-      let heightLeft = heightInPdf;
-      let position = 10;
+        let sheetsHtml = `
+          <div style="border-bottom: 3px solid #1e3a8a; padding-bottom: 12px; margin-bottom: 20px;">
+            <h1 style="margin: 0; color: #1e3a8a; font-size: 20px; font-weight: 800; text-transform: uppercase;">Schemi di Taglio (Nesting)</h1>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: #4b5563;">
+              <span><strong>Configurazione:</strong> ${title.trim() || "Taglio Parametrico"}</span>
+              <span><strong>Lastre:</strong> ${i + 1} - ${Math.min(i + 2, sheets.length)} di ${sheets.length}</span>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; align-items: start;">
+        `;
 
-      pdf.addImage(imgData, "JPEG", 10, position, pdfWidth - 20, heightInPdf);
-      heightLeft -= (pdfHeight - 20);
+        pair.forEach((sheet, indexInPair) => {
+          const sheetIdx = i + indexInPair;
+          const totalArea = sheetW * sheetH;
+          const yieldPct = totalArea > 0 ? (sheet.usedArea / totalArea) * 100 : 0;
 
-      while (heightLeft > 0) {
-        position = heightLeft - heightInPdf + 10;
+          sheetsHtml += `
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; font-weight: bold; font-size: 12px; color: #0f172a;">
+                <span>📄 Lastra #${sheetIdx + 1}</span>
+                <span style="color: #059669; font-family: monospace;">Resa: ${yieldPct.toFixed(1)}%</span>
+              </div>
+              <div style="font-size: 10px; color: #64748b; margin-bottom: 4px;">Dimensioni: ${sheetW} x ${sheetH} mm</div>
+              <div id="svg-container-${sheetIdx}" style="width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; background: #fafafa; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                <!-- SVG caricato via DOM -->
+              </div>
+            </div>
+          `;
+        });
+
+        sheetsHtml += `</div>`;
+        sheetsDiv.innerHTML = sheetsHtml;
+        document.body.appendChild(sheetsDiv);
+
+        // Ora creiamo e appendiamo gli SVG nel container
+        pair.forEach((sheet, indexInPair) => {
+          const sheetIdx = i + indexInPair;
+          const container = sheetsDiv.querySelector(`#svg-container-${sheetIdx}`);
+          if (container) {
+            const svgElement = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svgElement.setAttribute("width", "100%");
+            svgElement.setAttribute("viewBox", `0 0 ${sheetW} ${sheetH}`);
+            svgElement.style.display = "block";
+            svgElement.style.background = "#fafafa";
+
+            // Sfondo lastra
+            const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            bgRect.setAttribute("width", sheetW.toString());
+            bgRect.setAttribute("height", sheetH.toString());
+            bgRect.setAttribute("fill", "#f3f4f6");
+            bgRect.setAttribute("stroke", "#9ca3af");
+            bgRect.setAttribute("stroke-width", "5");
+            svgElement.appendChild(bgRect);
+
+            // Margini interni
+            if (margin > 0) {
+              const marginRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+              marginRect.setAttribute("x", margin.toString());
+              marginRect.setAttribute("y", margin.toString());
+              marginRect.setAttribute("width", (sheetW - margin * 2).toString());
+              marginRect.setAttribute("height", (sheetH - margin * 2).toString());
+              marginRect.setAttribute("fill", "none");
+              marginRect.setAttribute("stroke", "#3b82f6");
+              marginRect.setAttribute("stroke-width", "2");
+              marginRect.setAttribute("stroke-dasharray", "6,6");
+              marginRect.style.opacity = "0.5";
+              svgElement.appendChild(marginRect);
+            }
+
+            // Posizionamento dei singoli pezzi
+            sheet.placed.forEach((piece) => {
+              const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+
+              const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+              rect.setAttribute("x", piece.x.toString());
+              rect.setAttribute("y", piece.y.toString());
+              rect.setAttribute("width", piece.w.toString());
+              rect.setAttribute("height", piece.h.toString());
+              rect.setAttribute("fill", "#ecfdf5"); // Sfondo verde
+              rect.setAttribute("stroke", "#059669"); // Bordo verde
+              rect.setAttribute("stroke-width", "3");
+              rect.setAttribute("rx", "4");
+              g.appendChild(rect);
+
+              const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+              text.setAttribute("x", (piece.x + piece.w / 2).toString());
+              text.setAttribute("y", (piece.y + piece.h / 2).toString());
+              text.setAttribute("dominant-baseline", "middle");
+              text.setAttribute("text-anchor", "middle");
+              text.setAttribute("fill", "#064e3b");
+              text.setAttribute("font-family", "monospace");
+              text.setAttribute("font-weight", "bold");
+
+              if (piece.w > 120 && piece.h > 80) {
+                text.setAttribute("font-size", Math.max(14, Math.min(28, piece.w / 12)).toString());
+
+                const tspanDim = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                tspanDim.setAttribute("x", (piece.x + piece.w / 2).toString());
+                tspanDim.setAttribute("dy", "-0.3em");
+                tspanDim.textContent = `${piece.w}x${piece.h}`;
+                text.appendChild(tspanDim);
+
+                const tspanLabel = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+                tspanLabel.setAttribute("x", (piece.x + piece.w / 2).toString());
+                tspanLabel.setAttribute("dy", "1.1em");
+                tspanLabel.setAttribute("font-size", Math.max(9, Math.min(18, piece.w / 16)).toString());
+                tspanLabel.setAttribute("fill", "#047857");
+                tspanLabel.textContent = piece.label.split(" (")[0];
+                text.appendChild(tspanLabel);
+              } else {
+                text.setAttribute("font-size", "10");
+                text.textContent = `${piece.w}x${piece.h}`;
+              }
+
+              g.appendChild(text);
+              svgElement.appendChild(g);
+            });
+
+            container.appendChild(svgElement);
+          }
+        });
+
+        // Eseguiamo il render
+        const canvasSheets = await html2canvas(sheetsDiv, {
+          scale: 1.3,
+          useCORS: true,
+          logging: false,
+          backgroundColor: "#ffffff",
+        });
+
+        const imgDataSheets = canvasSheets.toDataURL("image/jpeg", 0.65);
+        document.body.removeChild(sheetsDiv);
+
         pdf.addPage();
-        pdf.addImage(imgData, "JPEG", 10, position, pdfWidth - 20, heightInPdf);
-        heightLeft -= (pdfHeight - 20);
+        const heightInPdfSheets = (canvasSheets.height * (pdfWidth - 20)) / canvasSheets.width;
+        pdf.addImage(imgDataSheets, "JPEG", 10, 10, pdfWidth - 20, heightInPdfSheets);
       }
 
-      // Estraiamo il file in formato Base64
-      const pdfBase64 = pdf.output("datauristring").split(",")[1];
+      // Estraiamo il file in formato Base64 URI String completo
+      const pdfBase64Uri = pdf.output("datauristring");
 
-      // 9. Salvataggio della nota di tipo "PDF" nel cantiere (offline-first)
+      // 7. Salvataggio della nota di tipo "PDF" nel cantiere (offline-first)
       const pdfNoteId = generateTempId();
       const levelId = noteToUse.level_id || initialNote.level_id || generateTempId();
 
@@ -759,8 +787,8 @@ export default function TaglioEditor({
           sort_order: 0,
         },
         {
-          item_type: "foto" as const, // Memorizziamo il file all'interno del campo text Base64
-          value_text: `data:application/pdf;base64,${pdfBase64}`,
+          item_type: "foto" as const, // Memorizziamo il file PDF Base64 nel campo text
+          value_text: pdfBase64Uri,
           sort_order: 1,
         }
       ];
@@ -773,11 +801,10 @@ export default function TaglioEditor({
         "PDF"
       );
 
-      // 10. Download nativo del file PDF per l'utente
-      const safeFilename = `${title.trim().replace(/[^a-z0-9]/gi, "_").toLowerCase() || "piano_di_taglio"}.pdf`;
-      pdf.save(safeFilename);
-
-      alert(`Il PDF "${safeFilename}" è stato scaricato ed archiviato nel cantiere con successo!`);
+      alert(`Il PDF "${title.trim() || "Piano di Taglio"}" è stato generato e archiviato nel cantiere con successo! Ora puoi leggerlo online nel tab "PDF".`);
+      
+      // Reindirizza al cantiere per vedere il PDF caricato
+      router.push(`/projects/${projectId}`);
     } catch (err) {
       console.error("Errore durante l'esportazione del PDF:", err);
       alert("Impossibile completare la generazione ed esportazione del PDF.");
