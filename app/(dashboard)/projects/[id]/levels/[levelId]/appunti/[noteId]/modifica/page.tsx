@@ -82,9 +82,13 @@ export default async function EditFieldNotePage({
     field_note_items: [],
   };
 
-  // Titolo: type_name (impostato dall'utente) → testo item 'nota' → numero progressivo
+  // Titolo:  // type_name personalizzato (es. "polo") → testo item 'nota' → numero progressivo
+  // "Appunti Cantiere" è il default generico: ignoralo come titolo
   const notaItem = note.field_note_items?.find((i: any) => i.item_type === "nota" && i.value_text?.trim());
-  const noteTitle = (note as any).type_name?.trim() || notaItem?.value_text?.trim() || `Appunto #${note.note_number}`;
+  const customType = (note as any).type_name?.trim();
+  const noteTitle = (customType && customType !== "Appunti Cantiere")
+    ? customType
+    : notaItem?.value_text?.trim() || `Appunto #${note.note_number}`;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto w-full animate-fade-in pb-4">
