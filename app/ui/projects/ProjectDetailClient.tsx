@@ -123,7 +123,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   const levelsToUse = mounted && cachedLevels && cachedLevels.length > 0 ? cachedLevels : drawings;
   const cachedFieldNotes = useOfflineStore((state) => state.fieldNotes);
 
-  const [activeTab, setActiveTab] = useState<"note" | "tagli">("note");
+  const [activeTab, setActiveTab] = useState<"note" | "tagli" | "pdf">("note");
 
   // Unisce le note caricate dal server con quelle presenti nello store offline per questo progetto
   const projectNotes = useMemo(() => {
@@ -140,11 +140,15 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   }, [notesList, cachedFieldNotes, project.id, mounted]);
 
   const standardNotes = useMemo(() => {
-    return projectNotes.filter((n) => n.type_name !== "Taglio");
+    return projectNotes.filter((n) => n.type_name !== "Taglio" && n.type_name !== "PDF");
   }, [projectNotes]);
 
   const taglioNotes = useMemo(() => {
     return projectNotes.filter((n) => n.type_name === "Taglio");
+  }, [projectNotes]);
+
+  const pdfNotes = useMemo(() => {
+    return projectNotes.filter((n) => n.type_name === "PDF");
   }, [projectNotes]);
 
   // Raggruppa le note per livello
@@ -706,11 +710,22 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
         >
           ✂️ Piani di Taglio ({taglioNotes.length})
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("pdf")}
+          className={`pb-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            activeTab === "pdf"
+              ? "border-[hsl(220,90%,56%)] text-white"
+              : "border-transparent text-white/40 hover:text-white/70"
+          }`}
+        >
+          📄 PDF ({pdfNotes.length})
+        </button>
       </div>
 
       {/* ── Contenuto Schede ── */}
       <div className="flex-1 p-4 sm:p-8 space-y-6 sm:space-y-8 overflow-y-auto">
-        {activeTab === "note" ? (
+        {activeTab === "note" && (
           groupedNotes.sortedPiani.length > 0 ? (
             groupedNotes.sortedPiani.map((pianoName) => (
               <div key={pianoName} className="space-y-2.5">
@@ -986,7 +1001,9 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
               <p className="text-sm" style={{ color: "hsl(215 15% 50%)" }}>Nessun appunto o disegno trovato.</p>
             </div>
           )
-        ) : (
+        )}
+
+        {activeTab === "tagli" && (
           /* ── Tab Tagli Raggruppati ── */
           <div className="space-y-4">
             {taglioNotes.length > 0 ? (
@@ -1076,6 +1093,115 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                 >
                   Crea Primo Taglio
                 </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "pdf" && (
+          /* ── Tab Documenti PDF ── */
+          <div className="space-y-4">
+            {pdfNotes.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {pdfNotes.map((note) => {
+                  const titleItem = note.field_note_items?.find(i => i.item_type === "nota" && i.sort_order === 0);
+                  const noteTitle = titleItem?.value_text?.replace("PDF: ", "") || `Documento #${note.note_number}`;
+                  
+                  const fileItem = note.field_note_items?.find(i => i.item_type === "foto" && i.value_text?.startsWith("data:application/pdf"));
+                  const pdfBase64 = fileItem?.value_text || "";
+
+                  const formattedDate = mounted ? new Date(note.created_at).toLocaleDateString("it-IT", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }) : "—";
+
+                  const handleDownload = (e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    if (!pdfBase64) {
+                      alert("File PDF non disponibile o vuoto.");
+                      return;
+                    }
+                    try {
+                      const pureBase64 = pdfBase64.includes("base64,") ? pdfBase64.split("base64,")[1] : pdfBase64;
+                      const byteCharacters = atob(pureBase64);
+                      const byteNumbers = new Array(byteCharacters.length);
+                      for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                      }
+                      const byteArray = new Uint8Array(byteNumbers);
+                      const blob = new Blob([byteArray], { type: "application/pdf" });
+                      
+                      const link = document.createElement("a");
+                      link.href = URL.createObjectURL(blob);
+                      const cleanFilename = noteTitle.trim().replace(/[^a-z0-9]/gi, "_").toLowerCase() || "piano_di_taglio";
+                      link.download = `${cleanFilename}.pdf`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    } catch (err) {
+                      console.error("Errore durante il download del PDF:", err);
+                      alert("Errore durante il download del file PDF.");
+                    }
+                  };
+
+                  return (
+                    <div 
+                      key={note.id}
+                      onClick={handleDownload}
+                      className="p-5 bg-white/[0.015] border border-white/5 rounded-2xl flex flex-col justify-between gap-4 hover:bg-white/[0.03] transition-all cursor-pointer select-none"
+                      style={{ borderColor: "hsl(220 20% 20% / 0.25)" }}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span
+                            className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                            style={{ background: "rgba(239, 68, 68, 0.15)", color: "#ef4444", border: "1px solid rgba(239, 68, 68, 0.2)" }}
+                          >
+                            📄 PDF Document
+                          </span>
+                          <span className="text-[10px] text-white/40">{formattedDate}</span>
+                        </div>
+                        <h4 className="text-sm font-bold text-white leading-snug flex items-center gap-2">
+                          <span className="text-red-500 text-base">📕</span>
+                          <span className="truncate">{noteTitle}</span>
+                        </h4>
+                      </div>
+                      
+                      <div className="flex justify-end gap-2 border-t border-white/5 pt-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm("Sei sicuro di voler eliminare definitivamente questo documento PDF?")) {
+                              useOfflineStore.getState().deleteFieldNoteOptimistic(note.id, project.id);
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-xl text-xs font-semibold text-red-400 hover:bg-red-500/10 border border-red-500/10 transition-colors"
+                        >
+                          Elimina
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDownload}
+                          className="px-4 py-1.5 rounded-xl text-xs font-semibold text-white transition-all bg-[hsl(220,90%,56%)] hover:bg-[hsl(220,85%,48%)] active:scale-95 cursor-pointer flex items-center gap-1.5"
+                        >
+                          <span>⬇</span> Scarica PDF
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-16 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.01]">
+                <div className="text-3xl mb-3">📄</div>
+                <h4 className="text-sm font-bold text-white mb-1">Nessun documento PDF salvato</h4>
+                <p className="text-xs text-white/40 max-w-xs mx-auto mb-4">
+                  I PDF generati e scaricati dall'officina di taglio verranno archiviati qui automaticamente.
+                </p>
               </div>
             )}
           </div>
