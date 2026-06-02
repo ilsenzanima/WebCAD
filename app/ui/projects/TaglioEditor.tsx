@@ -218,7 +218,7 @@ export default function TaglioEditor({
       return { sheets: [], totalPieces: 0, efficiency: 0 };
     }
 
-    // Ordina i pezzi per area decrescente
+    // Ordina i pezzi per area decrescente per massimizzare il rendimento del packing
     const sorted = [...sheetRequests].sort((a, b) => (b.width * b.height) - (a.width * a.height));
     const sheets: PackedSheet[] = [];
     const freeRectsByBoard: FreeRect[][] = [];
@@ -229,107 +229,168 @@ export default function TaglioEditor({
       return sheets.length - 1;
     };
 
-    const tryPlacement = (reqW: number, reqH: number, boardIndex: number, freeRectIndex: number, freeRect: FreeRect, rotated: boolean): PlacementCandidate | null => {
-      const pW = rotated ? reqH : reqW;
-      const pH = rotated ? reqW : reqH;
-      if (pW > freeRect.w || pH > freeRect.h) return null;
-      return { boardIndex, freeRectIndex, rotated, x: freeRect.x, y: freeRect.y, w: pW, h: pH };
+    // Helper per verificare se un rettangolo A contiene completamente un rettangolo B
+    const contains = (a: FreeRect, b: FreeRect): boolean => {
+      return (
+        b.x >= a.x &&
+        b.y >= a.y &&
+        b.x + b.w <= a.x + a.w &&
+        b.y + b.h <= a.y + a.h
+      );
     };
 
-    // FFD algorithm
-    sorted.forEach((req) => {
-      let best: PlacementCandidate | null = null;
+    // Helper per rimuovere rettangoli ridondanti (completamente contenuti in altri)
+    const pruneFreeRectangles = (boardIdx: number) => {
+      const rects = freeRectsByBoard[boardIdx];
+      for (let i = 0; i < rects.length; i++) {
+        for (let j = i + 1; j < rects.length; j++) {
+          if (contains(rects[i], rects[j])) {
+            rects.splice(j, 1);
+            j--;
+          } else if (contains(rects[j], rects[i])) {
+            rects.splice(i, 1);
+            i--;
+            break;
+          }
+        }
+      }
+    };
 
+    // Split di un rettangolo libero F in base a un rettangolo occupato P (tenendo conto del kerf)
+    const splitFreeRect = (f: FreeRect, p: { x: number; y: number; w: number; h: number }): FreeRect[] => {
+      // Bounding box occupato allargato di 'kerf' a destra e in basso per garantire la spaziatura
+      const pW = p.w + kerf;
+      const pH = p.h + kerf;
+
+      // Verifica se non c'è intersezione
+      if (p.x >= f.x + f.w || p.x + pW <= f.x || p.y >= f.y + f.h || p.y + pH <= f.y) {
+        return [f];
+      }
+
+      const result: FreeRect[] = [];
+
+      // Split Top
+      if (p.y > f.y && p.y < f.y + f.h) {
+        result.push({ x: f.x, y: f.y, w: f.w, h: p.y - f.y });
+      }
+      // Split Bottom
+      if (p.y + pH < f.y + f.h) {
+        result.push({ x: f.x, y: p.y + pH, w: f.w, h: f.y + f.h - (p.y + pH) });
+      }
+      // Split Left
+      if (p.x > f.x && p.x < f.x + f.w) {
+        result.push({ x: f.x, y: f.y, w: p.x - f.x, h: f.h });
+      }
+      // Split Right
+      if (p.x + pW < f.x + f.w) {
+        result.push({ x: p.x + pW, y: f.y, w: f.x + f.w - (p.x + pW), h: f.h });
+      }
+
+      return result;
+    };
+
+    // Algoritmo MaxRects con euristica Best Short Side Fit
+    sorted.forEach((req) => {
+      let bestSheetIdx = -1;
+      let bestRectIdx = -1;
+      let bestScore = Infinity;
+      let bestX = 0;
+      let bestY = 0;
+      let bestW = 0;
+      let bestH = 0;
+      let bestRotated = false;
+
+      // Cerca la migliore collocazione tra tutti i fogli attuali
       for (let s = 0; s < sheets.length; s++) {
         const rects = freeRectsByBoard[s];
         for (let r = 0; r < rects.length; r++) {
           const fr = rects[r];
-          // Prova normale
-          const candNormal = tryPlacement(req.width, req.height, s, r, fr, false);
-          if (candNormal) {
-            if (!best || candNormal.y < best.y || (candNormal.y === best.y && candNormal.x < best.x)) {
-              best = candNormal;
+
+          // Prova orientamento normale
+          if (req.width <= fr.w && req.height <= fr.h) {
+            const leftW = fr.w - req.width;
+            const leftH = fr.h - req.height;
+            const score = Math.min(leftW, leftH); // Euristica BSSF
+            if (score < bestScore) {
+              bestScore = score;
+              bestSheetIdx = s;
+              bestRectIdx = r;
+              bestX = fr.x;
+              bestY = fr.y;
+              bestW = req.width;
+              bestH = req.height;
+              bestRotated = false;
             }
           }
-          // Prova ruotato
-          const candRot = tryPlacement(req.width, req.height, s, r, fr, true);
-          if (candRot) {
-            if (!best || candRot.y < best.y || (candRot.y === best.y && candRot.x < best.x)) {
-              best = candRot;
+
+          // Prova orientamento ruotato
+          if (req.height <= fr.w && req.width <= fr.h) {
+            const leftW = fr.w - req.height;
+            const leftH = fr.h - req.width;
+            const score = Math.min(leftW, leftH);
+            if (score < bestScore) {
+              bestScore = score;
+              bestSheetIdx = s;
+              bestRectIdx = r;
+              bestX = fr.x;
+              bestY = fr.y;
+              bestW = req.height;
+              bestH = req.width;
+              bestRotated = true;
             }
           }
         }
       }
 
-      // Se nessun foglio esistente va bene, ne creiamo uno nuovo
-      if (!best) {
-        const s = createSheet();
-        const fr = freeRectsByBoard[s][0];
-        const cand = tryPlacement(req.width, req.height, s, 0, fr, false) || tryPlacement(req.width, req.height, s, 0, fr, true);
-        if (cand) best = cand;
-      }
-
-      if (best) {
-        const s = best.boardIndex;
-        const r = best.freeRectIndex;
-        const fr = freeRectsByBoard[s][r];
-
-        // Rimuove il rettangolo libero consumato
-        freeRectsByBoard[s].splice(r, 1);
-
-        // Aggiunge il pezzo posizionato
-        sheets[s].placed.push({
-          x: best.x,
-          y: best.y,
-          w: best.w,
-          h: best.h,
-          label: req.label,
-          rotated: best.rotated,
-        });
-        sheets[s].usedArea += best.w * best.h;
-
-        // Taglio ghigliottina (split) del rettangolo libero residuo
-        const remW = fr.w - best.w;
-        const remH = fr.h - best.h;
-
-        if (remW > remH) {
-          // Split verticale primario
-          if (remW > 0) {
-            freeRectsByBoard[s].push({
-              x: fr.x + best.w + kerf,
-              y: fr.y,
-              w: remW - kerf,
-              h: fr.h,
-            });
-          }
-          if (remH > 0) {
-            freeRectsByBoard[s].push({
-              x: fr.x,
-              y: fr.y + best.h + kerf,
-              w: best.w,
-              h: remH - kerf,
-            });
-          }
+      // Se nessun foglio può ospitare il pezzo, ne creiamo uno nuovo
+      if (bestSheetIdx === -1) {
+        bestSheetIdx = createSheet();
+        const fr = freeRectsByBoard[bestSheetIdx][0];
+        
+        // Verifica se il pezzo ci sta nel nuovo foglio vuoto
+        if (req.width <= fr.w && req.height <= fr.h) {
+          bestX = fr.x;
+          bestY = fr.y;
+          bestW = req.width;
+          bestH = req.height;
+          bestRotated = false;
+        } else if (req.height <= fr.w && req.width <= fr.h) {
+          bestX = fr.x;
+          bestY = fr.y;
+          bestW = req.height;
+          bestH = req.width;
+          bestRotated = true;
         } else {
-          // Split orizzontale primario
-          if (remH > 0) {
-            freeRectsByBoard[s].push({
-              x: fr.x,
-              y: fr.y + best.h + kerf,
-              w: fr.w,
-              h: remH - kerf,
-            });
-          }
-          if (remW > 0) {
-            freeRectsByBoard[s].push({
-              x: fr.x + best.w + kerf,
-              y: fr.y,
-              w: remW - kerf,
-              h: best.h,
-            });
-          }
+          // Il pezzo è più grande del foglio intero, lo ignoriamo per evitare crash
+          return;
         }
       }
+
+      // Piazziamo il pezzo nel foglio selezionato
+      const s = bestSheetIdx;
+      sheets[s].placed.push({
+        x: bestX,
+        y: bestY,
+        w: bestW,
+        h: bestH,
+        label: req.label,
+        rotated: bestRotated,
+      });
+      sheets[s].usedArea += bestW * bestH;
+
+      // Aggiorniamo i rettangoli liberi del foglio s
+      const placedBox = { x: bestX, y: bestY, w: bestW, h: bestH };
+      const newFreeRects: FreeRect[] = [];
+      
+      freeRectsByBoard[s].forEach((fr) => {
+        const splits = splitFreeRect(fr, placedBox);
+        newFreeRects.push(...splits);
+      });
+
+      freeRectsByBoard[s] = newFreeRects;
+
+      // Rimuoviamo i rettangoli ridondanti
+      pruneFreeRectangles(s);
     });
 
     // Calcola il rendimento totale
