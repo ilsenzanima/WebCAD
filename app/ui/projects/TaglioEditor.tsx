@@ -1,11 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
 import type { FieldNote, FieldNoteItem, FieldNoteType } from "@/app/actions/field-notes";
 import type { Material } from "@/lib/types/database";
-import { runNesting, PIECE_COLORS } from "@/lib/utils/nesting";
 
 interface Props {
   projectId: string;
@@ -33,9 +32,6 @@ export default function TaglioEditor({
   const [mounted, setMounted] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [isDataActual, setIsDataActual] = useState(false);
-  // Navigazione fogli e tab mobile
-  const [sheetIndex, setSheetIndex] = useState(0);
-  const [mobileTab, setMobileTab] = useState<"pezzi" | "canvas" | "bom">("pezzi");
 
   useEffect(() => {
     setMounted(true);
@@ -273,7 +269,7 @@ export default function TaglioEditor({
       const pW = p.w + kerf;
       const pH = p.h + kerf;
 
-      // Verifica se non c'Ã¨ intersezione
+      // Verifica se non c'è intersezione
       if (p.x >= f.x + f.w || p.x + pW <= f.x || p.y >= f.y + f.h || p.y + pH <= f.y) {
         return [f];
       }
@@ -381,7 +377,7 @@ export default function TaglioEditor({
         }
       }
 
-      // Se nessun foglio puÃ² ospitare il pezzo, ne creiamo uno nuovo
+      // Se nessun foglio può ospitare il pezzo, ne creiamo uno nuovo
       if (bestSheetIdx === -1) {
         bestSheetIdx = createSheet();
         const fr = freeRectsByBoard[bestSheetIdx][0];
@@ -400,7 +396,7 @@ export default function TaglioEditor({
           bestH = req.width;
           bestRotated = true;
         } else {
-          // Il pezzo Ã¨ piÃ¹ grande del foglio intero, lo ignoriamo per evitare crash
+          // Il pezzo è più grande del foglio intero, lo ignoriamo per evitare crash
           return;
         }
       }
@@ -442,23 +438,6 @@ export default function TaglioEditor({
 
     return { sheets, totalPieces: sheetRequests.length, efficiency };
   }, [pieces, sheetW, sheetH, kerf, margin]);
-
-  // Usa runNesting per ottenere dati con pieceIndex (per i colori)
-  const nestingFull = useMemo(
-    () => runNesting(pieces, { sheetW, sheetH, kerf, margin }),
-    [pieces, sheetW, sheetH, kerf, margin]
-  );
-
-  // Reset sheetIndex se il numero di fogli cambia
-  useEffect(() => {
-    if (sheetIndex >= nestingFull.sheets.length && nestingFull.sheets.length > 0) {
-      setSheetIndex(nestingFull.sheets.length - 1);
-    }
-  }, [nestingFull.sheets.length, sheetIndex]);
-
-  const effColor = (e: number) =>
-    e > 72 ? "hsl(142 71% 45%)" : e > 50 ? "hsl(38 92% 50%)" : "hsl(0 84% 60%)";
-
 
   // --- Salva & Sincronizza ---
   const handleSave = () => {
@@ -581,7 +560,7 @@ export default function TaglioEditor({
         </div>
 
         <div style="margin-bottom: 20px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 15px;">
-          <h2 style="margin: 0 0 10px 0; font-size: 14px; color: #0f172a; font-weight: 700;">ðŸ“‹ Dettagli Configurazione Lastre</h2>
+          <h2 style="margin: 0 0 10px 0; font-size: 14px; color: #0f172a; font-weight: 700;">📋 Dettagli Configurazione Lastre</h2>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px; color: #334155;">
             <div><strong>Nome Configurazione:</strong> ${title.trim() || "Taglio Parametrico"}</div>
             <div><strong>Materiale Lastra:</strong> ${materialFilter || "Nessuno (Generico)"}</div>
@@ -593,19 +572,19 @@ export default function TaglioEditor({
         </div>
 
         <div style="margin-bottom: 25px;">
-          <h2 style="margin: 0 0 10px 0; font-size: 14px; color: #0f172a; font-weight: 700; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px;">âœ‚ï¸ Distinta dei Pezzi da Tagliare (Raggruppati per Riferimento)</h2>
+          <h2 style="margin: 0 0 10px 0; font-size: 14px; color: #0f172a; font-weight: 700; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px;">✂️ Distinta dei Pezzi da Tagliare (Raggruppati per Riferimento)</h2>
       `;
 
       for (const refName in grouped) {
         page1Html += `
           <div style="margin-bottom: 18px; page-break-inside: avoid;">
-            <h3 style="margin: 6px 0; font-size: 12px; color: #1e40af; font-weight: 700; display: flex; items-center: center; gap: 4px;">ðŸ“ Riferimento: ${refName}</h3>
+            <h3 style="margin: 6px 0; font-size: 12px; color: #1e40af; font-weight: 700; display: flex; items-center: center; gap: 4px;">📍 Riferimento: ${refName}</h3>
             <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
               <thead>
                 <tr style="background-color: #f1f5f9; border-bottom: 1.5px solid #cbd5e1; font-weight: bold; color: #475569;">
                   <th style="padding: 6px 8px; border: 1px solid #e2e8f0;">Dimensioni Pezzo (Base x Altezza)</th>
-                  <th style="padding: 6px 8px; border: 1px solid #e2e8f0;">QuantitÃ  (Q)</th>
-                  <th style="padding: 6px 8px; border: 1px solid #e2e8f0;">UnitÃ </th>
+                  <th style="padding: 6px 8px; border: 1px solid #e2e8f0;">Quantità (Q)</th>
+                  <th style="padding: 6px 8px; border: 1px solid #e2e8f0;">Unità</th>
                 </tr>
               </thead>
               <tbody>
@@ -680,7 +659,7 @@ export default function TaglioEditor({
           sheetsHtml += `
             <div style="display: flex; flex-direction: column; gap: 8px;">
               <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #e2e8f0; padding-bottom: 4px; font-weight: bold; font-size: 12px; color: #0f172a;">
-                <span>ðŸ“„ Lastra #${sheetIdx + 1}</span>
+                <span>📄 Lastra #${sheetIdx + 1}</span>
                 <span style="color: #059669; font-family: monospace;">Resa: ${yieldPct.toFixed(1)}%</span>
               </div>
               <div style="font-size: 10px; color: #64748b; margin-bottom: 4px;">Dimensioni: ${sheetW} x ${sheetH} mm</div>
@@ -827,7 +806,7 @@ export default function TaglioEditor({
         "PDF"
       );
 
-      alert(`Il PDF "${title.trim() || "Piano di Taglio"}" Ã¨ stato generato e archiviato nel cantiere con successo! Ora puoi leggerlo online nel tab "PDF".`);
+      alert(`Il PDF "${title.trim() || "Piano di Taglio"}" è stato generato e archiviato nel cantiere con successo! Ora puoi leggerlo online nel tab "PDF".`);
       
       // Reindirizza al cantiere per vedere il PDF caricato
       router.push(`/projects/${projectId}`);
@@ -840,352 +819,497 @@ export default function TaglioEditor({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "hsl(222 47% 6%)", overflow: "hidden" }}>
+    <div className="space-y-6">
       {isGeneratingPDF && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[200] flex flex-col items-center justify-center gap-4 text-white">
           <div className="w-12 h-12 rounded-full border-4 border-t-red-500 border-white/10 animate-spin" />
-          <div className="text-sm font-bold tracking-wide">Generazione PDF in corso...</div>
+          <div className="text-sm font-bold tracking-wide">Generazione e archiviazione PDF in corso...</div>
+          <div className="text-xs text-white/40">Questo processo potrebbe richiedere qualche secondo per l'alta risoluzione</div>
         </div>
       )}
-      <header style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 16px", height: 56, flexShrink: 0, background: "hsl(220 32% 10%)", borderBottom: "1px solid hsl(220 20% 22%)" }}>
-        <button onClick={() => router.back()} style={{ display: "flex", alignItems: "center", gap: 4, color: "hsl(215 20% 65%)", fontSize: 12, background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>
-          <svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M7 1L1 7L7 13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          <span>Tagli</span>
-        </button>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} autoComplete="off"
-          style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: "hsl(210 40% 96%)", fontSize: 14, fontWeight: 700, minWidth: 0 }}
-          onFocus={(e) => { e.target.style.background = "hsl(220 26% 14%)"; e.target.style.padding = "2px 8px"; e.target.style.borderRadius = "6px"; }}
-          onBlur={(e) => { e.target.style.background = "transparent"; e.target.style.padding = "0"; }}
-        />
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-          <button onClick={handleSave} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "all 0.2s", border: `1px solid ${saveStatus === "saved" ? "hsl(142 71% 45%)" : "hsl(220 20% 22%)"}`, background: saveStatus === "saved" ? "hsla(142,71%,45%,0.15)" : "hsl(220 22% 18%)", color: saveStatus === "saved" ? "hsl(142 71% 45%)" : "hsl(210 40% 96%)" }}>
-            {saveStatus === "saving" ? "Salvataggio..." : saveStatus === "saved" ? "Salvato" : "Salva"}
-          </button>
-          <button onClick={handleSaveAndExportPDF} disabled={isGeneratingPDF} style={{ padding: "6px 16px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "none", background: "hsl(220 90% 56%)", color: "#fff", cursor: "pointer", opacity: isGeneratingPDF ? 0.6 : 1 }}>Esporta PDF</button>
-          <button onClick={handleDeletePlan} title="Elimina piano" style={{ padding: "6px 10px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "1px solid hsl(0 84% 60% / 0.3)", background: "transparent", color: "hsl(0 84% 60%)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          </button>
+      {/* ── Sezione Configurazione Parametri Lastre ── */}
+      <div
+        className="rounded-2xl p-4 sm:p-5 grid grid-cols-2 md:grid-cols-5 gap-4 items-end print:hidden"
+        style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
+      >
+        <div className="col-span-2 md:col-span-1">
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1">
+            Nome Configurazione
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full px-3 py-2 rounded-xl text-xs font-semibold outline-none"
+            style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 22%)", color: "white" }}
+            placeholder="es. Piano Primo, Lotto A"
+          />
+          <span className="block mt-1 text-[9px] text-white/30 leading-tight">
+            Identifica questo specifico piano di taglio (es: "Cucina", "Spalle").
+          </span>
         </div>
-      </header>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div className="hidden md:flex" style={{ flex: 1, overflow: "hidden" }}>
-          <div style={{ width: 300, flexShrink: 0, display: "flex", flexDirection: "column", background: "hsl(220 32% 10%)", borderRight: "1px solid hsl(220 20% 22%)", overflow: "hidden" }}>
-            <div style={{ padding: "12px 16px", borderBottom: "1px solid hsl(220 20% 22%)", flexShrink: 0 }}>
-              <p style={{ fontSize: 10, fontWeight: 700, color: "hsl(220 15% 35%)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Parametri Foglio</p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                {([{ k: "W", label: "Larghezza", val: sheetW, set: setSheetW }, { k: "H", label: "Altezza", val: sheetH, set: setSheetH }, { k: "K", label: "Lama kerf", val: kerf, set: setKerf }, { k: "M", label: "Margine", val: margin, set: setMargin }] as const).map((p) => (
-                  <div key={p.k}>
-                    <label style={{ fontSize: 10, fontWeight: 700, color: "hsl(220 15% 35%)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 2 }}>{p.label} <span style={{ fontWeight: 400 }}>mm</span></label>
-                    <input type="number" value={p.val} autoComplete="off" onChange={(e) => p.set(parseFloat(e.target.value) || 0)}
-                      style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", borderRadius: 8, color: "hsl(210 40% 96%)", padding: "6px 10px", fontSize: 13, outline: "none", width: "100%" }}
-                      onFocus={(e) => { e.target.style.borderColor = "hsl(220 90% 56%)"; }}
-                      onBlur={(e) => { e.target.style.borderColor = "hsl(220 20% 22%)"; }}
-                    />
-                  </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1.5">
+            Larghezza Foglio (mm)
+          </label>
+          <input
+            type="number"
+            value={sheetW}
+            onChange={(e) => setSheetW(Math.max(1, parseInt(e.target.value) || 0))}
+            className="w-full px-3 py-2 rounded-xl text-xs font-mono outline-none"
+            style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 22%)", color: "white" }}
+          />
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1.5">
+            Altezza Foglio (mm)
+          </label>
+          <input
+            type="number"
+            value={sheetH}
+            onChange={(e) => setSheetH(Math.max(1, parseInt(e.target.value) || 0))}
+            className="w-full px-3 py-2 rounded-xl text-xs font-mono outline-none"
+            style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 22%)", color: "white" }}
+          />
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1.5">
+            Spessore Lama (mm)
+          </label>
+          <input
+            type="number"
+            value={kerf}
+            onChange={(e) => setKerf(Math.max(0, parseInt(e.target.value) || 0))}
+            className="w-full px-3 py-2 rounded-xl text-xs font-mono outline-none"
+            style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 22%)", color: "white" }}
+          />
+        </div>
+
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-white/50 mb-1.5">
+            Margini Lamiera (mm)
+          </label>
+          <input
+            type="number"
+            value={margin}
+            onChange={(e) => setMargin(Math.max(0, parseInt(e.target.value) || 0))}
+            className="w-full px-3 py-2 rounded-xl text-xs font-mono outline-none"
+            style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 22%)", color: "white" }}
+          />
+        </div>
+      </div>
+
+      {/* ── Materiale & Riepilogo Efficienza ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Griglia Pezzi da Tagliare */}
+        <div
+          className="md:col-span-2 rounded-2xl p-4 space-y-4 print:p-0 print:border-none"
+          style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
+        >
+          <div className="flex items-center justify-between border-b border-white/5 pb-2 print:hidden">
+            <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+              <span>✂️</span> Griglia Pezzi da Tagliare ({pieces.length})
+            </h3>
+            
+            {/* Selezione Materiale */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase text-white/40">Materiale:</span>
+              <select
+                value={materialFilter}
+                onChange={(e) => setMaterialFilter(e.target.value)}
+                className="px-2 py-1 rounded-lg text-xs outline-none bg-[hsl(220,32%,10%)] border border-[hsl(220,20%,22%)] text-white"
+              >
+                <option value="">Nessuno (Generico)</option>
+                {catalogMaterials.map((m) => (
+                  <option key={m.id} value={m.name}>{m.name}</option>
                 ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Tabella interattiva */}
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-left text-xs text-white/80">
+              <thead>
+                <tr className="border-b border-white/5 font-bold uppercase tracking-wider text-white/40">
+                  <th className="py-2.5 px-2">Riferimento</th>
+                  <th className="py-2.5 px-2">Base</th>
+                  <th className="py-2.5 px-2">Altezza</th>
+                  <th className="py-2.5 px-2">Unità</th>
+                  <th className="py-2.5 px-2">Quantità (Q)</th>
+                  <th className="py-2.5 px-2 print:hidden">Azioni</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {pieces.map((p) => (
+                  <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="py-2 px-1">
+                      <input
+                        type="text"
+                        value={p.refTitle}
+                        onChange={(e) => updatePiece(p.id, "refTitle", e.target.value)}
+                        className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-full max-w-[150px] font-medium"
+                      />
+                    </td>
+                    <td className="py-2 px-1">
+                      <input
+                        type="number"
+                        value={p.b}
+                        onChange={(e) => updatePiece(p.id, "b", parseFloat(e.target.value) || 0)}
+                        className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-20 font-mono"
+                      />
+                    </td>
+                    <td className="py-2 px-1">
+                      <input
+                        type="number"
+                        value={p.h}
+                        onChange={(e) => updatePiece(p.id, "h", parseFloat(e.target.value) || 0)}
+                        className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-20 font-mono"
+                      />
+                    </td>
+                    <td className="py-2 px-1">
+                      <select
+                        value={p.unit}
+                        onChange={(e) => updatePiece(p.id, "unit", e.target.value as any)}
+                        className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white cursor-pointer"
+                      >
+                        <option value="cm">cm</option>
+                        <option value="mm">mm</option>
+                      </select>
+                    </td>
+                    <td className="py-2 px-1">
+                      <input
+                        type="number"
+                        value={p.q}
+                        onChange={(e) => updatePiece(p.id, "q", Math.max(1, parseInt(e.target.value) || 1))}
+                        className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-16 font-mono"
+                      />
+                    </td>
+                    <td className="py-2 px-1 print:hidden">
+                      <button
+                        type="button"
+                        onClick={() => deletePiece(p.id)}
+                        className="p-1 px-2.5 rounded-lg text-red-400 hover:bg-red-500/10 border border-red-500/10 font-bold transition-colors"
+                      >
+                        ✕
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+
+                {/* Riga Inserimento Manuale extra */}
+                <tr className="bg-white/[0.01] print:hidden">
+                  <td className="py-3 px-1">
+                    <input
+                      type="text"
+                      placeholder="es. Muro Spalla dx"
+                      value={newRef}
+                      onChange={(e) => setNewRef(e.target.value)}
+                      className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-full max-w-[150px] placeholder-white/30"
+                    />
+                  </td>
+                  <td className="py-3 px-1">
+                    <input
+                      type="number"
+                      placeholder="Larghezza"
+                      value={newB}
+                      onChange={(e) => setNewB(e.target.value)}
+                      className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-20 placeholder-white/30 font-mono"
+                    />
+                  </td>
+                  <td className="py-3 px-1">
+                    <input
+                      type="number"
+                      placeholder="Altezza"
+                      value={newH}
+                      onChange={(e) => setNewH(e.target.value)}
+                      className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-20 placeholder-white/30 font-mono"
+                    />
+                  </td>
+                  <td className="py-3 px-1">
+                    <select
+                      value={newUnit}
+                      onChange={(e) => setNewUnit(e.target.value as any)}
+                      className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white cursor-pointer"
+                    >
+                      <option value="cm">cm</option>
+                      <option value="mm">mm</option>
+                    </select>
+                  </td>
+                  <td className="py-3 px-1">
+                    <input
+                      type="number"
+                      value={newQ}
+                      onChange={(e) => setNewQ(e.target.value)}
+                      className="px-2 py-1.5 rounded bg-[hsl(220,32%,8%)] border border-[hsl(220,20%,18%)] text-white w-16 font-mono"
+                    />
+                  </td>
+                  <td className="py-3 px-1">
+                    <button
+                      type="button"
+                      onClick={addManualPiece}
+                      className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white transition-all bg-[hsl(220,90%,56%)] hover:bg-[hsl(220,85%,48%)] active:scale-95 cursor-pointer"
+                    >
+                      ＋ Aggiungi
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Dashboard Resa di Nesting */}
+        <div className="space-y-4">
+          <div
+            className="rounded-2xl p-4 sm:p-5 space-y-4 text-white print:hidden"
+            style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
+          >
+            <h3 className="text-sm font-bold border-b border-white/5 pb-2 flex items-center gap-1.5">
+              <span>📊</span> Statistiche Nesting 2D
+            </h3>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-[hsl(220,32%,10%)] p-3 rounded-xl border border-white/5">
+                <span className="block text-[10px] font-bold uppercase text-white/40">Fogli Richiesti</span>
+                <span className="text-xl font-bold font-mono">{nestingResult.sheets.length}</span>
+              </div>
+
+              <div className="bg-[hsl(220,32%,10%)] p-3 rounded-xl border border-white/5">
+                <span className="block text-[10px] font-bold uppercase text-white/40">Pezzi Totali</span>
+                <span className="text-xl font-bold font-mono">{nestingResult.totalPieces}</span>
               </div>
             </div>
-            <div style={{ padding: "8px 16px 4px", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: "hsl(220 15% 35%)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Pezzi da Tagliare</span>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "hsl(220 90% 56%)", background: "hsla(220,90%,56%,0.12)", padding: "1px 8px", borderRadius: 20 }}>{pieces.reduce((a, p) => a + p.q, 0)}</span>
-            </div>
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              {pieces.length === 0 ? (
-                <div style={{ padding: "24px 16px", textAlign: "center", color: "hsl(220 15% 35%)", fontSize: 13 }}>Nessun pezzo.<br />Aggiungine uno.</div>
-              ) : pieces.map((p, i) => (
-                <PieceRow key={p.id} piece={p} color={PIECE_COLORS[i % PIECE_COLORS.length]} onUpdate={updatePiece} onDelete={deletePiece} />
-              ))}
-            </div>
-            <div style={{ padding: "12px 16px", borderTop: "1px solid hsl(220 20% 22%)", flexShrink: 0 }}>
-              <AddPieceForm newB={newB} setNewB={setNewB} newH={newH} setNewH={setNewH} newQ={newQ} setNewQ={setNewQ} newUnit={newUnit} setNewUnit={setNewUnit} newRef={newRef} setNewRef={setNewRef} onAdd={addManualPiece} />
-            </div>
-          </div>
-          <NestingCanvas sheets={nestingFull.sheets} sheetW={sheetW} sheetH={sheetH} margin={margin} sheetIndex={sheetIndex} onPrev={() => setSheetIndex(i => Math.max(0, i - 1))} onNext={() => setSheetIndex(i => Math.min(nestingFull.sheets.length - 1, i + 1))} effColor={effColor} />
-          <NestingBomPanel result={nestingFull} pieces={pieces} params={{ sheetW, sheetH }} effColor={effColor} onSheetSelect={setSheetIndex} activeSheet={sheetIndex} />
-        </div>
-        <div className="flex flex-col md:hidden" style={{ flex: 1, overflow: "hidden" }}>
-          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-            {mobileTab === "pezzi" && (
-              <div style={{ flex: 1, overflowY: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                  {([{ label: "Largh. mm", val: sheetW, set: setSheetW }, { label: "Alt. mm", val: sheetH, set: setSheetH }, { label: "Lama mm", val: kerf, set: setKerf }, { label: "Marg. mm", val: margin, set: setMargin }] as const).map((p) => (
-                    <div key={p.label}>
-                      <label style={{ fontSize: 10, fontWeight: 700, color: "hsl(220 15% 35%)", textTransform: "uppercase", letterSpacing: "0.08em", display: "block", marginBottom: 2 }}>{p.label}</label>
-                      <input type="number" value={p.val} autoComplete="off" onChange={(e) => p.set(parseFloat(e.target.value) || 0)}
-                        style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", borderRadius: 8, color: "hsl(210 40% 96%)", padding: "6px 10px", fontSize: 13, outline: "none", width: "100%" }} />
-                    </div>
-                  ))}
-                </div>
-                <AddPieceForm newB={newB} setNewB={setNewB} newH={newH} setNewH={setNewH} newQ={newQ} setNewQ={setNewQ} newUnit={newUnit} setNewUnit={setNewUnit} newRef={newRef} setNewRef={setNewRef} onAdd={addManualPiece} />
-                {pieces.map((p, i) => <PieceRow key={p.id} piece={p} color={PIECE_COLORS[i % PIECE_COLORS.length]} onUpdate={updatePiece} onDelete={deletePiece} />)}
+
+            <div className="bg-[hsl(220,32%,10%)] p-4 rounded-xl border border-white/5 space-y-1.5">
+              <span className="block text-[10px] font-bold uppercase text-white/40">Rendimento Lamiera</span>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-black font-mono text-emerald-400">
+                  {nestingResult.efficiency.toFixed(1)}%
+                </span>
+                <span className="text-xs text-white/50">utilizzato</span>
               </div>
-            )}
-            {mobileTab === "canvas" && (
-              <NestingCanvas sheets={nestingFull.sheets} sheetW={sheetW} sheetH={sheetH} margin={margin} sheetIndex={sheetIndex} onPrev={() => setSheetIndex(i => Math.max(0, i - 1))} onNext={() => setSheetIndex(i => Math.min(nestingFull.sheets.length - 1, i + 1))} effColor={effColor} />
-            )}
-            {mobileTab === "bom" && (
-              <NestingBomPanel result={nestingFull} pieces={pieces} params={{ sheetW, sheetH }} effColor={effColor} onSheetSelect={setSheetIndex} activeSheet={sheetIndex} />
-            )}
+              
+              {/* Barra progresso */}
+              <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                <div 
+                  className="bg-gradient-to-r from-emerald-500 to-emerald-400 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${nestingResult.efficiency}%` }}
+                />
+              </div>
+            </div>
           </div>
-          <div style={{ display: "flex", background: "hsl(220 32% 10%)", borderTop: "1px solid hsl(220 20% 22%)", flexShrink: 0 }}>
-            {([
-              { id: "pezzi", label: "Pezzi" },
-              { id: "canvas", label: "Canvas" },
-              { id: "bom", label: "BoM" },
-            ] as const).map((t) => (
-              <button key={t.id} onClick={() => setMobileTab(t.id)}
-                style={{ flex: 1, padding: "12px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, border: "none", borderTop: `2px solid ${mobileTab === t.id ? "hsl(220 90% 56%)" : "transparent"}`, background: "transparent", color: mobileTab === t.id ? "hsl(220 90% 56%)" : "hsl(220 15% 35%)", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>
-                {t.label}
-              </button>
-            ))}
+
+          {/* Pulsanti di Salvataggio e Stampa */}
+          <div className="flex flex-col gap-3 print:hidden">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saveStatus === "saving"}
+              className={`w-full py-3 rounded-xl font-semibold text-white shadow-lg transition-all active:scale-98 cursor-pointer text-sm ${
+                saveStatus === "saved"
+                  ? "bg-emerald-600 hover:bg-emerald-500 shadow-emerald-900/20"
+                  : "bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400"
+              }`}
+            >
+              {saveStatus === "saving" && "💾 Salvataggio in corso..."}
+              {saveStatus === "saved" && "✅ Piano Salvato con Successo!"}
+              {saveStatus === "idle" && "💾 Salva Piano di Taglio"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push(`/projects/${projectId}`)}
+              className="w-full py-2.5 rounded-xl text-xs font-semibold text-white/50 hover:text-white bg-white/5 hover:bg-white/10 transition-colors"
+            >
+              ← Torna al Dettaglio Progetto
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSaveAndExportPDF}
+              disabled={isGeneratingPDF || nestingResult.sheets.length === 0}
+              className="w-full py-3 rounded-xl font-semibold text-white shadow-lg transition-all bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 active:scale-98 cursor-pointer text-sm disabled:opacity-50"
+            >
+              {isGeneratingPDF ? "⏳ Generazione PDF..." : "📄 Salva & Esporta PDF"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => window.print()}
+              disabled={nestingResult.sheets.length === 0}
+              className="w-full py-2.5 rounded-xl font-semibold text-white/70 transition-all bg-white/5 hover:bg-white/10 border border-white/5 cursor-pointer disabled:opacity-50 text-xs"
+            >
+              🖨️ Stampa Alternativa (Browser)
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDeletePlan}
+              className="w-full py-2.5 rounded-xl text-xs font-bold text-red-400 hover:text-red-300 bg-red-950/10 hover:bg-red-950/20 border border-red-900/20 active:scale-95 transition-all"
+            >
+              🗑️ Elimina Configurazione
+            </button>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
 
-function AddPieceForm({ newB, setNewB, newH, setNewH, newQ, setNewQ, newUnit, setNewUnit, newRef, setNewRef, onAdd }: {
-  newB: string; setNewB: (v: string) => void;
-  newH: string; setNewH: (v: string) => void;
-  newQ: string; setNewQ: (v: string) => void;
-  newUnit: "cm" | "mm"; setNewUnit: (v: "cm" | "mm") => void;
-  newRef: string; setNewRef: (v: string) => void;
-  onAdd: () => void;
-}) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <p style={{ fontSize: 10, fontWeight: 700, color: "hsl(220 15% 35%)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Aggiungi Pezzo</p>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 46px", gap: 6 }}>
-        <input placeholder="Base" type="number" value={newB} autoComplete="off" onChange={(e) => setNewB(e.target.value)}
-          style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", borderRadius: 8, color: "hsl(210 40% 96%)", padding: "7px 8px", fontSize: 13, outline: "none", width: "100%" }}
-          onFocus={(e) => { e.target.style.borderColor = "hsl(220 90% 56%)"; }} onBlur={(e) => { e.target.style.borderColor = "hsl(220 20% 22%)"; }} />
-        <input placeholder="Alt." type="number" value={newH} autoComplete="off" onChange={(e) => setNewH(e.target.value)}
-          style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", borderRadius: 8, color: "hsl(210 40% 96%)", padding: "7px 8px", fontSize: 13, outline: "none", width: "100%" }}
-          onFocus={(e) => { e.target.style.borderColor = "hsl(220 90% 56%)"; }} onBlur={(e) => { e.target.style.borderColor = "hsl(220 20% 22%)"; }} />
-        <button onClick={() => setNewUnit(newUnit === "cm" ? "mm" : "cm")}
-          style={{ background: "hsl(220 22% 18%)", border: "1px solid hsl(220 20% 22%)", borderRadius: 8, color: "hsl(210 40% 96%)", fontSize: 11, fontWeight: 800, cursor: "pointer" }}>
-          {newUnit}
-        </button>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "52px 1fr", gap: 6 }}>
-        <input placeholder="Q" type="number" min="1" value={newQ} autoComplete="off" onChange={(e) => setNewQ(e.target.value)}
-          style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", borderRadius: 8, color: "hsl(210 40% 96%)", padding: "7px 8px", fontSize: 13, outline: "none", width: "100%" }}
-          onFocus={(e) => { e.target.style.borderColor = "hsl(220 90% 56%)"; }} onBlur={(e) => { e.target.style.borderColor = "hsl(220 20% 22%)"; }} />
-        <input placeholder="Riferimento..." value={newRef} autoComplete="off" onChange={(e) => setNewRef(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onAdd()}
-          style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", borderRadius: 8, color: "hsl(210 40% 96%)", padding: "7px 8px", fontSize: 13, outline: "none", width: "100%" }}
-          onFocus={(e) => { e.target.style.borderColor = "hsl(220 90% 56%)"; }} onBlur={(e) => { e.target.style.borderColor = "hsl(220 20% 22%)"; }} />
-      </div>
-      <button onClick={onAdd}
-        style={{ width: "100%", padding: 9, borderRadius: 8, border: "none", background: "hsl(220 90% 56%)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-        + Aggiungi Pezzo
-      </button>
-    </div>
-  );
-}
+      {/* ── Layout Grafico dei Fogli di Nesting ── */}
+      <div className="space-y-6">
+        <h3 className="text-base font-bold text-white border-b border-white/5 pb-2 print:border-black/10 print:text-black print:text-lg">
+          🔍 Schemi di Taglio (Fogli {nestingResult.sheets.length})
+        </h3>
 
-function PieceRow({ piece, color, onUpdate, onDelete }: {
-  piece: { id: string; b: number; h: number; q: number; unit: string; refTitle: string };
-  color: string;
-  onUpdate: (id: string, key: any, value: any) => void;
-  onDelete: (id: string) => void;
-}) {
-  const [hover, setHover] = useState(false);
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", borderBottom: "1px solid hsl(220 20% 22%)", background: hover ? "hsl(220 26% 14%)" : "transparent", transition: "background 0.12s" }}
-      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
-      <div style={{ width: 9, height: 9, borderRadius: "50%", background: color, flexShrink: 0, boxShadow: `0 0 6px ${color}80` }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "hsl(210 40% 96%)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{piece.refTitle}</div>
-        <div style={{ fontSize: 10, color: "hsl(215 20% 65%)", fontFamily: "monospace" }}>{piece.b} x {piece.h} {piece.unit}</div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-        <button onClick={() => onUpdate(piece.id, "q", Math.max(1, piece.q - 1))}
-          style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid hsl(220 20% 22%)", background: "hsl(220 22% 18%)", color: "hsl(210 40% 96%)", fontSize: 14, cursor: "pointer", lineHeight: 1 }}>-</button>
-        <span style={{ fontSize: 12, fontWeight: 800, color: "hsl(210 40% 96%)", minWidth: 22, textAlign: "center" }}>{piece.q}</span>
-        <button onClick={() => onUpdate(piece.id, "q", piece.q + 1)}
-          style={{ width: 22, height: 22, borderRadius: 6, border: "1px solid hsl(220 20% 22%)", background: "hsl(220 22% 18%)", color: "hsl(210 40% 96%)", fontSize: 14, cursor: "pointer", lineHeight: 1 }}>+</button>
-      </div>
-      <button onClick={() => onDelete(piece.id)} title="Elimina"
-        style={{ width: 22, height: 22, border: "none", background: hover ? "hsla(0,84%,60%,0.15)" : "transparent", borderRadius: 6, color: hover ? "hsl(0 84% 60%)" : "hsl(220 15% 35%)", cursor: "pointer", transition: "all 0.15s", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
-      </button>
-    </div>
-  );
-}
-
-function NestingCanvas({ sheets, sheetW, sheetH, margin, sheetIndex, onPrev, onNext, effColor }: {
-  sheets: any[]; sheetW: number; sheetH: number; margin: number;
-  sheetIndex: number; onPrev: () => void; onNext: () => void;
-  effColor: (e: number) => string;
-}) {
-  const sheet = sheets[sheetIndex] ?? null;
-  const usedArea = sheet ? sheet.placed.reduce((a: number, p: any) => a + p.w * p.h, 0) : 0;
-  const sheetEff = sheetW * sheetH > 0 ? (usedArea / (sheetW * sheetH)) * 100 : 0;
-  const ec = effColor(sheetEff);
-  return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "hsl(222 47% 6%)", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px", flexShrink: 0, background: "hsl(220 32% 10%)", borderBottom: "1px solid hsl(220 20% 22%)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "hsl(210 40% 96%)" }}>Nesting</span>
-          <span style={{ fontSize: 11, color: "hsl(215 20% 65%)", fontFamily: "monospace" }}>{sheetW} x {sheetH} mm</span>
-        </div>
-        {sheets.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button onClick={onPrev} disabled={sheetIndex === 0} title="Precedente"
-              style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid hsl(220 20% 22%)", background: "hsl(220 22% 18%)", color: sheetIndex === 0 ? "hsl(220 15% 35%)" : "hsl(210 40% 96%)", cursor: sheetIndex === 0 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M6 1L1 6L6 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </button>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "hsl(210 40% 96%)", minWidth: 90, textAlign: "center" }}>Foglio {sheetIndex + 1} / {sheets.length}</span>
-            <button onClick={onNext} disabled={sheetIndex === sheets.length - 1} title="Successivo"
-              style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid hsl(220 20% 22%)", background: "hsl(220 22% 18%)", color: sheetIndex === sheets.length - 1 ? "hsl(220 15% 35%)" : "hsl(210 40% 96%)", cursor: sheetIndex === sheets.length - 1 ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <svg width="7" height="12" viewBox="0 0 7 12" fill="none"><path d="M1 1L6 6L1 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            </button>
-          </div>
-        )}
-      </div>
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 24, overflow: "hidden" }}>
-        {!sheet ? (
-          <div style={{ textAlign: "center", color: "hsl(220 15% 35%)" }}>
-            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" style={{ margin: "0 auto 12px", opacity: 0.15 }}><rect x="3" y="3" width="7" height="7" stroke="currentColor" strokeWidth="1.5" rx="1"/><rect x="14" y="3" width="7" height="7" stroke="currentColor" strokeWidth="1.5" rx="1"/><rect x="3" y="14" width="7" height="7" stroke="currentColor" strokeWidth="1.5" rx="1"/><rect x="14" y="14" width="7" height="7" stroke="currentColor" strokeWidth="1.5" rx="1"/></svg>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>Aggiungi pezzi per il nesting</div>
-            <div style={{ fontSize: 12, marginTop: 6, opacity: 0.6 }}>Calcolo in tempo reale</div>
-          </div>
-        ) : (
-          <svg viewBox={`0 0 ${sheetW} ${sheetH}`} style={{ maxWidth: "100%", maxHeight: "100%", display: "block", borderRadius: 6, boxShadow: "0 8px 40px rgba(0,0,0,0.6)" }} preserveAspectRatio="xMidYMid meet">
-            <defs>
-              <pattern id="waste-hatch" width="36" height="36" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-                <line x1="0" y1="0" x2="0" y2="36" stroke="hsl(220,20%,16%)" strokeWidth="10" />
-              </pattern>
-            </defs>
-            <rect x={0} y={0} width={sheetW} height={sheetH} fill="hsl(220,30%,9%)" />
-            <rect x={0} y={0} width={sheetW} height={sheetH} fill="url(#waste-hatch)" />
-            <rect x={2} y={2} width={sheetW - 4} height={sheetH - 4} fill="none" stroke="hsl(220,28%,28%)" strokeWidth={6} />
-            {margin > 0 && <rect x={margin} y={margin} width={sheetW - margin * 2} height={sheetH - margin * 2} fill="none" stroke="hsl(220,50%,45%)" strokeDasharray="20,14" strokeWidth={4} opacity={0.5} />}
-            {sheet.placed.map((p: any, i: number) => {
-              const col = PIECE_COLORS[p.pieceIndex % PIECE_COLORS.length];
-              const cx = p.x + p.w / 2;
-              const cy = p.y + p.h / 2;
-              const fsize = Math.min(p.w, p.h) * 0.11;
-              const show = p.w > 120 && p.h > 80;
+        {nestingResult.sheets.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 print:grid-cols-1 print:gap-12">
+            {nestingResult.sheets.map((sheet, idx) => {
+              const totalArea = sheetW * sheetH;
+              const wasteArea = totalArea - sheet.usedArea;
+              const yieldPct = totalArea > 0 ? (sheet.usedArea / totalArea) * 100 : 0;
+              
               return (
-                <g key={i}>
-                  <rect x={p.x} y={p.y} width={p.w} height={p.h} fill={col} opacity={0.80} rx={6} />
-                  <rect x={p.x} y={p.y} width={p.w} height={p.h} fill="none" stroke={col} strokeWidth={4} opacity={0.5} rx={6} />
-                  {p.rotated && <text x={p.x + p.w - 32} y={p.y + 36} fill="rgba(0,0,0,0.5)" fontSize={28} fontFamily="monospace">R</text>}
-                  {show && (<>
-                    <text x={cx} y={cy - fsize * 0.5} textAnchor="middle" fill="rgba(0,0,0,0.75)" fontSize={fsize} fontWeight={800} fontFamily="Inter,monospace,sans-serif">{p.dims || `${p.w}x${p.h}`}</text>
-                    <text x={cx} y={cy + fsize * 0.85} textAnchor="middle" fill="rgba(0,0,0,0.55)" fontSize={fsize * 0.72} fontFamily="Inter,sans-serif">{p.label}</text>
-                  </>)}
-                </g>
+                <div
+                  key={idx}
+                  className="rounded-2xl p-4 sm:p-5 space-y-4 print:p-0 print:border-none"
+                  style={{
+                    background: "hsl(220 26% 14%)",
+                    border: "1px solid hsl(220 20% 20%)",
+                  }}
+                >
+                  {/* Info Foglio */}
+                  <div className="flex items-center justify-between border-b border-white/5 pb-2 print:border-black/10 print:text-black">
+                    <span className="text-sm font-bold text-white print:text-black">
+                      📄 Lastra #{idx + 1} ({sheetW}x{sheetH} mm)
+                    </span>
+                    <span className="text-xs font-mono font-bold text-emerald-400 print:text-black">
+                      Resa: {yieldPct.toFixed(1)}%
+                    </span>
+                  </div>
+
+                  {/* Rendering SVG del Foglio in scala */}
+                  <div className="flex justify-center bg-[hsl(222,47%,6%)] rounded-xl p-3 border border-white/5 print:bg-white print:border-black/10">
+                    <svg
+                      width="100%"
+                      viewBox={`0 0 ${sheetW} ${sheetH}`}
+                      className="max-h-[60vh] max-w-full drop-shadow-xl"
+                    >
+                      {/* Sfondo foglio intero */}
+                      <rect
+                        width={sheetW}
+                        height={sheetH}
+                        rx={8}
+                        fill="hsl(220 32% 10%)"
+                        stroke="hsl(220 20% 25%)"
+                        strokeWidth={6}
+                        className="print:fill-gray-100 print:stroke-black"
+                      />
+
+                      {/* Rettangolo area utile (margine interno) */}
+                      {margin > 0 && (
+                        <rect
+                          x={margin}
+                          y={margin}
+                          width={sheetW - margin * 2}
+                          height={sheetH - margin * 2}
+                          fill="none"
+                          stroke="hsl(220 90% 56% / 0.15)"
+                          strokeWidth={2}
+                          strokeDasharray="8,8"
+                        />
+                      )}
+
+                      {/* Disegno dei pezzi posizionati */}
+                      {sheet.placed.map((piece, pIdx) => (
+                        <g key={pIdx}>
+                          <rect
+                            x={piece.x}
+                            y={piece.y}
+                            width={piece.w}
+                            height={piece.h}
+                            rx={4}
+                            fill="hsl(142 60% 15% / 0.75)"
+                            stroke="hsl(142 60% 55%)"
+                            strokeWidth={3}
+                            className="print:fill-emerald-50 print:stroke-emerald-800"
+                          />
+                          
+                          {/* Testo in scala */}
+                          {piece.w > 120 && piece.h > 80 ? (
+                            <text
+                              x={piece.x + piece.w / 2}
+                              y={piece.y + piece.h / 2}
+                              dominantBaseline="middle"
+                              textAnchor="middle"
+                              fill="#ffffff"
+                              fontSize={Math.max(14, Math.min(32, piece.w / 12))}
+                              fontFamily="monospace"
+                              fontWeight="bold"
+                              className="print:fill-emerald-900"
+                            >
+                              <tspan x={piece.x + piece.w / 2} dy="-0.3em">
+                                {piece.w}x{piece.h}
+                              </tspan>
+                              <tspan x={piece.x + piece.w / 2} dy="1em" fontSize={Math.max(10, Math.min(22, piece.w / 16))} fill="rgba(255,255,255,0.7)" className="print:fill-emerald-800">
+                                {piece.label.split(" (")[0]}
+                              </tspan>
+                            </text>
+                          ) : (
+                            <text
+                              x={piece.x + piece.w / 2}
+                              y={piece.y + piece.h / 2}
+                              dominantBaseline="middle"
+                              textAnchor="middle"
+                              fill="#ffffff"
+                              fontSize={10}
+                              fontFamily="monospace"
+                              className="print:fill-emerald-900"
+                            >
+                              {piece.w}x{piece.h}
+                            </text>
+                          )}
+                        </g>
+                      ))}
+                    </svg>
+                  </div>
+                </div>
               );
             })}
-            <text x={sheetW / 2} y={sheetH - 30} textAnchor="middle" fill="hsl(215,20%,38%)" fontSize={38} fontFamily="Inter,monospace">{sheetW} mm</text>
-            <text x={30} y={sheetH / 2} textAnchor="middle" dominantBaseline="middle" fill="hsl(215,20%,38%)" fontSize={38} fontFamily="Inter,monospace" transform={`rotate(-90, 30, ${sheetH / 2})`}>{sheetH} mm</text>
-          </svg>
+          </div>
+        ) : (
+          <div
+            className="p-8 rounded-2xl border text-center text-xs italic"
+            style={{ background: "hsl(220 32% 10%)", borderColor: "hsl(220 20% 18%)", color: "hsl(215 15% 40%)" }}
+          >
+            Inserisci quote e pezzi validi per visualizzare gli schemi grafici di taglio.
+          </div>
         )}
       </div>
-      {sheet && (
-        <div style={{ padding: "8px 16px", flexShrink: 0, background: "hsl(220 32% 10%)", borderTop: "1px solid hsl(220 20% 22%)", display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ fontSize: 11, color: "hsl(215 20% 65%)", flexShrink: 0 }}>Resa foglio</span>
-          <div style={{ flex: 1, height: 5, background: "hsl(220 26% 14%)", borderRadius: 3, overflow: "hidden" }}>
-            <div style={{ width: `${sheetEff}%`, height: "100%", background: ec, borderRadius: 3, transition: "width 0.5s ease" }} />
-          </div>
-          <span style={{ fontSize: 12, fontWeight: 800, color: ec, flexShrink: 0 }}>{sheetEff.toFixed(1)}%</span>
-          <span style={{ fontSize: 11, color: "hsl(220 15% 35%)", flexShrink: 0 }}>sfrido: {(100 - sheetEff).toFixed(1)}%</span>
-        </div>
-      )}
-    </div>
-  );
-}
 
-function NestingBomPanel({ result, pieces, params, effColor, onSheetSelect, activeSheet }: {
-  result: any; pieces: any[];
-  params: { sheetW: number; sheetH: number };
-  effColor: (e: number) => string;
-  onSheetSelect: (i: number) => void;
-  activeSheet: number;
-}) {
-  const { sheets = [], efficiency = 0, waste = 0 } = result;
-  const bArea = params.sheetW * params.sheetH;
-  const r = 34;
-  const circ = 2 * Math.PI * r;
-  const ec = effColor(efficiency);
-  const grouped: Record<string, { count: number; areaMm2: number; color: string }> = {};
-  pieces.forEach((p, i) => {
-    const key = p.refTitle;
-    if (!grouped[key]) grouped[key] = { count: 0, areaMm2: 0, color: PIECE_COLORS[i % PIECE_COLORS.length] };
-    const fac = p.unit === "cm" ? 10 : 1;
-    grouped[key].count += p.q;
-    grouped[key].areaMm2 += p.b * fac * p.h * fac * p.q;
-  });
-  return (
-    <div style={{ width: 268, flexShrink: 0, display: "flex", flexDirection: "column", background: "hsl(220 32% 10%)", borderLeft: "1px solid hsl(220 20% 22%)", overflow: "hidden" }}>
-      <div style={{ padding: "12px 16px", borderBottom: "1px solid hsl(220 20% 22%)", flexShrink: 0 }}>
-        <p style={{ fontSize: 10, fontWeight: 700, color: "hsl(220 15% 35%)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Statistiche &amp; BoM</p>
-      </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
-          <svg width={88} height={88} viewBox="0 0 88 88" style={{ flexShrink: 0 }}>
-            <circle cx={44} cy={44} r={r} fill="none" stroke="hsl(220 26% 14%)" strokeWidth={9} />
-            <circle cx={44} cy={44} r={r} fill="none" stroke={ec} strokeWidth={9} strokeLinecap="round"
-              strokeDasharray={circ} strokeDashoffset={circ * (1 - efficiency / 100)}
-              transform="rotate(-90 44 44)" style={{ transition: "stroke-dashoffset 0.6s ease, stroke 0.3s" }} />
-            <text x={44} y={44} textAnchor="middle" dominantBaseline="middle" fill="hsl(210 40% 96%)" fontSize={15} fontWeight={800} fontFamily="Inter,sans-serif">{efficiency.toFixed(0)}%</text>
-          </svg>
-          <div>
-            <div style={{ fontSize: 11, color: "hsl(215 20% 65%)", marginBottom: 2 }}>Efficienza media</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: "hsl(210 40% 96%)", lineHeight: 1 }}>{efficiency.toFixed(1)}%</div>
-            <div style={{ fontSize: 11, color: "hsl(16 100% 58%)", marginTop: 3 }}>sfrido {waste.toFixed(1)}%</div>
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
-          {[{ l: "Fogli", v: sheets.length, c: "hsl(220 90% 56%)" }, { l: "Pezzi tot.", v: result.totalPieces, c: "hsl(210 40% 96%)" }].map(({ l, v, c }) => (
-            <div key={l} style={{ background: "hsl(220 26% 14%)", borderRadius: 10, padding: "10px 12px" }}>
-              <div style={{ fontSize: 24, fontWeight: 800, color: c, lineHeight: 1 }}>{v}</div>
-              <div style={{ fontSize: 10, color: "hsl(215 20% 65%)", marginTop: 2 }}>{l}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ marginBottom: 18 }}>
-          <p style={{ fontSize: 10, fontWeight: 700, color: "hsl(220 15% 35%)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Distinta Materiali</p>
-          {Object.entries(grouped).length === 0 ? (
-            <div style={{ fontSize: 12, color: "hsl(220 15% 35%)", fontStyle: "italic" }}>Nessun materiale</div>
-          ) : Object.entries(grouped).map(([name, { count, areaMm2, color }]) => (
-            <div key={name} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid hsl(220 20% 22%)" }}>
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0, boxShadow: `0 0 5px ${color}70` }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "hsl(210 40% 96%)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
-                <div style={{ fontSize: 10, color: "hsl(215 20% 65%)", fontFamily: "monospace" }}>{count} pz - {(areaMm2 / 1e6).toFixed(3)} m2</div>
-              </div>
-              <span style={{ fontSize: 12, fontWeight: 800, color: "hsl(210 40% 96%)" }}>{count}</span>
-            </div>
-          ))}
-        </div>
-        <div>
-          <p style={{ fontSize: 10, fontWeight: 700, color: "hsl(220 15% 35%)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Riepilogo Fogli</p>
-          {sheets.length === 0 ? (
-            <div style={{ fontSize: 12, color: "hsl(220 15% 35%)", fontStyle: "italic", textAlign: "center", padding: 16 }}>Nessun foglio generato</div>
-          ) : sheets.map((s: any, i: number) => {
-            const ua = s.placed.reduce((a: number, p: any) => a + p.w * p.h, 0);
-            const eff = bArea > 0 ? (ua / bArea * 100) : 0;
-            const sheetEc = effColor(eff);
-            return (
-              <div key={i} onClick={() => onSheetSelect(i)}
-                style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", marginBottom: 5, borderRadius: 10, background: i === activeSheet ? "hsl(220 22% 18%)" : "hsl(220 26% 14%)", cursor: "pointer", border: i === activeSheet ? "1px solid hsla(220,90%,56%,0.3)" : "1px solid transparent" }}>
-                <div style={{ width: 28, height: 28, borderRadius: 8, background: "hsl(220 22% 18%)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "hsl(220 90% 56%)", flexShrink: 0 }}>{i + 1}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: "hsl(210 40% 96%)", fontWeight: 600 }}>{s.placed.length} pezzi</div>
-                  <div style={{ fontSize: 10, color: sheetEc }}>Resa {eff.toFixed(0)}%</div>
-                </div>
-                <div style={{ width: 44, height: 4, background: "hsl(220 20% 22%)", borderRadius: 2, overflow: "hidden", flexShrink: 0 }}>
-                  <div style={{ width: `${eff}%`, height: "100%", background: sheetEc, borderRadius: 2, transition: "width 0.4s ease" }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* ── CSS Globale Specializzato per la Stampa PDF ── */}
+      <style jsx global>{`
+        @media print {
+          body {
+            background-color: white !important;
+            color: black !important;
+          }
+          /* Nasconde sidebar, intestazioni del sito, barra di navigazione e pulsanti dell'app */
+          header, footer, nav, aside, .print\\:hidden {
+            display: none !important;
+          }
+          /* Riduce margini della pagina di stampa browser */
+          @page {
+            margin: 1.2cm;
+          }
+          /* Forza sfondi a colori durante la stampa */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
