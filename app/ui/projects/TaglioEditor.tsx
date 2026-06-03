@@ -31,6 +31,7 @@ export default function TaglioEditor({
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [isDataActual, setIsDataActual] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -63,67 +64,71 @@ export default function TaglioEditor({
 
   // --- Inizializzazione ---
   useEffect(() => {
-    if (mounted && !initialized) {
-      const noteSource = cachedNote || initialNote;
-      if (noteSource) {
-        // 1. Estrae il titolo dall'elemento 'nota' con sort_order 0
-        const titleItem = (noteSource.field_note_items ?? []).find(
-          (i) => i.item_type === "nota" && i.sort_order === 0
-        );
-        if (titleItem?.value_text) {
-          setTitle(titleItem.value_text.replace("Taglio: ", ""));
-        }
-
-        // 2. Estrae la configurazione speciale (se presente)
-        const configItem = (noteSource.field_note_items ?? []).find(
-          (i) => i.item_type === "nota" && i.value_text?.startsWith("__CONFIG__:")
-        );
-        if (configItem?.value_text) {
-          try {
-            const configJson = JSON.parse(configItem.value_text.replace("__CONFIG__:", ""));
-            if (configJson.sheetW) setSheetW(configJson.sheetW);
-            if (configJson.sheetH) setSheetH(configJson.sheetH);
-            if (configJson.kerf !== undefined) setKerf(configJson.kerf);
-            if (configJson.margin !== undefined) setMargin(configJson.margin);
-          } catch {
-            // fallback
+    if (mounted) {
+      const hasCachedData = !!cachedNote;
+      if (!initialized || (hasCachedData && !isDataActual)) {
+        const noteSource = cachedNote || initialNote;
+        if (noteSource) {
+          // 1. Estrae il titolo dall'elemento 'nota' con sort_order 0
+          const titleItem = (noteSource.field_note_items ?? []).find(
+            (i) => i.item_type === "nota" && i.sort_order === 0
+          );
+          if (titleItem?.value_text) {
+            setTitle(titleItem.value_text.replace("Taglio: ", ""));
           }
-        }
 
-        // 3. Estrae il materiale (se presente)
-        const materialItem = (noteSource.field_note_items ?? []).find(
-          (i) => i.item_type === "materiale"
-        );
-        if (materialItem?.value_text) {
-          setMaterialFilter(materialItem.value_text);
-        }
-
-        // 4. Estrae tutti i pezzi da tagliare 'dim_quadrata'
-        const loadedPieces: PieceItem[] = [];
-        (noteSource.field_note_items ?? []).forEach((item) => {
-          if (item.item_type === "dim_quadrata") {
+          // 2. Estrae la configurazione speciale (se presente)
+          const configItem = (noteSource.field_note_items ?? []).find(
+            (i) => i.item_type === "nota" && i.value_text?.startsWith("__CONFIG__:")
+          );
+          if (configItem?.value_text) {
             try {
-              const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
-              if (parsed) {
-                loadedPieces.push({
-                  id: item.id || crypto.randomUUID(),
-                  b: parseFloat(parsed.b) || 0,
-                  h: parseFloat(parsed.h) || 0,
-                  q: parseInt(parsed.q) || 1,
-                  unit: parsed.unit || "cm",
-                  refTitle: parsed.refTitle || "Rilievo",
-                });
-              }
+              const configJson = JSON.parse(configItem.value_text.replace("__CONFIG__:", ""));
+              if (configJson.sheetW) setSheetW(configJson.sheetW);
+              if (configJson.sheetH) setSheetH(configJson.sheetH);
+              if (configJson.kerf !== undefined) setKerf(configJson.kerf);
+              if (configJson.margin !== undefined) setMargin(configJson.margin);
             } catch {
-              // ignora
+              // fallback
             }
           }
-        });
-        setPieces(loadedPieces);
-        setInitialized(true);
+
+          // 3. Estrae il materiale (se presente)
+          const materialItem = (noteSource.field_note_items ?? []).find(
+            (i) => i.item_type === "materiale"
+          );
+          if (materialItem?.value_text) {
+            setMaterialFilter(materialItem.value_text);
+          }
+
+          // 4. Estrae tutti i pezzi da tagliare 'dim_quadrata'
+          const loadedPieces: PieceItem[] = [];
+          (noteSource.field_note_items ?? []).forEach((item) => {
+            if (item.item_type === "dim_quadrata") {
+              try {
+                const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
+                if (parsed) {
+                  loadedPieces.push({
+                    id: item.id || crypto.randomUUID(),
+                    b: parseFloat(parsed.b) || 0,
+                    h: parseFloat(parsed.h) || 0,
+                    q: parseInt(parsed.q) || 1,
+                    unit: parsed.unit || "cm",
+                    refTitle: parsed.refTitle || "Rilievo",
+                  });
+                }
+              } catch {
+                // ignora
+              }
+            }
+          });
+          setPieces(loadedPieces);
+          setInitialized(true);
+          setIsDataActual(hasCachedData);
+        }
       }
     }
-  }, [mounted, cachedNote, initialNote, initialized]);
+  }, [mounted, cachedNote, initialNote, initialized, isDataActual]);
 
   // --- Handlers dei Pezzi ---
   const updatePiece = (id: string, key: keyof PieceItem, value: any) => {
