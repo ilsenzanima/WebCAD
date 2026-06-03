@@ -48,6 +48,9 @@ service-account*.json
 _sample_data/
 _sample_data/**/*
 
+# Design handoff (riferimento, non codice di produzione)
+design_handoff_webcad_mobile/
+
 
 # vercel
 .vercel

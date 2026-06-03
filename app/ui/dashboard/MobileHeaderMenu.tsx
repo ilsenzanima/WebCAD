@@ -10,156 +10,254 @@ import { APP_VERSION } from "@/lib/version";
 
 interface MobileHeaderMenuProps {
   initials: string;
+  userName?: string;
+  userEmail?: string;
 }
 
-export default function MobileHeaderMenu({ initials }: MobileHeaderMenuProps) {
+export default function MobileHeaderMenu({ initials, userName, userEmail }: MobileHeaderMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
   const pathname = usePathname();
 
-  const menuItems = [
+  const navItems = [
     { href: "/projects", icon: "📐", label: "Progetti" },
     { href: "/settings", icon: "⚙️", label: "Impostazioni" },
   ];
 
+  const tools = [
+    { icon: "🧮", label: "Calcolatrice", action: () => { setIsOpen(false); setShowCalc(true); } },
+  ];
+
   return (
     <>
-      {/* Testata Mobile Interattiva */}
+      {/* ── Header Mobile ── */}
       <header
-        className="md:hidden flex items-center justify-between px-4 py-2 flex-shrink-0 relative z-40"
+        className="md:hidden flex items-center justify-between px-3 flex-shrink-0 relative z-40"
         style={{
+          height: 52,
           background: "hsl(220 32% 10%)",
-          borderBottom: "1px solid hsl(220 20% 16%)",
+          borderBottom: "1px solid hsl(220 20% 22%)",
         }}
       >
-        {/* Logo Cliccabile */}
-        <div
+        {/* Hamburger */}
+        <button
           onClick={() => setIsOpen(true)}
-          className="flex items-center gap-2.5 cursor-pointer active:scale-95 transition-all select-none animate-pulse-subtle"
+          style={{
+            width: 44,
+            height: 44,
+            border: "none",
+            background: "transparent",
+            color: "hsl(210 40% 96%)",
+            fontSize: 20,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+          aria-label="Apri menu"
         >
-          <img
-            src="/logo.svg"
-            alt="WebCAD Logo"
-            className="w-7 h-7 object-contain select-none shadow-md shadow-orange-500/5"
-          />
-          <div className="flex flex-col justify-center">
-            <span className="text-white font-extrabold text-sm tracking-wide flex items-center gap-1 leading-none">
-              WebCAD <span className="text-[9px] bg-orange-500/20 border border-orange-500/30 text-orange-400 px-1.5 py-0.5 rounded-full font-bold">MENU</span>
-            </span>
-          </div>
+          ☰
+        </button>
+
+        {/* Logo centrato */}
+        <div className="flex items-center gap-2 select-none">
+          <img src="/logo.svg" alt="WebCAD" className="w-6 h-6 object-contain" />
+          <span className="text-white font-extrabold text-sm tracking-wide">WebCAD</span>
         </div>
 
-        {/* Badge Profilo */}
+        {/* Avatar profilo */}
         <div
-          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-lg"
+          className="w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-extrabold text-white flex-shrink-0"
           style={{ background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" }}
         >
           {initials}
         </div>
       </header>
 
-      {/* Menu a comparsa dal basso (Mobile Bottom Sheet) */}
+      {/* ── Sidebar Slide-in ── */}
       {isOpen && (
-        <div className="fixed inset-0 z-[2000] md:hidden">
-          {/* Sfondo Oscurato con Blur */}
+        <div className="fixed inset-0 z-[2000] md:hidden flex">
+          {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/75 backdrop-blur-sm transition-opacity duration-300 animate-fade-in"
+            className="absolute inset-0"
+            style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(5px)" }}
             onClick={() => setIsOpen(false)}
           />
 
-          {/* Pannello Bottom Sheet */}
+          {/* Pannello sidebar */}
           <aside
-            className="absolute bottom-0 left-0 right-0 rounded-t-3xl flex flex-col p-6 pb-10 space-y-6 shadow-2xl animate-slide-up"
+            className="relative flex flex-col animate-slide-in-left"
             style={{
-              background: "hsl(220 35% 8% / 0.98)",
-              backdropFilter: "blur(20px)",
-              borderTop: "1px solid hsl(220 20% 16%)",
+              width: 272,
+              height: "100%",
+              background: "hsl(220 32% 10%)",
+              borderRight: "1px solid hsl(220 20% 22%)",
+              boxShadow: "8px 0 48px rgba(0,0,0,0.6)",
             }}
           >
-            {/* Barretta decorativa per trascinamento */}
-            <div className="w-12 h-1 bg-white/10 rounded-full mx-auto -mt-2 mb-2" />
+            {/* Safe area spacer */}
+            <div style={{ height: "env(safe-area-inset-top, 44px)", flexShrink: 0 }} />
 
-            {/* Header del Menu */}
-            <div className="flex items-center justify-between border-b border-white/5 pb-3">
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-8 h-8 rounded-xl flex items-center justify-center text-base"
-                  style={{ background: "linear-gradient(135deg, hsl(16 100% 58%), hsl(0 84% 60%))" }}
-                >
-                  🔥
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-white font-extrabold text-sm uppercase tracking-wider">WebCAD Menu</span>
-                  <span className="text-[9px] text-white/40 leading-none">Strumenti e Navigazione</span>
-                </div>
-              </div>
-              
-              <button
-                onClick={() => setIsOpen(false)}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white/50 bg-white/5 border border-white/10 hover:text-white transition-all active:scale-90"
+            {/* Profilo */}
+            <div
+              style={{
+                padding: "18px 20px 20px",
+                borderBottom: "1px solid hsl(220 20% 22%)",
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  width: 54,
+                  height: 54,
+                  borderRadius: 16,
+                  background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 18,
+                  fontWeight: 800,
+                  color: "#fff",
+                  marginBottom: 12,
+                }}
               >
-                ✕
-              </button>
+                {initials}
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "hsl(210 40% 96%)" }}>
+                {userName || "Utente"}
+              </div>
+              <div style={{ fontSize: 12, color: "hsl(215 20% 65%)", marginTop: 2 }}>
+                {userEmail || ""}
+              </div>
             </div>
 
-            {/* Griglia di Navigazione Premium (Control Center Style) */}
-            <div className="grid grid-cols-2 gap-3.5">
-              {menuItems.map((item) => {
-                const isActive = pathname === item.href;
+            {/* Nav */}
+            <nav
+              style={{
+                flex: 1,
+                padding: 12,
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                overflowY: "auto",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "hsl(220 15% 35%)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  padding: "4px 10px 8px",
+                }}
+              >
+                Menu
+              </p>
+              {navItems.map((item) => {
+                const active = pathname === item.href || pathname?.startsWith(item.href + "/");
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={() => setIsOpen(false)}
-                    className="flex flex-col items-center justify-center p-4 rounded-2xl border text-center transition-all active:scale-95"
                     style={{
-                      background: isActive ? "hsl(220 90% 56% / 0.15)" : "hsl(220 26% 12%)",
-                      borderColor: isActive ? "hsl(220 90% 56% / 0.4)" : "hsl(220 20% 18%)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "13px 14px",
+                      borderRadius: 14,
+                      textDecoration: "none",
+                      background: active ? "hsla(220,90%,56%,0.12)" : "transparent",
+                      color: active ? "hsl(220 90% 56%)" : "hsl(215 20% 65%)",
                     }}
                   >
-                    <span className="text-2xl mb-2 block">{item.icon}</span>
-                    <span className={`text-xs font-bold ${isActive ? "text-white" : "text-white/70"}`}>
-                      {item.label}
-                    </span>
+                    <span style={{ fontSize: 18, width: 22, textAlign: "center" }}>{item.icon}</span>
+                    <span style={{ fontSize: 15, fontWeight: active ? 700 : 500 }}>{item.label}</span>
                   </Link>
                 );
               })}
 
-              {/* Pulsante Calcolatrice nella Griglia */}
-              <button
-                onClick={() => {
-                  setIsOpen(false);
-                  setShowCalc(true);
-                }}
-                className="flex flex-col items-center justify-center p-4 rounded-2xl border text-center transition-all active:scale-95 cursor-pointer"
+              <p
                 style={{
-                  background: "hsl(220 26% 12%)",
-                  borderColor: "hsl(220 20% 18%)",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "hsl(220 15% 35%)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  padding: "12px 10px 8px",
                 }}
               >
-                <span className="text-2xl mb-2 block">🧮</span>
-                <span className="text-xs font-bold text-white/70">
-                  Calcolatrice
-                </span>
-              </button>
-
-              {/* Pulsante Bolla nella Griglia */}
-              <div onClick={() => setIsOpen(false)}>
+                Strumenti
+              </p>
+              {tools.map((t) => (
+                <button
+                  key={t.label}
+                  onClick={t.action}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "13px 14px",
+                    borderRadius: 14,
+                    border: "none",
+                    background: "transparent",
+                    color: "hsl(215 20% 65%)",
+                    cursor: "pointer",
+                    width: "100%",
+                  }}
+                >
+                  <span style={{ fontSize: 18, width: 22, textAlign: "center" }}>{t.icon}</span>
+                  <span style={{ fontSize: 15, fontWeight: 500 }}>{t.label}</span>
+                </button>
+              ))}
+              <div onClick={() => setIsOpen(false)} style={{ paddingLeft: 2 }}>
                 <GlobalBollaTrigger mode="mobile" />
               </div>
-            </div>
+            </nav>
 
-            {/* Piè di pagina del menu */}
-            <div className="border-t border-white/5 pt-4">
-              <div className="text-center text-[9px] text-white/30 font-mono">
-                WebCAD Cantiere v{APP_VERSION}
+            {/* Footer */}
+            <div
+              style={{
+                padding: "14px 20px 20px",
+                borderTop: "1px solid hsl(220 20% 22%)",
+                flexShrink: 0,
+              }}
+            >
+              <LogoutButton
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 0",
+                  border: "none",
+                  background: "transparent",
+                  color: "hsl(0 84% 60%)",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  width: "100%",
+                }}
+              >
+                Disconnetti
+              </LogoutButton>
+              <div
+                style={{
+                  fontSize: 10,
+                  color: "hsl(220 15% 35%)",
+                  marginTop: 8,
+                  fontFamily: "monospace",
+                }}
+              >
+                WebCAD v{APP_VERSION}
               </div>
             </div>
           </aside>
         </div>
       )}
 
-      {/* Calcolatrice Globale Mobile */}
+      {/* Calcolatrice Globale */}
       <CalcolatriceWidget
         isOpen={showCalc}
         onClose={() => setShowCalc(false)}

@@ -326,12 +326,19 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
           </div>
 
           {/* Search bar */}
-          <div className="relative flex-1 max-w-lg">
+          <div
+            className="relative flex-1 max-w-lg"
+            style={{
+              background: "hsl(220 26% 14%)",
+              border: "1px solid hsl(220 20% 22%)",
+              borderRadius: "14px",
+            }}
+          >
             <span
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm pointer-events-none"
-              style={{ color: "hsl(215 15% 45%)" }}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
+              style={{ color: "hsl(215 15% 45%)", fontSize: "15px" }}
             >
-              🔍
+              ⌕
             </span>
             <input
               id="projects-search"
@@ -339,14 +346,14 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Cerca progetto..."
-              className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm outline-none transition-all"
+              className="w-full pl-9 pr-4 outline-none transition-all"
               style={{
-                background: "hsl(220 32% 12%)",
-                border: "1px solid hsl(220 20% 20%)",
+                background: "transparent",
+                border: "none",
                 color: "hsl(210 40% 96%)",
+                fontSize: "14px",
+                padding: "10px 14px 10px 36px",
               }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "hsl(220 90% 56%)")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "hsl(220 20% 20%)")}
             />
           </div>
 
@@ -392,11 +399,45 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
           )}
         </div>
       </div>
+
+      {/* FAB mobile: solo su schermi < md */}
+      <button
+        id="fab-new-project"
+        aria-label="Nuovo progetto"
+        onClick={() => setIsModalOpen(true)}
+        className="md:hidden"
+        style={{
+          position: "fixed",
+          bottom: "calc(24px + env(safe-area-inset-bottom))",
+          right: "18px",
+          width: "58px",
+          height: "58px",
+          borderRadius: "50%",
+          background: "hsl(220 90% 56%)",
+          color: "white",
+          fontSize: "28px",
+          lineHeight: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 4px 20px hsla(220,90%,56%,0.45)",
+          border: "none",
+          cursor: "pointer",
+          zIndex: 50,
+          transition: "transform 0.15s ease, box-shadow 0.15s ease",
+        }}
+        onMouseDown={(e) => { e.currentTarget.style.transform = "scale(0.93)"; }}
+        onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+        onTouchStart={(e) => { e.currentTarget.style.transform = "scale(0.93)"; }}
+        onTouchEnd={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+      >
+        +
+      </button>
     </>
   );
 }
 
-// ── Componente riga elenco progetto ───────────────────────────
+// ── Componente riga/card progetto ───────────────────────────
 function ProjectRow({ 
   project, 
   onQuickAdd 
@@ -406,7 +447,7 @@ function ProjectRow({
 }) {
   const gradient = avatarGradient(project.id);
   const initials = getProjectInitials(project.name);
-  
+
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
@@ -414,40 +455,97 @@ function ProjectRow({
 
   const date = mounted ? safeFormatDate(project.updated_at || project.created_at) : "—";
 
+  // Leggi dati offline per il subtitle
+  const levels = mounted
+    ? (useOfflineStore.getState().levels[project.id] ?? [])
+    : [];
+  const notes = mounted
+    ? Object.values(useOfflineStore.getState().fieldNotes).filter(
+        (n) => n.project_id === project.id
+      )
+    : [];
+  const numNotes = notes.length;
+  const numLevels = Array.from(new Set(levels.map((l) => l.piano || l.name).filter(Boolean))).length;
+  const subtitle = `${numNotes} appunti · ${numLevels} livelli · ${date}`;
+
   return (
     <div
-      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 transition-colors hover:bg-white/[0.01]"
-      style={{ borderBottom: "1px solid hsl(220 20% 16%)" }}
+      className="group"
+      style={{
+        padding: "14px",
+        borderRadius: "0", // gestito dal contenitore padre
+        background: "hsl(220 26% 14%)",
+        borderBottom: "1px solid hsl(220 20% 22%)",
+        transition: "background 0.15s ease",
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = "hsl(220 22% 18%)"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = "hsl(220 26% 14%)"; }}
     >
-      {/* Sinistra cliccabile per entrare */}
-      <Link
-        href={`/projects/${project.id}`}
-        className="flex items-center gap-3.5 min-w-0 flex-1 focus:outline-none"
-        aria-label={`Apri progetto ${project.name}`}
-      >
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 shadow-sm"
-          style={{ background: gradient }}
+      {/* Riga principale: avatar + info + chevron */}
+      <div className="flex items-center gap-[14px]">
+        {/* Avatar 48×48 con gradient deterministico */}
+        <Link
+          href={`/projects/${project.id}`}
+          className="flex-shrink-0 focus:outline-none"
+          aria-label={`Apri progetto ${project.name}`}
+          tabIndex={-1}
         >
-          {initials || "🏢"}
-        </div>
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "14px",
+              background: gradient,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "white",
+              fontWeight: 700,
+              fontSize: "16px",
+              flexShrink: 0,
+            }}
+          >
+            {initials || "🏢"}
+          </div>
+        </Link>
 
-        <div className="min-w-0">
-          <h3 className="text-white font-bold text-sm leading-tight truncate group-hover:text-sky-400 transition-colors">
+        {/* Info centrale */}
+        <Link
+          href={`/projects/${project.id}`}
+          className="flex-1 min-w-0 focus:outline-none"
+          aria-label={`Apri progetto ${project.name}`}
+        >
+          <p
+            className="truncate"
+            style={{ fontSize: "14px", fontWeight: 700, color: "hsl(210 40% 96%)", lineHeight: 1.3 }}
+          >
             {project.name}
-          </h3>
-          <p className="text-[10px] text-white/40 leading-none mt-1">
-            Modificato: {date}
           </p>
-        </div>
-      </Link>
+          <p
+            className="truncate"
+            style={{ fontSize: "12px", color: "hsl(215 15% 50%)", marginTop: "3px", lineHeight: 1.4 }}
+          >
+            {subtitle}
+          </p>
+        </Link>
 
-      {/* Pulsanti rapidi a destra */}
-      <div className="flex items-center gap-2 flex-wrap">
+        {/* Chevron dx */}
+        <Link
+          href={`/projects/${project.id}`}
+          className="flex-shrink-0 focus:outline-none"
+          tabIndex={-1}
+          aria-hidden
+        >
+          <span style={{ fontSize: "20px", color: "hsl(215 15% 45%)", lineHeight: 1 }}>›</span>
+        </Link>
+      </div>
+
+      {/* Pulsanti rapidi — visibili sempre sotto la riga */}
+      <div className="flex items-center gap-2 mt-3 flex-wrap">
         <button
           type="button"
           onClick={() => onQuickAdd("nota")}
-          className="px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all border border-sky-500/10 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 active:scale-95 cursor-pointer flex items-center gap-1.5 animate-pulse-subtle"
+          className="px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all border border-sky-500/10 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 active:scale-95 cursor-pointer flex items-center gap-1.5"
           title="Aggiungi una nota/misura a questo progetto"
         >
           <span>📝</span>
@@ -471,15 +569,6 @@ function ProjectRow({
           <span>✂️</span>
           <span>Taglio</span>
         </button>
-
-        <div className="w-[1.5px] h-5 bg-white/10 mx-1 hidden sm:block" />
-
-        <Link
-          href={`/projects/${project.id}`}
-          className="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors border border-white/5 bg-white/5 hover:bg-white/10 text-white/80 whitespace-nowrap ml-auto"
-        >
-          Apri →
-        </Link>
       </div>
     </div>
   );

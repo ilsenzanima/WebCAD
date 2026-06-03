@@ -10,6 +10,7 @@ import QuickAddTaglioModal from "./QuickAddTaglioModal";
 import type { FieldNote } from "@/app/actions/field-notes";
 import { toggleFieldNoteCompleted } from "@/app/actions/field-notes";
 import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
+import BottomActionBar from "@/app/ui/dashboard/BottomActionBar";
 
 
 // ============================================
@@ -691,40 +692,41 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
       </div>
 
       {/* ── Tab Switcher di Navigazione Interna ── */}
-      <div className="px-4 sm:px-8 pt-4 pb-0 flex gap-2 border-b border-white/5 print:hidden">
-        <button
-          type="button"
-          onClick={() => setActiveTab("note")}
-          className={`pb-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
-            activeTab === "note"
-              ? "border-[hsl(220,90%,56%)] text-white"
-              : "border-transparent text-white/40 hover:text-white/70"
-          }`}
-        >
-          📝 Appunti & Disegni
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("tagli")}
-          className={`pb-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
-            activeTab === "tagli"
-              ? "border-[hsl(220,90%,56%)] text-white"
-              : "border-transparent text-white/40 hover:text-white/70"
-          }`}
-        >
-          ✂️ Piani di Taglio ({taglioNotes.length})
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("pdf")}
-          className={`pb-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
-            activeTab === "pdf"
-              ? "border-[hsl(220,90%,56%)] text-white"
-              : "border-transparent text-white/40 hover:text-white/70"
-          }`}
-        >
-          📄 PDF ({pdfNotes.length})
-        </button>
+      <div
+        className="flex sticky top-0 z-10 print:hidden"
+        style={{
+          background: "hsl(220 32% 10%)",
+          borderBottom: "1px solid hsl(220 20% 22%)",
+        }}
+      >
+        {([
+          { id: "note",  label: "Appunti",  icon: "📝" },
+          { id: "tagli", label: "Tagli",    icon: "✂️" },
+          { id: "pdf",   label: "PDF",      icon: "📄" },
+        ] as const).map((tab) => {
+          const active = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              style={{
+                flex: 1,
+                padding: "12px 0",
+                border: "none",
+                borderBottom: `2px solid ${active ? "hsl(220 90% 56%)" : "transparent"}`,
+                background: "transparent",
+                color: active ? "hsl(220 90% 56%)" : "hsl(220 15% 35%)",
+                fontSize: 13,
+                fontWeight: active ? 700 : 500,
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+            >
+              {tab.icon} {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Contenuto Schede ── */}
@@ -1306,6 +1308,13 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
             </div>
          )}
       </div>
+
+      {/* ── Bottom Action Bar ── */}
+      <BottomActionBar
+        onNote={() => setQuickAddType("nota")}
+        onPhoto={() => setQuickAddType("nota")}
+        onCalc={() => {}}
+      />
 
       {/* Modale Inserimento Rapido */}
       {quickAddType && quickAddType !== "taglio" && (
