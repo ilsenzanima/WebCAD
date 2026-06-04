@@ -69,19 +69,53 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
   const projectsList = useMemo(() => {
     if (!mounted) return projects;
     const map = new Map<string, any>();
+    
+    // Inseriamo i progetti server
     projects.forEach(p => map.set(p.id, p));
 
     const queue = useOfflineStore.getState().offlineQueue;
+
+    // 1. Rimuoviamo i progetti che hanno un'operazione di eliminazione pendente in coda
+    const deletedProjectIds = new Set(
+      queue
+        .filter(op => op.action === "DELETE_PROJECT")
+        .map(op => op.payload.projectId)
+    );
+    deletedProjectIds.forEach(id => map.delete(id));
+
+    // 2. Aggiungiamo i progetti in cache solo se sono nuovi (ID temp_ o operazione CREATE_PROJECT)
     Object.values(cachedProjects).forEach(p => {
-      const isPending = p.id.startsWith("temp_") || queue.some(op => 
-        (op.action === "CREATE_PROJECT" && op.payload.tempId === p.id) ||
-        (op.action === "RENAME_PROJECT" && op.payload.projectId === p.id) ||
-        (op.action === "DELETE_PROJECT" && op.payload.projectId === p.id)
+      const isNewPending = p.id.startsWith("temp_") || queue.some(op => 
+        op.action === "CREATE_PROJECT" && op.payload.tempId === p.id
       );
-      if (isPending || !map.has(p.id)) {
-        map.set(p.id, p);
+
+      if (isNewPending) {
+        // Applica rinomine locali se presenti nella coda
+        let currentName = p.name;
+        queue.forEach(op => {
+          if (op.action === "RENAME_PROJECT" && op.payload.projectId === p.id) {
+            currentName = op.payload.newName;
+          }
+        });
+        if (!deletedProjectIds.has(p.id)) {
+          map.set(p.id, { ...p, name: currentName });
+        }
+      } else {
+        // Se il progetto esiste sul server ed ha una rinomina pendente nella coda locale,
+        // aggiorniamo il nome optimisticamente
+        const existing = map.get(p.id);
+        if (existing) {
+          let currentName = existing.name;
+          queue.forEach(op => {
+            if (op.action === "RENAME_PROJECT" && op.payload.projectId === p.id) {
+              currentName = op.payload.newName;
+            }
+          });
+          map.set(p.id, { ...existing, name: currentName });
+        }
       }
     });
+
     return Array.from(map.values());
   }, [projects, cachedProjects, mounted]);
 

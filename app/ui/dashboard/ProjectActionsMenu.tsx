@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { renameProject, deleteProject } from "@/app/actions/projects";
+import { useOfflineStore } from "@/lib/stores/offline-store";
 import { useRouter } from "next/navigation";
 
 interface ProjectActionsMenuProps {
@@ -34,7 +34,7 @@ export default function ProjectActionsMenu({
       return;
     }
     startTransition(async () => {
-      await renameProject(projectId, localName);
+      useOfflineStore.getState().renameProjectOptimistic(projectId, localName);
       setIsRenaming(false);
       router.refresh();
     });
@@ -51,7 +51,7 @@ export default function ProjectActionsMenu({
   const confirmDelete = () => {
     setIsDeleteOpen(false);
     startTransition(async () => {
-      await deleteProject(projectId);
+      useOfflineStore.getState().deleteProjectOptimistic(projectId);
       // Dopo aver eliminato il progetto torniamo alla dashboard/projects
       router.push("/projects");
       router.refresh();
