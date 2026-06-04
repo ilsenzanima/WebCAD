@@ -313,10 +313,15 @@ export default function TaglioEditor({
 
           // Prova orientamento normale
           if (req.width <= fr.w && req.height <= fr.h) {
-            const candX = fr.x;
+            let candX = fr.x;
             const candY = fr.y;
             const candW = req.width;
             const candH = req.height;
+
+            // Se superiamo la metà del foglio in larghezza, i pezzi vengono calcolati partendo dal lato opposto
+            if (candX + candW > sheetW / 2) {
+              candX = fr.x + fr.w - candW;
+            }
 
             let isBetter = false;
             if (bestSheetIdx === -1) {
@@ -345,10 +350,15 @@ export default function TaglioEditor({
 
           // Prova orientamento ruotato
           if (req.height <= fr.w && req.width <= fr.h) {
-            const candX = fr.x;
+            let candX = fr.x;
             const candY = fr.y;
             const candW = req.height;
             const candH = req.width;
+
+            // Se superiamo la metà del foglio in larghezza, i pezzi vengono calcolati partendo dal lato opposto
+            if (candX + candW > sheetW / 2) {
+              candX = fr.x + fr.w - candW;
+            }
 
             let isBetter = false;
             if (bestSheetIdx === -1) {
@@ -384,16 +394,34 @@ export default function TaglioEditor({
         
         // Verifica se il pezzo ci sta nel nuovo foglio vuoto
         if (req.width <= fr.w && req.height <= fr.h) {
-          bestX = fr.x;
-          bestY = fr.y;
-          bestW = req.width;
-          bestH = req.height;
+          let candX = fr.x;
+          const candY = fr.y;
+          const candW = req.width;
+          const candH = req.height;
+          
+          if (candX + candW > sheetW / 2) {
+            candX = fr.x + fr.w - candW;
+          }
+
+          bestX = candX;
+          bestY = candY;
+          bestW = candW;
+          bestH = candH;
           bestRotated = false;
         } else if (req.height <= fr.w && req.width <= fr.h) {
-          bestX = fr.x;
-          bestY = fr.y;
-          bestW = req.height;
-          bestH = req.width;
+          let candX = fr.x;
+          const candY = fr.y;
+          const candW = req.height;
+          const candH = req.width;
+          
+          if (candX + candW > sheetW / 2) {
+            candX = fr.x + fr.w - candW;
+          }
+
+          bestX = candX;
+          bestY = candY;
+          bestW = candW;
+          bestH = candH;
           bestRotated = true;
         } else {
           // Il pezzo è più grande del foglio intero, lo ignoriamo per evitare crash

@@ -259,10 +259,15 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
 
           // Prova orientamento normale
           if (reqW <= fr.w && reqH <= fr.h) {
-            const candX = fr.x;
+            let candX = fr.x;
             const candY = fr.y;
             const candW = reqW;
             const candH = reqH;
+
+            // Se superiamo la metà del foglio in larghezza, i pezzi vengono calcolati partendo dal lato opposto
+            if (candX + candW > commercialSheetW / 2) {
+              candX = fr.x + fr.w - candW;
+            }
 
             let isBetter = false;
             if (bestBoardIdx === -1) {
@@ -291,10 +296,15 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
 
           // Prova orientamento ruotato
           if (reqH <= fr.w && reqW <= fr.h) {
-            const candX = fr.x;
+            let candX = fr.x;
             const candY = fr.y;
             const candW = reqH;
             const candH = reqW;
+
+            // Se superiamo la metà del foglio in larghezza, i pezzi vengono calcolati partendo dal lato opposto
+            if (candX + candW > commercialSheetW / 2) {
+              candX = fr.x + fr.w - candW;
+            }
 
             let isBetter = false;
             if (bestBoardIdx === -1) {
@@ -330,16 +340,34 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
         
         // Verifica se il pezzo ci sta nel nuovo foglio vuoto
         if (reqW <= fr.w && reqH <= fr.h) {
-          bestX = fr.x;
-          bestY = fr.y;
-          bestW = reqW;
-          bestH = reqH;
+          let candX = fr.x;
+          const candY = fr.y;
+          const candW = reqW;
+          const candH = reqH;
+          
+          if (candX + candW > commercialSheetW / 2) {
+            candX = fr.x + fr.w - candW;
+          }
+
+          bestX = candX;
+          bestY = candY;
+          bestW = candW;
+          bestH = candH;
           bestRotated = false;
         } else if (reqH <= fr.w && reqW <= fr.h) {
-          bestX = fr.x;
-          bestY = fr.y;
-          bestW = reqH;
-          bestH = reqW;
+          let candX = fr.x;
+          const candY = fr.y;
+          const candW = reqH;
+          const candH = reqW;
+          
+          if (candX + candW > commercialSheetW / 2) {
+            candX = fr.x + fr.w - candW;
+          }
+
+          bestX = candX;
+          bestY = candY;
+          bestW = candW;
+          bestH = candH;
           bestRotated = true;
         } else {
           // Il pezzo è più grande del foglio intero, lo ignoriamo per evitare crash

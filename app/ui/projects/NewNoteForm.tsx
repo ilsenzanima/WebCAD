@@ -1242,7 +1242,14 @@ function NestingPreview({ items }: { items: NoteItemDraft[] }) {
       const pieceW = rotated ? reqH : reqW;
       const pieceH = rotated ? reqW : reqH;
       if (pieceW > freeRect.w || pieceH > freeRect.h) return null;
-      return { boardIndex, freeRectIndex, rotated, x: freeRect.x, y: freeRect.y, w: pieceW, h: pieceH };
+
+      let candX = freeRect.x;
+      // Se superiamo la metà del foglio in larghezza, i pezzi vengono calcolati partendo dal lato opposto
+      if (candX + pieceW > commercialSheetW / 2) {
+        candX = freeRect.x + freeRect.w - pieceW;
+      }
+
+      return { boardIndex, freeRectIndex, rotated, x: candX, y: freeRect.y, w: pieceW, h: pieceH };
     };
 
     const isBetterBottomLeft = (a: PlacementCandidate, b: PlacementCandidate): boolean => {
@@ -1254,8 +1261,13 @@ function NestingPreview({ items }: { items: NoteItemDraft[] }) {
     };
 
     const splitFreeRectGuillotine = (freeRect: FreeRect, piece: PlacementCandidate): FreeRect[] => {
+      const isRightAligned = piece.x > freeRect.x;
+      const stripX = isRightAligned
+        ? freeRect.x
+        : freeRect.x + piece.w + bladeThickness;
+
       const rightStrip: FreeRect | null = freeRect.w - piece.w > 0
-        ? { x: freeRect.x + piece.w + bladeThickness, y: freeRect.y, w: freeRect.w - piece.w - bladeThickness, h: piece.h }
+        ? { x: stripX, y: freeRect.y, w: freeRect.w - piece.w - bladeThickness, h: piece.h }
         : null;
       const bottomStrip: FreeRect | null = freeRect.h - piece.h > 0
         ? { x: freeRect.x, y: freeRect.y + piece.h + bladeThickness, w: freeRect.w, h: freeRect.h - piece.h - bladeThickness }
