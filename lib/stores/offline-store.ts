@@ -23,6 +23,7 @@ export interface SyncOperation {
 interface OfflineState {
   // Connettività
   isOnline: boolean;
+  offlineMode: boolean; // Se forzata manuale
   
   // Cache locale
   projects: Record<string, Project>; // key: projectId
@@ -38,6 +39,7 @@ interface OfflineState {
 
   // Azioni di stato rete
   setOnlineStatus: (status: boolean) => void;
+  setOfflineMode: (status: boolean) => Promise<void>;
 
   // Caricamento dati (inizializzazione cache online)
   setProjectsCache: (projects: Project[]) => void;
@@ -67,10 +69,33 @@ export function generateTempId(): string {
   return `temp_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
 }
 
+export const isProjectPending = (queue: SyncOperation[], projectId: string) => {
+  return queue.some(op => 
+    (op.action === "CREATE_PROJECT" && op.payload.tempId === projectId) ||
+    (op.action === "RENAME_PROJECT" && op.payload.projectId === projectId) ||
+    (op.action === "DELETE_PROJECT" && op.payload.projectId === projectId)
+  );
+};
+
+export const isLevelPending = (queue: SyncOperation[], levelId: string) => {
+  return queue.some(op => 
+    (op.action === "ADD_LEVEL" && op.payload.tempId === levelId) ||
+    (op.action === "TOGGLE_LEVEL_COMPLETED" && op.payload.levelId === levelId)
+  );
+};
+
+export const isNotePending = (queue: SyncOperation[], noteId: string) => {
+  return queue.some(op => 
+    (op.action === "SAVE_NOTE_ITEMS" && op.payload.noteId === noteId) ||
+    (op.action === "DELETE_NOTE" && op.payload.noteId === noteId)
+  );
+};
+
 export const useOfflineStore = create<OfflineState>()(
   persist(
     (set, get) => ({
       isOnline: typeof window !== "undefined" ? window.navigator.onLine : true,
+      offlineMode: false,
       projects: {},
       levels: {},
       fieldNotes: {},
@@ -82,24 +107,64 @@ export const useOfflineStore = create<OfflineState>()(
 
       setOnlineStatus: (status) => set({ isOnline: status }),
 
+      setOfflineMode: async (status) => {
+        set({ offlineMode: status });
+        if (!status && get().isOnline) {
+          await get().syncOfflineData();
+        }
+      },
+
       setProjectsCache: (projects) => {
+        const queue = get().offlineQueue;
         const cache: Record<string, Project> = {};
         projects.forEach((p) => {
-          cache[p.id] = p;
+          if (!isProjectPending(queue, p.id)) {
+            cache[p.id] = p;
+          }
         });
         set((state) => ({ projects: { ...state.projects, ...cache } }));
       },
 
       setLevelsCache: (projectId, levels) => {
-        set((state) => ({
-          levels: { ...state.levels, [projectId]: levels },
-        }));
+        const queue = get().offlineQueue;
+        set((state) => {
+          const currentLevels = state.levels[projectId] ?? [];
+          const updatedLevels = [...currentLevels];
+
+          levels.forEach((serverLvl) => {
+            if (!isLevelPending(queue, serverLvl.id)) {
+              const idx = updatedLevels.findIndex((l) => l.id === serverLvl.id);
+              if (idx > -1) {
+                updatedLevels[idx] = serverLvl;
+              } else {
+                updatedLevels.push(serverLvl);
+              }
+            }
+          });
+
+          // Rimuovi eventuali livelli che sono stati rimossi sul server,
+          // a meno che non siano livelli temporanei creati offline (che iniziano con temp_)
+          // o che abbiano operazioni pendenti in coda.
+          const serverIds = new Set(levels.map((l) => l.id));
+          const filteredLevels = updatedLevels.filter((lvl) => 
+            serverIds.has(lvl.id) || 
+            lvl.id.startsWith("temp_") || 
+            isLevelPending(queue, lvl.id)
+          );
+
+          return {
+            levels: { ...state.levels, [projectId]: filteredLevels },
+          };
+        });
       },
 
       setFieldNotesCache: (notes) => {
+        const queue = get().offlineQueue;
         const cache: Record<string, FieldNote> = {};
         notes.forEach((n) => {
-          cache[n.id] = n;
+          if (!isNotePending(queue, n.id)) {
+            cache[n.id] = n;
+          }
         });
         set((state) => ({ fieldNotes: { ...state.fieldNotes, ...cache } }));
       },
@@ -144,7 +209,7 @@ export const useOfflineStore = create<OfflineState>()(
         };
         set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
 
-        if (get().isOnline) {
+        if (!get().offlineMode && get().isOnline) {
           get().syncOfflineData();
         }
       },
@@ -169,7 +234,7 @@ export const useOfflineStore = create<OfflineState>()(
         };
         set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
 
-        if (get().isOnline) {
+        if (!get().offlineMode && get().isOnline) {
           get().syncOfflineData();
         }
       },
@@ -191,7 +256,7 @@ export const useOfflineStore = create<OfflineState>()(
         };
         set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
 
-        if (get().isOnline) {
+        if (!get().offlineMode && get().isOnline) {
           get().syncOfflineData();
         }
       },
@@ -226,7 +291,7 @@ export const useOfflineStore = create<OfflineState>()(
         };
         set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
 
-        if (get().isOnline) {
+        if (!get().offlineMode && get().isOnline) {
           get().syncOfflineData();
         }
       },
@@ -253,7 +318,7 @@ export const useOfflineStore = create<OfflineState>()(
         };
         set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
 
-        if (get().isOnline) {
+        if (!get().offlineMode && get().isOnline) {
           get().syncOfflineData();
         }
       },
@@ -302,7 +367,7 @@ export const useOfflineStore = create<OfflineState>()(
         };
         set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
 
-        if (get().isOnline) {
+        if (!get().offlineMode && get().isOnline) {
           get().syncOfflineData();
         }
       },
@@ -322,7 +387,7 @@ export const useOfflineStore = create<OfflineState>()(
         };
         set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
 
-        if (get().isOnline) {
+        if (!get().offlineMode && get().isOnline) {
           get().syncOfflineData();
         }
       },
@@ -390,12 +455,10 @@ export const useOfflineStore = create<OfflineState>()(
         };
         set((state) => ({ offlineQueue: [...state.offlineQueue, op] }));
 
-        if (get().isOnline) {
+        if (!get().offlineMode && get().isOnline) {
           get().syncOfflineData();
         }
       },
-
-      // --- ENGINE DI SINCRONIZZAZIONE (SYNC ENGINE) ---
 
       syncOfflineData: async () => {
         if (get().isSyncing) return;
@@ -433,174 +496,186 @@ export const useOfflineStore = create<OfflineState>()(
             return obj;
           };
 
+          const completedOps: string[] = [];
+
           // Elabora in ordine sequenziale (FIFO)
           for (const op of queue) {
             const resolvedPayload = resolveIds(op.payload);
-          try {
-            switch (op.action) {
-              case "CREATE_PROJECT": {
-                // Crea il progetto sul server
-                // L'azione createProject fa un redirect, ma le Server Actions catturano i redirect come errori controllati o li gestiscono.
-                // Per evitare problemi di redirect forzato, creiamo una mini fetch o andiamo ad invocare la action.
-                // Nota: createProject originariamente reindirizza. Se fallisce o reindirizza, gestiamo l'ID.
-                // Invece di usare createProject standard che ha redirect(), useremo il client di Supabase se disponibile o invochiamo createProject gestendolo.
-                // Poiché il client può importare `@/lib/supabase/client`, creiamo un client Supabase client-side per aggirare i redirect server-side bloccanti in background!
-                const { createClient } = await import("@/lib/supabase/client");
-                const supabase = createClient() as any;
-                const { data: { user } } = await supabase.auth.getUser();
+            try {
+              switch (op.action) {
+                case "CREATE_PROJECT": {
+                  const { createClient } = await import("@/lib/supabase/client");
+                  const supabase = createClient() as any;
+                  const { data: { user } } = await supabase.auth.getUser();
 
-                if (user) {
-                  const { data, error } = await supabase
-                    .from("projects")
-                    .insert({ name: resolvedPayload.name, user_id: user.id, client_info: {} })
-                    .select("id")
-                    .single();
-                  
-                  if (!error && data) {
-                    idMap[resolvedPayload.tempId] = data.id;
-                    set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.tempId]: data.id } }));
+                  if (user) {
+                    const { data, error } = await supabase
+                      .from("projects")
+                      .insert({ name: resolvedPayload.name, user_id: user.id, client_info: {} })
+                      .select("id")
+                      .single();
+                    
+                    if (!error && data) {
+                      idMap[resolvedPayload.tempId] = data.id;
+                      set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.tempId]: data.id } }));
+                      completedOps.push(op.id);
+                    } else {
+                      console.error("Errore sync CREATE_PROJECT:", error);
+                      throw error || new Error("CREATE_PROJECT failed");
+                    }
                   } else {
-                    console.error("Errore sync CREATE_PROJECT:", error);
+                    throw new Error("User not authenticated");
                   }
+                  break;
                 }
-                break;
-              }
-              case "RENAME_PROJECT": {
-                await renameProject(resolvedPayload.projectId, resolvedPayload.newName);
-                break;
-              }
-              case "DELETE_PROJECT": {
-                await deleteProject(resolvedPayload.projectId);
-                break;
-              }
-              case "ADD_LEVEL": {
-                // Inserimento livello tramite Supabase client per aggirare redirect e prendere l'id reale
-                const { createClient } = await import("@/lib/supabase/client");
-                const supabase = createClient() as any;
-                const { data, error } = await supabase
-                  .from("levels")
-                  .insert({
-                    project_id: resolvedPayload.projectId,
-                    name: resolvedPayload.name,
-                    elevation_z: resolvedPayload.elevationZ,
-                    drawing_type: resolvedPayload.drawingType,
-                    piano: resolvedPayload.piano || "Generico",
-                  })
-                  .select("id")
-                  .single();
-
-                if (!error && data) {
-                  idMap[resolvedPayload.tempId] = data.id;
-                  set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.tempId]: data.id } }));
-                } else {
-                  console.error("Errore sync ADD_LEVEL:", error);
+                case "RENAME_PROJECT": {
+                  const res = await renameProject(resolvedPayload.projectId, resolvedPayload.newName);
+                  if (res && res.error) throw new Error(res.error);
+                  completedOps.push(op.id);
+                  break;
                 }
-                break;
-              }
-              case "TOGGLE_LEVEL_COMPLETED": {
-                await toggleLevelCompleted(resolvedPayload.levelId, resolvedPayload.completed);
-                break;
-              }
-              case "SAVE_NOTE_ITEMS": {
-                // Risolve ID di progetto e livello reali
-                const realProjId = resolvedPayload.projectId;
-                const realLvlId = resolvedPayload.levelId;
-                let realNoteId = resolvedPayload.noteId;
-
-                const { createClient } = await import("@/lib/supabase/client");
-                const supabase = createClient() as any;
-
-                // Se la nota ha un TempID, creiamo prima la nota nel database
-                if (realNoteId.startsWith("temp_")) {
-                  const { data: numData } = await supabase.rpc("next_field_note_number", { p_user_id: (await supabase.auth.getUser()).data.user?.id });
-                  const { data: newNote, error } = await supabase
-                    .from("field_notes")
+                case "DELETE_PROJECT": {
+                  const res = await deleteProject(resolvedPayload.projectId);
+                  if (res && res.error) throw new Error(res.error);
+                  completedOps.push(op.id);
+                  break;
+                }
+                case "ADD_LEVEL": {
+                  const { createClient } = await import("@/lib/supabase/client");
+                  const supabase = createClient() as any;
+                  const { data, error } = await supabase
+                    .from("levels")
                     .insert({
-                      project_id: realProjId,
-                      level_id: realLvlId,
-                      user_id: (await supabase.auth.getUser()).data.user?.id,
-                      note_number: numData || 1,
-                      type_name: resolvedPayload.typeName || "Appunti Cantiere",
+                      project_id: resolvedPayload.projectId,
+                      name: resolvedPayload.name,
+                      elevation_z: resolvedPayload.elevationZ,
+                      drawing_type: resolvedPayload.drawingType,
+                      piano: resolvedPayload.piano || "Generico",
                     })
                     .select("id")
                     .single();
 
-                  if (!error && newNote) {
-                    idMap[resolvedPayload.noteId] = newNote.id;
-                    set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.noteId]: newNote.id } }));
-                    realNoteId = newNote.id;
+                  if (!error && data) {
+                    idMap[resolvedPayload.tempId] = data.id;
+                    set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.tempId]: data.id } }));
+                    completedOps.push(op.id);
                   } else {
-                    console.error("Errore creazione field_notes in sync:", error);
-                    continue;
+                    console.error("Errore sync ADD_LEVEL:", error);
+                    throw error || new Error("ADD_LEVEL failed");
                   }
+                  break;
                 }
+                case "TOGGLE_LEVEL_COMPLETED": {
+                  const res = await toggleLevelCompleted(resolvedPayload.levelId, resolvedPayload.completed);
+                  if (res && res.error) throw new Error(res.error);
+                  completedOps.push(op.id);
+                  break;
+                }
+                case "SAVE_NOTE_ITEMS": {
+                  const realProjId = resolvedPayload.projectId;
+                  const realLvlId = resolvedPayload.levelId;
+                  let realNoteId = resolvedPayload.noteId;
 
-                // Salva le voci note
-                await updateFieldNote(realNoteId, {
-                  project_id: realProjId,
-                  level_id: realLvlId,
-                  type_name: resolvedPayload.typeName,
-                  items: resolvedPayload.items,
-                });
-                break;
+                  const { createClient } = await import("@/lib/supabase/client");
+                  const supabase = createClient() as any;
+
+                  if (realNoteId.startsWith("temp_")) {
+                    const { data: numData } = await supabase.rpc("next_field_note_number", { p_user_id: (await supabase.auth.getUser()).data.user?.id });
+                    const { data: newNote, error } = await supabase
+                      .from("field_notes")
+                      .insert({
+                        project_id: realProjId,
+                        level_id: realLvlId,
+                        user_id: (await supabase.auth.getUser()).data.user?.id,
+                        note_number: numData || 1,
+                        type_name: resolvedPayload.typeName || "Appunti Cantiere",
+                      })
+                      .select("id")
+                      .single();
+
+                    if (!error && newNote) {
+                      idMap[resolvedPayload.noteId] = newNote.id;
+                      set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.noteId]: newNote.id } }));
+                      realNoteId = newNote.id;
+                    } else {
+                      console.error("Errore creazione field_notes in sync:", error);
+                      throw error || new Error("SAVE_NOTE_ITEMS parent note creation failed");
+                    }
+                  }
+
+                  const res = await updateFieldNote(realNoteId, {
+                    project_id: realProjId,
+                    level_id: realLvlId,
+                    type_name: resolvedPayload.typeName,
+                    items: resolvedPayload.items,
+                  });
+                  if (!res.success) throw new Error(res.error || "SAVE_NOTE_ITEMS items update failed");
+                  completedOps.push(op.id);
+                  break;
+                }
+                case "DELETE_NOTE": {
+                  const res = await deleteFieldNote(resolvedPayload.noteId, resolvedPayload.projectId);
+                  if (!res.success) throw new Error(res.error || "DELETE_NOTE failed");
+                  completedOps.push(op.id);
+                  break;
+                }
+                case "UPDATE_NOTE_TEXT": {
+                  const res = await updateLevelNoteText(resolvedPayload.levelId, resolvedPayload.text);
+                  if (!res.success) throw new Error(res.error || "UPDATE_NOTE_TEXT failed");
+                  completedOps.push(op.id);
+                  break;
+                }
               }
-              case "DELETE_NOTE": {
-                await deleteFieldNote(resolvedPayload.noteId, resolvedPayload.projectId);
-                break;
-              }
-              case "UPDATE_NOTE_TEXT": {
-                await updateLevelNoteText(resolvedPayload.levelId, resolvedPayload.text);
-                break;
-              }
+            } catch (err) {
+              console.error(`Errore nella sincronizzazione dell'operazione ${op.action}:`, err);
+              // Blocca l'esecuzione della coda al primo errore (FIFO)
+              break;
             }
-          } catch (err) {
-            console.error(`Errore nella sincronizzazione dell'operazione ${op.action}:`, err);
-          }
-        }
-
-        // Ricalcola la cache locale post-sync per rinfrescare con gli ID reali
-        set((state) => {
-          const resolvedProjects: Record<string, Project> = {};
-          for (const key in state.projects) {
-            const realKey = idMap[key] ?? key;
-            resolvedProjects[realKey] = { ...state.projects[key], id: realKey };
           }
 
-          const resolvedLevels: Record<string, Level[]> = {};
-          for (const key in state.levels) {
-            const realKey = idMap[key] ?? key;
-            resolvedLevels[realKey] = state.levels[key].map((lvl) => ({
-              ...lvl,
-              id: idMap[lvl.id] ?? lvl.id,
-              project_id: realKey,
-            }));
-          }
+          // Ricalcola la cache locale post-sync per rinfrescare con gli ID reali
+          set((state) => {
+            const resolvedProjects: Record<string, Project> = {};
+            for (const key in state.projects) {
+              const realKey = idMap[key] ?? key;
+              resolvedProjects[realKey] = { ...state.projects[key], id: realKey };
+            }
 
-          const resolvedNotes: Record<string, FieldNote> = {};
-          for (const key in state.fieldNotes) {
-            const realKey = idMap[key] ?? key;
-            const note = state.fieldNotes[key];
-            resolvedNotes[realKey] = {
-              ...note,
-              id: realKey,
-              project_id: idMap[note.project_id] ?? note.project_id,
-              level_id: note.level_id ? (idMap[note.level_id] ?? note.level_id) : null,
+            const resolvedLevels: Record<string, Level[]> = {};
+            for (const key in state.levels) {
+              const realKey = idMap[key] ?? key;
+              resolvedLevels[realKey] = state.levels[key].map((lvl) => ({
+                ...lvl,
+                id: idMap[lvl.id] ?? lvl.id,
+                project_id: realKey,
+              }));
+            }
+
+            const resolvedNotes: Record<string, FieldNote> = {};
+            for (const key in state.fieldNotes) {
+              const realKey = idMap[key] ?? key;
+              const note = state.fieldNotes[key];
+              resolvedNotes[realKey] = {
+                ...note,
+                id: realKey,
+                project_id: idMap[note.project_id] ?? note.project_id,
+                level_id: note.level_id ? (idMap[note.level_id] ?? note.level_id) : null,
+              };
+            }
+
+            return {
+              projects: resolvedProjects,
+              levels: resolvedLevels,
+              fieldNotes: resolvedNotes,
+              offlineQueue: state.offlineQueue.filter((op) => !completedOps.includes(op.id)),
+              isSyncing: false,
             };
-          }
-
-          return {
-            projects: resolvedProjects,
-            levels: resolvedLevels,
-            fieldNotes: resolvedNotes,
-            offlineQueue: [], // Pulisce la coda
-            isSyncing: false,
-          };
-        });
-      } catch (err) {
-        console.error("Errore generico in syncOfflineData:", err);
-        set({ isSyncing: false });
-      }
-    },
+          });
+        } catch (err) {
+          console.error("Errore generico in syncOfflineData:", err);
+          set({ isSyncing: false });
+        }
+      },
 
       clearQueue: () => set({ offlineQueue: [] }),
     }),
@@ -609,6 +684,7 @@ export const useOfflineStore = create<OfflineState>()(
       storage: createJSONStorage(() => localStorage),
       // Escludi lo stato di connettività isOnline e isSyncing dal localStorage per evitare blocchi
       partialize: (state) => ({
+        offlineMode: state.offlineMode,
         projects: state.projects,
         levels: state.levels,
         fieldNotes: state.fieldNotes,

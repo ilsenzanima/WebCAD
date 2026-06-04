@@ -19,27 +19,44 @@ export default async function ProjectDetailPage({
     redirect("/login");
   }
 
-  // Fetch project data (cantiere)
-  const { data: project, error: projectError } = await supabase
-    .from("projects")
-    .select("id, name, notes, created_at, updated_at")
-    .eq("id", id)
-    .single();
+  let project;
+  let levels: any[] = [];
+  let projectNotes: any[] = [];
 
-  if (projectError || !project) {
-    return notFound();
+  if (id.startsWith("temp_")) {
+    project = {
+      id,
+      name: "Nuovo Progetto Offline",
+      notes: "",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  } else {
+    // Fetch project data (cantiere)
+    const { data, error: projectError } = await supabase
+      .from("projects")
+      .select("id, name, notes, created_at, updated_at")
+      .eq("id", id)
+      .single();
+
+    if (projectError || !data) {
+      return notFound();
+    }
+    project = data;
+
+    // Fetch levels (note) di questo cantiere
+    const [fetchedLevels, fetchedNotes] = await Promise.all([
+      supabase
+        .from("levels")
+        .select("id, project_id, name, elevation_z, plan_image_url, scale_ratio, drawing_type, created_at, completed, piano")
+        .eq("project_id", id)
+        .order("elevation_z", { ascending: true })
+        .then(res => res.data ?? []),
+      getAllProjectFieldNotes(id)
+    ]);
+    levels = fetchedLevels;
+    projectNotes = fetchedNotes;
   }
-
-  // Fetch levels (note) di questo cantiere
-  const [levels, projectNotes] = await Promise.all([
-    supabase
-      .from("levels")
-      .select("id, project_id, name, elevation_z, plan_image_url, scale_ratio, drawing_type, created_at, completed, piano")
-      .eq("project_id", id)
-      .order("elevation_z", { ascending: true })
-      .then(res => res.data ?? []),
-    getAllProjectFieldNotes(id)
-  ]);
 
   return <ProjectDetailClient project={project} drawings={levels} notesList={projectNotes} />;
 }

@@ -10,7 +10,7 @@ const NetworkSyncContext = createContext<{ isOnline: boolean }>({ isOnline: true
 export const useNetworkStatus = () => useContext(NetworkSyncContext);
 export default function NetworkSyncProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { isOnline, setOnlineStatus, syncOfflineData, offlineQueue, isSyncing } = useOfflineStore();
+  const { isOnline, offlineMode, setOnlineStatus, syncOfflineData, offlineQueue, isSyncing } = useOfflineStore();
   const [showSyncSuccess, setShowSyncSuccess] = useState(false);
   // Previene il mismatch di idratazione React #418:
   // i banner condizionali (offline/syncing) vengono renderizzati solo lato client dopo il mount
@@ -118,12 +118,14 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
     // Gestione connettività di rete
     const handleOnline = () => {
       setOnlineStatus(true);
-      // Avvia la sincronizzazione automatica quando torna online
-      syncOfflineData().then(() => {
-        setShowSyncSuccess(true);
-        router.refresh();
-        setTimeout(() => setShowSyncSuccess(false), 3000);
-      });
+      // Avvia la sincronizzazione automatica quando torna online, se non siamo in offlineMode manuale
+      if (!useOfflineStore.getState().offlineMode) {
+        syncOfflineData().then(() => {
+          setShowSyncSuccess(true);
+          router.refresh();
+          setTimeout(() => setShowSyncSuccess(false), 3000);
+        });
+      }
     };
 
     const handleOffline = () => {
@@ -136,8 +138,8 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
       // Imposta lo stato iniziale
       setOnlineStatus(window.navigator.onLine);
       
-      // Se all'avvio siamo online ed abbiamo operazioni in coda, sincronizziamo
-      if (window.navigator.onLine) {
+      // Se all'avvio siamo online ed abbiamo operazioni in coda, e non siamo in offlineMode manuale, sincronizziamo
+      if (window.navigator.onLine && !useOfflineStore.getState().offlineMode) {
         if (offlineQueue.length > 0) {
           syncOfflineData().then(() => {
             router.refresh();
@@ -165,9 +167,9 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
       {clientMounted && (
         <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 font-sans">
           {/* Banner Offline */}
-          {!isOnline && (
+          {(offlineMode || !isOnline) && (
             <div
-              className="flex items-center gap-2.5 px-4 py-3 rounded-2xl text-xs font-semibold shadow-2xl animate-bounce border"
+               className="flex items-center gap-2.5 px-4 py-3 rounded-2xl text-xs font-semibold shadow-2xl animate-bounce border"
               style={{
                 background: "hsl(220 26% 12% / 0.95)",
                 borderColor: "hsl(32 95% 44% / 0.4)",
@@ -178,7 +180,7 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
             >
               <span className="text-sm">⚠️</span>
               <div>
-                <p className="font-bold">Modalità Offline</p>
+                <p className="font-bold">{!isOnline ? "Modalità Offline (Senza Rete)" : "Modalità Offline Attiva"}</p>
                 <p className="opacity-80 text-[10px] font-normal mt-0.5">Le modifiche saranno salvate in locale</p>
               </div>
               {offlineQueue.length > 0 && (

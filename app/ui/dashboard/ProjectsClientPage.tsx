@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import NewProjectModal from "./NewProjectModal";
@@ -63,6 +63,27 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const cachedProjects = useOfflineStore((state) => state.projects);
+
+  const projectsList = useMemo(() => {
+    if (!mounted) return projects;
+    const map = new Map<string, any>();
+    projects.forEach(p => map.set(p.id, p));
+
+    const queue = useOfflineStore.getState().offlineQueue;
+    Object.values(cachedProjects).forEach(p => {
+      const isPending = p.id.startsWith("temp_") || queue.some(op => 
+        (op.action === "CREATE_PROJECT" && op.payload.tempId === p.id) ||
+        (op.action === "RENAME_PROJECT" && op.payload.projectId === p.id) ||
+        (op.action === "DELETE_PROJECT" && op.payload.projectId === p.id)
+      );
+      if (isPending || !map.has(p.id)) {
+        map.set(p.id, p);
+      }
+    });
+    return Array.from(map.values());
+  }, [projects, cachedProjects, mounted]);
 
   const [loadedNotes, setLoadedNotes] = useState<FieldNote[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
@@ -223,7 +244,7 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
   };
 
   // Ordina i cantieri in ordine alfabetico per nome
-  const filtered = projects
+  const filtered = projectsList
     .filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -263,7 +284,7 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
                 color: "hsl(220 90% 70%)",
               }}
             >
-              {projects.length}
+              {projectsList.length}
             </span>
           </div>
 

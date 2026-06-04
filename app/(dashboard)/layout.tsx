@@ -8,6 +8,7 @@ import UpdateNotifier from "@/app/ui/dashboard/UpdateNotifier";
 import SidebarProfile from "@/app/ui/dashboard/SidebarProfile";
 import GlobalCalcTrigger from "@/app/ui/dashboard/GlobalCalcTrigger";
 import GlobalBollaTrigger from "@/app/ui/dashboard/GlobalBollaTrigger";
+import OfflineModeToggle from "@/app/ui/dashboard/OfflineModeToggle";
 import type { ReactNode } from "react";
 
 const navItems = [
@@ -114,6 +115,9 @@ export default async function DashboardLayout({
               </Link>
             ))}
           </div>
+
+          {/* Switch offline manuale */}
+          <OfflineModeToggle />
 
           {/* Profilo & Notifiche di Aggiornamento */}
           <SidebarProfile 

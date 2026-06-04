@@ -74,6 +74,21 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
 
   const [activePdfViewerUrl, setActivePdfViewerUrl] = useState<{ url: string; title: string } | null>(null);
 
+  // Store offline Zustand
+  const isOnline = useOfflineStore((state) => state.isOnline);
+  const offlineMode = useOfflineStore((state) => state.offlineMode);
+  const isOfflineActive = offlineMode || !isOnline;
+
+  const setProjectsCache = useOfflineStore((state) => state.setProjectsCache);
+  const setLevelsCache = useOfflineStore((state) => state.setLevelsCache);
+  const setFieldNotesCache = useOfflineStore((state) => state.setFieldNotesCache);
+  const addLevelOptimistic = useOfflineStore((state) => state.addLevelOptimistic);
+  const renameProjectOptimistic = useOfflineStore((state) => state.renameProjectOptimistic);
+  const toggleLevelCompletedOptimistic = useOfflineStore((state) => state.toggleLevelCompletedOptimistic);
+
+  const cachedLevels = useOfflineStore((state) => state.levels[project.id]);
+  const cachedFieldNotes = useOfflineStore((state) => state.fieldNotes);
+
   // Stati per accordion note, lightbox foto e completamento singola nota
   const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
   const [activeLightboxUrl, setActiveLightboxUrl] = useState<string | null>(null);
@@ -83,7 +98,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
     const nextCompleted = !currentCompleted;
     setLocalCompletedNotes((prev) => ({ ...prev, [noteId]: nextCompleted }));
 
-    if (!isOnline) {
+    if (isOfflineActive) {
       // Aggiorna localmente lo store offline se la nota è presente nella cache
       const cached = cachedFieldNotes[noteId];
       if (cached) {
@@ -105,36 +120,49 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
     });
   };
 
-  // Store offline Zustand
-  const isOnline = useOfflineStore((state) => state.isOnline);
-  const setProjectsCache = useOfflineStore((state) => state.setProjectsCache);
-  const setLevelsCache = useOfflineStore((state) => state.setLevelsCache);
-  const setFieldNotesCache = useOfflineStore((state) => state.setFieldNotesCache);
-  const addLevelOptimistic = useOfflineStore((state) => state.addLevelOptimistic);
-  const renameProjectOptimistic = useOfflineStore((state) => state.renameProjectOptimistic);
-  const toggleLevelCompletedOptimistic = useOfflineStore((state) => state.toggleLevelCompletedOptimistic);
-
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Leggi dinamicamente dallo store offline
-  const cachedLevels = useOfflineStore((state) => state.levels[project.id]);
-  const levelsToUse = mounted && cachedLevels && cachedLevels.length > 0 ? cachedLevels : drawings;
-  const cachedFieldNotes = useOfflineStore((state) => state.fieldNotes);
+  // Leggi dinamicamente dallo store offline unendo i livelli del server
+  const levelsToUse = useMemo(() => {
+    if (!mounted) return drawings;
+    if (!cachedLevels || cachedLevels.length === 0) return drawings;
+
+    const queue = useOfflineStore.getState().offlineQueue;
+    const allLevelsMap = new Map<string, Drawing>();
+    drawings.forEach((d) => allLevelsMap.set(d.id, d as Drawing));
+
+    cachedLevels.forEach((lvl) => {
+      const isPending = lvl.id.startsWith("temp_") || queue.some(op => 
+        (op.action === "ADD_LEVEL" && op.payload.tempId === lvl.id) ||
+        (op.action === "TOGGLE_LEVEL_COMPLETED" && op.payload.levelId === lvl.id)
+      );
+      if (isPending || !allLevelsMap.has(lvl.id)) {
+        allLevelsMap.set(lvl.id, lvl as Drawing);
+      }
+    });
+
+    return Array.from(allLevelsMap.values());
+  }, [drawings, cachedLevels, mounted]);
 
   const [activeTab, setActiveTab] = useState<"note" | "tagli" | "pdf">("note");
 
   // Unisce le note caricate dal server con quelle presenti nello store offline per questo progetto
   const projectNotes = useMemo(() => {
-    if (!mounted) return notesList; // Durante SSR/idratazione iniziale, usa solo i dati del server per evitare discrepanze UI
+    if (!mounted) return notesList;
 
     const allNotesMap: Record<string, FieldNote> = {};
     notesList.forEach(n => { allNotesMap[n.id] = n; });
+
+    const queue = useOfflineStore.getState().offlineQueue;
     Object.values(cachedFieldNotes).forEach(n => {
       if (n.project_id === project.id) {
-        allNotesMap[n.id] = n;
+        const isPending = n.id.startsWith("temp_") || queue.some(op => op.payload.noteId === n.id);
+        if (isPending || !allNotesMap[n.id]) {
+          allNotesMap[n.id] = n;
+        }
       }
     });
     return Object.values(allNotesMap);
@@ -425,7 +453,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
 
   const handleSaveTitle = () => {
     if (editTitle.trim() !== project.name && editTitle.trim()) {
-      if (!isOnline) {
+      if (isOfflineActive) {
         renameProjectOptimistic(project.id, editTitle);
         setIsEditingTitle(false);
         return;
@@ -449,7 +477,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
       prev.map((d) => (d.id === levelId ? { ...d, completed: nextCompleted } : d))
     );
 
-    if (!isOnline) {
+    if (isOfflineActive) {
       toggleLevelCompletedOptimistic(levelId, project.id, nextCompleted);
       return;
     }

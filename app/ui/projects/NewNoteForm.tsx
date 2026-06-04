@@ -150,6 +150,8 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
 
   // Store offline Zustand
   const isOnline = useOfflineStore((state) => state.isOnline);
+  const offlineMode = useOfflineStore((state) => state.offlineMode);
+  const isOfflineActive = offlineMode || !isOnline;
   const setCatalogMaterialsCache = useOfflineStore((state) => state.setCatalogMaterialsCache);
   const setNoteTypesCache = useOfflineStore((state) => state.setNoteTypesCache);
   const saveFieldNoteItemsOptimistic = useOfflineStore((state) => state.saveFieldNoteItemsOptimistic);
@@ -422,7 +424,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         })),
       };
 
-      if (!isOnline || levelId.startsWith("temp_") || (initialNote && initialNote.id.startsWith("temp_"))) {
+      if (isOfflineActive || levelId.startsWith("temp_") || (initialNote && initialNote.id.startsWith("temp_"))) {
         // Salvataggio offline ottimistico (in coda) per preservare la risoluzione referenziale dei Temp ID
         const noteId = initialNote ? initialNote.id : `temp-note-${Date.now()}`;
         saveFieldNoteItemsOptimistic(noteId, projectId, levelId, payload.items, finalType.name);
@@ -449,7 +451,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
 
     setError(null);
     startTransition(async () => {
-      if (!isOnline || initialNote.id.startsWith("temp_")) {
+      if (isOfflineActive || initialNote.id.startsWith("temp_")) {
         deleteFieldNoteOptimistic(initialNote.id, projectId);
         router.push(`/projects/${projectId}`);
         return;

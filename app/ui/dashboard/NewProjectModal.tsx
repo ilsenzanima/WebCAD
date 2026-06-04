@@ -2,6 +2,8 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import { createProject } from "@/app/actions/projects";
+import { useRouter } from "next/navigation";
+import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
 
 interface NewProjectModalProps {
   open: boolean;
@@ -9,9 +11,14 @@ interface NewProjectModalProps {
 }
 
 export default function NewProjectModal({ open, onClose }: NewProjectModalProps) {
+  const router = useRouter();
   const [name, setName] = useState("");
   const [isPending, startTransition] = useTransition();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const isOnline = useOfflineStore((state) => state.isOnline);
+  const offlineMode = useOfflineStore((state) => state.offlineMode);
+  const isOfflineActive = offlineMode || !isOnline;
 
   useEffect(() => {
     if (open) {
@@ -25,8 +32,30 @@ export default function NewProjectModal({ open, onClose }: NewProjectModalProps)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    startTransition(() => createProject(name.trim()));
+    const trimmedName = name.trim();
+    if (!trimmedName) return;
+
+    if (isOfflineActive) {
+      const tempId = generateTempId();
+      useOfflineStore.getState().addProjectOptimistic(tempId, trimmedName);
+      onClose();
+      router.push(`/projects/${tempId}`);
+    } else {
+      startTransition(async () => {
+        try {
+          await createProject(trimmedName);
+        } catch (err: any) {
+          if (err && (err.message === "NEXT_REDIRECT" || err.digest?.startsWith("NEXT_REDIRECT"))) {
+            return;
+          }
+          console.warn("Errore creazione cantiere online, fallback offline:", err);
+          const tempId = generateTempId();
+          useOfflineStore.getState().addProjectOptimistic(tempId, trimmedName);
+          onClose();
+          router.push(`/projects/${tempId}`);
+        }
+      });
+    }
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {

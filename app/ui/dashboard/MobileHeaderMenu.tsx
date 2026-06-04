@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
 import CalcolatriceWidget from "./CalcolatriceWidget";
 import GlobalBollaTrigger from "./GlobalBollaTrigger";
+import OfflineModeToggle from "./OfflineModeToggle";
 import { APP_VERSION } from "@/lib/version";
 
 interface MobileHeaderMenuProps {
@@ -216,6 +217,11 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
                 <GlobalBollaTrigger mode="mobile" />
               </div>
             </nav>
+
+            {/* Switch offline manuale */}
+            <div className="border-t border-[hsl(220,20%,22%)] pt-2 flex-shrink-0">
+              <OfflineModeToggle />
+            </div>
 
             {/* Footer */}
             <div
