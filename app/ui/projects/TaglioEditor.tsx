@@ -37,7 +37,9 @@ export default function TaglioEditor({
     setMounted(true);
   }, []);
 
-  const cachedNote = useOfflineStore((state) => state.fieldNotes[initialNote.id]);
+  const tempIdMap = useOfflineStore((state) => state.tempIdMap);
+  const resolvedNoteId = initialNote?.id ? (tempIdMap[initialNote.id] ?? initialNote.id) : "";
+  const cachedNote = useOfflineStore((state) => state.fieldNotes[resolvedNoteId]);
   const noteToUse = (mounted && cachedNote) ? cachedNote : initialNote;
 
   // --- Stati dell'Editor ---
@@ -60,7 +62,8 @@ export default function TaglioEditor({
   const [selectedImportNoteIds, setSelectedImportNoteIds] = useState<Record<string, boolean>>({});
 
   // Recupera le note del progetto per l'importazione
-  const allNotes = useOfflineStore((state) => Object.values(state.fieldNotes));
+  const fieldNotes = useOfflineStore((state) => state.fieldNotes);
+  const allNotes = useMemo(() => Object.values(fieldNotes), [fieldNotes]);
   const projectNotes = useMemo(() => {
     return allNotes.filter((n) => n.project_id === projectId);
   }, [allNotes, projectId]);
@@ -586,7 +589,7 @@ export default function TaglioEditor({
 
     // 3. Salva optimisticamente nello store offline
     useOfflineStore.getState().saveFieldNoteItemsOptimistic(
-      initialNote.id,
+      resolvedNoteId,
       projectId,
       noteToUse.level_id || initialNote.level_id || generateTempId(), // level_id
       payloadItems,
@@ -601,7 +604,7 @@ export default function TaglioEditor({
 
   const handleDeletePlan = () => {
     if (confirm("Sei sicuro di voler eliminare definitivamente questo piano di taglio?")) {
-      useOfflineStore.getState().deleteFieldNoteOptimistic(initialNote.id, projectId);
+      useOfflineStore.getState().deleteFieldNoteOptimistic(resolvedNoteId, projectId);
       router.push(`/projects/${projectId}`);
     }
   };
