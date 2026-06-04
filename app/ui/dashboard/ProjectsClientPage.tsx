@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import NewProjectModal from "./NewProjectModal";
 import QuickAddModal from "@/app/ui/projects/QuickAddModal";
-import QuickAddTaglioModal from "@/app/ui/projects/QuickAddTaglioModal";
 import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
 import { getAllProjectFieldNotes, type FieldNote } from "@/app/actions/field-notes";
 
@@ -192,17 +191,17 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
     );
   };
 
-  const handleQuickAddTaglioSubmit = async (title: string, selectedNoteIds: string[]) => {
+  const handleQuickAddTaglioSubmit = async (title: string, pianoName: string) => {
     if (!quickAdd) return;
     const { projectId } = quickAdd;
 
     const cachedLevels = useOfflineStore.getState().levels[projectId] ?? [];
-    let level = cachedLevels.find((l) => l.name.toLowerCase() === "generico" || l.name.toLowerCase() === "tagli" || l.name.toLowerCase() === "taglio");
+    let level = cachedLevels.find((l) => l.name.toLowerCase() === pianoName.toLowerCase());
     let levelId = level?.id;
 
     if (!levelId) {
       levelId = generateTempId();
-      useOfflineStore.getState().addLevelOptimistic(levelId, projectId, "Generico", 0, "2d_wall", "Generico");
+      useOfflineStore.getState().addLevelOptimistic(levelId, projectId, pianoName, 0, "2d_wall", pianoName);
     }
 
     const tempNoteId = generateTempId();
@@ -210,54 +209,6 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
     const initialItems: any[] = [
       { id: generateTempId(), item_type: "nota" as const, value_text: `Taglio: ${title}`, sort_order: 0 },
     ];
-
-    let order = 1;
-    const projectNotes = loadedNotes;
-
-    const getNoteTitle = (note: any) => {
-      const ct = note.type_name?.trim();
-      if (ct && ct !== "Appunti Cantiere") return ct;
-      const notaText = (note.field_note_items ?? []).find((i: any) => i.item_type === "nota")?.value_text;
-      if (notaText?.trim()) return notaText.trim();
-      return `Appunto #${note.note_number ?? "Senza Numero"}`;
-    };
-
-    selectedNoteIds.forEach((noteId) => {
-      const sourceNote = projectNotes.find((n) => n.id === noteId);
-      if (sourceNote && sourceNote.field_note_items) {
-        const sourceTitle = getNoteTitle(sourceNote);
-        sourceNote.field_note_items.forEach((item) => {
-          if (item.item_type === "dim_quadrata") {
-            try {
-              const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
-              if (parsed && (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null))) {
-                initialItems.push({
-                  id: generateTempId(),
-                  item_type: "dim_quadrata" as const,
-                  value_text: JSON.stringify({ ...parsed, refTitle: sourceTitle }),
-                  sort_order: order++,
-                });
-              }
-            } catch {
-              // ignora
-            }
-          } else if (item.item_type === "materiale" && (item.value_text || item.composite)) {
-            let matText = item.value_text;
-            if (!matText && item.composite) {
-              matText = typeof item.composite === "string" ? item.composite : (item.composite.name || JSON.stringify(item.composite));
-            }
-            if (matText) {
-              initialItems.push({
-                id: generateTempId(),
-                item_type: "materiale" as const,
-                value_text: matText,
-                sort_order: order++,
-              });
-            }
-          }
-        });
-      }
-    });
 
     useOfflineStore.getState().saveFieldNoteItemsOptimistic(
       tempNoteId,
@@ -284,21 +235,12 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
     <>
       <NewProjectModal open={isModalOpen} onClose={() => setIsModalOpen(false)} />
 
-      {quickAdd && quickAdd.type !== "taglio" && (
+      {quickAdd && (
         <QuickAddModal
           type={quickAdd.type}
           existingPiani={currentProjectLevels}
           onClose={() => setQuickAdd(null)}
-          onSubmit={handleQuickAddSubmit}
-        />
-      )}
-
-      {quickAdd && quickAdd.type === "taglio" && (
-        <QuickAddTaglioModal
-          notesWithCuts={getProjectNotesWithCuts()}
-          isLoading={loadingNotes}
-          onClose={() => setQuickAdd(null)}
-          onSubmit={handleQuickAddTaglioSubmit}
+          onSubmit={quickAdd.type === "taglio" ? handleQuickAddTaglioSubmit : handleQuickAddSubmit}
         />
       )}
 

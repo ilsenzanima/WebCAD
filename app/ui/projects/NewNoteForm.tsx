@@ -781,6 +781,36 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
           })()
         ) : (
           <>
+            {/* Titolo dell'Appunto */}
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-white/60 uppercase mb-1">
+                Titolo dell&apos;Appunto
+              </label>
+              <input
+                type="text"
+                value={items.find((i) => i.item_type === "nota")?.value_text ?? ""}
+                onChange={(e) => {
+                  const titleItem = items.find((i) => i.item_type === "nota");
+                  if (titleItem) {
+                    updateItem(titleItem.id, { value_text: e.target.value });
+                  } else {
+                    const newId = crypto.randomUUID();
+                    setItems((prev) => [
+                      { id: newId, item_type: "nota", value_text: e.target.value, sort_order: 0 },
+                      ...prev,
+                    ]);
+                  }
+                }}
+                placeholder="es. Rilievo Staffaggi, Misure Canali..."
+                className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
+                style={{
+                  background: "hsl(220 32% 10%)",
+                  border: "1px solid hsl(220 20% 22%)",
+                  color: "hsl(210 40% 96%)",
+                }}
+              />
+            </div>
+
             <div className="flex items-center justify-between">
               <div />
 
@@ -956,76 +986,82 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
             )}
 
             <div className="space-y-2">
-              {items.map((item) => {
-                if (item.item_type === "posizione") {
-                  const hasPos = !!item.value_text;
-                  let posLabel = "Nessuna posizione selezionata";
-                  if (hasPos) {
-                    try {
-                      const { x, y } = JSON.parse(item.value_text!);
-                      posLabel = `x:${x}% y:${y}%`;
-                    } catch { /* noop */ }
-                  }
-                  return (
-                    <div key={item.id} className="rounded-xl overflow-hidden" style={{ border: "1px solid hsl(220 20% 18%)", background: "hsl(220 32% 10%)" }}>
-                      <div className="flex items-center gap-3 p-3">
-                        <span className="text-sm font-medium" style={{ color: "hsl(215 20% 65%)" }}>📍 Posizione</span>
-                        <span className="flex-1 text-xs font-mono" style={{ color: hasPos ? "hsl(220 90% 70%)" : "hsl(215 15% 40%)" }}>{posLabel}</span>
-                        {hasPos && (
-                          <button type="button" onClick={() => updateItem(item.id, { value_text: undefined })}
-                            className="text-xs px-2 py-1 rounded-lg transition-all cursor-pointer"
-                            style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
-                          >Rimuovi</button>
-                        )}
-                        {planImageUrl ? (
-                          <button type="button" onClick={() => setPosizionePickingId(posizionePickingId === item.id ? null : item.id)}
-                            className="text-xs px-2 py-1 rounded-lg transition-all cursor-pointer"
-                            style={{ background: "hsl(220 90% 56% / 0.15)", color: "hsl(220 90% 70%)", border: "1px solid hsl(220 90% 56% / 0.3)" }}
-                          >{posizionePickingId === item.id ? "Chiudi mappa" : (hasPos ? "Modifica" : "Seleziona")}</button>
-                        ) : (
-                          <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>Nessuna planimetria caricata</span>
-                        )}
-                        <button type="button" onClick={() => { removeItem(item.id); setPosizionePickingId(null); }}
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-all flex-shrink-0 cursor-pointer"
-                          style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
-                          title="Rimuovi voce">✕</button>
-                      </div>
-                      {posizionePickingId === item.id && planImageUrl && (
-                        <div className="px-3 pb-3">
-                          <PlanimetriaMappa
-                            planImageUrl={planImageUrl}
-                            notes={levelNotes ?? []}
-                            pendingNoteNumber={nextNoteNumber ?? (initialNote?.note_number)}
-                            pendingPosition={hasPos ? (() => { try { return JSON.parse(item.value_text!); } catch { return null; } })() : null}
-                            onPositionSelected={(x, y) => {
-                              updateItem(item.id, { value_text: JSON.stringify({ x, y }) });
-                              setPosizionePickingId(null);
-                            }}
-                          />
+              {(() => {
+                const firstNotaItem = items.find((i) => i.item_type === "nota");
+                const firstNotaId = firstNotaItem?.id;
+                return items
+                  .filter((item) => item.id !== firstNotaId)
+                  .map((item) => {
+                    if (item.item_type === "posizione") {
+                      const hasPos = !!item.value_text;
+                      let posLabel = "Nessuna posizione selezionata";
+                      if (hasPos) {
+                        try {
+                          const { x, y } = JSON.parse(item.value_text!);
+                          posLabel = `x:${x}% y:${y}%`;
+                        } catch { /* noop */ }
+                      }
+                      return (
+                        <div key={item.id} className="rounded-xl overflow-hidden" style={{ border: "1px solid hsl(220 20% 18%)", background: "hsl(220 32% 10%)" }}>
+                          <div className="flex items-center gap-3 p-3">
+                            <span className="text-sm font-medium" style={{ color: "hsl(215 20% 65%)" }}>📍 Posizione</span>
+                            <span className="flex-1 text-xs font-mono" style={{ color: hasPos ? "hsl(220 90% 70%)" : "hsl(215 15% 40%)" }}>{posLabel}</span>
+                            {hasPos && (
+                              <button type="button" onClick={() => updateItem(item.id, { value_text: undefined })}
+                                className="text-xs px-2 py-1 rounded-lg transition-all cursor-pointer"
+                                style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
+                              >Rimuovi</button>
+                            )}
+                            {planImageUrl ? (
+                              <button type="button" onClick={() => setPosizionePickingId(posizionePickingId === item.id ? null : item.id)}
+                                className="text-xs px-2 py-1 rounded-lg transition-all cursor-pointer"
+                                style={{ background: "hsl(220 90% 56% / 0.15)", color: "hsl(220 90% 70%)", border: "1px solid hsl(220 90% 56% / 0.3)" }}
+                              >{posizionePickingId === item.id ? "Chiudi mappa" : (hasPos ? "Modifica" : "Seleziona")}</button>
+                            ) : (
+                              <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>Nessuna planimetria caricata</span>
+                            )}
+                            <button type="button" onClick={() => { removeItem(item.id); setPosizionePickingId(null); }}
+                              className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-all flex-shrink-0 cursor-pointer"
+                              style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
+                              title="Rimuovi voce">✕</button>
+                          </div>
+                          {posizionePickingId === item.id && planImageUrl && (
+                            <div className="px-3 pb-3">
+                              <PlanimetriaMappa
+                                planImageUrl={planImageUrl}
+                                notes={levelNotes ?? []}
+                                pendingNoteNumber={nextNoteNumber ?? (initialNote?.note_number)}
+                                pendingPosition={hasPos ? (() => { try { return JSON.parse(item.value_text!); } catch { return null; } })() : null}
+                                onPositionSelected={(x, y) => {
+                                  updateItem(item.id, { value_text: JSON.stringify({ x, y }) });
+                                  setPosizionePickingId(null);
+                                }}
+                              />
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                }
-                return (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    onChange={(changes) => updateItem(item.id, changes)}
-                    onRemove={() => removeItem(item.id)}
-                    catalogMaterials={catalogMaterials}
-                    onEditFoto={(id, url) => {
-                      setEditingFotoId(id);
-                      setEditingFotoUrl(url);
-                    }}
-                    onDrawFoto={(id, url) => {
-                      setEditingSketchId(id);
-                      setEditingSketchUrl(url);
-                    }}
-                    lastAddedId={lastAddedId}
-                  />
-                );
-              })}
+                      );
+                    }
+                    return (
+                      <ItemRow
+                        key={item.id}
+                        item={item}
+                        onChange={(changes) => updateItem(item.id, changes)}
+                        onRemove={() => removeItem(item.id)}
+                        catalogMaterials={catalogMaterials}
+                        onEditFoto={(id, url) => {
+                          setEditingFotoId(id);
+                          setEditingFotoUrl(url);
+                        }}
+                        onDrawFoto={(id, url) => {
+                          setEditingSketchId(id);
+                          setEditingSketchUrl(url);
+                        }}
+                        lastAddedId={lastAddedId}
+                      />
+                    );
+                  });
+              })()}
             </div>
           </>
         )}

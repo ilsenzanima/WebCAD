@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 
 interface Props {
-  type: "nota" | "sketch" | "3d";
+  type: "nota" | "sketch" | "3d" | "taglio";
   onClose: () => void;
   onSubmit: (title: string, piano: string) => Promise<void>;
   existingPiani?: string[];
@@ -13,6 +13,7 @@ const TYPE_CONFIG = {
   nota: { icon: "📝", title: "Aggiungi Nota", label: "Titolo della Nota", placeholder: "es. Rilievo Staffaggi, Misure Canali..." },
   sketch: { icon: "🎨", title: "Aggiungi Sketch", label: "Titolo dello Sketch", placeholder: "es. Schema Planimetria, Dettaglio Staffa..." },
   "3d": { icon: "📦", title: "Aggiungi Report 3D", label: "Titolo del Report 3D", placeholder: "es. Componente Curva, Rilievo 3D Collettore..." },
+  taglio: { icon: "✂️", title: "Crea Piano di Taglio", label: "Titolo del Piano di Taglio", placeholder: "es. Taglio Tubi Collettore, Ordine Lamiere..." },
 };
 
 export default function QuickAddModal({

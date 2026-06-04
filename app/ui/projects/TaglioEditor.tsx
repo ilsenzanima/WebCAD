@@ -55,6 +55,74 @@ export default function TaglioEditor({
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
 
+  // Stati per importazione manuale da note
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [selectedImportNoteIds, setSelectedImportNoteIds] = useState<Record<string, boolean>>({});
+
+  // Recupera le note del progetto per l'importazione
+  const allNotes = useOfflineStore((state) => Object.values(state.fieldNotes));
+  const projectNotes = useMemo(() => {
+    return allNotes.filter((n) => n.project_id === projectId);
+  }, [allNotes, projectId]);
+
+  const getNoteTitle = (note: any) => {
+    const ct = note.type_name?.trim();
+    if (ct && ct !== "Appunti Cantiere") return ct;
+    const titleItem = (note.field_note_items ?? []).find((i: any) => i.item_type === "nota");
+    if (titleItem?.value_text?.trim()) return titleItem.value_text.trim();
+    return `Appunto #${note.note_number ?? "Senza Numero"}`;
+  };
+
+  const importableNotes = useMemo(() => {
+    return projectNotes.filter((note) =>
+      note.type_name !== "Taglio" &&
+      (note.field_note_items ?? []).some(
+        (item) =>
+          item.item_type === "dim_quadrata" &&
+          (item.value_text || item.composite) &&
+          (() => {
+            try {
+              const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
+              return parsed && (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null));
+            } catch {
+              return false;
+            }
+          })()
+      )
+    );
+  }, [projectNotes]);
+
+  const handleConfirmImport = () => {
+    const newPieces: PieceItem[] = [];
+    Object.keys(selectedImportNoteIds).forEach((noteId) => {
+      if (!selectedImportNoteIds[noteId]) return;
+      const note = projectNotes.find((n) => n.id === noteId);
+      if (note && note.field_note_items) {
+        const sourceTitle = getNoteTitle(note);
+        note.field_note_items.forEach((item) => {
+          if (item.item_type === "dim_quadrata") {
+            try {
+              const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
+              if (parsed && (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null))) {
+                newPieces.push({
+                  id: crypto.randomUUID(),
+                  b: parseFloat(parsed.b) || 0,
+                  h: parseFloat(parsed.h) || 0,
+                  q: parseInt(parsed.q) || 1,
+                  unit: parsed.unit || "cm",
+                  refTitle: parsed.refTitle || sourceTitle,
+                });
+              }
+            } catch { /* noop */ }
+          }
+        });
+      }
+    });
+    setPieces((prev) => [...prev, ...newPieces]);
+    setShowImportModal(false);
+    setSelectedImportNoteIds({});
+  };
+
   // Stato per l'inserimento manuale rapido
   const [newB, setNewB] = useState("");
   const [newH, setNewH] = useState("");
@@ -942,19 +1010,31 @@ export default function TaglioEditor({
               <span>✂️</span> Griglia Pezzi da Tagliare ({pieces.length})
             </h3>
             
-            {/* Selezione Materiale */}
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold uppercase text-white/40">Materiale:</span>
-              <select
-                value={materialFilter}
-                onChange={(e) => setMaterialFilter(e.target.value)}
-                className="px-2 py-1 rounded-lg text-xs outline-none bg-[hsl(220,32%,10%)] border border-[hsl(220,20%,22%)] text-white"
-              >
-                <option value="">Nessuno (Generico)</option>
-                {catalogMaterials.map((m) => (
-                  <option key={m.id} value={m.name}>{m.name}</option>
-                ))}
-              </select>
+            {/* Selezione Materiale & Importa */}
+            <div className="flex items-center gap-3">
+              {importableNotes.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(true)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold text-white transition-all bg-sky-600 hover:bg-sky-700 active:scale-95 cursor-pointer flex items-center gap-1 shadow-md shadow-sky-600/10"
+                >
+                  <span>📥</span> Importa da note
+                </button>
+              )}
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase text-white/40">Materiale:</span>
+                <select
+                  value={materialFilter}
+                  onChange={(e) => setMaterialFilter(e.target.value)}
+                  className="px-2 py-1 rounded-lg text-xs outline-none bg-[hsl(220,32%,10%)] border border-[hsl(220,20%,22%)] text-white"
+                >
+                  <option value="">Nessuno (Generico)</option>
+                  {catalogMaterials.map((m) => (
+                    <option key={m.id} value={m.name}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -1315,6 +1395,137 @@ export default function TaglioEditor({
           </div>
         )}
       </div>
+
+      {/* Modale per l'importazione dei pezzi dalle note del progetto */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-[2500] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fade-in">
+          <div
+            className="w-full max-w-lg rounded-2xl p-6 shadow-2xl relative animate-slide-up flex flex-col max-h-[85vh]"
+            style={{
+              background: "hsl(220 26% 14%)",
+              border: "1px solid hsl(220 20% 22%)",
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setShowImportModal(false);
+                setSelectedImportNoteIds({});
+              }}
+              className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors text-sm w-7 h-7 flex items-center justify-center rounded-full bg-white/5 border border-white/10"
+            >
+              ✕
+            </button>
+
+            <h2 className="text-base font-bold text-white mb-4 flex items-center gap-2">
+              <span>📥</span> Importa Pezzi da Note
+            </h2>
+
+            <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 py-1">
+              {importableNotes.length > 0 ? (
+                importableNotes.map((note) => {
+                  const notePieces = (note.field_note_items ?? [])
+                    .filter((item) => item.item_type === "dim_quadrata")
+                    .map((item) => {
+                      try {
+                        return item.value_text ? JSON.parse(item.value_text) : item.composite;
+                      } catch {
+                        return null;
+                      }
+                    })
+                    .filter((p) => p && (p.isCutPiece || (p.q !== undefined && p.q !== null)));
+
+                  const isChecked = !!selectedImportNoteIds[note.id];
+
+                  return (
+                    <div
+                      key={note.id}
+                      onClick={() =>
+                        setSelectedImportNoteIds((prev) => ({
+                          ...prev,
+                          [note.id]: !prev[note.id],
+                        }))
+                      }
+                      className="p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3.5 select-none"
+                      style={{
+                        background: isChecked ? "hsl(220 90% 56% / 0.05)" : "hsl(220 32% 10%)",
+                        borderColor: isChecked ? "hsl(220 90% 56% / 0.4)" : "hsl(220 20% 18%)",
+                      }}
+                    >
+                      {/* Checkbox */}
+                      <div
+                        className="w-5 h-5 rounded-lg flex items-center justify-center border font-bold text-xs transition-colors mt-0.5"
+                        style={{
+                          borderColor: isChecked ? "hsl(220 90% 56%)" : "hsl(220 20% 22%)",
+                          background: isChecked ? "hsl(220 90% 56%)" : "transparent",
+                          color: "#fff",
+                        }}
+                      >
+                        {isChecked && "✓"}
+                      </div>
+
+                      {/* Info nota */}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white text-xs font-bold truncate">
+                          {getNoteTitle(note)}
+                        </div>
+                        <div className="text-[10px] text-white/30 font-mono mt-0.5">
+                          Appunto #{note.note_number}
+                        </div>
+
+                        {/* Elenco pezzi interni */}
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {notePieces.map((p, pIdx) => (
+                            <span
+                              key={pIdx}
+                              className="px-2 py-0.5 rounded bg-white/5 border border-white/5 text-[9px] font-mono text-white/70"
+                            >
+                              ✂️ {p.b}x{p.h} {p.unit} (x{p.q || 1})
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="p-8 text-center text-xs text-white/40 italic">
+                  Nessun appunto con pezzi da tagliare disponibile in questo progetto.
+                </div>
+              )}
+            </div>
+
+            {/* Pulsanti azioni */}
+            <div className="pt-4 border-t border-white/5 flex justify-end gap-3 mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportModal(false);
+                  setSelectedImportNoteIds({});
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold transition-colors"
+                style={{
+                  background: "hsl(220 26% 20%)",
+                  color: "hsl(210 40% 90%)",
+                }}
+              >
+                Annulla
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmImport}
+                disabled={!Object.values(selectedImportNoteIds).some(Boolean)}
+                className="px-5 py-2 rounded-xl text-xs font-bold text-white transition-all duration-200 shadow-lg disabled:opacity-50 cursor-pointer"
+                style={{
+                  background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+                }}
+              >
+                Importa selezionati ({Object.values(selectedImportNoteIds).filter(Boolean).length})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── CSS Globale Specializzato per la Stampa PDF ── */}
       <style jsx global>{`

@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { updateProjectNotes, renameProject, toggleLevelCompleted } from "@/app/actions/projects";
 import ProjectActionsMenu from "@/app/ui/dashboard/ProjectActionsMenu";
 import QuickAddModal from "./QuickAddModal";
-import QuickAddTaglioModal from "./QuickAddTaglioModal";
 import type { FieldNote } from "@/app/actions/field-notes";
 import { toggleFieldNoteCompleted } from "@/app/actions/field-notes";
 import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
@@ -269,6 +268,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   // Filtra le note del progetto che contengono elementi con pezzi da tagliare (nesting)
   const notesWithCuts = useMemo(() => {
     return projectNotes.filter((note) =>
+      note.type_name !== "Taglio" &&
       (note.field_note_items ?? []).some(
         (item) =>
           item.item_type === "dim_quadrata" &&
@@ -285,14 +285,14 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
     );
   }, [projectNotes]);
 
-  const handleQuickAddTaglioSubmit = async (title: string, selectedNoteIds: string[]) => {
-    // 1. Usa un livello chiamato "Generico", "Tagli" o "Taglio"
-    let level = localDrawings.find((l) => l.name.toLowerCase() === "generico" || l.name.toLowerCase() === "tagli" || l.name.toLowerCase() === "taglio");
+  const handleQuickAddTaglioSubmit = async (title: string, pianoName: string) => {
+    // 1. Usa un livello chiamato pianoName o crea un livello
+    let level = localDrawings.find((l) => l.name.toLowerCase() === pianoName.toLowerCase());
     let levelId = level?.id;
 
     if (!levelId) {
       levelId = generateTempId();
-      addLevelOptimistic(levelId, project.id, "Generico", 0, "2d_wall", "Generico");
+      addLevelOptimistic(levelId, project.id, pianoName, 0, "2d_wall", pianoName);
     }
 
     // 2. Crea la nota di tipo "Taglio"
@@ -301,53 +301,6 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
     const initialItems: any[] = [
       { id: generateTempId(), item_type: "nota" as const, value_text: `Taglio: ${title}`, sort_order: 0 },
     ];
-
-    const getNoteTitle = (note: any) => {
-      const ct = note.type_name?.trim();
-      if (ct && ct !== "Appunti Cantiere") return ct;
-      const notaText = (note.field_note_items ?? []).find((i: any) => i.item_type === "nota")?.value_text;
-      if (notaText?.trim()) return notaText.trim();
-      return `Appunto #${note.note_number ?? "Senza Numero"}`;
-    };
-
-    let order = 1;
-    // Raccoglie gli elementi 'dim_quadrata' (pezzo da tagliare) e materiali correlati dalle note selezionate
-    selectedNoteIds.forEach((noteId) => {
-      const sourceNote = projectNotes.find((n) => n.id === noteId);
-      if (sourceNote && sourceNote.field_note_items) {
-        const sourceTitle = getNoteTitle(sourceNote);
-        sourceNote.field_note_items.forEach((item) => {
-          if (item.item_type === "dim_quadrata") {
-            try {
-              const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
-              if (parsed && (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null))) {
-                initialItems.push({
-                  id: generateTempId(),
-                  item_type: "dim_quadrata" as const,
-                  value_text: JSON.stringify({ ...parsed, refTitle: sourceTitle }),
-                  sort_order: order++,
-                });
-              }
-            } catch {
-              // ignora
-            }
-          } else if (item.item_type === "materiale" && (item.value_text || item.composite)) {
-            let matText = item.value_text;
-            if (!matText && item.composite) {
-              matText = typeof item.composite === "string" ? item.composite : (item.composite.name || JSON.stringify(item.composite));
-            }
-            if (matText) {
-              initialItems.push({
-                id: generateTempId(),
-                item_type: "materiale" as const,
-                value_text: matText,
-                sort_order: order++,
-              });
-            }
-          }
-        });
-      }
-    });
 
     useOfflineStore.getState().saveFieldNoteItemsOptimistic(
       tempNoteId,
@@ -1308,20 +1261,12 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
       </div>
 
       {/* Modale Inserimento Rapido */}
-      {quickAddType && quickAddType !== "taglio" && (
+      {quickAddType && (
         <QuickAddModal
           type={quickAddType}
           existingPiani={existingPiani}
           onClose={() => setQuickAddType(null)}
-          onSubmit={handleQuickAddSubmit}
-        />
-      )}
-
-      {quickAddType === "taglio" && (
-        <QuickAddTaglioModal
-          notesWithCuts={notesWithCuts}
-          onClose={() => setQuickAddType(null)}
-          onSubmit={handleQuickAddTaglioSubmit}
+          onSubmit={quickAddType === "taglio" ? handleQuickAddTaglioSubmit : handleQuickAddSubmit}
         />
       )}
 
