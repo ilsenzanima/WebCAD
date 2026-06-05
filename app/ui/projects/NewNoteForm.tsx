@@ -111,38 +111,49 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   const [items, setItems] = useState<NoteItemDraft[]>([]);
 
   useEffect(() => {
-    if (noteToUse?.field_note_items && noteToUse.field_note_items.length > 0) {
-      const shouldInitialize = !hasInitializedRef.current || (mounted && cachedNote && cachedNote.updated_at !== initialNote?.updated_at);
+    const shouldInitialize = !hasInitializedRef.current || (mounted && cachedNote && cachedNote.updated_at !== initialNote?.updated_at);
 
-      if (shouldInitialize) {
-        setItems(
-          noteToUse.field_note_items.map((item) => {
-            const isComposite = item.item_type === "dim_quadrata" || item.item_type === "dim_cubica";
-            let composite: CompositeValue | undefined;
-            if (isComposite && item.value_text) {
-              try {
-                const parsed = JSON.parse(item.value_text);
-                composite = {
-                  ...parsed,
-                  isCutPiece: parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null),
-                };
-              } catch {
-                composite = { unit: "cm" };
-              }
-            }
-            return {
-              id: item.id || crypto.randomUUID(),
-              item_type: item.item_type,
-              value_num: item.value_num,
-              value_unit: (item.value_unit as "mm" | "cm") ?? "cm",
-              value_bool: item.value_bool ?? true,
-              value_text: isComposite ? undefined : (item.value_text ?? undefined),
-              composite,
+    if (shouldInitialize && mounted) {
+      const dbItems = noteToUse?.field_note_items || [];
+      const hasNota = dbItems.some(i => i.item_type === "nota");
+
+      const mappedItems: NoteItemDraft[] = dbItems.map((item) => {
+        const isComposite = item.item_type === "dim_quadrata" || item.item_type === "dim_cubica";
+        let composite: CompositeValue | undefined;
+        if (isComposite && item.value_text) {
+          try {
+            const parsed = JSON.parse(item.value_text);
+            composite = {
+              ...parsed,
+              isCutPiece: parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null),
             };
-          })
-        );
-        hasInitializedRef.current = true;
+          } catch {
+            composite = { unit: "cm" };
+          }
+        }
+        return {
+          id: item.id || crypto.randomUUID(),
+          item_type: item.item_type,
+          value_num: item.value_num,
+          value_unit: (item.value_unit as "mm" | "cm") ?? "cm",
+          value_bool: item.value_bool ?? true,
+          value_text: isComposite ? undefined : (item.value_text ?? undefined),
+          composite,
+        };
+      });
+
+      // Se non c'è una nota per il titolo principale, la pre-popoliamo vuota per evitare
+      // che la prima nota libera creata dal menu "+" venga scambiata per il titolo dell'appunto
+      if (!hasNota) {
+        mappedItems.unshift({
+          id: crypto.randomUUID(),
+          item_type: "nota",
+          value_text: "",
+        });
       }
+
+      setItems(mappedItems);
+      hasInitializedRef.current = true;
     }
   }, [noteToUse, mounted, cachedNote, initialNote]);
 
@@ -532,6 +543,10 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   const has3DModel = items.some(i => i.item_type === "foto" && is3DModelUrl(i.value_text));
   const isReport3D = typeFilter === "Report 3D" || selectedType?.name === "Report 3D" || has3DModel;
   const isTaglio = typeFilter === "Taglio" || selectedType?.name === "Taglio";
+
+  const firstNotaItem = items.find((i) => i.item_type === "nota");
+  const firstNotaId = firstNotaItem?.id;
+  const visualItems = items.filter((item) => item.id !== firstNotaId);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -1069,89 +1084,83 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
               </div>
             </div>
 
-            {items.length === 0 && (
+            {visualItems.length === 0 && (
               <p className="text-sm text-center py-6" style={{ color: "hsl(215 15% 40%)" }}>
                 Premi ＋ per aggiungere misure e appunti.
               </p>
             )}
 
             <div className="space-y-2">
-              {(() => {
-                const firstNotaItem = items.find((i) => i.item_type === "nota");
-                const firstNotaId = firstNotaItem?.id;
-                return items
-                  .filter((item) => item.id !== firstNotaId)
-                  .map((item) => {
-                    if (item.item_type === "posizione") {
-                      const hasPos = !!item.value_text;
-                      let posLabel = "Nessuna posizione selezionata";
-                      if (hasPos) {
-                        try {
-                          const { x, y } = JSON.parse(item.value_text!);
-                          posLabel = `x:${x}% y:${y}%`;
-                        } catch { /* noop */ }
-                      }
-                      return (
-                        <div key={item.id} className="rounded-xl overflow-hidden" style={{ border: "1px solid hsl(220 20% 18%)", background: "hsl(220 32% 10%)" }}>
-                          <div className="flex items-center gap-3 p-3">
-                            <span className="text-sm font-medium" style={{ color: "hsl(215 20% 65%)" }}>📍 Posizione</span>
-                            <span className="flex-1 text-xs font-mono" style={{ color: hasPos ? "hsl(220 90% 70%)" : "hsl(215 15% 40%)" }}>{posLabel}</span>
-                            {hasPos && (
-                              <button type="button" onClick={() => updateItem(item.id, { value_text: undefined })}
-                                className="text-xs px-2 py-1 rounded-lg transition-all cursor-pointer"
-                                style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
-                              >Rimuovi</button>
-                            )}
-                            {planImageUrl ? (
-                              <button type="button" onClick={() => setPosizionePickingId(posizionePickingId === item.id ? null : item.id)}
-                                className="text-xs px-2 py-1 rounded-lg transition-all cursor-pointer"
-                                style={{ background: "hsl(220 90% 56% / 0.15)", color: "hsl(220 90% 70%)", border: "1px solid hsl(220 90% 56% / 0.3)" }}
-                              >{posizionePickingId === item.id ? "Chiudi mappa" : (hasPos ? "Modifica" : "Seleziona")}</button>
-                            ) : (
-                              <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>Nessuna planimetria caricata</span>
-                            )}
-                            <button type="button" onClick={() => { removeItem(item.id); setPosizionePickingId(null); }}
-                              className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-all flex-shrink-0 cursor-pointer"
-                              style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
-                              title="Rimuovi voce">✕</button>
-                          </div>
-                          {posizionePickingId === item.id && planImageUrl && (
-                            <div className="px-3 pb-3">
-                              <PlanimetriaMappa
-                                planImageUrl={planImageUrl}
-                                notes={levelNotes ?? []}
-                                pendingNoteNumber={nextNoteNumber ?? (initialNote?.note_number)}
-                                pendingPosition={hasPos ? (() => { try { return JSON.parse(item.value_text!); } catch { return null; } })() : null}
-                                onPositionSelected={(x, y) => {
-                                  updateItem(item.id, { value_text: JSON.stringify({ x, y }) });
-                                  setPosizionePickingId(null);
-                                }}
-                              />
-                            </div>
-                          )}
+              {visualItems.map((item) => {
+                if (item.item_type === "posizione") {
+                  const hasPos = !!item.value_text;
+                  let posLabel = "Nessuna posizione selezionata";
+                  if (hasPos) {
+                    try {
+                      const { x, y } = JSON.parse(item.value_text!);
+                      posLabel = `x:${x}% y:${y}%`;
+                    } catch { /* noop */ }
+                  }
+                  return (
+                    <div key={item.id} className="rounded-xl overflow-hidden" style={{ border: "1px solid hsl(220 20% 18%)", background: "hsl(220 32% 10%)" }}>
+                      <div className="flex items-center gap-3 p-3">
+                        <span className="text-sm font-medium" style={{ color: "hsl(215 20% 65%)" }}>📍 Posizione</span>
+                        <span className="flex-1 text-xs font-mono" style={{ color: hasPos ? "hsl(220 90% 70%)" : "hsl(215 15% 40%)" }}>{posLabel}</span>
+                        {hasPos && (
+                          <button type="button" onClick={() => updateItem(item.id, { value_text: undefined })}
+                            className="text-xs px-2 py-1 rounded-lg transition-all cursor-pointer"
+                            style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
+                          >Rimuovi</button>
+                        )}
+                        {planImageUrl ? (
+                          <button type="button" onClick={() => setPosizionePickingId(posizionePickingId === item.id ? null : item.id)}
+                            className="text-xs px-2 py-1 rounded-lg transition-all cursor-pointer"
+                            style={{ background: "hsl(220 90% 56% / 0.15)", color: "hsl(220 90% 70%)", border: "1px solid hsl(220 90% 56% / 0.3)" }}
+                          >{posizionePickingId === item.id ? "Chiudi mappa" : (hasPos ? "Modifica" : "Seleziona")}</button>
+                        ) : (
+                          <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>Nessuna planimetria caricata</span>
+                        )}
+                        <button type="button" onClick={() => { removeItem(item.id); setPosizionePickingId(null); }}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-sm transition-all flex-shrink-0 cursor-pointer"
+                          style={{ background: "hsl(0 60% 20%)", color: "hsl(0 70% 60%)", border: "1px solid hsl(0 60% 25%)" }}
+                          title="Rimuovi voce">✕</button>
+                      </div>
+                      {posizionePickingId === item.id && planImageUrl && (
+                        <div className="px-3 pb-3">
+                          <PlanimetriaMappa
+                            planImageUrl={planImageUrl}
+                            notes={levelNotes ?? []}
+                            pendingNoteNumber={nextNoteNumber ?? (initialNote?.note_number)}
+                            pendingPosition={hasPos ? (() => { try { return JSON.parse(item.value_text!); } catch { return null; } })() : null}
+                            onPositionSelected={(x, y) => {
+                              updateItem(item.id, { value_text: JSON.stringify({ x, y }) });
+                              setPosizionePickingId(null);
+                            }}
+                          />
                         </div>
-                      );
-                    }
-                    return (
-                      <ItemRow
-                        key={item.id}
-                        item={item}
-                        onChange={(changes) => updateItem(item.id, changes)}
-                        onRemove={() => removeItem(item.id)}
-                        catalogMaterials={catalogMaterials}
-                        onEditFoto={(id, url) => {
-                          setEditingFotoId(id);
-                          setEditingFotoUrl(url);
-                        }}
-                        onDrawFoto={(id, url) => {
-                          setEditingSketchId(id);
-                          setEditingSketchUrl(url);
-                        }}
-                        lastAddedId={lastAddedId}
-                      />
-                    );
-                  });
-              })()}
+                      )}
+                    </div>
+                  );
+                }
+                return (
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    onChange={(changes) => updateItem(item.id, changes)}
+                    onRemove={() => removeItem(item.id)}
+                    catalogMaterials={catalogMaterials}
+                    onEditFoto={(id, url) => {
+                      setEditingFotoId(id);
+                      setEditingFotoUrl(url);
+                    }}
+                    onDrawFoto={(id, url) => {
+                      setEditingSketchId(id);
+                      setEditingSketchUrl(url);
+                    }}
+                    lastAddedId={lastAddedId}
+                  />
+                );
+              })}
             </div>
           </>
         )}
