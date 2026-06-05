@@ -184,6 +184,7 @@ export async function updateFieldNote(noteId: string, formData: {
   const { error: noteError } = await (supabase as any)
     .from("field_notes")
     .update({
+      level_id: formData.level_id,
       type_id: formData.type_id ?? null,
       type_name: formData.type_name ?? null,
       updated_at: new Date().toISOString(),
