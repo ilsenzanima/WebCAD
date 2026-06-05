@@ -163,7 +163,7 @@ export async function getFieldNote(
 
 export async function updateFieldNote(noteId: string, formData: {
   project_id: string;
-  level_id: string;
+  level_id: string | null;
   type_id?: string | null;
   type_name?: string | null;
   items: Array<{
@@ -219,7 +219,7 @@ export async function updateFieldNote(noteId: string, formData: {
 
 export async function createFieldNote(formData: {
   project_id: string;
-  level_id: string;          // livello (piano 2D/3D) obbligatorio
+  level_id: string | null;          // livello (piano 2D/3D) opzionale
   type_id?: string | null;
   type_name?: string | null;
   items: Array<{

@@ -478,6 +478,55 @@ export const useOfflineStore = create<OfflineState>()(
           // Mappa di risoluzione degli ID temporanei a reali, ereditata dallo stato persistente
           const idMap: Record<string, string> = { ...get().tempIdMap };
 
+          // Helper di auto-guarigione per risolvere ID orfani se il sync è stato interrotto o perso
+          const healId = async (tempId: string | null | undefined, type: "project" | "level", contextId?: string | null): Promise<string | null> => {
+            if (!tempId) return null;
+            if (!tempId.startsWith("temp_")) return tempId;
+            if (idMap[tempId]) return idMap[tempId];
+
+            const { createClient } = await import("@/lib/supabase/client");
+            const supabase = createClient() as any;
+
+            try {
+              if (type === "project") {
+                const localProj = get().projects[tempId];
+                if (localProj) {
+                  const { data } = await supabase
+                    .from("projects")
+                    .select("id")
+                    .eq("name", localProj.name)
+                    .maybeSingle();
+                  if (data) {
+                    console.log(`%c[Sync Self-Healing]%c Progetto orfano risolto: ${tempId} -> ${data.id}`, "color: #eab308; font-weight: bold;", "color: inherit;");
+                    idMap[tempId] = data.id;
+                    set((state) => ({ tempIdMap: { ...state.tempIdMap, [tempId]: data.id } }));
+                    return data.id;
+                  }
+                }
+              } else if (type === "level" && contextId) {
+                const resolvedProjId = idMap[contextId] ?? contextId;
+                const localLvl = (get().levels[resolvedProjId] ?? []).find(l => l.id === tempId);
+                if (localLvl) {
+                  const { data } = await supabase
+                    .from("levels")
+                    .select("id")
+                    .eq("project_id", resolvedProjId)
+                    .eq("name", localLvl.name)
+                    .maybeSingle();
+                  if (data) {
+                    console.log(`%c[Sync Self-Healing]%c Livello orfano risolto: ${tempId} -> ${data.id}`, "color: #eab308; font-weight: bold;", "color: inherit;");
+                    idMap[tempId] = data.id;
+                    set((state) => ({ tempIdMap: { ...state.tempIdMap, [tempId]: data.id } }));
+                    return data.id;
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn("[Sync Self-Healing] Errore durante il ripristino dell'ID:", err);
+            }
+            return tempId;
+          };
+
           const resolveIds = (obj: any): any => {
             if (!obj) return obj;
             if (typeof obj === "string") {
@@ -498,6 +547,14 @@ export const useOfflineStore = create<OfflineState>()(
 
           const completedOps: string[] = [];
 
+          console.log(
+            `%c[Sync]%c Sincronizzazione offline avviata... (Elementi in coda: %c${queue.length}%c)`,
+            "color: #10b981; font-weight: bold;",
+            "color: inherit;",
+            "color: #3b82f6; font-weight: bold;",
+            "color: inherit;"
+          );
+
           // Elabora in ordine sequenziale (FIFO)
           for (const op of queue) {
             const resolvedPayload = resolveIds(op.payload);
@@ -509,6 +566,22 @@ export const useOfflineStore = create<OfflineState>()(
                   const { data: { user } } = await supabase.auth.getUser();
 
                   if (user) {
+                    // Prevenzione duplicazione: controlla se il progetto esiste già con questo nome
+                    const { data: existingProj, error: checkError } = await supabase
+                      .from("projects")
+                      .select("id")
+                      .eq("name", resolvedPayload.name)
+                      .eq("user_id", user.id)
+                      .maybeSingle();
+
+                    if (!checkError && existingProj) {
+                      console.log(`%c[Sync]%c Progetto "${resolvedPayload.name}" già esistente sul server. Recupero ID: ${existingProj.id}`, "color: #3b82f6; font-weight: bold;", "color: inherit;");
+                      idMap[resolvedPayload.tempId] = existingProj.id;
+                      set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.tempId]: existingProj.id } }));
+                      completedOps.push(op.id);
+                      break;
+                    }
+
                     const { data, error } = await supabase
                       .from("projects")
                       .insert({ name: resolvedPayload.name, user_id: user.id, client_info: {} })
@@ -520,33 +593,52 @@ export const useOfflineStore = create<OfflineState>()(
                       set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.tempId]: data.id } }));
                       completedOps.push(op.id);
                     } else {
-                      console.error("Errore sync CREATE_PROJECT:", error);
                       throw error || new Error("CREATE_PROJECT failed");
                     }
                   } else {
-                    throw new Error("User not authenticated");
+                    throw new Error("Utente non autenticato");
                   }
                   break;
                 }
                 case "RENAME_PROJECT": {
-                  const res = await renameProject(resolvedPayload.projectId, resolvedPayload.newName);
+                  const realProjId = await healId(resolvedPayload.projectId, "project");
+                  const res = await renameProject(realProjId!, resolvedPayload.newName);
                   if (res && res.error) throw new Error(res.error);
                   completedOps.push(op.id);
                   break;
                 }
                 case "DELETE_PROJECT": {
-                  const res = await deleteProject(resolvedPayload.projectId);
+                  const realProjId = await healId(resolvedPayload.projectId, "project");
+                  const res = await deleteProject(realProjId!);
                   if (res && res.error) throw new Error(res.error);
                   completedOps.push(op.id);
                   break;
                 }
                 case "ADD_LEVEL": {
+                  const realProjId = await healId(resolvedPayload.projectId, "project");
                   const { createClient } = await import("@/lib/supabase/client");
                   const supabase = createClient() as any;
+
+                  // Prevenzione duplicazione: verifica se il livello esiste già sul server
+                  const { data: existingLvl, error: checkError } = await supabase
+                    .from("levels")
+                    .select("id")
+                    .eq("project_id", realProjId)
+                    .eq("name", resolvedPayload.name)
+                    .maybeSingle();
+
+                  if (!checkError && existingLvl) {
+                    console.log(`%c[Sync]%c Livello "${resolvedPayload.name}" già esistente sul server. Recupero ID: ${existingLvl.id}`, "color: #3b82f6; font-weight: bold;", "color: inherit;");
+                    idMap[resolvedPayload.tempId] = existingLvl.id;
+                    set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.tempId]: existingLvl.id } }));
+                    completedOps.push(op.id);
+                    break;
+                  }
+
                   const { data, error } = await supabase
                     .from("levels")
                     .insert({
-                      project_id: resolvedPayload.projectId,
+                      project_id: realProjId,
                       name: resolvedPayload.name,
                       elevation_z: resolvedPayload.elevationZ,
                       drawing_type: resolvedPayload.drawingType,
@@ -560,51 +652,55 @@ export const useOfflineStore = create<OfflineState>()(
                     set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.tempId]: data.id } }));
                     completedOps.push(op.id);
                   } else {
-                    console.error("Errore sync ADD_LEVEL:", error);
                     throw error || new Error("ADD_LEVEL failed");
                   }
                   break;
                 }
                 case "TOGGLE_LEVEL_COMPLETED": {
-                  const res = await toggleLevelCompleted(resolvedPayload.levelId, resolvedPayload.completed);
+                  const realProjId = await healId(resolvedPayload.projectId, "project");
+                  const realLvlId = await healId(resolvedPayload.levelId, "level", realProjId);
+                  const res = await toggleLevelCompleted(realLvlId!, resolvedPayload.completed);
                   if (res && res.error) throw new Error(res.error);
                   completedOps.push(op.id);
                   break;
                 }
                 case "SAVE_NOTE_ITEMS": {
-                  const realProjId = resolvedPayload.projectId;
-                  const realLvlId = resolvedPayload.levelId;
+                  const realProjId = await healId(resolvedPayload.projectId, "project");
+                  const realLvlId = await healId(resolvedPayload.levelId, "level", realProjId);
                   let realNoteId = resolvedPayload.noteId;
 
                   const { createClient } = await import("@/lib/supabase/client");
                   const supabase = createClient() as any;
 
                   if (realNoteId.startsWith("temp_")) {
-                    const { data: numData } = await supabase.rpc("next_field_note_number", { p_user_id: (await supabase.auth.getUser()).data.user?.id });
-                    const { data: newNote, error } = await supabase
-                      .from("field_notes")
-                      .insert({
-                        project_id: realProjId,
-                        level_id: realLvlId,
-                        user_id: (await supabase.auth.getUser()).data.user?.id,
-                        note_number: numData || 1,
-                        type_name: resolvedPayload.typeName || "Appunti Cantiere",
-                      })
-                      .select("id")
-                      .single();
-
-                    if (!error && newNote) {
-                      idMap[resolvedPayload.noteId] = newNote.id;
-                      set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.noteId]: newNote.id } }));
-                      realNoteId = newNote.id;
+                    if (idMap[realNoteId]) {
+                      realNoteId = idMap[realNoteId];
                     } else {
-                      console.error("Errore creazione field_notes in sync:", error);
-                      throw error || new Error("SAVE_NOTE_ITEMS parent note creation failed");
+                      const { data: numData } = await supabase.rpc("next_field_note_number", { p_user_id: (await supabase.auth.getUser()).data.user?.id });
+                      const { data: newNote, error } = await supabase
+                        .from("field_notes")
+                        .insert({
+                          project_id: realProjId,
+                          level_id: realLvlId,
+                          user_id: (await supabase.auth.getUser()).data.user?.id,
+                          note_number: numData || 1,
+                          type_name: resolvedPayload.typeName || "Appunti Cantiere",
+                        })
+                        .select("id")
+                        .single();
+
+                      if (!error && newNote) {
+                        idMap[resolvedPayload.noteId] = newNote.id;
+                        set((state) => ({ tempIdMap: { ...state.tempIdMap, [resolvedPayload.noteId]: newNote.id } }));
+                        realNoteId = newNote.id;
+                      } else {
+                        throw error || new Error("SAVE_NOTE_ITEMS parent note creation failed");
+                      }
                     }
                   }
 
                   const res = await updateFieldNote(realNoteId, {
-                    project_id: realProjId,
+                    project_id: realProjId!,
                     level_id: realLvlId,
                     type_name: resolvedPayload.typeName,
                     items: resolvedPayload.items,
@@ -614,13 +710,16 @@ export const useOfflineStore = create<OfflineState>()(
                   break;
                 }
                 case "DELETE_NOTE": {
-                  const res = await deleteFieldNote(resolvedPayload.noteId, resolvedPayload.projectId);
+                  const realProjId = await healId(resolvedPayload.projectId, "project");
+                  const realNoteId = idMap[resolvedPayload.noteId] ?? resolvedPayload.noteId;
+                  const res = await deleteFieldNote(realNoteId, realProjId!);
                   if (!res.success) throw new Error(res.error || "DELETE_NOTE failed");
                   completedOps.push(op.id);
                   break;
                 }
                 case "UPDATE_NOTE_TEXT": {
-                  const res = await updateLevelNoteText(resolvedPayload.levelId, resolvedPayload.text);
+                  const realLvlId = await healId(resolvedPayload.levelId, "level", resolvedPayload.projectId);
+                  const res = await updateLevelNoteText(realLvlId!, resolvedPayload.text);
                   if (!res.success) throw new Error(res.error || "UPDATE_NOTE_TEXT failed");
                   completedOps.push(op.id);
                   break;
@@ -628,10 +727,17 @@ export const useOfflineStore = create<OfflineState>()(
               }
             } catch (err) {
               console.error(`Errore nella sincronizzazione dell'operazione ${op.action}:`, err);
-              // Blocca l'esecuzione della coda al primo errore (FIFO)
               break;
             }
           }
+
+          console.log(
+            `%c[Sync]%c Sincronizzazione completata! (%c${completedOps.length}/${queue.length}%c operazioni elaborate)`,
+            "color: #10b981; font-weight: bold;",
+            "color: inherit;",
+            "color: #3b82f6; font-weight: bold;",
+            "color: inherit;"
+          );
 
           // Ricalcola la cache locale post-sync per rinfrescare con gli ID reali
           set((state) => {
