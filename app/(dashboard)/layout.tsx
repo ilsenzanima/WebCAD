@@ -55,6 +55,8 @@ export default async function DashboardLayout({
           style={{
             background: "hsl(220 32% 10%)",
             borderRight: "1px solid hsl(220 20% 16%)",
+            position: "relative",
+            zIndex: 40,
           }}
         >
           {/* Logo */}
