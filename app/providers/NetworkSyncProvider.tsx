@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { useOfflineStore } from "@/lib/stores/offline-store";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import PageLoadLogger from "./PageLoadLogger";
 
 const NetworkSyncContext = createContext<{ isOnline: boolean }>({ isOnline: true });
 
@@ -234,6 +235,7 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
           )}
         </div>
       )}
+      <PageLoadLogger />
     </NetworkSyncContext.Provider>
   );
 }
