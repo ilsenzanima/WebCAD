@@ -263,6 +263,33 @@ export default function SketchEditorClient({
     };
   }, [sketch.level_id]);
 
+  const handleTouchStartRef = useRef(handleTouchStart);
+  const handleTouchMoveRef = useRef(handleTouchMove);
+  const handleTouchEndRef = useRef(handleTouchEnd);
+
+  handleTouchStartRef.current = handleTouchStart;
+  handleTouchMoveRef.current = handleTouchMove;
+  handleTouchEndRef.current = handleTouchEnd;
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onTouchStartNativo = (e: TouchEvent) => handleTouchStartRef.current(e as any);
+    const onTouchMoveNativo = (e: TouchEvent) => handleTouchMoveRef.current(e as any);
+    const onTouchEndNativo = (e: TouchEvent) => handleTouchEndRef.current(e as any);
+
+    container.addEventListener("touchstart", onTouchStartNativo, { passive: false });
+    container.addEventListener("touchmove", onTouchMoveNativo, { passive: false });
+    container.addEventListener("touchend", onTouchEndNativo, { passive: false });
+
+    return () => {
+      container.removeEventListener("touchstart", onTouchStartNativo);
+      container.removeEventListener("touchmove", onTouchMoveNativo);
+      container.removeEventListener("touchend", onTouchEndNativo);
+    };
+  }, []);
+
   // Algoritmo di Riconoscimento Geometrico (Fixato e calibrato per Quadrati/Rettangoli vs Triangoli)
   function detectShape(points: Point[]) {
     if (points.length < 8) return null;
@@ -1115,9 +1142,6 @@ export default function SketchEditorClient({
         {/* WORKSPACE DI DISEGNO CON SUPPORTI TOUCH GESTURE ZOOM/PAN */}
         <div
           ref={containerRef}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
           className="flex-1 w-full h-full flex items-center justify-center relative touch-none select-none"
           style={{ 
             paddingTop: "76px", 
