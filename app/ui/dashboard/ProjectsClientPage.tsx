@@ -58,6 +58,8 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [quickAdd, setQuickAdd] = useState<{ projectId: string; type: "nota" | "sketch" | "taglio" } | null>(null);
+  const [onlineProjects, setOnlineProjects] = useState<Project[]>([]);
+  const [loadingOnline, setLoadingOnline] = useState(false);
 
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -66,12 +68,45 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
 
   const cachedProjects = useOfflineStore((state) => state.projects);
 
+  // Fetch dei progetti in background lato client
+  useEffect(() => {
+    const fetchProjects = async () => {
+      setLoadingOnline(true);
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const { data, error } = await supabase
+          .from("projects")
+          .select("id, name, created_at, updated_at")
+          .order("updated_at", { ascending: false })
+          .order("created_at", { ascending: false });
+
+        if (!error && data) {
+          setOnlineProjects(data as any[]);
+          // Aggiorna lo store offline
+          useOfflineStore.getState().setProjectsCache(data as any[]);
+        }
+      } catch (err) {
+        console.error("Errore caricamento progetti in background:", err);
+      } finally {
+        setLoadingOnline(false);
+      }
+    };
+
+    fetchProjects();
+  }, []);
+
   const projectsList = useMemo(() => {
-    if (!mounted) return projects;
+    if (!mounted) return [];
     const map = new Map<string, any>();
     
-    // Inseriamo i progetti server
-    projects.forEach(p => map.set(p.id, p));
+    // Seleziona come base i progetti scaricati online se presenti, altrimenti usa la cache offline locale
+    const baseProjects = onlineProjects.length > 0 ? onlineProjects : Object.values(cachedProjects);
+    baseProjects.forEach(p => map.set(p.id, p));
 
     const queue = useOfflineStore.getState().offlineQueue;
 
@@ -101,7 +136,7 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
           map.set(p.id, { ...p, name: currentName });
         }
       } else {
-        // Se il progetto esiste sul server ed ha una rinomina pendente nella coda locale,
+        // Se il progetto esiste ed ha una rinomina pendente nella coda locale,
         // aggiorniamo il nome optimisticamente
         const existing = map.get(p.id);
         if (existing) {
@@ -116,8 +151,13 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
       }
     });
 
-    return Array.from(map.values());
-  }, [projects, cachedProjects, mounted]);
+    // Ordina per data di aggiornamento/creazione decrescente
+    return Array.from(map.values()).sort((a, b) => {
+      const dateA = new Date(a.updated_at || a.created_at).getTime();
+      const dateB = new Date(b.updated_at || b.created_at).getTime();
+      return dateB - dateA;
+    });
+  }, [onlineProjects, cachedProjects, mounted]);
 
   const [loadedNotes, setLoadedNotes] = useState<FieldNote[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(false);

@@ -4,7 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { useOfflineStore } from "@/lib/stores/offline-store";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import PageLoadLogger from "./PageLoadLogger";
+import PageLoadLogger, { subscribeToErrors } from "./PageLoadLogger";
 
 const NetworkSyncContext = createContext<{ isOnline: boolean }>({ isOnline: true });
 
@@ -21,6 +21,46 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
     useOfflineStore.persist.rehydrate();
     setClientMounted(true);
   }, []);
+
+  const [syncErrorMsg, setSyncErrorMsg] = useState<string | null>(null);
+
+  // A. Prevenzione chiusura scheda del browser se ci sono elementi in coda
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (offlineQueue.length > 0) {
+        e.preventDefault();
+        e.returnValue = "Ci sono modifiche non sincronizzate in corso. Sei sicuro di voler uscire? Potresti perdere i dati.";
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [offlineQueue.length]);
+
+  // B. Sottoscrizione agli errori di sincronizzazione
+  useEffect(() => {
+    const unsubscribe = subscribeToErrors((newError) => {
+      if (
+        newError.includes("Errore nella sincronizzazione dell'operazione") ||
+        newError.includes("Errore generico in syncOfflineData")
+      ) {
+        setSyncErrorMsg(newError);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  // C. Reset del toast se la coda si svuota
+  useEffect(() => {
+    if (offlineQueue.length === 0) {
+      setSyncErrorMsg(null);
+    }
+  }, [offlineQueue.length]);
 
   // Gestione pulsante indietro nativo per Capacitor (Android / iOS)
   useEffect(() => {
@@ -235,6 +275,30 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
           )}
         </div>
       )}
+      {/* Toast di errore bloccante sincronizzazione in alto al centro */}
+      {clientMounted && syncErrorMsg && (
+        <div
+          onClick={() => {
+            router.push("/sync");
+            setSyncErrorMsg(null);
+          }}
+          className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[9999] flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-semibold shadow-2xl border cursor-pointer animate-fade-in hover:scale-102 transition-all"
+          style={{
+            background: "hsl(350 89% 10% / 0.95)",
+            borderColor: "hsl(350 89% 60% / 0.4)",
+            color: "hsl(350 89% 80%)",
+            backdropFilter: "blur(12px)",
+            boxShadow: "0 10px 40px rgba(239, 68, 68, 0.3)",
+          }}
+        >
+          <span className="text-sm animate-pulse">⚠️</span>
+          <div>
+            <p className="font-bold text-red-400">Errore Sincronizzazione Offline!</p>
+            <p className="opacity-90 text-[10px] font-normal mt-0.5">La coda si è bloccata. Clicca per sbloccare ed evitare la perdita di dati.</p>
+          </div>
+        </div>
+      )}
+
       <PageLoadLogger />
     </NetworkSyncContext.Provider>
   );
