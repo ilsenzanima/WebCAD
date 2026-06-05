@@ -8,6 +8,7 @@ import CalcolatriceWidget from "./CalcolatriceWidget";
 import GlobalBollaTrigger from "./GlobalBollaTrigger";
 import OfflineModeToggle from "./OfflineModeToggle";
 import { APP_VERSION } from "@/lib/version";
+import NotificationBell from "./NotificationBell";
 
 interface MobileHeaderMenuProps {
   initials: string;
@@ -67,12 +68,15 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
           <span className="text-white font-extrabold text-sm tracking-wide">WebCAD</span>
         </div>
 
-        {/* Avatar profilo */}
-        <div
-          className="w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-extrabold text-white flex-shrink-0"
-          style={{ background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" }}
-        >
-          {initials}
+        {/* Sezione destra (Campana Notifiche + Profilo) */}
+        <div className="flex items-center gap-3">
+          <NotificationBell mode="mobile" />
+          <div
+            className="w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-extrabold text-white flex-shrink-0"
+            style={{ background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" }}
+          >
+            {initials}
+          </div>
         </div>
       </header>
 
