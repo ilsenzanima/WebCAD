@@ -533,7 +533,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   const isTaglio = typeFilter === "Taglio" || selectedType?.name === "Taglio";
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-6">
       {/* Errore globale */}
       {error && (
         <div
@@ -544,81 +544,121 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         </div>
       )}
 
-      {/* ── Tipo appunto (Automatico e Leggibile) ── */}
+      {/* ── Scheda Intestazione Unificata (Tipo, Piano, Titolo) ── */}
       <div
-        className="rounded-2xl p-4 flex items-center justify-between gap-4"
+        className="rounded-2xl p-5 md:p-6 space-y-4 md:space-y-0 md:grid md:grid-cols-3 md:gap-6 items-start relative"
         style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
+        ref={dropdownRef}
       >
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-white/40 mb-1">
+        {/* 1. Tipo di Appunto */}
+        <div className="space-y-2">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-white/40">
             Tipo di Appunto
           </label>
-          <div className="text-sm font-bold text-white flex items-center gap-2">
-            {isSketch ? (
-              <>
-                <span className="text-base">🎨</span>
-                <span>Sketch (Disegno / Schema)</span>
-              </>
-            ) : isReport3D ? (
-              <>
-                <span className="text-base">📦</span>
-                <span>Report 3D (Modello CAD)</span>
-              </>
-            ) : isTaglio ? (
-              <>
-                <span className="text-base">✂️</span>
-                <span>Taglio Raggruppato (Nesting)</span>
-              </>
-            ) : (
-              <>
-                <span className="text-base">📝</span>
-                <span>Nota di Cantiere (Misure)</span>
-              </>
+          <div className="pt-1.5 flex items-center">
+            <span
+              className="text-[11px] font-bold uppercase px-3 py-1.5 rounded-xl font-mono flex items-center gap-2"
+              style={{
+                background: isSketch
+                  ? "rgba(245, 158, 11, 0.15)"
+                  : isReport3D
+                  ? "rgba(168, 85, 247, 0.15)"
+                  : isTaglio
+                  ? "rgba(16, 185, 129, 0.15)"
+                  : "rgba(14, 165, 233, 0.15)",
+                color: isSketch ? "#fbbf24" : isReport3D ? "#c084fc" : isTaglio ? "#10b981" : "#38bdf8",
+                border: `1px solid ${
+                  isSketch ? "rgba(245, 158, 11, 0.3)" : isReport3D ? "rgba(168, 85, 247, 0.3)" : isTaglio ? "rgba(16, 185, 129, 0.3)" : "rgba(14, 165, 233, 0.3)"
+                }`,
+              }}
+            >
+              <span>{isSketch ? "🎨" : isReport3D ? "📦" : isTaglio ? "✂️" : "📝"}</span>
+              <span>{isSketch ? "Sketch" : isReport3D ? "Report 3D" : isTaglio ? "Taglio" : "Nota"}</span>
+            </span>
+          </div>
+        </div>
+
+        {/* 2. Piano / Livello */}
+        <div className="space-y-2 relative">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-white/40">
+            Piano / Livello
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              required
+              value={pianoName}
+              onChange={(e) => {
+                setPianoName(e.target.value);
+                setShowPianiDropdown(true);
+              }}
+              onFocus={() => setShowPianiDropdown(true)}
+              placeholder="Scrivi o seleziona un piano..."
+              className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
+              style={{
+                background: "hsl(220 32% 10%)",
+                border: "1px solid hsl(220 20% 22%)",
+                color: "hsl(210 40% 96%)",
+              }}
+              onFocusCapture={e => e.currentTarget.style.borderColor = "hsl(220 90% 56%)"}
+              onBlurCapture={e => e.currentTarget.style.borderColor = "hsl(220 20% 22%)"}
+              autoComplete="off"
+            />
+
+            {/* Dropdown piani esistenti */}
+            {showPianiDropdown && projectLevels.length > 0 && (
+              <div
+                className="absolute left-0 right-0 mt-1 rounded-xl overflow-hidden z-50 border max-h-40 overflow-y-auto"
+                style={{
+                  background: "hsl(220 26% 14%)",
+                  borderColor: "hsl(220 20% 22%)",
+                  boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
+                }}
+              >
+                {projectLevels
+                  .filter(p => p.name.toLowerCase().includes(pianoName.toLowerCase()))
+                  .map((p, idx, arr) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setCurrentLevelId(p.id);
+                        setPianoName(p.name);
+                        setShowPianiDropdown(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-xs hover:bg-white/5 transition-colors text-white/80"
+                      style={{ borderBottom: idx < arr.length - 1 ? "1px solid hsl(220 20% 18%)" : "none" }}
+                    >
+                      🏢 {p.name}
+                    </button>
+                  ))
+                }
+              </div>
             )}
           </div>
         </div>
 
-        <div
-          className="text-[10px] font-bold uppercase px-2.5 py-1 rounded-full font-mono"
-          style={{
-            background: isSketch
-              ? "rgba(245, 158, 11, 0.15)"
-              : isReport3D
-              ? "rgba(168, 85, 247, 0.15)"
-              : isTaglio
-              ? "rgba(16, 185, 129, 0.15)"
-              : "rgba(14, 165, 233, 0.15)",
-            color: isSketch ? "#fbbf24" : isReport3D ? "#c084fc" : isTaglio ? "#10b981" : "#38bdf8",
-            border: `1px solid ${
-              isSketch ? "rgba(245, 158, 11, 0.3)" : isReport3D ? "rgba(168, 85, 247, 0.3)" : isTaglio ? "rgba(16, 185, 129, 0.3)" : "rgba(14, 165, 233, 0.3)"
-            }`,
-          }}
-        >
-          {isSketch ? "Sketch" : isReport3D ? "Report 3D" : isTaglio ? "Taglio" : "Nota"}
-        </div>
-      </div>
-
-
-      {/* ── Piano / Livello (Selettore integrato) ── */}
-      <div
-        className="rounded-2xl p-4 space-y-3 relative"
-        style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
-        ref={dropdownRef}
-      >
-        <label className="block text-xs font-semibold uppercase tracking-wider text-white/40">
-          Piano / Livello
-        </label>
-        <div className="relative">
+        {/* 3. Titolo dell'Appunto */}
+        <div className="space-y-2">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-white/40">
+            {isSketch ? "Titolo dello Sketch" : isReport3D ? "Titolo del Report 3D" : "Titolo dell'Appunto"}
+          </label>
           <input
             type="text"
-            required
-            value={pianoName}
+            value={items.find((i) => i.item_type === "nota")?.value_text ?? ""}
             onChange={(e) => {
-              setPianoName(e.target.value);
-              setShowPianiDropdown(true);
+              const titleItem = items.find((i) => i.item_type === "nota");
+              if (titleItem) {
+                updateItem(titleItem.id, { value_text: e.target.value });
+              } else {
+                const newId = crypto.randomUUID();
+                setItems((prev) => [
+                  { id: newId, item_type: "nota", value_text: e.target.value, sort_order: 0 },
+                  ...prev,
+                ]);
+              }
             }}
-            onFocus={() => setShowPianiDropdown(true)}
-            placeholder="Scrivi o seleziona un piano..."
+            placeholder={isSketch ? "es. Schema quadro..." : isReport3D ? "es. Assieme condotte..." : "es. Rilievo Staffaggi..."}
             className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
             style={{
               background: "hsl(220 32% 10%)",
@@ -627,43 +667,8 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
             }}
             onFocusCapture={e => e.currentTarget.style.borderColor = "hsl(220 90% 56%)"}
             onBlurCapture={e => e.currentTarget.style.borderColor = "hsl(220 20% 22%)"}
-            autoComplete="off"
           />
-
-          {/* Dropdown piani esistenti */}
-          {showPianiDropdown && projectLevels.length > 0 && (
-            <div
-              className="absolute left-0 right-0 mt-1 rounded-xl overflow-hidden z-50 border max-h-40 overflow-y-auto"
-              style={{
-                background: "hsl(220 26% 14%)",
-                borderColor: "hsl(220 20% 22%)",
-                boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
-              }}
-            >
-              {projectLevels
-                .filter(p => p.name.toLowerCase().includes(pianoName.toLowerCase()))
-                .map((p, idx, arr) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => {
-                      setCurrentLevelId(p.id);
-                      setPianoName(p.name);
-                      setShowPianiDropdown(false);
-                    }}
-                    className="w-full text-left px-4 py-2.5 text-xs hover:bg-white/5 transition-colors text-white/80"
-                    style={{ borderBottom: idx < arr.length - 1 ? "1px solid hsl(220 20% 18%)" : "none" }}
-                  >
-                    🏢 {p.name}
-                  </button>
-                ))
-              }
-            </div>
-          )}
         </div>
-        <p className="text-[10px] text-white/40">
-          Modifica il piano di riferimento per questo appunto. Se digiti un nome non esistente, verrà creato un nuovo livello al salvataggio.
-        </p>
       </div>
 
 
@@ -674,32 +679,9 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
       >
         {isSketch ? (
           (() => {
-            const sketchTitleItem = items.find(i => i.item_type === "nota");
             const sketchFotoItem = items.find(i => i.item_type === "foto");
             return (
               <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-white/60 uppercase mb-1">
-                    Titolo dello Sketch
-                  </label>
-                  <input
-                    type="text"
-                    value={sketchTitleItem?.value_text ?? ""}
-                    onChange={(e) => {
-                      if (sketchTitleItem) {
-                        updateItem(sketchTitleItem.id, { value_text: e.target.value });
-                      }
-                    }}
-                    placeholder="es. Schema quadro elettrico, Dettaglio tubazioni..."
-                    className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
-                    style={{
-                      background: "hsl(220 32% 10%)",
-                      border: "1px solid hsl(220 20% 22%)",
-                      color: "hsl(210 40% 96%)",
-                    }}
-                  />
-                </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-white/60 uppercase mb-1">
                     Disegno (Foglio Millimetrato)
@@ -736,33 +718,10 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
           })()
         ) : isReport3D ? (
           (() => {
-            const reportTitleItem = items.find(i => i.item_type === "nota");
             const model3dItem = items.find(i => i.item_type === "foto" && is3DModelUrl(i.value_text));
             const snapshotItem = items.find(i => i.item_type === "foto" && !is3DModelUrl(i.value_text));
             return (
               <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-white/60 uppercase mb-1">
-                    Titolo del Report 3D
-                  </label>
-                  <input
-                    type="text"
-                    value={reportTitleItem?.value_text ?? ""}
-                    onChange={(e) => {
-                      if (reportTitleItem) {
-                        updateItem(reportTitleItem.id, { value_text: e.target.value });
-                      }
-                    }}
-                    placeholder="es. Assieme condotte piano 1, Vista assonometrica..."
-                    className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
-                    style={{
-                      background: "hsl(220 32% 10%)",
-                      border: "1px solid hsl(220 20% 22%)",
-                      color: "hsl(210 40% 96%)",
-                    }}
-                  />
-                </div>
-
                 {!model3dItem ? (
                   <div className="p-6 rounded-2xl border border-dashed border-white/20 bg-white/[0.02] text-center space-y-3">
                     <div className="text-3xl">📦</div>
@@ -907,36 +866,6 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
           })()
         ) : (
           <>
-            {/* Titolo dell'Appunto */}
-            <div className="mb-4">
-              <label className="block text-xs font-semibold text-white/60 uppercase mb-1">
-                Titolo dell&apos;Appunto
-              </label>
-              <input
-                type="text"
-                value={items.find((i) => i.item_type === "nota")?.value_text ?? ""}
-                onChange={(e) => {
-                  const titleItem = items.find((i) => i.item_type === "nota");
-                  if (titleItem) {
-                    updateItem(titleItem.id, { value_text: e.target.value });
-                  } else {
-                    const newId = crypto.randomUUID();
-                    setItems((prev) => [
-                      { id: newId, item_type: "nota", value_text: e.target.value, sort_order: 0 },
-                      ...prev,
-                    ]);
-                  }
-                }}
-                placeholder="es. Rilievo Staffaggi, Misure Canali..."
-                className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
-                style={{
-                  background: "hsl(220 32% 10%)",
-                  border: "1px solid hsl(220 20% 22%)",
-                  color: "hsl(210 40% 96%)",
-                }}
-              />
-            </div>
-
             <div className="flex items-center justify-between">
               <div />
 
