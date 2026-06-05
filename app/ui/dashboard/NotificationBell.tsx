@@ -128,7 +128,7 @@ export default function NotificationBell({ mode }: NotificationBellProps) {
   }
 
   return (
-    <div ref={bellRef} className="relative z-50">
+    <div ref={bellRef} className="relative z-50" onMouseDown={(e) => e.stopPropagation()}>
       {/* ── Icona Campana Interattiva ── */}
       <button
         onClick={() => setIsOpen(!isOpen)}
