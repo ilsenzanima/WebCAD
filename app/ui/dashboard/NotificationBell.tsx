@@ -160,8 +160,8 @@ export default function NotificationBell({ mode }: NotificationBellProps) {
               : "top-11 right-0 mt-2 w-80 sm:w-96"
           }`}
           style={{
-            background: "hsl(220 26% 12% / 0.95)",
-            borderColor: "hsl(220 20% 18%)",
+            background: "hsl(220 28% 6%)",
+            borderColor: "hsl(220 20% 20%)",
           }}
         >
           {/* Header Popover con Tabs */}
