@@ -16,7 +16,7 @@ import PhotoQuotaEditor from "./PhotoQuotaEditor";
 import SketchEditorClient from "@/app/ui/sketches/SketchEditorClient";
 import LivellaBolla from "./LivellaBolla";
 import CalcolatriceWidget from "@/app/ui/dashboard/CalcolatriceWidget";
-import { useOfflineStore } from "@/lib/stores/offline-store";
+import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
 import type { Material } from "@/lib/types/database";
 
 const is3DModelUrl = (url?: string | null) => {
@@ -198,6 +198,26 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   const [isCreatingType, setIsCreatingType] = useState(false);
   const typeInputRef = useRef<HTMLInputElement>(null);
 
+  // --- Gestione Livello / Piano ---
+  const projectLevels = useOfflineStore((state) => state.levels[projectId] ?? []);
+  const addLevelOptimistic = useOfflineStore((state) => state.addLevelOptimistic);
+  const [currentLevelId, setCurrentLevelId] = useState(initialNote?.level_id ?? levelId);
+  const currentLevel = projectLevels.find(l => l.id === currentLevelId);
+  const [pianoName, setPianoName] = useState(currentLevel?.name ?? "");
+  const [showPianiDropdown, setShowPianiDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Chiude il dropdown dei piani se si clicca fuori
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowPianiDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   useEffect(() => {
     if (mounted && cachedNote) {
       if (cachedNote.type_name) {
@@ -218,6 +238,16 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
       }
     }
   }, [noteToUse, noteTypes, typeFilter, selectedType, mounted, cachedNote]);
+
+  // Sincronizza il nome del piano quando cambia o vengono caricati i livelli
+  useEffect(() => {
+    if (mounted && projectLevels.length > 0) {
+      const lvl = projectLevels.find(l => l.id === currentLevelId);
+      if (lvl) {
+        setPianoName(lvl.name);
+      }
+    }
+  }, [mounted, currentLevelId, projectLevels]);
 
   // Auto-inizializzazione per Sketch e Report 3D
   useEffect(() => {
@@ -403,9 +433,27 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         return;
       }
 
+      // Risolve o crea il livello/piano prima di salvare la nota
+      let finalLevelId = currentLevelId;
+      const targetPianoName = pianoName.trim() || "Generico";
+      const matchedLevel = projectLevels.find(l => l.name.toLowerCase() === targetPianoName.toLowerCase());
+      if (matchedLevel) {
+        finalLevelId = matchedLevel.id;
+      } else {
+        finalLevelId = generateTempId();
+        addLevelOptimistic(
+          finalLevelId,
+          projectId,
+          targetPianoName,
+          0,
+          "2d_wall",
+          targetPianoName
+        );
+      }
+
       const payload = {
         project_id: projectId,
-        level_id: levelId,
+        level_id: finalLevelId,
         type_id: finalType.id,
         type_name: finalType.name,
         items: items.map((item, idx) => ({
@@ -424,10 +472,10 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         })),
       };
 
-      if (isOfflineActive || levelId.startsWith("temp_") || (initialNote && initialNote.id.startsWith("temp_"))) {
+      if (isOfflineActive || finalLevelId.startsWith("temp_") || (initialNote && initialNote.id.startsWith("temp_"))) {
         // Salvataggio offline ottimistico (in coda) per preservare la risoluzione referenziale dei Temp ID
         const noteId = initialNote ? initialNote.id : `temp-note-${Date.now()}`;
-        saveFieldNoteItemsOptimistic(noteId, projectId, levelId, payload.items, finalType.name);
+        saveFieldNoteItemsOptimistic(noteId, projectId, finalLevelId, payload.items, finalType.name);
         router.push(`/projects/${projectId}`);
         return;
       }
@@ -540,6 +588,74 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         >
           {isSketch ? "Sketch" : isReport3D ? "Report 3D" : isTaglio ? "Taglio" : "Nota"}
         </div>
+      </div>
+
+
+      {/* ── Piano / Livello (Selettore integrato) ── */}
+      <div
+        className="rounded-2xl p-4 space-y-3 relative"
+        style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}
+        ref={dropdownRef}
+      >
+        <label className="block text-xs font-semibold uppercase tracking-wider text-white/40">
+          Piano / Livello
+        </label>
+        <div className="relative">
+          <input
+            type="text"
+            required
+            value={pianoName}
+            onChange={(e) => {
+              setPianoName(e.target.value);
+              setShowPianiDropdown(true);
+            }}
+            onFocus={() => setShowPianiDropdown(true)}
+            placeholder="Scrivi o seleziona un piano..."
+            className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
+            style={{
+              background: "hsl(220 32% 10%)",
+              border: "1px solid hsl(220 20% 22%)",
+              color: "hsl(210 40% 96%)",
+            }}
+            onFocusCapture={e => e.currentTarget.style.borderColor = "hsl(220 90% 56%)"}
+            onBlurCapture={e => e.currentTarget.style.borderColor = "hsl(220 20% 22%)"}
+            autoComplete="off"
+          />
+
+          {/* Dropdown piani esistenti */}
+          {showPianiDropdown && projectLevels.length > 0 && (
+            <div
+              className="absolute left-0 right-0 mt-1 rounded-xl overflow-hidden z-50 border max-h-40 overflow-y-auto"
+              style={{
+                background: "hsl(220 26% 14%)",
+                borderColor: "hsl(220 20% 22%)",
+                boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
+              }}
+            >
+              {projectLevels
+                .filter(p => p.name.toLowerCase().includes(pianoName.toLowerCase()))
+                .map((p, idx, arr) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => {
+                      setCurrentLevelId(p.id);
+                      setPianoName(p.name);
+                      setShowPianiDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2.5 text-xs hover:bg-white/5 transition-colors text-white/80"
+                    style={{ borderBottom: idx < arr.length - 1 ? "1px solid hsl(220 20% 18%)" : "none" }}
+                  >
+                    🏢 {p.name}
+                  </button>
+                ))
+              }
+            </div>
+          )}
+        </div>
+        <p className="text-[10px] text-white/40">
+          Modifica il piano di riferimento per questo appunto. Se digiti un nome non esistente, verrà creato un nuovo livello al salvataggio.
+        </p>
       </div>
 
 
@@ -892,6 +1008,40 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                         </button>
                         <button
                           type="button"
+                          onClick={() => {
+                            const canvas = document.createElement("canvas");
+                            canvas.width = 1200;
+                            canvas.height = 1200;
+                            const ctx = canvas.getContext("2d");
+                            if (ctx) {
+                              ctx.fillStyle = "#ffffff";
+                              ctx.fillRect(0, 0, 1200, 1200);
+                              ctx.strokeStyle = "#e2e8f0";
+                              ctx.lineWidth = 1;
+                              for (let i = 0; i < 1200; i += 40) {
+                                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 1200); ctx.stroke();
+                                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(1200, i); ctx.stroke();
+                              }
+                            }
+                            const emptySketchBase64 = canvas.toDataURL("image/png");
+                            
+                            const newId = crypto.randomUUID();
+                            const draft: NoteItemDraft = {
+                              id: newId,
+                              item_type: "foto",
+                              value_text: emptySketchBase64,
+                            };
+                            setItems((prev) => [...prev, draft]);
+                            setLastAddedId(newId);
+                            setShowItemDropdown(false);
+                          }}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          🎨 Disegno bianco
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => addItem("base")}
                           className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
                           style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
@@ -1153,7 +1303,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
               id: editingSketchId,
               name: isSketch ? "Disegno Foglio Millimetrato" : "Annotazione su Foto",
               user_id: "",
-              level_id: levelId,
+              level_id: currentLevelId,
               image_data: editingSketchUrl,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -1593,7 +1743,7 @@ function ItemRow({
   return (
     <div
       ref={rowRef}
-      className="grid grid-cols-[85px_1fr_auto] items-center gap-2 p-2 rounded-xl text-sm"
+      className="flex flex-col sm:grid sm:grid-cols-[100px_1fr_auto] items-stretch sm:items-center gap-2 p-2 rounded-xl text-sm"
       style={{
         background: item.id === lastAddedId ? "hsl(220 90% 56% / 0.05)" : "hsl(220 32% 10%)",
         border: item.id === lastAddedId ? "1px solid hsl(220 90% 56% / 0.3)" : "1px solid hsl(220 20% 18%)",
@@ -1602,7 +1752,7 @@ function ItemRow({
     >
       {/* Label */}
       <span
-        className="font-medium text-xs truncate flex items-center gap-1"
+        className="font-medium text-xs sm:truncate flex items-center gap-1 mb-1 sm:mb-0"
         style={{ color: "hsl(215 20% 65%)" }}
       >
         {item.item_type === "base" ? "↔ L (Oriz.)" :
@@ -1677,18 +1827,19 @@ function ItemRow({
 
       {/* Input nota */}
       {isNote && (
-        <input
-          ref={inputRef}
-          type="text"
+        <textarea
+          ref={inputRef as any}
           value={item.value_text ?? ""}
           onChange={(e) => onChange({ value_text: e.target.value })}
           placeholder="Scrivi una nota..."
-          className="flex-1 px-2.5 py-1.5 rounded-lg text-xs outline-none min-w-0"
+          className="flex-1 px-2.5 py-1.5 rounded-lg text-xs outline-none min-w-0 resize-y"
           style={{
             background: "hsl(220 26% 14%)",
             border: "1px solid hsl(220 20% 22%)",
             color: "hsl(210 40% 96%)",
+            minHeight: "45px",
           }}
+          rows={2}
         />
       )}
 
@@ -1866,7 +2017,7 @@ function ItemRow({
             onRemove();
           }
         }}
-        className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all flex-shrink-0 text-red-400 bg-red-950/20 border border-red-900/30 cursor-pointer"
+        className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all flex-shrink-0 text-red-400 bg-red-950/20 border border-red-900/30 cursor-pointer self-end sm:self-auto mt-1 sm:mt-0"
         title="Rimuovi voce"
       >
         ✕

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { updateProjectNotes, renameProject, toggleLevelCompleted } from "@/app/actions/projects";
 import ProjectActionsMenu from "@/app/ui/dashboard/ProjectActionsMenu";
-import QuickAddModal from "./QuickAddModal";
 import type { FieldNote } from "@/app/actions/field-notes";
 import { toggleFieldNoteCompleted } from "@/app/actions/field-notes";
 import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
@@ -217,80 +216,45 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitle, setEditTitle] = useState(project.name);
 
-  // Stati per inserimento rapido dropdown e modale
-  const [showAddMenu, setShowAddMenu] = useState(false);
-  const [quickAddType, setQuickAddType] = useState<"nota" | "sketch" | "taglio" | null>(null);
-
-  // Gestore per l'inserimento rapido dal dettaglio del progetto
-  const handleQuickAddSubmit = async (title: string, pianoName: string) => {
-    if (!quickAddType) return;
-    
-    // 1. Controlla se il livello esiste già offline
-    let level = localDrawings.find(l => l.name.toLowerCase() === pianoName.toLowerCase());
-    let levelId = level?.id;
-    
-    if (!levelId) {
-      // Crea il livello optimisticamente
+  // Gestore per l'inserimento diretto di una nota senza modali
+  const handleAddNoteDirectly = () => {
+    // 1. Usa il primo livello disponibile se presente, altrimenti creane uno chiamato "Generico"
+    let levelId;
+    if (localDrawings.length > 0) {
+      levelId = localDrawings[0].id;
+    } else {
       levelId = generateTempId();
-      addLevelOptimistic(
-        levelId,
-        project.id,
-        pianoName,
-        0,
-        "2d_wall",
-        pianoName
-      );
+      addLevelOptimistic(levelId, project.id, "Generico", 0, "2d_wall", "Generico");
     }
-    
-    // 2. Crea la nota optimisticamente in base al tipo
+
+    // 2. Crea la nota vuota optimisticamente
     const tempNoteId = generateTempId();
-    
-    if (quickAddType === "nota") {
-      const initialItems = [{ item_type: "nota" as const, value_text: title, sort_order: 0 }];
-      useOfflineStore.getState().saveFieldNoteItemsOptimistic(
-        tempNoteId,
-        project.id,
-        levelId,
-        initialItems,
-        "Appunti Cantiere"
-      );
-      
-      setQuickAddType(null);
-      router.push(`/projects/${project.id}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
-    } else if (quickAddType === "sketch") {
-      // Genera un foglio millimetrato Base64 iniziale
-      const canvas = document.createElement("canvas");
-      canvas.width = 1200;
-      canvas.height = 1200;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, 1200, 1200);
-        ctx.strokeStyle = "#e2e8f0";
-        ctx.lineWidth = 1;
-        for (let i = 0; i < 1200; i += 40) {
-          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 1200); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(1200, i); ctx.stroke();
-        }
-      }
-      const emptySketchBase64 = canvas.toDataURL("image/png");
-      
-      const initialItems = [
-        { item_type: "nota" as const, value_text: title, sort_order: 0 },
-        { item_type: "foto" as const, value_text: emptySketchBase64, sort_order: 1 }
-      ];
-      
-      useOfflineStore.getState().saveFieldNoteItemsOptimistic(
-        tempNoteId,
-        project.id,
-        levelId,
-        initialItems,
-        "Sketch"
-      );
-      
-      setQuickAddType(null);
-      router.push(`/projects/${project.id}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
-    }
+    const initialItems = [{ item_type: "nota" as const, value_text: "", sort_order: 0 }];
+    useOfflineStore.getState().saveFieldNoteItemsOptimistic(
+      tempNoteId,
+      project.id,
+      levelId,
+      initialItems,
+      "Appunti Cantiere"
+    );
+
+    router.push(`/projects/${project.id}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
+  };
+
+  // Gestore per l'inserimento diretto di un piano di taglio senza modali
+  const handleAddTaglioDirectly = () => {
+    const tempNoteId = generateTempId();
+    const initialItems = [
+      { id: generateTempId(), item_type: "nota" as const, value_text: "Taglio: Nuovo Piano di Taglio", sort_order: 0 },
+    ];
+    useOfflineStore.getState().saveFieldNoteItemsOptimistic(
+      tempNoteId,
+      project.id,
+      null, // level_id impostato a null (livello generale di progetto)
+      initialItems,
+      "Taglio"
+    );
+    router.push(`/projects/${project.id}/tagli/${tempNoteId}`);
   };
 
   // Filtra le note del progetto che contengono elementi con pezzi da tagliare (nesting)
@@ -313,34 +277,6 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
     );
   }, [projectNotes]);
 
-  const handleQuickAddTaglioSubmit = async (title: string, pianoName: string) => {
-    // 1. Usa un livello chiamato pianoName o crea un livello
-    let level = localDrawings.find((l) => l.name.toLowerCase() === pianoName.toLowerCase());
-    let levelId = level?.id;
-
-    if (!levelId) {
-      levelId = generateTempId();
-      addLevelOptimistic(levelId, project.id, pianoName, 0, "2d_wall", pianoName);
-    }
-
-    // 2. Crea la nota di tipo "Taglio"
-    const tempNoteId = generateTempId();
-
-    const initialItems: any[] = [
-      { id: generateTempId(), item_type: "nota" as const, value_text: `Taglio: ${title}`, sort_order: 0 },
-    ];
-
-    useOfflineStore.getState().saveFieldNoteItemsOptimistic(
-      tempNoteId,
-      project.id,
-      levelId,
-      initialItems,
-      "Taglio"
-    );
-
-    setQuickAddType(null);
-    router.push(`/projects/${project.id}/tagli/${tempNoteId}`);
-  };
 
   // Sincronizza lo stato locale quando cambiano i livelli dello store o le prop
   useEffect(() => {
@@ -607,63 +543,19 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
           <span className="sm:hidden">Report</span>
         </Link>
 
-        {/* Pulsante Dropdown Aggiungi ＋ */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowAddMenu(!showAddMenu)}
-            disabled={isPending}
-            className="flex items-center gap-1.5 sm:gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold text-white transition-all duration-150 disabled:opacity-50 whitespace-nowrap focus:outline-none cursor-pointer hover:brightness-110 active:scale-95"
-            style={{
-              background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-              boxShadow: "0 4px 16px hsl(220 90% 56% / 0.25)",
-            }}
-          >
-            <span>Aggiungi ＋</span>
-          </button>
-          
-          {showAddMenu && (
-            <div
-              className="absolute right-0 mt-1.5 w-40 rounded-xl overflow-hidden z-50 border flex flex-col"
-              style={{
-                background: "hsl(220 26% 14%)",
-                borderColor: "hsl(220 20% 22%)",
-                boxShadow: "0 10px 25px rgba(0,0,0,0.5)",
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAddMenu(false);
-                  setQuickAddType("nota");
-                }}
-                className="w-full text-left px-4 py-2.5 text-xs hover:bg-white/5 transition-colors text-white/90 flex items-center gap-2"
-              >
-                <span>📝</span> Nota
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAddMenu(false);
-                  setQuickAddType("sketch");
-                }}
-                className="w-full text-left px-4 py-2.5 text-xs hover:bg-white/5 transition-colors text-white/90 border-t border-white/5 flex items-center gap-2"
-              >
-                <span>🎨</span> Sketch (Disegno)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAddMenu(false);
-                  setQuickAddType("taglio");
-                }}
-                className="w-full text-left px-4 py-2.5 text-xs hover:bg-white/5 transition-colors text-white/90 border-t border-white/5 flex items-center gap-2"
-              >
-                <span>✂️</span> Crea Taglio (Nesting)
-              </button>
-            </div>
-          )}
-        </div>
+        {/* Pulsante Aggiungi Nota */}
+        <button
+          type="button"
+          onClick={handleAddNoteDirectly}
+          disabled={isPending}
+          className="flex items-center gap-1.5 sm:gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold text-white transition-all duration-150 disabled:opacity-50 whitespace-nowrap focus:outline-none cursor-pointer hover:brightness-110 active:scale-95"
+          style={{
+            background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+            boxShadow: "0 4px 16px hsl(220 90% 56% / 0.25)",
+          }}
+        >
+          <span>Aggiungi Nota ＋</span>
+        </button>
 
         {/* Menu Azioni Progetto/Cantiere */}
         <div className="relative flex items-center justify-center p-1">
@@ -992,6 +884,17 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
         {activeTab === "tagli" && (
           /* ── Tab Tagli Raggruppati ── */
           <div className="space-y-4">
+            {taglioNotes.length > 0 && (
+              <div className="flex justify-end print:hidden">
+                <button
+                  type="button"
+                  onClick={handleAddTaglioDirectly}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95 flex items-center gap-1 cursor-pointer"
+                >
+                  <span>✂️</span> Nuovo Piano di Taglio
+                </button>
+              </div>
+            )}
             {taglioNotes.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {taglioNotes.map((note) => {
@@ -1074,7 +977,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                 </p>
                 <button
                   type="button"
-                  onClick={() => setQuickAddType("taglio")}
+                  onClick={handleAddTaglioDirectly}
                   className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-[hsl(220,90%,56%)] hover:bg-[hsl(220,85%,48%)] active:scale-95 cursor-pointer"
                 >
                   Crea Primo Taglio
@@ -1288,15 +1191,6 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
          )}
       </div>
 
-      {/* Modale Inserimento Rapido */}
-      {quickAddType && (
-        <QuickAddModal
-          type={quickAddType}
-          existingPiani={existingPiani}
-          onClose={() => setQuickAddType(null)}
-          onSubmit={quickAddType === "taglio" ? handleQuickAddTaglioSubmit : handleQuickAddSubmit}
-        />
-      )}
 
       {/* Lightbox Pieno Schermo */}
       {activeLightboxUrl && (

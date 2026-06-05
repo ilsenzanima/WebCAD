@@ -55,7 +55,7 @@ interface OfflineState {
   deleteProjectOptimistic: (projectId: string) => void;
   addLevelOptimistic: (tempId: string, projectId: string, name: string, elevationZ: number, drawingType: "2d_wall" | "3d_box", piano: string) => void;
   toggleLevelCompletedOptimistic: (levelId: string, projectId: string, completed: boolean) => void;
-  saveFieldNoteItemsOptimistic: (noteId: string, projectId: string, levelId: string, items: Omit<FieldNoteItem, "id">[], typeName?: string) => void;
+  saveFieldNoteItemsOptimistic: (noteId: string, projectId: string, levelId: string | null, items: Omit<FieldNoteItem, "id">[], typeName?: string) => void;
   deleteFieldNoteOptimistic: (noteId: string, projectId: string) => void;
   updateLevelNoteTextOptimistic: (levelId: string, text: string) => void;
 

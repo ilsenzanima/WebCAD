@@ -591,7 +591,7 @@ export default function TaglioEditor({
     useOfflineStore.getState().saveFieldNoteItemsOptimistic(
       resolvedNoteId,
       projectId,
-      noteToUse.level_id || initialNote.level_id || generateTempId(), // level_id
+      noteToUse.level_id || initialNote.level_id || null, // level_id
       payloadItems,
       "Taglio"
     );
@@ -882,7 +882,7 @@ export default function TaglioEditor({
 
       // 7. Salvataggio della nota di tipo "PDF" nel cantiere (offline-first)
       const pdfNoteId = generateTempId();
-      const levelId = noteToUse.level_id || initialNote.level_id || generateTempId();
+      const levelId = noteToUse.level_id || initialNote.level_id || null;
 
       const pdfItems = [
         {
