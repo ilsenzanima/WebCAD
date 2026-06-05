@@ -575,7 +575,7 @@ export default function SketchEditorClient({
       startShapeCenterRef.current !== null &&
       initialShapeParamsRef.current !== null
     ) {
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
 
       const tempCanvas = tempCanvasRef.current;
       if (!tempCanvas) return;
@@ -641,7 +641,7 @@ export default function SketchEditorClient({
       startTouchDistRef.current !== null &&
       startTouchCenterRef.current !== null
     ) {
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
 
       const t1 = e.touches[0];
       const t2 = e.touches[1];
@@ -694,7 +694,7 @@ export default function SketchEditorClient({
     // Se stiamo zoomando con 2 dita o l'evento non è primario (multi-touch), ignora il disegno
     if (isZoomingRef.current || !e.isPrimary) return;
 
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     const tempCanvas = tempCanvasRef.current;
     if (!tempCanvas) return;
 
@@ -772,7 +772,7 @@ export default function SketchEditorClient({
     // Gestione Pan in tempo reale con 1 dito o mouse
     if (tool === "pan") {
       if (!isPanningRef.current) return;
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       const dx = e.clientX - startPointerRef.current.x;
       const dy = e.clientY - startPointerRef.current.y;
       setPan({
@@ -783,7 +783,7 @@ export default function SketchEditorClient({
     }
 
     if (!isDrawingRef.current || !lastPointRef.current || !startPointRef.current || !e.isPrimary) return;
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
 
     const tempCanvas = tempCanvasRef.current;
     const tempCtx = tempCanvas?.getContext("2d");
@@ -889,7 +889,7 @@ export default function SketchEditorClient({
     }
 
     if (!isDrawingRef.current) return;
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
 
     isDrawingRef.current = false;
     if (holdTimeoutRef.current) clearTimeout(holdTimeoutRef.current);
