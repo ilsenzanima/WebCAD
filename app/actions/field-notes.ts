@@ -179,20 +179,58 @@ export async function updateFieldNote(noteId: string, formData: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Non autenticato" };
 
-  // Aggiorna l'appunto
+  // 1. Controlla se la nota esiste già nel DB
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: noteError } = await (supabase as any)
+  const { data: existingNote, error: checkError } = await (supabase as any)
     .from("field_notes")
-    .update({
-      level_id: formData.level_id,
-      type_id: formData.type_id ?? null,
-      type_name: formData.type_name ?? null,
-      updated_at: new Date().toISOString(),
-    })
+    .select("id")
     .eq("id", noteId)
-    .eq("user_id", user.id);
+    .maybeSingle();
 
-  if (noteError) return { success: false, error: noteError.message };
+  if (checkError) return { success: false, error: checkError.message };
+
+  if (existingNote) {
+    // Aggiorna l'appunto esistente
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: noteError } = await (supabase as any)
+      .from("field_notes")
+      .update({
+        level_id: formData.level_id,
+        type_id: formData.type_id ?? null,
+        type_name: formData.type_name ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", noteId)
+      .eq("user_id", user.id);
+
+    if (noteError) return { success: false, error: noteError.message };
+  } else {
+    // La nota non esiste sul server (es: per disallineamento offline o rimozione).
+    // La creiamo specificando l'id originale per non rompere le referenze dei figli.
+    
+    // Ottieni numero progressivo atomico
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: numData, error: numError } = await (supabase as any)
+      .rpc("next_field_note_number", { p_user_id: user.id });
+
+    if (numError) return { success: false, error: "Errore numerazione: " + numError.message };
+    const note_number = numData || 1;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error: insertError } = await (supabase as any)
+      .from("field_notes")
+      .insert({
+        id: noteId,
+        project_id: formData.project_id,
+        level_id: formData.level_id,
+        user_id: user.id,
+        note_number,
+        type_id: formData.type_id ?? null,
+        type_name: formData.type_name ?? null,
+      });
+
+    if (insertError) return { success: false, error: insertError.message };
+  }
 
   // Sostituisci tutte le voci (cancella vecchie, inserisci nuove)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
