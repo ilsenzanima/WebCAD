@@ -699,11 +699,30 @@ export const useOfflineStore = create<OfflineState>()(
                     }
                   }
 
+                  // 1. Carica i file Base64 accumulati offline su Supabase Storage
+                  const { uploadBase64ToStorage } = await import("@/lib/supabase/storage");
+                  const processedItems = [...resolvedPayload.items];
+                  for (let i = 0; i < processedItems.length; i++) {
+                    const item = processedItems[i];
+                    if (item.value_text && item.value_text.startsWith("data:")) {
+                      try {
+                        const is3DModel = item.value_text.startsWith("data:model/") || item.value_text.startsWith("data:application/octet-stream") || item.value_text.startsWith("data:application/x-gltf");
+                        const prefix = is3DModel ? "cad" : "foto";
+                        console.log(`[Sync] Caricamento file base64 accumulato offline su storage (tipo: ${item.item_type})...`);
+                        const publicUrl = await uploadBase64ToStorage(item.value_text, prefix);
+                        processedItems[i] = { ...item, value_text: publicUrl };
+                      } catch (uploadErr) {
+                        console.error("Errore durante l'upload del file in background durante il sync:", uploadErr);
+                        throw uploadErr;
+                      }
+                    }
+                  }
+
                   const res = await updateFieldNote(realNoteId, {
                     project_id: realProjId!,
                     level_id: realLvlId,
                     type_name: resolvedPayload.typeName,
-                    items: resolvedPayload.items,
+                    items: processedItems,
                   });
                   if (!res.success) throw new Error(res.error || "SAVE_NOTE_ITEMS items update failed");
                   completedOps.push(op.id);

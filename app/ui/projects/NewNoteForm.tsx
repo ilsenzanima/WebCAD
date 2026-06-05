@@ -18,6 +18,7 @@ import LivellaBolla from "./LivellaBolla";
 import CalcolatriceWidget from "@/app/ui/dashboard/CalcolatriceWidget";
 import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
 import type { Material } from "@/lib/types/database";
+import { uploadBase64ToStorage } from "@/lib/supabase/storage";
 
 const is3DModelUrl = (url?: string | null) => {
   if (!url) return false;
@@ -1537,6 +1538,9 @@ function ItemRow({
   const isComposite = COMPOSITE_TYPES.includes(item.item_type);
   const isDim3D = item.item_type === "dim_cubica";
   const isMateriale = item.item_type === "materiale";
+  
+  const isOfflineActive = useOfflineStore((state) => state.offlineMode || !state.isOnline);
+  const [isUploading, setIsUploading] = useState(false);
 
   const rowRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1881,66 +1885,91 @@ function ItemRow({
             </div>
           ) : (
             <div className="flex items-center w-full min-w-0">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,.glb,.gltf"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  
-                  const is3DModel = file.name.endsWith(".glb") || file.name.endsWith(".gltf") || file.type.includes("gltf") || file.type.includes("model");
-                  
-                  const reader = new FileReader();
-                  reader.onload = (evt) => {
-                    const resultUrl = evt.target?.result as string;
-                    
-                    if (is3DModel) {
-                      // Salviamo direttamente il Base64 DataURL del modello 3D nel database
-                      onChange({ value_text: resultUrl });
-                    } else {
-                      // Compressione immagine classica
-                      const img = new Image();
-                      img.onload = () => {
-                        const canvas = document.createElement("canvas");
-                        const MAX_WIDTH = 800;
-                        const MAX_HEIGHT = 800;
-                        let width = img.width;
-                        let height = img.height;
-
-                        if (width > height) {
-                          if (width > MAX_WIDTH) {
-                            height *= MAX_WIDTH / width;
-                            width = MAX_WIDTH;
-                          }
-                        } else {
-                          if (height > MAX_HEIGHT) {
-                            width *= MAX_HEIGHT / height;
-                            height = MAX_HEIGHT;
-                          }
-                        }
-
-                        canvas.width = width;
-                        canvas.height = height;
-                        const ctx = canvas.getContext("2d");
-                        ctx?.drawImage(img, 0, 0, width, height);
+              {isUploading ? (
+                <div className="flex items-center gap-2 text-[10px] text-white/50 py-1 px-2">
+                  <div className="w-3 h-3 border-2 border-t-transparent border-blue-500 rounded-full animate-spin" />
+                  <span>Caricamento file su storage...</span>
+                </div>
+              ) : (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,.glb,.gltf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      
+                      const is3DModel = file.name.endsWith(".glb") || file.name.endsWith(".gltf") || file.type.includes("gltf") || file.type.includes("model");
+                      
+                      const reader = new FileReader();
+                      reader.onload = (evt) => {
+                        const resultUrl = evt.target?.result as string;
                         
-                        const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
-                        onChange({ value_text: compressedBase64 });
+                        const handleUpload = async (base64: string, prefix: string) => {
+                          if (isOfflineActive) {
+                            onChange({ value_text: base64 });
+                          } else {
+                            setIsUploading(true);
+                            try {
+                              const publicUrl = await uploadBase64ToStorage(base64, prefix);
+                              onChange({ value_text: publicUrl });
+                            } catch (err: any) {
+                              console.error("Errore upload file:", err);
+                              alert("Errore durante il caricamento del file: " + (err.message || String(err)));
+                            } finally {
+                              setIsUploading(false);
+                            }
+                          }
+                        };
+
+                        if (is3DModel) {
+                          handleUpload(resultUrl, "cad");
+                        } else {
+                          // Compressione immagine classica
+                          const img = new Image();
+                          img.onload = () => {
+                            const canvas = document.createElement("canvas");
+                            const MAX_WIDTH = 800;
+                            const MAX_HEIGHT = 800;
+                            let width = img.width;
+                            let height = img.height;
+
+                            if (width > height) {
+                              if (width > MAX_WIDTH) {
+                                height *= MAX_WIDTH / width;
+                                width = MAX_WIDTH;
+                              }
+                            } else {
+                              if (height > MAX_HEIGHT) {
+                                width *= MAX_HEIGHT / height;
+                                height = MAX_HEIGHT;
+                              }
+                            }
+
+                            canvas.width = width;
+                            canvas.height = height;
+                            const ctx = canvas.getContext("2d");
+                            ctx?.drawImage(img, 0, 0, width, height);
+                            
+                            const compressedBase64 = canvas.toDataURL("image/jpeg", 0.7);
+                            handleUpload(compressedBase64, "foto");
+                          };
+                          img.src = resultUrl;
+                        }
                       };
-                      img.src = resultUrl;
+                      reader.readAsDataURL(file);
+                    }}
+                    className="w-full text-[10px] file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:text-white file:cursor-pointer cursor-pointer"
+                    style={{ color: "hsl(215 15% 50%)" }}
+                  />
+                  <style dangerouslySetInnerHTML={{__html: `
+                    input[type=file]::file-selector-button {
+                      background: linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%));
                     }
-                  };
-                  reader.readAsDataURL(file);
-                }}
-                className="w-full text-[10px] file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:text-white file:cursor-pointer cursor-pointer"
-                style={{ color: "hsl(215 15% 50%)" }}
-              />
-              <style dangerouslySetInnerHTML={{__html: `
-                input[type=file]::file-selector-button {
-                  background: linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%));
-                }
-              `}} />
+                  `}} />
+                </>
+              )}
             </div>
           )}
         </div>
