@@ -78,6 +78,21 @@ if (typeof window !== "undefined") {
   };
 }
 
+export function getRecentErrors(): string[] {
+  return errorLogHistory;
+}
+
+export function clearRecentErrors() {
+  errorLogHistory.length = 0;
+}
+
+export function subscribeToErrors(listener: (err: string) => void) {
+  errorListeners.push(listener);
+  return () => {
+    errorListeners = errorListeners.filter((l) => l !== listener);
+  };
+}
+
 interface LoadMetrics {
   duration: number;
   type: "Client" | "SSR";

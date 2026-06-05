@@ -103,6 +103,15 @@ export default async function DashboardLayout({
             <GlobalCalcTrigger mode="desktop" />
             {/* Bolla Globale */}
             <GlobalBollaTrigger mode="desktop" />
+            {/* Sincronizzazione */}
+            <Link
+              href="/sync"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
+              style={{ color: "hsl(215 20% 65%)" }}
+            >
+              <span className="text-base w-5 text-center font-bold">⇅</span>
+              <span>Sincronizzazione</span>
+            </Link>
             {bottomNavItems.map((item) => (
               <Link
                 key={item.href}

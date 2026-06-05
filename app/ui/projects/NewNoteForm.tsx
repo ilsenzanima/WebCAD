@@ -434,21 +434,29 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
       }
 
       // Risolve o crea il livello/piano prima di salvare la nota
-      let finalLevelId = currentLevelId;
-      const targetPianoName = pianoName.trim() || "Generico";
-      const matchedLevel = projectLevels.find(l => l.name.toLowerCase() === targetPianoName.toLowerCase());
-      if (matchedLevel) {
-        finalLevelId = matchedLevel.id;
+      let finalLevelId: string | null = currentLevelId;
+      const targetPianoName = pianoName.trim();
+      const currentLvl = projectLevels.find(l => l.id === currentLevelId);
+
+      if (currentLvl && targetPianoName.toLowerCase() === currentLvl.name.toLowerCase()) {
+        finalLevelId = currentLevelId;
+      } else if (!targetPianoName) {
+        finalLevelId = null;
       } else {
-        finalLevelId = generateTempId();
-        addLevelOptimistic(
-          finalLevelId,
-          projectId,
-          targetPianoName,
-          0,
-          "2d_wall",
-          targetPianoName
-        );
+        const matchedLevel = projectLevels.find(l => l.name.toLowerCase() === targetPianoName.toLowerCase());
+        if (matchedLevel) {
+          finalLevelId = matchedLevel.id;
+        } else {
+          finalLevelId = generateTempId();
+          addLevelOptimistic(
+            finalLevelId,
+            projectId,
+            targetPianoName,
+            0,
+            "2d_wall",
+            targetPianoName
+          );
+        }
       }
 
       const payload = {
@@ -472,7 +480,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         })),
       };
 
-      if (isOfflineActive || finalLevelId.startsWith("temp_") || (initialNote && initialNote.id.startsWith("temp_"))) {
+      if (isOfflineActive || (finalLevelId && finalLevelId.startsWith("temp_")) || (initialNote && initialNote.id.startsWith("temp_"))) {
         // Salvataggio offline ottimistico (in coda) per preservare la risoluzione referenziale dei Temp ID
         const noteId = initialNote ? initialNote.id : `temp-note-${Date.now()}`;
         saveFieldNoteItemsOptimistic(noteId, projectId, finalLevelId, payload.items, finalType.name);

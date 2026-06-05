@@ -216,6 +216,23 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
               <div onClick={() => setIsOpen(false)} style={{ paddingLeft: 2 }}>
                 <GlobalBollaTrigger mode="mobile" />
               </div>
+              <Link
+                href="/sync"
+                onClick={() => setIsOpen(false)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "13px 14px",
+                  borderRadius: 14,
+                  textDecoration: "none",
+                  color: pathname === "/sync" ? "hsl(220 90% 56%)" : "hsl(215 20% 65%)",
+                  background: pathname === "/sync" ? "hsla(220,90%,56%,0.12)" : "transparent",
+                }}
+              >
+                <span style={{ fontSize: 18, width: 22, textAlign: "center", fontWeight: "bold" }}>⇅</span>
+                <span style={{ fontSize: 15, fontWeight: pathname === "/sync" ? 700 : 500 }}>Sincronizzazione</span>
+              </Link>
             </nav>
 
             {/* Switch offline manuale */}
