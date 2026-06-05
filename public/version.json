@@ -1,5 +1,5 @@
 {
-  "version": "0.6.1",
+  "version": "0.6.2",
   "buildTime": "2026-06-05T17:23:57Z",
-  "notes": "Compilazione automatica APK v0.6.1 (build #93)."
+  "notes": "Aggiunta pagina Sincronizzazione offline, diagnostica campana ed ottimizzazione caricamento dashboard."
 }
