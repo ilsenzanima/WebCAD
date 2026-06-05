@@ -97,6 +97,18 @@ jobs:
           sed -i "s/versionName \".*\"/versionName \"$VERSION\"/g" android/app/build.gradle
           sed -i "s/versionCode [0-9]*/versionCode ${{ github.run_number }}/g" android/app/build.gradle
           
+          # Aggiorna lib/version.ts in modo che il sito rifletta l'APK compilato
+          echo "export const APP_VERSION = \"$VERSION\";" > lib/version.ts
+          echo "export const BUILD_DATE = \"\$(date +'%d %B %Y')\";" >> lib/version.ts
+          
+          # Aggiorna public/version.json con timestamp e note
+          BUILD_TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "{" > public/version.json
+          echo "  \"version\": \"$VERSION\"," >> public/version.json
+          echo "  \"buildTime\": \"$BUILD_TIME\"," >> public/version.json
+          echo "  \"notes\": \"Compilazione automatica APK v$VERSION (build #${{ github.run_number }}).\"" >> public/version.json
+          echo "}" >> public/version.json
+          
           echo "=== android/app/build.gradle modificato ==="
           grep -E "versionCode|versionName" android/app/build.gradle
 
@@ -136,7 +148,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "build: compilato APK debug v${{ steps.get_version.outputs.VERSION }} (build #${{ github.run_number }})"
-          file_pattern: "public/downloads/webcad-*.apk android/app/debug.keystore"
+          file_pattern: "public/downloads/webcad-*.apk android/app/debug.keystore lib/version.ts public/version.json"
           branch: main
 
       - name: Upload APK come artifact GitHub

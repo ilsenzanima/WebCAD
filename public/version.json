@@ -1,5 +1,5 @@
 {
-  "version": "0.3.0",
-  "buildTime": "2026-05-28T22:36:00Z",
-  "notes": "Introdotto il nuovo modulo Sketch (Disegno Libero) con forme geometriche automatiche (Procreate style), consultazione delle note/misure di cantiere in tempo reale sul canvas, e risoluzione del build automatico Android APK."
+  "version": "0.6.0",
+  "buildTime": "2026-06-05T09:25:00Z",
+  "notes": "Ottimizzazione delle query in parallelo, loading skeleton, badge per i tempi di caricamento, dashboard diagnostica degli errori e autoguarigione per ID orfani."
 }

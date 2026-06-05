@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import LogoutButton from "./LogoutButton";
+import { APP_VERSION } from "@/lib/version";
 
-const CURRENT_VERSION = "0.3.0";
+const CURRENT_VERSION = APP_VERSION;
 
 interface SidebarProfileProps {
   userName: string;
