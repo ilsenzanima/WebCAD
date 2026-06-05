@@ -11,14 +11,6 @@ export default async function ProjectDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/login");
-  }
-
   let project;
   let levels: any[] = [];
   let projectNotes: any[] = [];
@@ -32,30 +24,33 @@ export default async function ProjectDetailPage({
       updated_at: new Date().toISOString(),
     };
   } else {
-    // Fetch project data (cantiere)
-    const { data, error: projectError } = await supabase
-      .from("projects")
-      .select("id, name, notes, created_at, updated_at")
-      .eq("id", id)
-      .single();
-
-    if (projectError || !data) {
-      return notFound();
-    }
-    project = data;
-
-    // Fetch levels (note) di questo cantiere
-    const [fetchedLevels, fetchedNotes] = await Promise.all([
+    // Eseguiamo l'auth check e il fetch dei dati in parallelo per abbattere la latenza sequenziale
+    const [userRes, projectRes, levelsRes, notesRes] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase
+        .from("projects")
+        .select("id, name, notes, created_at, updated_at")
+        .eq("id", id)
+        .single(),
       supabase
         .from("levels")
         .select("id, project_id, name, elevation_z, plan_image_url, scale_ratio, drawing_type, created_at, completed, piano")
         .eq("project_id", id)
-        .order("elevation_z", { ascending: true })
-        .then(res => res.data ?? []),
+        .order("elevation_z", { ascending: true }),
       getAllProjectFieldNotes(id)
-    ]);
-    levels = fetchedLevels;
-    projectNotes = fetchedNotes;
+    ]) as [any, any, any, any];
+
+    if (!userRes.data.user) {
+      redirect("/login");
+    }
+
+    if (projectRes.error || !projectRes.data) {
+      return notFound();
+    }
+
+    project = projectRes.data;
+    levels = levelsRes.data ?? [];
+    projectNotes = notesRes;
   }
 
   return <ProjectDetailClient project={project} drawings={levels} notesList={projectNotes} />;
