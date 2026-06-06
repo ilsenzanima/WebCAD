@@ -4,9 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import NewProjectModal from "./NewProjectModal";
-import QuickAddModal from "@/app/ui/projects/QuickAddModal";
-import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
-import { getAllProjectFieldNotes, type FieldNote } from "@/app/actions/field-notes";
+import { useOfflineStore } from "@/lib/stores/offline-store";
 
 interface Project {
   id: string;
@@ -57,7 +55,6 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [quickAdd, setQuickAdd] = useState<{ projectId: string; type: "nota" | "sketch" | "taglio" } | null>(null);
   const [onlineProjects, setOnlineProjects] = useState<Project[]>([]);
   const [loadingOnline, setLoadingOnline] = useState(false);
 
@@ -159,185 +156,16 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
     });
   }, [onlineProjects, cachedProjects, mounted]);
 
-  const [loadedNotes, setLoadedNotes] = useState<FieldNote[]>([]);
-  const [loadingNotes, setLoadingNotes] = useState(false);
 
-  useEffect(() => {
-    if (quickAdd && quickAdd.type === "taglio") {
-      const fetchNotes = async () => {
-        setLoadingNotes(true);
-        try {
-          const onlineNotes = await getAllProjectFieldNotes(quickAdd.projectId);
-          
-          const cachedFieldNotes = useOfflineStore.getState().fieldNotes;
-          const allNotesMap: Record<string, FieldNote> = {};
-          
-          onlineNotes.forEach(n => { allNotesMap[n.id] = n; });
-          
-          Object.values(cachedFieldNotes).forEach(n => {
-            if (n.project_id === quickAdd.projectId) {
-              allNotesMap[n.id] = n;
-            }
-          });
-          
-          setLoadedNotes(Object.values(allNotesMap));
-        } catch (err) {
-          console.error("Errore nel caricamento degli appunti per il taglio:", err);
-        } finally {
-          setLoadingNotes(false);
-        }
-      };
-      fetchNotes();
-    } else {
-      setLoadedNotes([]);
-    }
-  }, [quickAdd]);
-
-  // Gestore per il salvataggio rapido dal pop-up della card
-  const handleQuickAddSubmit = async (title: string, pianoName: string) => {
-    if (!quickAdd) return;
-    const { projectId, type } = quickAdd;
-    
-    // 1. Controlla se il livello esiste già offline
-    const cachedLevels = useOfflineStore.getState().levels[projectId] ?? [];
-    let level = cachedLevels.find(l => l.name.toLowerCase() === pianoName.toLowerCase());
-    let levelId = level?.id;
-    
-    if (!levelId) {
-      // Crea il livello optimisticamente
-      levelId = generateTempId();
-      useOfflineStore.getState().addLevelOptimistic(
-        levelId,
-        projectId,
-        pianoName,
-        0,
-        "2d_wall",
-        pianoName
-      );
-    }
-    
-    // 2. Crea la nota optimisticamente in base al tipo
-    const tempNoteId = generateTempId();
-    
-    if (type === "nota") {
-      const initialItems = [{ item_type: "nota" as const, value_text: title, sort_order: 0 }];
-      useOfflineStore.getState().saveFieldNoteItemsOptimistic(
-        tempNoteId,
-        projectId,
-        levelId,
-        initialItems,
-        "Appunti Cantiere"
-      );
-      
-      setQuickAdd(null);
-      router.push(`/projects/${projectId}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
-    } else if (type === "sketch") {
-      // Genera un foglio millimetrato Base64 iniziale
-      const canvas = document.createElement("canvas");
-      canvas.width = 1200;
-      canvas.height = 1200;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, 1200, 1200);
-        ctx.strokeStyle = "#e2e8f0";
-        ctx.lineWidth = 1;
-        for (let i = 0; i < 1200; i += 40) {
-          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 1200); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(1200, i); ctx.stroke();
-        }
-      }
-      const emptySketchBase64 = canvas.toDataURL("image/png");
-      
-      const initialItems = [
-        { item_type: "nota" as const, value_text: title, sort_order: 0 },
-        { item_type: "foto" as const, value_text: emptySketchBase64, sort_order: 1 }
-      ];
-      
-      useOfflineStore.getState().saveFieldNoteItemsOptimistic(
-        tempNoteId,
-        projectId,
-        levelId,
-        initialItems,
-        "Sketch"
-      );
-      
-      setQuickAdd(null);
-      router.push(`/projects/${projectId}/levels/${levelId}/appunti/${tempNoteId}/modifica`);
-    }
-  };
-
-  const getProjectNotesWithCuts = () => {
-    return loadedNotes.filter(
-      (note) =>
-        (note.field_note_items ?? []).some(
-          (item) =>
-            item.item_type === "dim_quadrata" &&
-            (item.value_text || item.composite) &&
-            (() => {
-              try {
-                const parsed = item.value_text ? JSON.parse(item.value_text) : item.composite;
-                return parsed && (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null));
-              } catch {
-                return false;
-              }
-            })()
-        )
-    );
-  };
-
-  const handleQuickAddTaglioSubmit = async (title: string, pianoName: string) => {
-    if (!quickAdd) return;
-    const { projectId } = quickAdd;
-
-    const cachedLevels = useOfflineStore.getState().levels[projectId] ?? [];
-    let level = cachedLevels.find((l) => l.name.toLowerCase() === pianoName.toLowerCase());
-    let levelId = level?.id;
-
-    if (!levelId) {
-      levelId = generateTempId();
-      useOfflineStore.getState().addLevelOptimistic(levelId, projectId, pianoName, 0, "2d_wall", pianoName);
-    }
-
-    const tempNoteId = generateTempId();
-
-    const initialItems: any[] = [
-      { id: generateTempId(), item_type: "nota" as const, value_text: `Taglio: ${title}`, sort_order: 0 },
-    ];
-
-    useOfflineStore.getState().saveFieldNoteItemsOptimistic(
-      tempNoteId,
-      projectId,
-      levelId,
-      initialItems,
-      "Taglio"
-    );
-
-    setQuickAdd(null);
-    router.push(`/projects/${projectId}/tagli/${tempNoteId}`);
-  };
 
   // Ordina i cantieri in ordine alfabetico per nome
   const filtered = projectsList
     .filter((p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const currentProjectLevels = quickAdd 
-    ? Array.from(new Set((useOfflineStore.getState().levels[quickAdd.projectId] ?? []).map(l => l.piano || "Generico").filter(Boolean)))
-    : [];
-
   return (
     <>
       <NewProjectModal open={isModalOpen} onClose={() => setIsModalOpen(false)} />
-
-      {quickAdd && (
-        <QuickAddModal
-          type={quickAdd.type}
-          existingPiani={currentProjectLevels}
-          onClose={() => setQuickAdd(null)}
-          onSubmit={quickAdd.type === "taglio" ? handleQuickAddTaglioSubmit : handleQuickAddSubmit}
-        />
-      )}
 
       <div className="flex flex-col h-full">
         {/* ── Barra superiore fissa ───────────────────────────── */}
@@ -417,7 +245,6 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
                 <ProjectRow 
                   key={project.id} 
                   project={project} 
-                  onQuickAdd={(type) => setQuickAdd({ projectId: project.id, type })}
                 />
               ))}
             </div>
@@ -433,13 +260,11 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
   );
 }
 
-// ── Componente riga elenco progetto ───────────────────────────
+// ── Componente riga elenco cantiere (Stile Lista Pulito) ───────────────────────────
 function ProjectRow({ 
-  project, 
-  onQuickAdd 
+  project 
 }: { 
   project: Project; 
-  onQuickAdd: (type: "nota" | "sketch" | "taglio") => void; 
 }) {
   const gradient = avatarGradient(project.id);
   const initials = getProjectInitials(project.name);
@@ -452,18 +277,16 @@ function ProjectRow({
   const date = mounted ? safeFormatDate(project.updated_at || project.created_at) : "—";
 
   return (
-    <div
-      className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 transition-colors hover:bg-white/[0.01]"
+    <Link
+      href={`/projects/${project.id}`}
+      className="flex items-center justify-between gap-4 p-4 transition-all hover:bg-white/[0.03] group focus:outline-none cursor-pointer"
       style={{ borderBottom: "1px solid hsl(220 20% 16%)" }}
+      aria-label={`Apri progetto ${project.name}`}
     >
-      {/* Sinistra cliccabile per entrare */}
-      <Link
-        href={`/projects/${project.id}`}
-        className="flex items-center gap-3.5 min-w-0 flex-1 focus:outline-none"
-        aria-label={`Apri progetto ${project.name}`}
-      >
+      {/* Sinistra: Avatar e Nome */}
+      <div className="flex items-center gap-3.5 min-w-0">
         <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 shadow-sm"
+          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 shadow-sm transition-transform group-hover:scale-105"
           style={{ background: gradient }}
         >
           {initials || "🏢"}
@@ -473,52 +296,24 @@ function ProjectRow({
           <h3 className="text-white font-bold text-sm leading-tight truncate group-hover:text-sky-400 transition-colors">
             {project.name}
           </h3>
-          <p className="text-[10px] text-white/40 leading-none mt-1">
+          <p className="text-[10px] text-white/40 leading-none mt-1 sm:hidden">
             Modificato: {date}
           </p>
         </div>
-      </Link>
-
-      {/* Pulsanti rapidi a destra */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <button
-          type="button"
-          onClick={() => onQuickAdd("nota")}
-          className="px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all border border-sky-500/10 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 active:scale-95 cursor-pointer flex items-center gap-1.5 animate-pulse-subtle"
-          title="Aggiungi una nota/misura a questo progetto"
-        >
-          <span>📝</span>
-          <span>Nota</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onQuickAdd("sketch")}
-          className="px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all border border-amber-500/10 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 active:scale-95 cursor-pointer flex items-center gap-1.5"
-          title="Disegna uno sketch a questo progetto"
-        >
-          <span>🎨</span>
-          <span>Sketch</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onQuickAdd("taglio")}
-          className="px-2.5 py-1.5 rounded-lg text-[10px] font-extrabold transition-all border border-emerald-500/10 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 active:scale-95 cursor-pointer flex items-center gap-1.5"
-          title="Crea un piano di taglio ottimizzato (Nesting)"
-        >
-          <span>✂️</span>
-          <span>Taglio</span>
-        </button>
-
-        <div className="w-[1.5px] h-5 bg-white/10 mx-1 hidden sm:block" />
-
-        <Link
-          href={`/projects/${project.id}`}
-          className="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors border border-white/5 bg-white/5 hover:bg-white/10 text-white/80 whitespace-nowrap ml-auto"
-        >
-          Apri →
-        </Link>
       </div>
-    </div>
+
+      {/* Destra: Data ultima modifica e pulsante Apri */}
+      <div className="flex items-center gap-4 flex-shrink-0">
+        <span className="text-[11px] text-white/40 leading-none hidden sm:inline">
+          Ultima modifica: {date}
+        </span>
+        <span 
+          className="text-xs font-bold px-3.5 py-1.5 rounded-xl transition-all border border-white/5 bg-white/5 hover:bg-white/10 text-white/80 group-hover:bg-sky-500/10 group-hover:text-sky-400 group-hover:border-sky-500/20 active:scale-95 cursor-pointer flex items-center gap-1"
+        >
+          Apri <span>→</span>
+        </span>
+      </div>
+    </Link>
   );
 }
 
