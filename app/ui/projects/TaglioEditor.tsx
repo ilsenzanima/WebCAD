@@ -426,6 +426,8 @@ export default function TaglioEditor({
       let bestW = 0;
       let bestH = 0;
       let bestRotated = false;
+      let bestFrX = 0;
+      let bestFrW = 0;
 
       // Cerca la migliore collocazione tra tutti i fogli attuali
       for (let s = 0; s < sheets.length; s++) {
@@ -435,15 +437,10 @@ export default function TaglioEditor({
 
           // Prova orientamento normale
           if (req.width <= fr.w && req.height <= fr.h) {
-            let candX = fr.x;
+            const candX = fr.x;
             const candY = fr.y;
             const candW = req.width;
             const candH = req.height;
-
-            // Se superiamo la metà del foglio in larghezza, i pezzi vengono calcolati partendo dal lato opposto
-            if (candX + candW > sheetW / 2) {
-              candX = fr.x + fr.w - candW;
-            }
 
             let isBetter = false;
             if (bestSheetIdx === -1) {
@@ -467,20 +464,17 @@ export default function TaglioEditor({
               bestW = candW;
               bestH = candH;
               bestRotated = false;
+              bestFrX = fr.x;
+              bestFrW = fr.w;
             }
           }
 
           // Prova orientamento ruotato
           if (req.height <= fr.w && req.width <= fr.h) {
-            let candX = fr.x;
+            const candX = fr.x;
             const candY = fr.y;
             const candW = req.height;
             const candH = req.width;
-
-            // Se superiamo la metà del foglio in larghezza, i pezzi vengono calcolati partendo dal lato opposto
-            if (candX + candW > sheetW / 2) {
-              candX = fr.x + fr.w - candW;
-            }
 
             let isBetter = false;
             if (bestSheetIdx === -1) {
@@ -504,6 +498,8 @@ export default function TaglioEditor({
               bestW = candW;
               bestH = candH;
               bestRotated = true;
+              bestFrX = fr.x;
+              bestFrW = fr.w;
             }
           }
         }
@@ -516,45 +512,37 @@ export default function TaglioEditor({
         
         // Verifica se il pezzo ci sta nel nuovo foglio vuoto
         if (req.width <= fr.w && req.height <= fr.h) {
-          let candX = fr.x;
-          const candY = fr.y;
-          const candW = req.width;
-          const candH = req.height;
-          
-          if (candX + candW > sheetW / 2) {
-            candX = fr.x + fr.w - candW;
-          }
-
-          bestX = candX;
-          bestY = candY;
-          bestW = candW;
-          bestH = candH;
+          bestX = fr.x;
+          bestY = fr.y;
+          bestW = req.width;
+          bestH = req.height;
           bestRotated = false;
+          bestFrX = fr.x;
+          bestFrW = fr.w;
         } else if (req.height <= fr.w && req.width <= fr.h) {
-          let candX = fr.x;
-          const candY = fr.y;
-          const candW = req.height;
-          const candH = req.width;
-          
-          if (candX + candW > sheetW / 2) {
-            candX = fr.x + fr.w - candW;
-          }
-
-          bestX = candX;
-          bestY = candY;
-          bestW = candW;
-          bestH = candH;
+          bestX = fr.x;
+          bestY = fr.y;
+          bestW = req.height;
+          bestH = req.width;
           bestRotated = true;
+          bestFrX = fr.x;
+          bestFrW = fr.w;
         } else {
           // Il pezzo è più grande del foglio intero, lo ignoriamo per evitare crash
           return;
         }
       }
 
+      // Solo dopo aver scelto la collocazione ottimale, applichiamo la regola di allineamento dal lato opposto
+      let finalX = bestX;
+      if (finalX + bestW > sheetW / 2) {
+        finalX = bestFrX + bestFrW - bestW;
+      }
+
       // Piazziamo il pezzo nel foglio selezionato
       const s = bestSheetIdx;
       sheets[s].placed.push({
-        x: bestX,
+        x: finalX,
         y: bestY,
         w: bestW,
         h: bestH,
@@ -564,7 +552,7 @@ export default function TaglioEditor({
       sheets[s].usedArea += bestW * bestH;
 
       // Aggiorniamo i rettangoli liberi del foglio s
-      const placedBox = { x: bestX, y: bestY, w: bestW, h: bestH };
+      const placedBox = { x: finalX, y: bestY, w: bestW, h: bestH };
       const newFreeRects: FreeRect[] = [];
       
       freeRectsByBoard[s].forEach((fr) => {

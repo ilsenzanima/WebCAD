@@ -1428,13 +1428,7 @@ function NestingPreview({ items }: { items: NoteItemDraft[] }) {
       const pieceH = rotated ? reqW : reqH;
       if (pieceW > freeRect.w || pieceH > freeRect.h) return null;
 
-      let candX = freeRect.x;
-      // Se superiamo la metà del foglio in larghezza, i pezzi vengono calcolati partendo dal lato opposto
-      if (candX + pieceW > commercialSheetW / 2) {
-        candX = freeRect.x + freeRect.w - pieceW;
-      }
-
-      return { boardIndex, freeRectIndex, rotated, x: candX, y: freeRect.y, w: pieceW, h: pieceH };
+      return { boardIndex, freeRectIndex, rotated, x: freeRect.x, y: freeRect.y, w: pieceW, h: pieceH };
     };
 
     const isBetterBottomLeft = (a: PlacementCandidate, b: PlacementCandidate): boolean => {
@@ -1498,11 +1492,19 @@ function NestingPreview({ items }: { items: NoteItemDraft[] }) {
       const targetFreeRect = freeRects[bestCandidate.freeRectIndex];
       if (!board || !targetFreeRect) return;
 
-      board.placed.push({ x: bestCandidate.x, y: bestCandidate.y, w: bestCandidate.w, h: bestCandidate.h, label: req.label });
+      // Solo dopo aver scelto la collocazione ottimale, applichiamo la regola di allineamento dal lato opposto
+      let finalX = bestCandidate.x;
+      if (finalX + bestCandidate.w > commercialSheetW / 2) {
+        finalX = targetFreeRect.x + targetFreeRect.w - bestCandidate.w;
+      }
+
+      const adjustedCandidate = { ...bestCandidate, x: finalX };
+
+      board.placed.push({ x: finalX, y: bestCandidate.y, w: bestCandidate.w, h: bestCandidate.h, label: req.label });
       board.usedArea += bestCandidate.w * bestCandidate.h;
 
       freeRects.splice(bestCandidate.freeRectIndex, 1);
-      freeRects.push(...splitFreeRectGuillotine(targetFreeRect, bestCandidate));
+      freeRects.push(...splitFreeRectGuillotine(targetFreeRect, adjustedCandidate));
     });
 
     return boards;

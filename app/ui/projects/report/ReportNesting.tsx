@@ -300,6 +300,8 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
       let bestW = 0;
       let bestH = 0;
       let bestRotated = false;
+      let bestFrX = 0;
+      let bestFrW = 0;
 
       // Cerca la migliore collocazione tra tutti i fogli attuali
       for (let s = 0; s < boards.length; s++) {
@@ -309,15 +311,10 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
 
           // Prova orientamento normale
           if (reqW <= fr.w && reqH <= fr.h) {
-            let candX = fr.x;
+            const candX = fr.x;
             const candY = fr.y;
             const candW = reqW;
             const candH = reqH;
-
-            // Se superiamo la metà del foglio in larghezza, i pezzi vengono calcolati partendo dal lato opposto
-            if (candX + candW > commercialSheetW / 2) {
-              candX = fr.x + fr.w - candW;
-            }
 
             let isBetter = false;
             if (bestBoardIdx === -1) {
@@ -341,20 +338,17 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
               bestW = candW;
               bestH = candH;
               bestRotated = false;
+              bestFrX = fr.x;
+              bestFrW = fr.w;
             }
           }
 
           // Prova orientamento ruotato
           if (reqH <= fr.w && reqW <= fr.h) {
-            let candX = fr.x;
+            const candX = fr.x;
             const candY = fr.y;
             const candW = reqH;
             const candH = reqW;
-
-            // Se superiamo la metà del foglio in larghezza, i pezzi vengono calcolati partendo dal lato opposto
-            if (candX + candW > commercialSheetW / 2) {
-              candX = fr.x + fr.w - candW;
-            }
 
             let isBetter = false;
             if (bestBoardIdx === -1) {
@@ -378,6 +372,8 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
               bestW = candW;
               bestH = candH;
               bestRotated = true;
+              bestFrX = fr.x;
+              bestFrW = fr.w;
             }
           }
         }
@@ -390,45 +386,37 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
         
         // Verifica se il pezzo ci sta nel nuovo foglio vuoto
         if (reqW <= fr.w && reqH <= fr.h) {
-          let candX = fr.x;
-          const candY = fr.y;
-          const candW = reqW;
-          const candH = reqH;
-          
-          if (candX + candW > commercialSheetW / 2) {
-            candX = fr.x + fr.w - candW;
-          }
-
-          bestX = candX;
-          bestY = candY;
-          bestW = candW;
-          bestH = candH;
+          bestX = fr.x;
+          bestY = fr.y;
+          bestW = reqW;
+          bestH = reqH;
           bestRotated = false;
+          bestFrX = fr.x;
+          bestFrW = fr.w;
         } else if (reqH <= fr.w && reqW <= fr.h) {
-          let candX = fr.x;
-          const candY = fr.y;
-          const candW = reqH;
-          const candH = reqW;
-          
-          if (candX + candW > commercialSheetW / 2) {
-            candX = fr.x + fr.w - candW;
-          }
-
-          bestX = candX;
-          bestY = candY;
-          bestW = candW;
-          bestH = candH;
+          bestX = fr.x;
+          bestY = fr.y;
+          bestW = reqH;
+          bestH = reqW;
           bestRotated = true;
+          bestFrX = fr.x;
+          bestFrW = fr.w;
         } else {
           // Il pezzo è più grande del foglio intero, lo ignoriamo per evitare crash
           return;
         }
       }
 
+      // Solo dopo aver scelto la collocazione ottimale, applichiamo la regola di allineamento dal lato opposto
+      let finalX = bestX;
+      if (finalX + bestW > commercialSheetW / 2) {
+        finalX = bestFrX + bestFrW - bestW;
+      }
+
       // Piazziamo il pezzo nel foglio selezionato
       const s = bestBoardIdx;
       boards[s].placed.push({
-        x: bestX,
+        x: finalX,
         y: bestY,
         w: bestW,
         h: bestH,
@@ -437,7 +425,7 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
       boards[s].usedArea += bestW * bestH;
 
       // Aggiorniamo i rettangoli liberi del foglio s
-      const placedBox = { x: bestX, y: bestY, w: bestW, h: bestH };
+      const placedBox = { x: finalX, y: bestY, w: bestW, h: bestH };
       const newFreeRects: FreeRect[] = [];
       
       freeRectsByBoard[s].forEach((fr) => {
