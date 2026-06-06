@@ -1291,6 +1291,53 @@ function NestingPreview({ items }: { items: NoteItemDraft[] }) {
   const bladeThickness = 3; // Spessore lama (Kerf) in mm
   const totalBoardArea = commercialSheetW * commercialSheetH;
 
+  // Helper ricorsivo per dividere i pezzi che superano la dimensione del foglio
+  const splitPiece = (w: number, h: number, sW: number, sH: number): { w: number; h: number }[] => {
+    if ((w <= sW && h <= sH) || (w <= sH && h <= sW)) {
+      return [{ w, h }];
+    }
+    const maxSheetDim = Math.max(sW, sH);
+    if (h > maxSheetDim || (h > w && w <= maxSheetDim)) {
+      let maxH = maxSheetDim;
+      if (w <= sW && w <= sH) {
+        maxH = maxSheetDim;
+      } else if (w <= sW) {
+        maxH = sH;
+      } else if (w <= sH) {
+        maxH = sW;
+      } else {
+        maxH = maxSheetDim;
+      }
+      const result: { w: number; h: number }[] = [];
+      let remainingH = h;
+      while (remainingH > 0) {
+        const currentH = Math.min(remainingH, maxH);
+        result.push(...splitPiece(w, currentH, sW, sH));
+        remainingH -= currentH;
+      }
+      return result;
+    } else {
+      let maxW = maxSheetDim;
+      if (h <= sW && h <= sH) {
+        maxW = maxSheetDim;
+      } else if (h <= sW) {
+        maxW = sH;
+      } else if (h <= sH) {
+        maxW = sW;
+      } else {
+        maxW = maxSheetDim;
+      }
+      const result: { w: number; h: number }[] = [];
+      let remainingW = w;
+      while (remainingW > 0) {
+        const currentW = Math.min(remainingW, maxW);
+        result.push(...splitPiece(currentW, h, sW, sH));
+        remainingW -= currentW;
+      }
+      return result;
+    }
+  };
+
   interface SheetMaterialRequest {
     width: number;
     height: number;
@@ -1312,11 +1359,14 @@ function NestingPreview({ items }: { items: NoteItemDraft[] }) {
         const wMm = Math.round(b * factor);
         const hMm = Math.round(h * factor);
 
+        const splitPieces = splitPiece(wMm, hMm, commercialSheetW, commercialSheetH);
         for (let i = 0; i < q; i++) {
-          sheetRequests.push({
-            width: wMm,
-            height: hMm,
-            label: cv.refTitle ? `${cv.refTitle} (${wMm}x${hMm}mm)` : `Pezzo #${idx + 1} (${wMm}x${hMm}mm)`,
+          splitPieces.forEach((sp) => {
+            sheetRequests.push({
+              width: sp.w,
+              height: sp.h,
+              label: cv.refTitle ? `${cv.refTitle} (${wMm}x${hMm}mm)` : `Pezzo #${idx + 1} (${wMm}x${hMm}mm)`,
+            });
           });
         }
       }
