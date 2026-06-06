@@ -116,13 +116,25 @@ export const useOfflineStore = create<OfflineState>()(
 
       setProjectsCache: (projects) => {
         const queue = get().offlineQueue;
-        const cache: Record<string, Project> = {};
-        projects.forEach((p) => {
-          if (!isProjectPending(queue, p.id)) {
-            cache[p.id] = p;
-          }
+        set((state) => {
+          const newProjects: Record<string, Project> = {};
+          
+          // 1. Mantieni i progetti pendenti offline
+          Object.keys(state.projects).forEach((id) => {
+            if (isProjectPending(queue, id)) {
+              newProjects[id] = state.projects[id];
+            }
+          });
+
+          // 2. Aggiungi i progetti aggiornati dal server
+          projects.forEach((p) => {
+            if (!isProjectPending(queue, p.id)) {
+              newProjects[p.id] = p;
+            }
+          });
+
+          return { projects: newProjects };
         });
-        set((state) => ({ projects: { ...state.projects, ...cache } }));
       },
 
       setLevelsCache: (projectId, levels) => {
@@ -160,13 +172,25 @@ export const useOfflineStore = create<OfflineState>()(
 
       setFieldNotesCache: (notes) => {
         const queue = get().offlineQueue;
-        const cache: Record<string, FieldNote> = {};
-        notes.forEach((n) => {
-          if (!isNotePending(queue, n.id)) {
-            cache[n.id] = n;
-          }
+        set((state) => {
+          const newNotes: Record<string, FieldNote> = {};
+
+          // 1. Mantieni le note pendenti offline
+          Object.keys(state.fieldNotes).forEach((id) => {
+            if (isNotePending(queue, id)) {
+              newNotes[id] = state.fieldNotes[id];
+            }
+          });
+
+          // 2. Aggiungi le note aggiornate dal server
+          notes.forEach((n) => {
+            if (!isNotePending(queue, n.id)) {
+              newNotes[n.id] = n;
+            }
+          });
+
+          return { fieldNotes: newNotes };
         });
-        set((state) => ({ fieldNotes: { ...state.fieldNotes, ...cache } }));
       },
 
       setFieldNoteDetailCache: (noteId, note) => {

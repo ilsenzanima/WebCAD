@@ -100,7 +100,12 @@ export default function DownloadPage() {
                 const isCapacitor = typeof window !== "undefined" && (window as any).Capacitor;
                 if (isCapacitor) {
                   e.preventDefault();
-                  window.open(`https://web-cad-lac.vercel.app/downloads/webcad-v${APP_VERSION}.apk`, "_system");
+                  import("@capacitor/browser").then(({ Browser }) => {
+                    Browser.open({ url: `https://web-cad-lac.vercel.app/downloads/webcad-v${APP_VERSION}.apk` });
+                  }).catch((err) => {
+                    console.warn("Impossibile aprire il browser nativo:", err);
+                    window.open(`https://web-cad-lac.vercel.app/downloads/webcad-v${APP_VERSION}.apk`, "_system");
+                  });
                 }
               }}
               className="inline-flex items-center justify-center w-full py-4 px-6 rounded-xl font-bold text-sm text-white transition-all shadow-lg hover:brightness-110 active:scale-[0.98]"
