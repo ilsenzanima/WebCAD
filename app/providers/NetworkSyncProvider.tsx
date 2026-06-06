@@ -110,29 +110,41 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "projects" },
-        () => {
+        (payload) => {
           router.refresh();
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("realtime-db-change", { detail: { table: "projects", payload } }));
+          }
         }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "levels" },
-        () => {
+        (payload) => {
           router.refresh();
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("realtime-db-change", { detail: { table: "levels", payload } }));
+          }
         }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "field_notes" },
-        () => {
+        (payload) => {
           router.refresh();
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("realtime-db-change", { detail: { table: "field_notes", payload } }));
+          }
         }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "field_note_items" },
-        () => {
+        (payload) => {
           router.refresh();
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("realtime-db-change", { detail: { table: "field_note_items", payload } }));
+          }
         }
       );
 

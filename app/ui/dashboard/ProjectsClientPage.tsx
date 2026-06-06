@@ -65,36 +65,54 @@ export default function ProjectsClientPage({ projects }: ProjectsClientPageProps
 
   const cachedProjects = useOfflineStore((state) => state.projects);
 
-  // Fetch dei progetti in background lato client
+  const fetchProjects = async () => {
+    setLoadingOnline(true);
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, name, created_at, updated_at")
+        .order("updated_at", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        setOnlineProjects(data as any[]);
+        // Aggiorna lo store offline
+        useOfflineStore.getState().setProjectsCache(data as any[]);
+      }
+    } catch (err) {
+      console.error("Errore caricamento progetti in background:", err);
+    } finally {
+      setLoadingOnline(false);
+    }
+  };
+
+  // Fetch dei progetti in background lato client al montaggio
   useEffect(() => {
-    const fetchProjects = async () => {
-      setLoadingOnline(true);
-      try {
-        const { createClient } = await import("@/lib/supabase/client");
-        const supabase = createClient();
-        
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
+    fetchProjects();
+  }, []);
 
-        const { data, error } = await supabase
-          .from("projects")
-          .select("id, name, created_at, updated_at")
-          .order("updated_at", { ascending: false })
-          .order("created_at", { ascending: false });
+  // Ascolta gli aggiornamenti realtime da Supabase per ricaricare la lista in tempo reale
+  useEffect(() => {
+    if (typeof window === "undefined") return;
 
-        if (!error && data) {
-          setOnlineProjects(data as any[]);
-          // Aggiorna lo store offline
-          useOfflineStore.getState().setProjectsCache(data as any[]);
-        }
-      } catch (err) {
-        console.error("Errore caricamento progetti in background:", err);
-      } finally {
-        setLoadingOnline(false);
+    const handleRealtimeChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.table === "projects") {
+        console.log("[ProjectsClientPage] Rilevato aggiornamento realtime, rinfresco progetti...");
+        fetchProjects();
       }
     };
 
-    fetchProjects();
+    window.addEventListener("realtime-db-change", handleRealtimeChange);
+    return () => {
+      window.removeEventListener("realtime-db-change", handleRealtimeChange);
+    };
   }, []);
 
   const projectsList = useMemo(() => {
