@@ -17,15 +17,31 @@ export default function UpdateNotifier() {
   const [remoteVersion, setRemoteVersion] = useState("");
   const [releaseNotes, setReleaseNotes] = useState("");
   const [isDismissed, setIsDismissed] = useState(true); // Default to dismissed to avoid flash
+  const [localVersion, setLocalVersion] = useState(CURRENT_VERSION);
 
   useEffect(() => {
     const checkUpdate = async () => {
       try {
+        let currentVer = CURRENT_VERSION;
+        const isCapacitor = typeof window !== "undefined" && (window as any).Capacitor;
+        if (isCapacitor) {
+          try {
+            const { App } = await import("@capacitor/app");
+            const info = await App.getInfo();
+            if (info && info.version) {
+              currentVer = info.version;
+            }
+          } catch (err) {
+            console.warn("Impossibile recuperare versione nativa:", err);
+          }
+        }
+        setLocalVersion(currentVer);
+
         const res = await fetch("/version.json", { cache: "no-store" });
         if (!res.ok) return;
         const data: VersionData = await res.json();
         
-        if (data.version && isNewerVersion(data.version, CURRENT_VERSION)) {
+        if (data.version && isNewerVersion(data.version, currentVer)) {
           const dismissed = localStorage.getItem(`dismissed_version_${data.version}`);
           if (!dismissed) {
             setRemoteVersion(data.version);
@@ -84,7 +100,7 @@ export default function UpdateNotifier() {
             <div>
               <h4 className="text-sm font-bold text-white leading-tight">Nuovo Rilascio Disponibile!</h4>
               <p className="text-[11px]" style={{ color: "hsl(215 20% 65%)" }}>
-                Versione {remoteVersion} (corrente: {CURRENT_VERSION})
+                Versione {remoteVersion} (corrente: {localVersion})
               </p>
             </div>
           </div>

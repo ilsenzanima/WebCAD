@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { changePassword, logout } from "@/app/actions/auth";
 import UnifiedSettingsManager from "./UnifiedSettingsManager";
 import { APP_VERSION } from "@/lib/version";
@@ -26,6 +26,19 @@ export default function SettingsClient({
 }: Props) {
   const [activeTab, setActiveTab] = useState<"profile" | "config" | "mobile">("profile");
   const [isPending, startTransition] = useTransition();
+  const [localVersion, setLocalVersion] = useState(APP_VERSION);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && (window as any).Capacitor) {
+      import("@capacitor/app").then(({ App }) => {
+        App.getInfo().then((info) => {
+          if (info && info.version) {
+            setLocalVersion(info.version);
+          }
+        });
+      }).catch(() => {});
+    }
+  }, []);
 
   // Stati form cambio password
   const [newPassword, setNewPassword] = useState("");
@@ -75,7 +88,7 @@ export default function SettingsClient({
       {/* Intestazione */}
       <div>
         <h1 className="text-2xl font-bold text-white">⚙️ Impostazioni Generali</h1>
-        <p className="text-xs text-white/50">Gestisci il tuo profilo, configura l&apos;app e scarica la versione mobile per il cantiere (Versione Corrente: v{APP_VERSION}).</p>
+        <p className="text-xs text-white/50">Gestisci il tuo profilo, configura l&apos;app e scarica la versione mobile per il cantiere (Versione Corrente: v{localVersion}).</p>
       </div>
 
       {/* Selettore Schede Tab per Desktop */}

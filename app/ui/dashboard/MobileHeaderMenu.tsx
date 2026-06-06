@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
@@ -20,6 +20,19 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
   const [isOpen, setIsOpen] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
   const pathname = usePathname();
+  const [localVersion, setLocalVersion] = useState(APP_VERSION);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && (window as any).Capacitor) {
+      import("@capacitor/app").then(({ App }) => {
+        App.getInfo().then((info) => {
+          if (info && info.version) {
+            setLocalVersion(info.version);
+          }
+        });
+      }).catch(() => {});
+    }
+  }, []);
 
   const navItems = [
     { href: "/projects", icon: "📐", label: "Progetti" },
@@ -277,7 +290,7 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
                   fontFamily: "monospace",
                 }}
               >
-                WebCAD v{APP_VERSION}
+                WebCAD v{localVersion}
               </div>
             </div>
           </aside>

@@ -24,6 +24,7 @@ export default function NotificationBell({ mode }: NotificationBellProps) {
   const [activeTab, setActiveTab] = useState<"notifications" | "logs">("notifications");
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [remoteVersion, setRemoteVersion] = useState("");
+  const [localVersion, setLocalVersion] = useState(APP_VERSION);
   const [errors, setErrors] = useState<string[]>([]);
   const [metrics, setMetrics] = useState<LoadMetrics | null>(null);
 
@@ -34,10 +35,25 @@ export default function NotificationBell({ mode }: NotificationBellProps) {
   useEffect(() => {
     const checkUpdate = async () => {
       try {
+        let currentVer = APP_VERSION;
+        const isCapacitor = typeof window !== "undefined" && (window as any).Capacitor;
+        if (isCapacitor) {
+          try {
+            const { App } = await import("@capacitor/app");
+            const info = await App.getInfo();
+            if (info && info.version) {
+              currentVer = info.version;
+            }
+          } catch (err) {
+            console.warn("Impossibile recuperare la versione nativa in campana:", err);
+          }
+        }
+        setLocalVersion(currentVer);
+
         const res = await fetch("/version.json", { cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
-        if (data.version && isNewerVersion(data.version, APP_VERSION)) {
+        if (data.version && isNewerVersion(data.version, currentVer)) {
           setRemoteVersion(data.version);
           setUpdateAvailable(true);
         }
@@ -203,7 +219,7 @@ export default function NotificationBell({ mode }: NotificationBellProps) {
                       Aggiornamento Disponibile!
                     </p>
                     <p className="text-[10px] text-white/60">
-                      È disponibile la versione v{remoteVersion} (attuale: v{APP_VERSION}). Clicca per aggiornare.
+                      È disponibile la versione v{remoteVersion} (attuale: v{localVersion}). Clicca per aggiornare.
                     </p>
                   </div>
                 </Link>
