@@ -5,8 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
 import CalcolatriceWidget from "./CalcolatriceWidget";
-import GlobalBollaTrigger from "./GlobalBollaTrigger";
-import GlobalRalTrigger from "./GlobalRalTrigger";
+import LivellaBolla from "../projects/LivellaBolla";
+import RalScannerWidget from "../projects/RalScannerWidget";
 import OfflineModeToggle from "./OfflineModeToggle";
 import { APP_VERSION } from "@/lib/version";
 import NotificationBell from "./NotificationBell";
@@ -20,6 +20,8 @@ interface MobileHeaderMenuProps {
 export default function MobileHeaderMenu({ initials, userName, userEmail }: MobileHeaderMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showCalc, setShowCalc] = useState(false);
+  const [showBolla, setShowBolla] = useState(false);
+  const [showRal, setShowRal] = useState(false);
   const pathname = usePathname();
   const [localVersion, setLocalVersion] = useState(APP_VERSION);
 
@@ -47,6 +49,8 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
 
   const tools = [
     { icon: "🧮", label: "Calcolatrice", action: () => { setIsOpen(false); setShowCalc(true); } },
+    { icon: "🟢", label: "Livella Bolla", action: () => { setIsOpen(false); setShowBolla(true); } },
+    { icon: "🎨", label: "Rilevatore RAL", action: () => { setIsOpen(false); setShowRal(true); } },
   ];
 
   return (
@@ -219,6 +223,7 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
                 <button
                   key={t.label}
                   onClick={t.action}
+                  className="transition-colors hover:bg-white/5 active:bg-white/10 text-left"
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -236,15 +241,10 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
                   <span style={{ fontSize: 15, fontWeight: 500 }}>{t.label}</span>
                 </button>
               ))}
-              <div onClick={() => setIsOpen(false)} style={{ paddingLeft: 2 }}>
-                <GlobalBollaTrigger mode="mobile" />
-              </div>
-              <div onClick={() => setIsOpen(false)} style={{ paddingLeft: 2 }}>
-                <GlobalRalTrigger mode="mobile" />
-              </div>
               <Link
                 href="/sync"
                 onClick={() => setIsOpen(false)}
+                className="transition-colors hover:bg-white/5 active:bg-white/10"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -305,6 +305,20 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
           </aside>
         </div>
       )}
+
+      {/* Livella Bolla Globale */}
+      {showBolla && (
+        <LivellaBolla 
+          onCapture={() => {}} 
+          onClose={() => setShowBolla(false)} 
+        />
+      )}
+
+      {/* Rilevatore RAL Globale */}
+      <RalScannerWidget
+        isOpen={showRal}
+        onClose={() => setShowRal(false)}
+      />
 
       {/* Calcolatrice Globale */}
       <CalcolatriceWidget
