@@ -640,13 +640,15 @@ export default function TaglioEditor({
       // 5. Creazione di Pagina 1: Dettagli + Distinta pezzi
       const page1Div = document.createElement("div");
       page1Div.id = "temp-pdf-page1-container";
-      page1Div.style.position = "absolute";
-      page1Div.style.left = "-9999px";
-      page1Div.style.top = "-9999px";
+      page1Div.style.position = "fixed";
+      page1Div.style.left = "0";
+      page1Div.style.top = "0";
       page1Div.style.width = "750px"; // Larghezza fissa adatta per A4
       page1Div.style.background = "#ffffff";
       page1Div.style.color = "#000000";
       page1Div.style.padding = "35px";
+      page1Div.style.zIndex = "-9999";
+      page1Div.style.pointerEvents = "none";
       page1Div.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
       let page1Html = `
@@ -710,6 +712,9 @@ export default function TaglioEditor({
       page1Div.innerHTML = page1Html;
       document.body.appendChild(page1Div);
 
+      // Micro-delay per garantire il corretto rendering nel DOM prima di html2canvas
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
       const canvas1 = await html2canvas(page1Div, {
         scale: 1.3,
         useCORS: true,
@@ -730,13 +735,15 @@ export default function TaglioEditor({
 
         const sheetsDiv = document.createElement("div");
         sheetsDiv.id = `temp-pdf-sheets-container-${i}`;
-        sheetsDiv.style.position = "absolute";
-        sheetsDiv.style.left = "-9999px";
-        sheetsDiv.style.top = "-9999px";
+        sheetsDiv.style.position = "fixed";
+        sheetsDiv.style.left = "0";
+        sheetsDiv.style.top = "0";
         sheetsDiv.style.width = "750px";
         sheetsDiv.style.background = "#ffffff";
         sheetsDiv.style.color = "#000000";
         sheetsDiv.style.padding = "35px";
+        sheetsDiv.style.zIndex = "-9999";
+        sheetsDiv.style.pointerEvents = "none";
         sheetsDiv.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
         let sheetsHtml = `
@@ -860,6 +867,9 @@ export default function TaglioEditor({
             container.appendChild(svgElement);
           }
         });
+
+        // Micro-delay per garantire il corretto rendering degli SVG prima dello screenshot
+        await new Promise((resolve) => setTimeout(resolve, 150));
 
         // Eseguiamo il render
         const canvasSheets = await html2canvas(sheetsDiv, {
