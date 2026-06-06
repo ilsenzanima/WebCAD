@@ -185,9 +185,25 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
       setOnlineStatus(false);
     };
 
+    // Al risveglio dell'app (es. riaccensione schermo), forziamo un aggiornamento immediato
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        console.log("📱 [NetworkSyncProvider] App visibile/riattivata. Rinfresco immediato dei dati...");
+        router.refresh();
+        if (window.navigator.onLine && !useOfflineStore.getState().offlineMode) {
+          syncOfflineData().then(() => {
+            router.refresh();
+          });
+        }
+        // Notifica anche i client components
+        window.dispatchEvent(new CustomEvent("realtime-db-change", { detail: { table: "projects" } }));
+      }
+    };
+
     if (typeof window !== "undefined") {
       window.addEventListener("online", handleOnline);
       window.addEventListener("offline", handleOffline);
+      document.addEventListener("visibilitychange", handleVisibilityChange);
       // Imposta lo stato iniziale
       setOnlineStatus(window.navigator.onLine);
       
@@ -207,6 +223,7 @@ export default function NetworkSyncProvider({ children }: { children: React.Reac
       if (typeof window !== "undefined") {
         window.removeEventListener("online", handleOnline);
         window.removeEventListener("offline", handleOffline);
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
       }
     };
   }, [setOnlineStatus, syncOfflineData, offlineQueue.length, router]);
