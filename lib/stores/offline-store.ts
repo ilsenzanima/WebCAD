@@ -659,6 +659,9 @@ export const useOfflineStore = create<OfflineState>()(
                 case "TOGGLE_LEVEL_COMPLETED": {
                   const realProjId = await healId(resolvedPayload.projectId, "project");
                   const realLvlId = await healId(resolvedPayload.levelId, "level", realProjId);
+                  if (realLvlId && realLvlId.startsWith("temp_")) {
+                    throw new Error("TOGGLE_LEVEL_COMPLETED level not synced yet");
+                  }
                   const res = await toggleLevelCompleted(realLvlId!, resolvedPayload.completed);
                   if (res && res.error) throw new Error(res.error);
                   completedOps.push(op.id);
@@ -666,7 +669,16 @@ export const useOfflineStore = create<OfflineState>()(
                 }
                 case "SAVE_NOTE_ITEMS": {
                   const realProjId = await healId(resolvedPayload.projectId, "project");
-                  const realLvlId = await healId(resolvedPayload.levelId, "level", realProjId);
+                  if (realProjId && realProjId.startsWith("temp_")) {
+                    throw new Error("SAVE_NOTE_ITEMS project not synced yet");
+                  }
+
+                  let realLvlId = await healId(resolvedPayload.levelId, "level", realProjId);
+                  if (realLvlId && realLvlId.startsWith("temp_")) {
+                    console.warn(`[Sync] Level ID ${realLvlId} non risolto. Impostato a null per evitare errori UUID.`);
+                    realLvlId = null;
+                  }
+
                   let realNoteId = resolvedPayload.noteId;
 
                   const { createClient } = await import("@/lib/supabase/client");
@@ -730,7 +742,15 @@ export const useOfflineStore = create<OfflineState>()(
                 }
                 case "DELETE_NOTE": {
                   const realProjId = await healId(resolvedPayload.projectId, "project");
+                  if (realProjId && realProjId.startsWith("temp_")) {
+                    throw new Error("DELETE_NOTE project not synced yet");
+                  }
                   const realNoteId = idMap[resolvedPayload.noteId] ?? resolvedPayload.noteId;
+                  if (realNoteId.startsWith("temp_")) {
+                    console.log(`[Sync] DELETE_NOTE per nota temporanea ${realNoteId} non creata sul server. Considerata completata.`);
+                    completedOps.push(op.id);
+                    break;
+                  }
                   const res = await deleteFieldNote(realNoteId, realProjId!);
                   if (!res.success) throw new Error(res.error || "DELETE_NOTE failed");
                   completedOps.push(op.id);
@@ -738,6 +758,9 @@ export const useOfflineStore = create<OfflineState>()(
                 }
                 case "UPDATE_NOTE_TEXT": {
                   const realLvlId = await healId(resolvedPayload.levelId, "level", resolvedPayload.projectId);
+                  if (realLvlId && realLvlId.startsWith("temp_")) {
+                    throw new Error("UPDATE_NOTE_TEXT level not synced yet");
+                  }
                   const res = await updateLevelNoteText(realLvlId!, resolvedPayload.text);
                   if (!res.success) throw new Error(res.error || "UPDATE_NOTE_TEXT failed");
                   completedOps.push(op.id);
