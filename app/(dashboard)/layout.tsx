@@ -8,6 +8,7 @@ import UpdateNotifier from "@/app/ui/dashboard/UpdateNotifier";
 import SidebarProfile from "@/app/ui/dashboard/SidebarProfile";
 import GlobalCalcTrigger from "@/app/ui/dashboard/GlobalCalcTrigger";
 import GlobalBollaTrigger from "@/app/ui/dashboard/GlobalBollaTrigger";
+import GlobalRalTrigger from "@/app/ui/dashboard/GlobalRalTrigger";
 import OfflineModeToggle from "@/app/ui/dashboard/OfflineModeToggle";
 import type { ReactNode } from "react";
 
@@ -105,6 +106,8 @@ export default async function DashboardLayout({
             <GlobalCalcTrigger mode="desktop" />
             {/* Bolla Globale */}
             <GlobalBollaTrigger mode="desktop" />
+            {/* Rilevatore RAL Globale */}
+            <GlobalRalTrigger mode="desktop" />
             {/* Sincronizzazione */}
             <Link
               href="/sync"

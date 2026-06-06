@@ -16,6 +16,7 @@ import PhotoQuotaEditor from "./PhotoQuotaEditor";
 import SketchEditorClient from "@/app/ui/sketches/SketchEditorClient";
 import LivellaBolla from "./LivellaBolla";
 import CalcolatriceWidget from "@/app/ui/dashboard/CalcolatriceWidget";
+import RalScannerWidget from "./RalScannerWidget";
 import { useOfflineStore, generateTempId } from "@/lib/stores/offline-store";
 import type { Material } from "@/lib/types/database";
 import { uploadBase64ToStorage } from "@/lib/supabase/storage";
@@ -315,9 +316,45 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
   const [editingFotoUrl, setEditingFotoUrl] = useState<string | null>(null);
   const [editingSketchId, setEditingSketchId] = useState<string | null>(null);
   const [editingSketchUrl, setEditingSketchUrl] = useState<string | null>(null);
+  const [showRalScanner, setShowRalScanner] = useState(false);
+  const [activeRalItemId, setActiveRalItemId] = useState<string | null>(null);
 
   // --- Errori ---
   const [error, setError] = useState<string | null>(null);
+
+  // Gestore per l'apertura dello scanner RAL
+  function handleOpenRalScanner(itemId: string | null = null) {
+    setActiveRalItemId(itemId);
+    setShowRalScanner(true);
+  }
+
+  // Gestore per la selezione del colore RAL
+  function handleSelectRalColor(colorString: string) {
+    if (activeRalItemId) {
+      setItems((prev) =>
+        prev.map((item) => {
+          if (item.id === activeRalItemId) {
+            const currentText = item.value_text || "";
+            const separator = currentText ? " " : "";
+            return {
+              ...item,
+              value_text: currentText + separator + `[${colorString}]`,
+            };
+          }
+          return item;
+        })
+      );
+    } else {
+      const newNoteItem: NoteItemDraft = {
+        id: crypto.randomUUID(),
+        item_type: "nota",
+        value_text: `Colore Rilevato: [${colorString}]`,
+      };
+      setItems((prev) => [...prev, newNoteItem]);
+    }
+    setActiveRalItemId(null);
+    setShowRalScanner(false);
+  }
 
   // Gestore per catturare l'inclinazione della livella ed inserirla come nota + foto unificata
   function handleCaptureLivella(text: string, photoBase64?: string | null) {
@@ -919,6 +956,21 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                     🟢
                   </button>
 
+                  {/* Bottone Rilevatore Colore RAL */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenRalScanner(null)}
+                    className="w-9 h-9 rounded-xl flex items-center justify-center text-sm transition-all hover:scale-105 active:scale-95 cursor-pointer text-base"
+                    style={{
+                      background: "hsl(220 26% 18%)",
+                      border: "1px solid hsl(220 20% 24%)",
+                      boxShadow: "0 4px 10px rgba(0,0,0,0.3)",
+                    }}
+                    title="Apri Rilevatore Colore RAL"
+                  >
+                    🎨
+                  </button>
+
                   {/* Pulsante "+" con dropdown */}
                   <div className="relative">
                     <button
@@ -1158,6 +1210,7 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                       setEditingSketchUrl(url);
                     }}
                     lastAddedId={lastAddedId}
+                    onOpenRalScanner={handleOpenRalScanner}
                   />
                 );
               })}
@@ -1223,6 +1276,18 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
         <LivellaBolla
           onCapture={handleCaptureLivella}
           onClose={() => setShowLivella(false)}
+        />
+      )}
+
+      {/* Modale Rilevatore Colore RAL */}
+      {showRalScanner && (
+        <RalScannerWidget
+          isOpen={showRalScanner}
+          onSelectColor={handleSelectRalColor}
+          onClose={() => {
+            setShowRalScanner(false);
+            setActiveRalItemId(null);
+          }}
         />
       )}
 
@@ -1582,6 +1647,7 @@ function ItemRow({
   onEditFoto,
   onDrawFoto,
   lastAddedId,
+  onOpenRalScanner,
 }: {
   item: NoteItemDraft;
   onChange: (changes: Partial<NoteItemDraft>) => void;
@@ -1590,6 +1656,7 @@ function ItemRow({
   onEditFoto?: (id: string, url: string) => void;
   onDrawFoto?: (id: string, url: string) => void;
   lastAddedId?: string | null;
+  onOpenRalScanner?: (id: string) => void;
 }) {
   const label = ITEM_LABELS[item.item_type];
   const isMeasure = MEASURE_TYPES.includes(item.item_type);
@@ -1829,20 +1896,32 @@ function ItemRow({
 
       {/* Input nota */}
       {isNote && (
-        <textarea
-          ref={inputRef as any}
-          value={item.value_text ?? ""}
-          onChange={(e) => onChange({ value_text: e.target.value })}
-          placeholder="Scrivi una nota..."
-          className="flex-1 px-2.5 py-1.5 rounded-lg text-xs outline-none min-w-0 resize-y"
-          style={{
-            background: "hsl(220 26% 14%)",
-            border: "1px solid hsl(220 20% 22%)",
-            color: "hsl(210 40% 96%)",
-            minHeight: "45px",
-          }}
-          rows={2}
-        />
+        <div className="flex-1 flex items-start gap-2 min-w-0">
+          <textarea
+            ref={inputRef as any}
+            value={item.value_text ?? ""}
+            onChange={(e) => onChange({ value_text: e.target.value })}
+            placeholder="Scrivi una nota..."
+            className="flex-1 px-2.5 py-1.5 rounded-lg text-xs outline-none min-w-0 resize-y"
+            style={{
+              background: "hsl(220 26% 14%)",
+              border: "1px solid hsl(220 20% 22%)",
+              color: "hsl(210 40% 96%)",
+              minHeight: "45px",
+            }}
+            rows={2}
+          />
+          {onOpenRalScanner && (
+            <button
+              type="button"
+              onClick={() => onOpenRalScanner(item.id)}
+              className="w-8 h-8 rounded-lg flex items-center justify-center bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 text-sm flex-shrink-0 cursor-pointer transition-all duration-150"
+              title="Apri Rilevatore Colore RAL"
+            >
+              🎨
+            </button>
+          )}
+        </div>
       )}
 
       {/* Materiale */}

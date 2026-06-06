@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
 import CalcolatriceWidget from "./CalcolatriceWidget";
 import GlobalBollaTrigger from "./GlobalBollaTrigger";
+import GlobalRalTrigger from "./GlobalRalTrigger";
 import OfflineModeToggle from "./OfflineModeToggle";
 import { APP_VERSION } from "@/lib/version";
 import NotificationBell from "./NotificationBell";
@@ -237,6 +238,9 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
               ))}
               <div onClick={() => setIsOpen(false)} style={{ paddingLeft: 2 }}>
                 <GlobalBollaTrigger mode="mobile" />
+              </div>
+              <div onClick={() => setIsOpen(false)} style={{ paddingLeft: 2 }}>
+                <GlobalRalTrigger mode="mobile" />
               </div>
               <Link
                 href="/sync"

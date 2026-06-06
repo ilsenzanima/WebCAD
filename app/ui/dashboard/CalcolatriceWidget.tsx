@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 
 interface CalcolatriceWidgetProps {
   isOpen: boolean;
@@ -16,9 +17,11 @@ export default function CalcolatriceWidget({
   const [display, setDisplay] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [lastResult, setLastResult] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   // Carica cronologia locale all'avvio
   useEffect(() => {
+    setMounted(true);
     const saved = localStorage.getItem("webcad_calc_history");
     if (saved) {
       try {
@@ -29,7 +32,7 @@ export default function CalcolatriceWidget({
     }
   }, []);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   // Calcola in modo sicuro senza eval
   function calculateExpression(expr: string): string {
@@ -120,7 +123,7 @@ export default function CalcolatriceWidget({
     ["0", ",", "=", "+"],
   ];
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       {/* Sfondo sfocato oscurato */}
       <div 
@@ -277,6 +280,7 @@ export default function CalcolatriceWidget({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

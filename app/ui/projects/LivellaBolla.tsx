@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Motion } from "@capacitor/motion";
 import { Capacitor } from "@capacitor/core";
 
@@ -12,6 +13,11 @@ interface LivellaBollaProps {
 export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) {
   const [beta, setBeta] = useState<number>(0);
   const [gamma, setGamma] = useState<number>(0);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   
   // Stati per la fotocamera posteriore in background
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -374,7 +380,9 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
   const moveX = Math.max(-maxDisplacement, Math.min(maxDisplacement, effGamma * sensitivity));
   const moveY = Math.max(-maxDisplacement, Math.min(maxDisplacement, effBeta * sensitivity));
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[100] flex flex-col items-center justify-between p-6 transition-all duration-300"
       style={{ 
@@ -634,6 +642,8 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
           📸 Scatta e Registra Nota
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
+
