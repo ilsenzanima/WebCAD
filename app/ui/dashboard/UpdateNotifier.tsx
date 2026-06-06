@@ -35,7 +35,7 @@ export default function UpdateNotifier() {
           }
         }
       } catch (err) {
-        console.error("Errore verifica aggiornamenti:", err);
+        console.warn("Errore verifica aggiornamenti:", err);
       }
     };
 

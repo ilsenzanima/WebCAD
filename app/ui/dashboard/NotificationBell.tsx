@@ -42,7 +42,7 @@ export default function NotificationBell({ mode }: NotificationBellProps) {
           setUpdateAvailable(true);
         }
       } catch (err) {
-        console.error("Errore verifica aggiornamenti in campana:", err);
+        console.warn("Errore verifica aggiornamenti in campana:", err);
       }
     };
 
