@@ -36,7 +36,7 @@ export default function NotificationBell({ mode }: NotificationBellProps) {
     const checkUpdate = async () => {
       try {
         let currentVer = APP_VERSION;
-        const isCapacitor = typeof window !== "undefined" && (window as any).Capacitor;
+        const isCapacitor = typeof window !== "undefined" && (window as any).Capacitor?.isNativePlatform();
         if (isCapacitor) {
           try {
             const { App } = await import("@capacitor/app");

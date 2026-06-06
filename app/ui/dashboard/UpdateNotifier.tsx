@@ -23,7 +23,7 @@ export default function UpdateNotifier() {
     const checkUpdate = async () => {
       try {
         let currentVer = CURRENT_VERSION;
-        const isCapacitor = typeof window !== "undefined" && (window as any).Capacitor;
+         const isCapacitor = typeof window !== "undefined" && (window as any).Capacitor?.isNativePlatform();
         if (isCapacitor) {
           try {
             const { App } = await import("@capacitor/app");

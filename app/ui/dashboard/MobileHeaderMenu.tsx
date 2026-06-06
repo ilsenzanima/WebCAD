@@ -23,15 +23,20 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
   const [localVersion, setLocalVersion] = useState(APP_VERSION);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && (window as any).Capacitor) {
-      import("@capacitor/app").then(({ App }) => {
-        App.getInfo().then((info) => {
+    const getVersion = async () => {
+      if (typeof window !== "undefined" && (window as any).Capacitor?.isNativePlatform()) {
+        try {
+          const { App } = await import("@capacitor/app");
+          const info = await App.getInfo();
           if (info && info.version) {
             setLocalVersion(info.version);
           }
-        });
-      }).catch(() => {});
-    }
+        } catch (err) {
+          console.warn("Impossibile recuperare versione nativa in menu:", err);
+        }
+      }
+    };
+    getVersion();
   }, []);
 
   const navItems = [
