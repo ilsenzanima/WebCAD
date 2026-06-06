@@ -20,6 +20,15 @@ export interface SyncOperation {
   timestamp: number;
 }
 
+export interface SyncHistoryItem {
+  id: string;
+  action: string;
+  payloadSummary: string;
+  timestamp: number;
+  status: "success" | "error";
+  errorDetails?: string;
+}
+
 interface OfflineState {
   // Connettività
   isOnline: boolean;
@@ -36,6 +45,7 @@ interface OfflineState {
   // Coda offline
   offlineQueue: SyncOperation[];
   isSyncing: boolean;
+  syncHistory: SyncHistoryItem[];
 
   // Azioni di stato rete
   setOnlineStatus: (status: boolean) => void;
@@ -62,11 +72,36 @@ interface OfflineState {
   // Sincronizzazione
   syncOfflineData: () => Promise<void>;
   clearQueue: () => void;
+  clearSyncHistory: () => void;
 }
 
 // Generatore di ID temporanei robusti
 export function generateTempId(): string {
   return `temp_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
+}
+
+export function getPayloadSummary(action: string, payload: any): string {
+  if (!payload) return action;
+  switch (action) {
+    case "CREATE_PROJECT":
+      return `Creazione progetto "${payload.name || "Senza nome"}"`;
+    case "RENAME_PROJECT":
+      return `Progetto rinominato in "${payload.newName || "Senza nome"}"`;
+    case "DELETE_PROJECT":
+      return `Eliminazione progetto`;
+    case "ADD_LEVEL":
+      return `Aggiunto livello "${payload.name || "Senza nome"}" (${payload.piano || ""})`;
+    case "TOGGLE_LEVEL_COMPLETED":
+      return `Livello completato impostato a ${payload.completed ? "Sì" : "No"}`;
+    case "SAVE_NOTE_ITEMS":
+      return `Salvataggio ${payload.items?.length || 0} voci di appunto`;
+    case "DELETE_NOTE":
+      return `Eliminazione appunto`;
+    case "UPDATE_NOTE_TEXT":
+      return `Aggiornamento testo appunto`;
+    default:
+      return `${action}`;
+  }
 }
 
 export const isProjectPending = (queue: SyncOperation[], projectId: string) => {
@@ -103,6 +138,7 @@ export const useOfflineStore = create<OfflineState>()(
       noteTypes: [],
       offlineQueue: [],
       isSyncing: false,
+      syncHistory: [],
       tempIdMap: {},
 
       setOnlineStatus: (status) => set({ isOnline: status }),
@@ -791,8 +827,35 @@ export const useOfflineStore = create<OfflineState>()(
                   break;
                 }
               }
+
+              if (completedOps.includes(op.id)) {
+                const historyItem: SyncHistoryItem = {
+                  id: op.id,
+                  action: op.action,
+                  payloadSummary: getPayloadSummary(op.action, resolvedPayload),
+                  timestamp: Date.now(),
+                  status: "success",
+                };
+                set((state) => ({
+                  syncHistory: [historyItem, ...(state.syncHistory || [])].slice(0, 30),
+                }));
+              }
             } catch (err) {
+              const errMsg = err instanceof Error ? err.message : String(err);
               console.error(`Errore nella sincronizzazione dell'operazione ${op.action}:`, err);
+              
+              const historyItem: SyncHistoryItem = {
+                id: op.id,
+                action: op.action,
+                payloadSummary: getPayloadSummary(op.action, resolvedPayload),
+                timestamp: Date.now(),
+                status: "error",
+                errorDetails: errMsg,
+              };
+              set((state) => ({
+                syncHistory: [historyItem, ...(state.syncHistory || [])].slice(0, 30),
+              }));
+              
               break;
             }
           }
@@ -850,6 +913,7 @@ export const useOfflineStore = create<OfflineState>()(
       },
 
       clearQueue: () => set({ offlineQueue: [] }),
+      clearSyncHistory: () => set({ syncHistory: [] }),
     }),
     {
       name: "abaco-offline-storage",
@@ -864,6 +928,7 @@ export const useOfflineStore = create<OfflineState>()(
         noteTypes: state.noteTypes,
         offlineQueue: state.offlineQueue,
         tempIdMap: state.tempIdMap,
+        syncHistory: state.syncHistory,
       }),
       // CRITICO: evita che Zustand idrati automaticamente il localStorage durante il rendering SSR.
       // L'idratazione viene eseguita manualmente nel NetworkSyncProvider (lato client) per

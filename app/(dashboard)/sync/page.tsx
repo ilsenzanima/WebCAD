@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useOfflineStore, type SyncOperation } from "@/lib/stores/offline-store";
 import { getRecentErrors, subscribeToErrors, clearRecentErrors } from "@/app/providers/PageLoadLogger";
 
 export default function SyncPage() {
+  const router = useRouter();
   const {
     offlineQueue,
     isOnline,
@@ -13,6 +15,8 @@ export default function SyncPage() {
     syncOfflineData,
     clearQueue,
     setOfflineMode,
+    syncHistory,
+    clearSyncHistory,
   } = useOfflineStore();
 
   const [errors, setErrors] = useState<string[]>([]);
@@ -183,7 +187,7 @@ export default function SyncPage() {
 
         {offlineQueue.length === 0 ? (
           <div
-            className="rounded-2xl p-8 text-center space-y-2 border border-dashed"
+            className="rounded-2xl p-8 text-center space-y-2 border border-dashed flex flex-col items-center justify-center"
             style={{
               background: "hsl(220 26% 12% / 0.5)",
               borderColor: "hsl(220 20% 16%)",
@@ -194,6 +198,17 @@ export default function SyncPage() {
             <p className="text-xs" style={{ color: "hsl(215 15% 45%)" }}>
               Nessuna operazione in coda. L&apos;applicazione è completamente sincronizzata con il server cloud.
             </p>
+            <button
+              onClick={async () => {
+                setSyncingManual(true);
+                router.refresh();
+                setTimeout(() => setSyncingManual(false), 1200);
+              }}
+              disabled={syncingManual || !isOnline || offlineMode}
+              className="mt-3 inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-xl bg-white/5 hover:bg-white/10 text-white/90 border border-white/10 transition-all cursor-pointer disabled:opacity-50"
+            >
+              {syncingManual ? "🔄 Aggiornamento..." : "🔄 Ricarica Dati dal Server"}
+            </button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -239,6 +254,98 @@ export default function SyncPage() {
                   >
                     {JSON.stringify(op.payload, null, 2)}
                   </pre>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Sezione Cronologia Sincronizzazioni ── */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-white/50">
+              Cronologia Sincronizzazioni Recenti
+            </h2>
+            {syncHistory && syncHistory.length > 0 && (
+              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-white/10 text-white/70 border border-white/20">
+                {syncHistory.length}
+              </span>
+            )}
+          </div>
+
+          {syncHistory && syncHistory.length > 0 && (
+            <button
+              onClick={clearSyncHistory}
+              className="px-3 py-1.5 text-xs font-semibold rounded-xl text-white/40 hover:text-red-400 transition-colors cursor-pointer"
+            >
+              Pulisci Cronologia
+            </button>
+          )}
+        </div>
+
+        {!syncHistory || syncHistory.length === 0 ? (
+          <div
+            className="rounded-2xl p-6 text-center text-xs italic border border-dashed"
+            style={{
+              background: "hsl(220 26% 12% / 0.3)",
+              borderColor: "hsl(220 20% 14%)",
+              color: "hsl(215 15% 45%)",
+            }}
+          >
+            Nessuna operazione registrata nella cronologia di sincronizzazione.
+          </div>
+        ) : (
+          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+            {syncHistory.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-2xl p-4 space-y-2.5 transition-all"
+                style={{
+                  background: "hsl(220 26% 12%)",
+                  border: "1px solid hsl(220 20% 16%)",
+                }}
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                        item.status === "success"
+                          ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                          : "bg-red-500/10 text-red-400 border-red-500/20"
+                      }`}
+                    >
+                      {item.status === "success" ? "SUCCESSO" : "ERRORE"}
+                    </span>
+                    <span className="text-xs font-semibold text-white/95">
+                      {item.payloadSummary}
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-white/40 sm:text-right">
+                    {formatTimestamp(item.timestamp)}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-2 text-[10px] text-white/50">
+                  <span>Azione:</span>
+                  <span className="font-mono bg-white/5 px-1.5 py-0.5 rounded text-white/70">
+                    {item.action}
+                  </span>
+                </div>
+
+                {item.status === "error" && item.errorDetails && (
+                  <div
+                    className="p-3 rounded-xl text-[10px] font-mono whitespace-pre-wrap leading-tight break-all border"
+                    style={{
+                      background: "hsl(350 89% 10% / 0.15)",
+                      borderColor: "hsl(350 89% 60% / 0.1)",
+                      color: "hsl(350 89% 75%)",
+                    }}
+                  >
+                    <div className="font-semibold text-red-400 mb-1">Dettaglio Errore:</div>
+                    {item.errorDetails}
+                  </div>
                 )}
               </div>
             ))}
