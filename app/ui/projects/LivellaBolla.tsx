@@ -442,7 +442,7 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white/70 hover:bg-white/10 transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-white/10 border border-white/20 hover:bg-white/20 transition-all active:scale-95 cursor-pointer"
           >
             Chiudi
           </button>
@@ -567,12 +567,20 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
       </div>
 
       {/* Controlli inferiori */}
-      <div className="w-full max-w-md flex flex-col gap-3.5 bg-white/5 border border-white/10 rounded-2xl p-4">
+      <div 
+        className="w-full max-w-md flex flex-col gap-3.5 border rounded-2xl p-4 shadow-2xl relative z-10"
+        style={{
+          background: "hsl(220 32% 10% / 0.92)",
+          borderColor: "hsl(220 20% 22% / 0.8)",
+          backdropFilter: "blur(12px)",
+          boxShadow: "0 -8px 32px rgba(0,0,0,0.5)",
+        }}
+      >
         {isSupported && hasPermission && (
           /* Calcolatore Fuori Bolla premium interattivo */
-          <div className="border-b border-white/5 pb-3.5 mb-1.5 space-y-2">
+          <div className="border-b border-white/10 pb-3.5 mb-1.5 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold text-white/50 tracking-wider">📏 Lunghezza Rilievo</span>
+              <span className="text-[10px] uppercase font-bold text-white/80 tracking-wider">📏 Lunghezza Rilievo</span>
               <span className="text-[10px] font-bold text-sky-400 font-mono">
                 Y: {formatOffset(fueraBollaY)} · X: {formatOffset(fueraBollaX)}
               </span>
@@ -582,26 +590,26 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
                 type="number"
                 value={lengthValue}
                 onChange={(e) => setLengthValue(Math.max(1, parseFloat(e.target.value) || 0))}
-                className="flex-1 px-3 py-2 rounded-xl text-xs outline-none bg-white/5 border border-white/10 text-white font-mono text-center"
+                className="flex-1 px-3 py-2 rounded-xl text-xs outline-none bg-black/40 border border-white/20 text-white font-mono text-center focus:border-sky-500/50 transition-colors"
               />
-              <div className="flex rounded-xl overflow-hidden border border-white/10 bg-white/5 p-0.5">
+              <div className="flex rounded-xl overflow-hidden border border-white/20 bg-black/30 p-0.5">
                 <button
                   type="button"
                   onClick={() => setLengthUnit("cm")}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${lengthUnit === "cm" ? "bg-sky-500 text-white" : "text-white/60 hover:text-white"}`}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${lengthUnit === "cm" ? "bg-sky-500 text-white" : "text-white/70 hover:text-white"}`}
                 >
                   cm
                 </button>
                 <button
                   type="button"
                   onClick={() => setLengthUnit("m")}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${lengthUnit === "m" ? "bg-sky-500 text-white" : "text-white/60 hover:text-white"}`}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${lengthUnit === "m" ? "bg-sky-500 text-white" : "text-white/70 hover:text-white"}`}
                 >
                   m
                 </button>
               </div>
             </div>
-            <p className="text-[9px] text-white/40 leading-snug">
+            <p className="text-[10px] text-white/60 leading-snug">
               Inserisci la distanza dal punto di appoggio (es. 50cm) per stimare di quanti mm/cm la struttura pende in tempo reale.
             </p>
           </div>
@@ -612,7 +620,7 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
             <button
               type="button"
               onClick={handleCalibrate}
-              className="flex-1 py-2.5 rounded-xl text-xs font-semibold border border-white/10 text-white/80 hover:bg-white/5 transition-all cursor-pointer"
+              className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-white/20 text-white bg-white/10 hover:bg-white/20 transition-all active:scale-[0.98] cursor-pointer"
             >
               🎯 Calibra (Azzera)
             </button>
@@ -620,7 +628,7 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
               <button
                 type="button"
                 onClick={handleResetCalibration}
-                className="px-3 py-2.5 rounded-xl text-xs font-semibold border border-red-500/30 text-red-400 hover:bg-red-500/5 transition-all cursor-pointer"
+                className="px-3 py-2.5 rounded-xl text-xs font-bold border border-red-500/40 text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-all active:scale-[0.98] cursor-pointer"
                 title="Resetta calibrazione"
               >
                 ✕
