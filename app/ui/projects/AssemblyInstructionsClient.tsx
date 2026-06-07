@@ -91,9 +91,9 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
       return [
         {
           num: 1,
-          title: "🛠️ Struttura di Sostegno (Barra Asolata)",
+          title: "🛠️ Struttura di Sostegno",
           desc: "Fissa i pendini di sospensione a soffitto/parete adeguate al peso e posiziona le barre asolate di supporto livellandole accuratamente per l'appoggio della canalizzazione.",
-          materials: ["Barre asolate di supporto", "Pendini filettati di sospensione", "Tasselli e ancoranti per calcestruzzo/laterizio"],
+          materials: ["Barre asolate di supporto", "Pendini filettati di sospensione (max 1 metro di distanza)", "Tasselli e ancoranti per calcestruzzo/laterizio"],
         },
         {
           num: 2,
@@ -115,18 +115,24 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
         },
         {
           num: 5,
-          title: "🛑 Tappo Terminale di Chiusura",
+          title: "🛑 Tappo Terminale di Chiusura (Facoltativo)",
           desc: `Taglia il tappo di chiusura terminale con larghezza pari a ${widthCm + 2 * thicknessCm} cm e altezza pari a ${heightCm + 2 * thicknessCm} cm. Posizionalo all'estremità del canale per completare la chiusura e sigillare il lavoro.`,
           materials: [`1x Tappo Terminale: ${widthCm + 2 * thicknessCm} x ${heightCm + 2 * thicknessCm} cm (Spessore: ${thicknessMm} mm)`],
         },
         {
           num: 6,
           title: "🔗 Giunto Coprigiunto Esterno",
-          desc: "Applica il giunto esterno largo 20 cm a cavallo dell'estremità di uscita per unire le tratte della canalizzazione. Taglia i 4 pezzi coprigiunto dallo stesso materiale per fare tutto il giro esterno.",
+          desc: "Applica il giunto esterno largo da 10 a 20 cm a cavallo dell'estremità di uscita per unire le tratte della canalizzazione. Taglia i 4 pezzi coprigiunto dallo stesso materiale per fare tutto il giro esterno.",
           materials: [
-            `2x Coprigiunto Orizzontale (Sopra/Sotto): ${widthCm + 4 * thicknessCm} x 20 cm (Spessore: ${thicknessMm} mm)`,
-            `2x Coprigiunto Verticale (Fianchi): ${heightCm + 2 * thicknessCm} x 20 cm (Spessore: ${thicknessMm} mm)`,
+            `2x Coprigiunto Orizzontale (Sopra/Sotto): ${widthCm + 4 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
+            `2x Coprigiunto Verticale (Fianchi): ${heightCm + 2 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
           ],
+        },
+        {
+          num: 7,
+          title: "✅ Canalizzazione Completata",
+          desc: "La canalizzazione è ora completata con tutte le staffe, i pannelli di rivestimento sigillati, il tappo di chiusura e la cornice del giunto esterno montata in posizione definitiva.",
+          materials: ["Canalizzazione assemblata e pronta all'uso"],
         },
       ];
     } else {
@@ -134,7 +140,7 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
       return [
         {
           num: 1,
-          title: "🛠️ Staffaggio a Parete & Supporti",
+          title: "🛠️ Staffaggio a Parete",
           desc: "Traccia la linea di sviluppo verticale a parete. Installa le barre asolate di supporto a parete per fissare saldamente la canalizzazione.",
           materials: ["Barre asolate di supporto", "Tasselli di ancoraggio e staffe di supporto"],
         },
@@ -158,18 +164,24 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
         },
         {
           num: 5,
-          title: "🛑 Tappo Terminale di Chiusura",
+          title: "🛑 Tappo Terminale di Chiusura (Facoltativo)",
           desc: `Taglia il tappo di chiusura terminale con larghezza pari a ${widthCm + 2 * thicknessCm} cm e altezza pari a ${heightCm + 2 * thicknessCm} cm. Posizionalo all'estremità superiore per chiudere la testa della canalizzazione.`,
           materials: [`1x Tappo Terminale: ${widthCm + 2 * thicknessCm} x ${heightCm + 2 * thicknessCm} cm (Spessore: ${thicknessMm} mm)`],
         },
         {
           num: 6,
           title: "🔗 Giunto Coprigiunto Esterno",
-          desc: "Applica il giunto esterno largo 20 cm a cavallo dell'estremità di uscita per unire le tratte della canalizzazione verticale. Taglia i 4 pezzi coprigiunto dallo stesso materiale per fare tutto il giro esterno.",
+          desc: "Applica il giunto esterno largo da 10 a 20 cm a cavallo dell'estremità di uscita per unire le tratte della canalizzazione verticale. Taglia i 4 pezzi coprigiunto dallo stesso materiale per fare tutto il giro esterno.",
           materials: [
-            `2x Coprigiunto Fronte/Retro: ${widthCm + 4 * thicknessCm} x 20 cm (Spessore: ${thicknessMm} mm)`,
-            `2x Coprigiunto Laterale (Fianchi): ${heightCm + 2 * thicknessCm} x 20 cm (Spessore: ${thicknessMm} mm)`,
+            `2x Coprigiunto Fronte/Retro: ${widthCm + 4 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
+            `2x Coprigiunto Laterale (Fianchi): ${heightCm + 2 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
           ],
+        },
+        {
+          num: 7,
+          title: "✅ Canalizzazione Completata",
+          desc: "La canalizzazione verticale è ora completata con lo staffaggio a parete, le lastre sigillate, il tappo superiore di chiusura e la cornice del giunto esterno montata in posizione definitiva.",
+          materials: ["Canalizzazione assemblata e pronta all'uso"],
         },
       ];
     }
@@ -356,7 +368,7 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
             <div className="space-y-4">
               <div className="flex justify-between items-center pb-2 border-b border-white/5">
                 <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-orange-500/10 text-orange-400 uppercase">
-                  PASSAGGIO {currentStep} DI 6
+                  PASSAGGIO {currentStep} DI 7
                 </span>
                 <span className="text-xs text-gray-400">
                   {isHorizontal ? "Canalizzazione Orizzontale" : "Canalizzazione Verticale"}
@@ -397,8 +409,8 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
                   ◀ Precedente
                 </button>
                 <button
-                  onClick={() => setCurrentStep((prev) => Math.min(6, prev + 1))}
-                  disabled={currentStep === 6}
+                  onClick={() => setCurrentStep((prev) => Math.min(7, prev + 1))}
+                  disabled={currentStep === 7}
                   className="flex-1 py-3 px-4 rounded-xl text-xs font-bold bg-white text-black hover:bg-white/95 disabled:opacity-30 transition-all cursor-pointer text-center"
                 >
                   Successivo ▶

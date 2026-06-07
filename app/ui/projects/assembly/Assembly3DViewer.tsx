@@ -123,8 +123,21 @@ export default function Assembly3DViewer({
                       metalness={0.8}
                     />
                   </mesh>
+                  {/* Barra asolata 3 (supporto centrale) */}
+                  <mesh
+                    castShadow
+                    receiveShadow
+                    position={[0, -h / 2 - t - 0.02, 0]}
+                  >
+                    <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
+                    <meshStandardMaterial
+                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                      roughness={0.2}
+                      metalness={0.8}
+                    />
+                  </mesh>
 
-                  {/* Pendini di sospensione verticali */}
+                  {/* Pendini di sospensione verticali (posteriori, centrali, anteriori) */}
                   <mesh position={[-w / 2 - 0.06, 0.5 - h / 2, -l / 2 + 0.3]}>
                     <cylinderGeometry args={[0.006, 0.006, 1.2]} />
                     <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
@@ -133,6 +146,17 @@ export default function Assembly3DViewer({
                     <cylinderGeometry args={[0.006, 0.006, 1.2]} />
                     <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
                   </mesh>
+                  
+                  {/* Pendini centrali */}
+                  <mesh position={[-w / 2 - 0.06, 0.5 - h / 2, 0]}>
+                    <cylinderGeometry args={[0.006, 0.006, 1.2]} />
+                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
+                  </mesh>
+                  <mesh position={[w / 2 + 0.06, 0.5 - h / 2, 0]}>
+                    <cylinderGeometry args={[0.006, 0.006, 1.2]} />
+                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
+                  </mesh>
+
                   <mesh position={[-w / 2 - 0.06, 0.5 - h / 2, l / 2 - 0.3]}>
                     <cylinderGeometry args={[0.006, 0.006, 1.2]} />
                     <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
@@ -152,6 +176,19 @@ export default function Assembly3DViewer({
                     castShadow
                     receiveShadow
                     position={[0, -h / 2 - t - 0.02, -l / 2 + 0.5]}
+                  >
+                    <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
+                    <meshStandardMaterial
+                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                      roughness={0.2}
+                      metalness={0.8}
+                    />
+                  </mesh>
+                  {/* Barra asolata posteriore centrale */}
+                  <mesh
+                    castShadow
+                    receiveShadow
+                    position={[0, -h / 2 - t - 0.02, 0]}
                   >
                     <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
                     <meshStandardMaterial
