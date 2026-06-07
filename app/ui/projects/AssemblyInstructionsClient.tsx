@@ -26,35 +26,58 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
   const [itemType, setItemType] = useState<"dritte" | "curve">("dritte");
   const [selectedMaterialId, setSelectedMaterialId] = useState<string>("");
   
-  // Dimensioni standard in cm (default 30x30x250)
-  const [widthCm, setWidthCm] = useState<number>(30);
-  const [heightCm, setHeightCm] = useState<number>(30);
-  const [lengthCm, setLengthCm] = useState<number>(250);
+  // Input testuali per consentire la cancellazione temporanea delle cifre
+  const [widthCmInput, setWidthCmInput] = useState<string>("30");
+  const [heightCmInput, setHeightCmInput] = useState<string>("30");
+  const [lengthCmInput, setLengthCmInput] = useState<string>("250");
+
+  // Calcolo delle dimensioni effettive (numericamente sicure per il motore 3D e i calcoli)
+  const widthCm = useMemo(() => Math.max(10, parseInt(widthCmInput) || 10), [widthCmInput]);
+  const heightCm = useMemo(() => Math.max(10, parseInt(heightCmInput) || 10), [heightCmInput]);
+  const lengthCm = useMemo(() => Math.max(50, parseInt(lengthCmInput) || 50), [lengthCmInput]);
 
   // Step attivo delle istruzioni
   const [currentStep, setCurrentStep] = useState<number>(1);
 
+  const handleBlur = (val: string, setVal: (s: string) => void, min: number, max: number) => {
+    const parsed = parseInt(val);
+    if (isNaN(parsed) || parsed < min) {
+      setVal(min.toString());
+    } else if (parsed > max) {
+      setVal(max.toString());
+    } else {
+      setVal(parsed.toString());
+    }
+  };
+
   useEffect(() => {
     setMounted(true);
-    // Inizializza con il primo materiale se disponibile
+    // Inizializza cercando per default "L500 sp.50"
     if (catalogMaterials.length > 0) {
-      setSelectedMaterialId(catalogMaterials[0].id);
+      const defaultMat = catalogMaterials.find((m) =>
+        m.name.toLowerCase().includes("l500 sp.50")
+      );
+      if (defaultMat) {
+        setSelectedMaterialId(defaultMat.id);
+      } else {
+        setSelectedMaterialId(catalogMaterials[0].id);
+      }
     }
   }, [catalogMaterials]);
 
-  // Materiale selezionato e spessore di default (15mm) se non impostato
+  // Materiale selezionato e spessore di default (50mm per L500 sp.50) se non impostato
   const activeMaterial = useMemo(() => {
     const mat = catalogMaterials.find((m) => m.id === selectedMaterialId);
     if (mat) {
       return {
         name: mat.name,
-        thickness_mm: mat.thickness_mm ?? 15,
+        thickness_mm: mat.thickness_mm ?? 50,
       };
     }
     // Fallback standard
     return {
-      name: "Lastra Silicato Standard",
-      thickness_mm: 15,
+      name: "L500 sp.50",
+      thickness_mm: 50,
     };
   }, [selectedMaterialId, catalogMaterials]);
 
@@ -326,33 +349,30 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-gray-400 uppercase">Foro W (cm)</label>
                   <input
-                    type="number"
-                    min="10"
-                    max="300"
-                    value={widthCm}
-                    onChange={(e) => setWidthCm(Math.max(10, parseInt(e.target.value) || 10))}
+                    type="text"
+                    value={widthCmInput}
+                    onChange={(e) => setWidthCmInput(e.target.value)}
+                    onBlur={() => handleBlur(widthCmInput, setWidthCmInput, 10, 300)}
                     className="w-full px-3 py-2 rounded-xl text-xs bg-black/30 border border-white/10 text-white font-bold"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-gray-400 uppercase">Foro H (cm)</label>
                   <input
-                    type="number"
-                    min="10"
-                    max="300"
-                    value={heightCm}
-                    onChange={(e) => setHeightCm(Math.max(10, parseInt(e.target.value) || 10))}
+                    type="text"
+                    value={heightCmInput}
+                    onChange={(e) => setHeightCmInput(e.target.value)}
+                    onBlur={() => handleBlur(heightCmInput, setHeightCmInput, 10, 300)}
                     className="w-full px-3 py-2 rounded-xl text-xs bg-black/30 border border-white/10 text-white font-bold"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-gray-400 uppercase">Lunghezza L (cm)</label>
                   <input
-                    type="number"
-                    min="50"
-                    max="1000"
-                    value={lengthCm}
-                    onChange={(e) => setLengthCm(Math.max(50, parseInt(e.target.value) || 50))}
+                    type="text"
+                    value={lengthCmInput}
+                    onChange={(e) => setLengthCmInput(e.target.value)}
+                    onBlur={() => handleBlur(lengthCmInput, setLengthCmInput, 50, 1000)}
                     className="w-full px-3 py-2 rounded-xl text-xs bg-black/30 border border-white/10 text-white font-bold"
                   />
                 </div>

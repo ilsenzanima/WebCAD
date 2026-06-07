@@ -33,6 +33,19 @@ export default function Assembly3DViewer({
   const positions = useMemo(() => {
     const explosionOffset = 0.15; // 15 cm di distacco per lo step attivo
 
+    // Posizioni Z per giunto e tappo in base all'orientamento
+    const tappoZ = isVertical
+      ? l / 2 + t / 2 + (currentStep === 5 ? explosionOffset : 0)
+      : -l / 2 - t / 2 - (currentStep === 5 ? explosionOffset : 0);
+
+    const collarZ = isVertical
+      ? -l / 2 - (currentStep === 6 ? explosionOffset : 0)
+      : l / 2 + (currentStep === 6 ? explosionOffset : 0);
+
+    const collarBottomZ = isVertical
+      ? l / 2 + (currentStep === 6 ? explosionOffset : 0)
+      : 0;
+
     return {
       base: [
         0,
@@ -57,11 +70,12 @@ export default function Assembly3DViewer({
       tappo: [
         0,
         0,
-        -l / 2 - t / 2 - (currentStep === 5 ? explosionOffset : 0),
+        tappoZ,
       ] as [number, number, number],
-      collarZ: l / 2 + (currentStep === 6 ? explosionOffset : 0),
+      collarZ,
+      collarBottomZ,
     };
-  }, [w, h, t, l, currentStep]);
+  }, [w, h, t, l, currentStep, isVertical]);
 
   // Colori dei materiali
   const colors = {
@@ -168,48 +182,54 @@ export default function Assembly3DViewer({
                 </group>
               )}
 
-              {/* Fissaggi verticali a muro / Barre asolate a parete (se verticale) */}
+              {/* Fissaggi verticali a muro / Staffe antiribaltamento (se verticale) */}
               {isVertical && (
                 <group>
-                  {/* Barra asolata posteriore 1 */}
-                  <mesh
-                    castShadow
-                    receiveShadow
-                    position={[0, -h / 2 - t - 0.02, -l / 2 + 0.5]}
-                  >
-                    <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
-                    <meshStandardMaterial
-                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
-                      roughness={0.2}
-                      metalness={0.8}
-                    />
-                  </mesh>
-                  {/* Barra asolata posteriore centrale */}
-                  <mesh
-                    castShadow
-                    receiveShadow
-                    position={[0, -h / 2 - t - 0.02, 0]}
-                  >
-                    <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
-                    <meshStandardMaterial
-                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
-                      roughness={0.2}
-                      metalness={0.8}
-                    />
-                  </mesh>
-                  {/* Barra asolata posteriore 2 */}
-                  <mesh
-                    castShadow
-                    receiveShadow
-                    position={[0, -h / 2 - t - 0.02, l / 2 - 0.5]}
-                  >
-                    <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
-                    <meshStandardMaterial
-                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
-                      roughness={0.2}
-                      metalness={0.8}
-                    />
-                  </mesh>
+                  {[-l / 2 + 0.5, 0, l / 2 - 0.5].map((zPos, idx) => (
+                    <group key={idx}>
+                      {/* Barra asolata frontale */}
+                      <mesh
+                        castShadow
+                        receiveShadow
+                        position={[0, h / 2 + t + 0.02, zPos]}
+                      >
+                        <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
+                        <meshStandardMaterial
+                          color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                          roughness={0.2}
+                          metalness={0.8}
+                        />
+                      </mesh>
+
+                      {/* Staffa laterale sinistra (antiribaltamento) */}
+                      <mesh
+                        castShadow
+                        receiveShadow
+                        position={[-w / 2 - t - 0.01, 0, zPos]}
+                      >
+                        <boxGeometry args={[0.02, h + 2 * t + 0.06, 0.02]} />
+                        <meshStandardMaterial
+                          color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                          roughness={0.2}
+                          metalness={0.8}
+                        />
+                      </mesh>
+
+                      {/* Staffa laterale destra (antiribaltamento) */}
+                      <mesh
+                        castShadow
+                        receiveShadow
+                        position={[w / 2 + t + 0.01, 0, zPos]}
+                      >
+                        <boxGeometry args={[0.02, h + 2 * t + 0.06, 0.02]} />
+                        <meshStandardMaterial
+                          color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                          roughness={0.2}
+                          metalness={0.8}
+                        />
+                      </mesh>
+                    </group>
+                  ))}
                 </group>
               )}
             </group>
@@ -280,49 +300,98 @@ export default function Assembly3DViewer({
             </mesh>
           )}
 
-          {/* STEP 6: Giunto coprigiunto esterno (largo 200mm) */}
+          {/* STEP 6: Giunto coprigiunto esterno (largo da 10 a 20 cm) */}
           {currentStep >= 6 && (
             <group>
-              {/* Bottom collar piece */}
-              <mesh castShadow receiveShadow position={[0, -h / 2 - 1.5 * t, positions.collarZ]}>
-                <boxGeometry args={[w + 4 * t, t, 0.2]} />
-                <meshStandardMaterial
-                  color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
-                  roughness={0.8}
-                  transparent={currentStep === 6}
-                  opacity={currentStep === 6 ? 0.85 : 1}
-                />
-              </mesh>
-              {/* Top collar piece */}
-              <mesh castShadow receiveShadow position={[0, h / 2 + 1.5 * t, positions.collarZ]}>
-                <boxGeometry args={[w + 4 * t, t, 0.2]} />
-                <meshStandardMaterial
-                  color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
-                  roughness={0.8}
-                  transparent={currentStep === 6}
-                  opacity={currentStep === 6 ? 0.85 : 1}
-                />
-              </mesh>
-              {/* Left collar piece */}
-              <mesh castShadow receiveShadow position={[-w / 2 - 1.5 * t, 0, positions.collarZ]}>
-                <boxGeometry args={[t, h + 2 * t, 0.2]} />
-                <meshStandardMaterial
-                  color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
-                  roughness={0.8}
-                  transparent={currentStep === 6}
-                  opacity={currentStep === 6 ? 0.85 : 1}
-                />
-              </mesh>
-              {/* Right collar piece */}
-              <mesh castShadow receiveShadow position={[w / 2 + 1.5 * t, 0, positions.collarZ]}>
-                <boxGeometry args={[t, h + 2 * t, 0.2]} />
-                <meshStandardMaterial
-                  color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
-                  roughness={0.8}
-                  transparent={currentStep === 6}
-                  opacity={currentStep === 6 ? 0.85 : 1}
-                />
-              </mesh>
+              {/* Giunto 1 (all'estremità o in alto) */}
+              <group>
+                {/* Bottom collar piece */}
+                <mesh castShadow receiveShadow position={[0, -h / 2 - 1.5 * t, positions.collarZ]}>
+                  <boxGeometry args={[w + 4 * t, t, 0.2]} />
+                  <meshStandardMaterial
+                    color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
+                    roughness={0.8}
+                    transparent={currentStep === 6}
+                    opacity={currentStep === 6 ? 0.85 : 1}
+                  />
+                </mesh>
+                {/* Top collar piece */}
+                <mesh castShadow receiveShadow position={[0, h / 2 + 1.5 * t, positions.collarZ]}>
+                  <boxGeometry args={[w + 4 * t, t, 0.2]} />
+                  <meshStandardMaterial
+                    color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
+                    roughness={0.8}
+                    transparent={currentStep === 6}
+                    opacity={currentStep === 6 ? 0.85 : 1}
+                  />
+                </mesh>
+                {/* Left collar piece */}
+                <mesh castShadow receiveShadow position={[-w / 2 - 1.5 * t, 0, positions.collarZ]}>
+                  <boxGeometry args={[t, h + 2 * t, 0.2]} />
+                  <meshStandardMaterial
+                    color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
+                    roughness={0.8}
+                    transparent={currentStep === 6}
+                    opacity={currentStep === 6 ? 0.85 : 1}
+                  />
+                </mesh>
+                {/* Right collar piece */}
+                <mesh castShadow receiveShadow position={[w / 2 + 1.5 * t, 0, positions.collarZ]}>
+                  <boxGeometry args={[t, h + 2 * t, 0.2]} />
+                  <meshStandardMaterial
+                    color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
+                    roughness={0.8}
+                    transparent={currentStep === 6}
+                    opacity={currentStep === 6 ? 0.85 : 1}
+                  />
+                </mesh>
+              </group>
+
+              {/* Giunto 2 (di base a pavimento, solo verticale) */}
+              {isVertical && (
+                <group>
+                  {/* Bottom collar piece */}
+                  <mesh castShadow receiveShadow position={[0, -h / 2 - 1.5 * t, positions.collarBottomZ]}>
+                    <boxGeometry args={[w + 4 * t, t, 0.2]} />
+                    <meshStandardMaterial
+                      color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 6}
+                      opacity={currentStep === 6 ? 0.85 : 1}
+                    />
+                  </mesh>
+                  {/* Top collar piece */}
+                  <mesh castShadow receiveShadow position={[0, h / 2 + 1.5 * t, positions.collarBottomZ]}>
+                    <boxGeometry args={[w + 4 * t, t, 0.2]} />
+                    <meshStandardMaterial
+                      color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 6}
+                      opacity={currentStep === 6 ? 0.85 : 1}
+                    />
+                  </mesh>
+                  {/* Left collar piece */}
+                  <mesh castShadow receiveShadow position={[-w / 2 - 1.5 * t, 0, positions.collarBottomZ]}>
+                    <boxGeometry args={[t, h + 2 * t, 0.2]} />
+                    <meshStandardMaterial
+                      color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 6}
+                      opacity={currentStep === 6 ? 0.85 : 1}
+                    />
+                  </mesh>
+                  {/* Right collar piece */}
+                  <mesh castShadow receiveShadow position={[w / 2 + 1.5 * t, 0, positions.collarBottomZ]}>
+                    <boxGeometry args={[t, h + 2 * t, 0.2]} />
+                    <meshStandardMaterial
+                      color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 6}
+                      opacity={currentStep === 6 ? 0.85 : 1}
+                    />
+                  </mesh>
+                </group>
+              )}
             </group>
           )}
         </group>
