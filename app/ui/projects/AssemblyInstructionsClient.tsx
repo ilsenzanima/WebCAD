@@ -16,9 +16,10 @@ interface Props {
     name: string;
   };
   catalogMaterials: Material[];
+  variant?: "con-giunto" | "senza-giunto";
 }
 
-export default function AssemblyInstructionsClient({ project, catalogMaterials }: Props) {
+export default function AssemblyInstructionsClient({ project, catalogMaterials, variant = "con-giunto" }: Props) {
   const [mounted, setMounted] = useState(false);
 
   // Stati del configuratore
@@ -108,116 +109,217 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
     q: 2,
   };
 
-  // Definizione dei passaggi in base all'orientamento
+  // Definizione dei passaggi in base all'orientamento e alla variante (con-giunto o senza-giunto)
   const steps = useMemo(() => {
+    const isWithJoint = variant === "con-giunto";
+
     if (isHorizontal) {
-      return [
-        {
-          num: 1,
-          title: "🛠️ Struttura di Sostegno",
-          desc: "Fissa i pendini di sospensione a soffitto/parete adeguate al peso e posiziona le barre asolate di supporto livellandole accuratamente per l'appoggio della canalizzazione.",
-          materials: ["Barre asolate di supporto", "Pendini filettati di sospensione (max 1 metro di distanza)", "Tasselli e ancoranti per calcestruzzo/laterizio"],
-        },
-        {
-          num: 2,
-          title: "🧱 Lastra Inferiore (Fondo)",
-          desc: `Taglia la lastra di fondo con larghezza pari a ${widthCm + 2 * thicknessCm} cm (Foro interno ${widthCm} cm + 2 spessori da ${thicknessCm} cm) e lunghezza ${lengthCm} cm. Appoggiala e fissala sulle barre asolate di supporto.`,
-          materials: [`1x Lastra Fondo: ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
-        },
-        {
-          num: 3,
-          title: "📐 Lastre Fianchi (Laterali)",
-          desc: `Taglia le 2 lastre dei fianchi laterali con altezza pari a ${heightCm} cm e lunghezza ${lengthCm} cm. Posizionale sopra la lastra di fondo e fissale meccanicamente con viti adeguate.`,
-          materials: [`2x Lastre Fianchi: ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
-        },
-        {
-          num: 4,
-          title: "🔒 Chiusura Superiore (Coperchio)",
-          desc: `Taglia la lastra superiore (coperchio alto) con larghezza pari a ${widthCm + 2 * thicknessCm} cm e lunghezza ${lengthCm} cm. Posizionala a chiusura superiore del canale e avvitala stabilmente per sigillare la canalizzazione.`,
-          materials: [`1x Lastra Coperchio: ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
-        },
-        {
-          num: 5,
-          title: "🛑 Tappo Terminale di Chiusura (Facoltativo)",
-          desc: `Taglia il tappo di chiusura terminale con larghezza pari a ${widthCm + 2 * thicknessCm} cm e altezza pari a ${heightCm + 2 * thicknessCm} cm. Posizionalo all'estremità del canale per completare la chiusura e sigillare il lavoro.`,
-          materials: [`1x Tappo Terminale: ${widthCm + 2 * thicknessCm} x ${heightCm + 2 * thicknessCm} cm (Spessore: ${thicknessMm} mm)`],
-        },
-        {
-          num: 6,
-          title: "🔗 Giunto Coprigiunto Esterno",
-          desc: "Applica il giunto esterno largo da 10 a 20 cm a cavallo dell'estremità di uscita per unire le tratte della canalizzazione. Taglia i 4 pezzi coprigiunto dallo stesso materiale per fare tutto il giro esterno.",
-          materials: [
-            `2x Coprigiunto Orizzontale (Sopra/Sotto): ${widthCm + 4 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
-            `2x Coprigiunto Verticale (Fianchi): ${heightCm + 2 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
-          ],
-        },
-        {
-          num: 7,
-          title: "✅ Canalizzazione Completata",
-          desc: "La canalizzazione è ora completata con tutte le staffe, i pannelli di rivestimento sigillati, il tappo di chiusura e la cornice del giunto esterno montata in posizione definitiva.",
-          materials: ["Canalizzazione assemblata e pronta all'uso"],
-        },
-      ];
+      if (isWithJoint) {
+        return [
+          {
+            num: 1,
+            title: "🛠️ Struttura di Sostegno",
+            desc: "Fissa i pendini di sospensione a soffitto/parete adeguate al peso e posiziona le barre asolate di supporto livellandole accuratamente per l'appoggio della canalizzazione.",
+            materials: ["Barre asolate di supporto", "Pendini filettati di sospensione (max 1 metro di distanza)", "Tasselli e ancoranti per calcestruzzo/laterizio"],
+          },
+          {
+            num: 2,
+            title: "🧱 Lastra Inferiore (Fondo)",
+            desc: `Taglia la lastra di fondo con larghezza pari a ${widthCm + 2 * thicknessCm} cm (Foro interno ${widthCm} cm + 2 spessori da ${thicknessCm} cm) e lunghezza ${lengthCm} cm. Appoggiala e fissala sulle barre asolate di supporto.`,
+            materials: [`1x Lastra Fondo: ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 3,
+            title: "📐 Lastre Fianchi (Laterali)",
+            desc: `Taglia le 2 lastre dei fianchi laterali con altezza pari a ${heightCm} cm e lunghezza ${lengthCm} cm. Posizionale sopra la lastra di fondo e fissale meccanicamente con viti adeguate.`,
+            materials: [`2x Lastre Fianchi: ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 4,
+            title: "🔒 Chiusura Superiore (Coperchio)",
+            desc: `Taglia la lastra superiore (coperchio alto) con larghezza pari a ${widthCm + 2 * thicknessCm} cm e lunghezza ${lengthCm} cm. Posizionala a chiusura superiore del canale e avvitala stabilmente per sigillare la canalizzazione.`,
+            materials: [`1x Lastra Coperchio: ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 5,
+            title: "🛑 Tappo Terminale di Chiusura (Facoltativo)",
+            desc: `Taglia il tappo di chiusura terminale con larghezza pari a ${widthCm + 2 * thicknessCm} cm e altezza pari a ${heightCm + 2 * thicknessCm} cm. Posizionalo all'estremità del canale per completare la chiusura e sigillare il lavoro.`,
+            materials: [`1x Tappo Terminale: ${widthCm + 2 * thicknessCm} x ${heightCm + 2 * thicknessCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 6,
+            title: "🔗 Giunto Coprigiunto Esterno",
+            desc: "Applica il giunto esterno largo da 10 a 20 cm a cavallo dell'estremità di uscita per unire le tratte della canalizzazione. Taglia i 4 pezzi coprigiunto dallo stesso materiale per fare tutto il giro esterno.",
+            materials: [
+              `2x Coprigiunto Orizzontale (Sopra/Sotto): ${widthCm + 4 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
+              `2x Coprigiunto Verticale (Fianchi): ${heightCm + 2 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
+            ],
+          },
+          {
+            num: 7,
+            title: "✅ Canalizzazione Completata",
+            desc: "La canalizzazione è ora completata con tutte le staffe, i pannelli di rivestimento sigillati, il tappo di chiusura e la cornice del giunto esterno montata in posizione definitiva.",
+            materials: ["Canalizzazione assemblata e pronta all'uso"],
+          },
+        ];
+      } else {
+        // Orizzontale senza giunto (sfalsato)
+        return [
+          {
+            num: 1,
+            title: "🛠️ Struttura di Sostegno",
+            desc: "Fissa i pendini di sospensione a soffitto/parete adeguate al peso e posiziona le barre asolate di supporto livellandole accuratamente per l'appoggio della canalizzazione.",
+            materials: ["Barre asolate di supporto", "Pendini filettati di sospensione (max 1 metro di distanza)", "Tasselli e ancoranti per calcestruzzo/laterizio"],
+          },
+          {
+            num: 2,
+            title: "🧱 Lastra Inferiore (Fondo Sfalsato)",
+            desc: `Taglia la prima lastra di fondo a metà lunghezza pari a ${lengthCm / 2} cm e larghezza ${widthCm + 2 * thicknessCm} cm. Appoggiala e fissala sulle barre asolate. Le successive tratte utilizzeranno lastre intere per sfalsare i giunti.`,
+            materials: [`1x Lastra Fondo (Mezza): ${widthCm + 2 * thicknessCm} x ${lengthCm / 2} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 3,
+            title: "📐 Lastre Fianchi (Laterali Sfalsati)",
+            desc: `Taglia il fianco sinistro a metà lunghezza pari a ${lengthCm / 2} cm. Il fianco destro va tagliato e montato a lunghezza intera pari a ${lengthCm} cm. Questa disposizione sfalsata garantisce la tenuta strutturale.`,
+            materials: [
+              `1x Fianco Sinistro (Mezzo): ${heightCm} x ${lengthCm / 2} cm (Spessore: ${thicknessMm} mm)`,
+              `1x Fianco Destro (Intero): ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+            ],
+          },
+          {
+            num: 4,
+            title: "🔒 Chiusura Superiore (Coperchio Intero)",
+            desc: `Taglia la lastra superiore (coperchio) a lunghezza intera pari a ${lengthCm} cm e larghezza ${widthCm + 2 * thicknessCm} cm. Posizionala a chiusura del canale a cavallo dei giunti inferiori per sigillare il canale.`,
+            materials: [`1x Lastra Coperchio (Intera): ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 5,
+            title: "🛑 Tappo Terminale di Chiusura (Facoltativo)",
+            desc: `Taglia il tappo di chiusura terminale con larghezza pari a ${widthCm + 2 * thicknessCm} cm e altezza pari a ${heightCm + 2 * thicknessCm} cm. Posizionalo all'estremità per chiudere il cavedio.`,
+            materials: [`1x Tappo Terminale: ${widthCm + 2 * thicknessCm} x ${heightCm + 2 * thicknessCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 6,
+            title: "✅ Canalizzazione Completata",
+            desc: "La canalizzazione con giunti sfalsati (senza coprigiunti esterni) è ora completata. Le lastre sfalsate garantiscono la tenuta senza spessori esterni.",
+            materials: ["Canalizzazione assemblata e pronta all'uso"],
+          },
+        ];
+      }
     } else {
       // Verticale
-      return [
-        {
-          num: 1,
-          title: "🛠️ Staffaggio a Parete",
-          desc: "Traccia la linea di sviluppo verticale a parete. Installa le barre asolate di supporto a parete per fissare saldamente la canalizzazione.",
-          materials: ["Barre asolate di supporto", "Tasselli di ancoraggio e staffe di supporto"],
-        },
-        {
-          num: 2,
-          title: "🧱 Lastra Posteriore (Schiena)",
-          desc: `Taglia la lastra posteriore (schiena) con larghezza pari a ${widthCm + 2 * thicknessCm} cm (Foro interno ${widthCm} cm + 2 spessori da ${thicknessCm} cm) e altezza ${lengthCm} cm. Fissala sulle barre asolate di supporto.`,
-          materials: [`1x Lastra Schiena: ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
-        },
-        {
-          num: 3,
-          title: "📐 Lastre Fianchi (Laterali)",
-          desc: `Taglia le 2 lastre laterali dei fianchi con larghezza pari a ${heightCm} cm e altezza ${lengthCm} cm. Fissale a sormonto sulla lastra posteriore.`,
-          materials: [`2x Lastre Laterali: ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
-        },
-        {
-          num: 4,
-          title: "🔒 Chiusura Anteriore (Fronte)",
-          desc: `Taglia la lastra frontale con larghezza pari a ${widthCm + 2 * thicknessCm} cm e altezza ${lengthCm} cm. Posizionala sul lato anteriore e avvitala per chiudere e sigillare la canalizzazione verticale.`,
-          materials: [`1x Lastra Frontale: ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
-        },
-        {
-          num: 5,
-          title: "🛑 Tappo Terminale di Chiusura (Facoltativo)",
-          desc: `Taglia il tappo di chiusura terminale con larghezza pari a ${widthCm + 2 * thicknessCm} cm e altezza pari a ${heightCm + 2 * thicknessCm} cm. Posizionalo all'estremità superiore per chiudere la testa della canalizzazione.`,
-          materials: [`1x Tappo Terminale: ${widthCm + 2 * thicknessCm} x ${heightCm + 2 * thicknessCm} cm (Spessore: ${thicknessMm} mm)`],
-        },
-        {
-          num: 6,
-          title: "🔗 Giunto Coprigiunto in Alto",
-          desc: "Applica il giunto esterno superiore largo da 10 a 20 cm a cavallo dell'estremità superiore per unire le tratte della canalizzazione verticale. Taglia i 4 pezzi coprigiunto dallo stesso materiale per fare tutto il giro esterno.",
-          materials: [
-            `2x Coprigiunto Fronte/Retro: ${widthCm + 4 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
-            `2x Coprigiunto Laterale (Fianchi): ${heightCm + 2 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
-          ],
-        },
-        {
-          num: 7,
-          title: "🔗 Giunto di Sostegno a Pavimento",
-          desc: "Installa il giunto di base a contatto con il pavimento (nella parte inferiore) in modo da distribuire il carico e dare stabilità e sostegno alla base della canalizzazione.",
-          materials: [
-            `2x Coprigiunto Fronte/Retro: ${widthCm + 4 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
-            `2x Coprigiunto Laterale (Fianchi): ${heightCm + 2 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
-          ],
-        },
-        {
-          num: 8,
-          title: "✅ Canalizzazione Completata",
-          desc: "La canalizzazione verticale è ora completata con lo staffaggio a parete, le lastre sigillate, il tappo inferiore di chiusura e i due giunti esterni montati in posizione definitiva.",
-          materials: ["Canalizzazione assemblata e pronta all'uso"],
-        },
-      ];
+      if (isWithJoint) {
+        return [
+          {
+            num: 1,
+            title: "🛠️ Staffaggio a Parete",
+            desc: "Traccia la linea di sviluppo verticale a parete. Installa le barre asolate di supporto a parete per fissare saldamente la canalizzazione.",
+            materials: ["Barre asolate di supporto", "Tasselli di ancoraggio e staffe di supporto"],
+          },
+          {
+            num: 2,
+            title: "🧱 Lastra Posteriore (Schiena)",
+            desc: `Taglia la lastra posteriore (schiena) con larghezza pari a ${widthCm + 2 * thicknessCm} cm (Foro interno ${widthCm} cm + 2 spessori da ${thicknessCm} cm) e altezza ${lengthCm} cm. Fissala sulle barre asolate di supporto.`,
+            materials: [`1x Lastra Schiena: ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 3,
+            title: "📐 Lastre Fianchi (Laterali)",
+            desc: `Taglia le 2 lastre laterali dei fianchi con larghezza pari a ${heightCm} cm e altezza ${lengthCm} cm. Fissale a sormonto sulla lastra posteriore.`,
+            materials: [`2x Lastre Laterali: ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 4,
+            title: "🔒 Chiusura Anteriore (Fronte)",
+            desc: `Taglia la lastra frontale con larghezza pari a ${widthCm + 2 * thicknessCm} cm e altezza ${lengthCm} cm. Posizionala sul lato anteriore e avvitala per chiudere e sigillare la canalizzazione verticale.`,
+            materials: [`1x Lastra Frontale: ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 5,
+            title: "🛑 Tappo Terminale di Chiusura (Facoltativo)",
+            desc: `Taglia il tappo di chiusura terminale con larghezza pari a ${widthCm + 2 * thicknessCm} cm e altezza pari a ${heightCm + 2 * thicknessCm} cm. Posizionalo all'estremità superiore per chiudere la testa della canalizzazione.`,
+            materials: [`1x Tappo Terminale: ${widthCm + 2 * thicknessCm} x ${heightCm + 2 * thicknessCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 6,
+            title: "🔗 Giunto Coprigiunto in Alto",
+            desc: "Applica il giunto esterno superiore largo da 10 a 20 cm a cavallo dell'estremità superiore per unire le tratte della canalizzazione verticale. Taglia i 4 pezzi coprigiunto dallo stesso materiale per fare tutto il giro esterno.",
+            materials: [
+              `2x Coprigiunto Fronte/Retro: ${widthCm + 4 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
+              `2x Coprigiunto Laterale (Fianchi): ${heightCm + 2 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
+            ],
+          },
+          {
+            num: 7,
+            title: "🔗 Giunto di Sostegno a Pavimento",
+            desc: "Installa il giunto di base a contatto con il pavimento (nella parte inferiore) in modo da distribuire il carico e dare stabilità e sostegno alla base della canalizzazione.",
+            materials: [
+              `2x Coprigiunto Fronte/Retro: ${widthCm + 4 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
+              `2x Coprigiunto Laterale (Fianchi): ${heightCm + 2 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
+            ],
+          },
+          {
+            num: 8,
+            title: "✅ Canalizzazione Completata",
+            desc: "La canalizzazione verticale è ora completata con lo staffaggio a parete, le lastre sigillate, il tappo inferiore di chiusura e i due giunti esterni montati in posizione definitiva.",
+            materials: ["Canalizzazione assemblata e pronta all'uso"],
+          },
+        ];
+      } else {
+        // Verticale senza giunto (sfalsato)
+        return [
+          {
+            num: 1,
+            title: "🛠️ Staffaggio a Parete",
+            desc: "Traccia la linea di sviluppo verticale a parete. Installa le barre asolate di supporto a parete per fissare saldamente la canalizzazione.",
+            materials: ["Barre asolate di supporto", "Tasselli di ancoraggio e staffe di supporto"],
+          },
+          {
+            num: 2,
+            title: "🧱 Lastra Posteriore (Schiena Sfalsata)",
+            desc: `Taglia la prima lastra posteriore (schiena) a metà altezza pari a ${lengthCm / 2} cm e larghezza ${widthCm + 2 * thicknessCm} cm. Fissala sulle barre asolate.`,
+            materials: [`1x Lastra Schiena (Mezza): ${widthCm + 2 * thicknessCm} x ${lengthCm / 2} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 3,
+            title: "📐 Lastre Fianchi (Laterali Sfalsati)",
+            desc: `Taglia il fianco sinistro a metà altezza pari a ${lengthCm / 2} cm. Il fianco destro va tagliato e montato ad altezza intera pari a ${lengthCm} cm. Questa disposizione sfalsata garantisce la stabilità meccanica.`,
+            materials: [
+              `1x Fianco Sinistro (Mezzo): ${heightCm} x ${lengthCm / 2} cm (Spessore: ${thicknessMm} mm)`,
+              `1x Fianco Destro (Intero): ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+            ],
+          },
+          {
+            num: 4,
+            title: "🔒 Chiusura Anteriore (Fronte Intero)",
+            desc: `Taglia la lastra frontale ad altezza intera pari a ${lengthCm} cm e larghezza ${widthCm + 2 * thicknessCm} cm. Avvitala sul lato anteriore per chiudere il cavedio verticale.`,
+            materials: [`1x Lastra Frontale (Intera): ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 5,
+            title: "🛑 Tappo Terminale di Chiusura (Facoltativo)",
+            desc: `Taglia il tappo di chiusura terminale con larghezza pari a ${widthCm + 2 * thicknessCm} cm e altezza pari a ${heightCm + 2 * thicknessCm} cm. Posizionalo all'estremità inferiore per chiudere la testa della canalizzazione.`,
+            materials: [`1x Tappo Terminale: ${widthCm + 2 * thicknessCm} x ${heightCm + 2 * thicknessCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 6,
+            title: "🔗 Giunto di Sostegno a Pavimento",
+            desc: "Installa il giunto di base a contatto con il pavimento (nella parte inferiore) in modo da distribuire il carico e dare stabilità e sostegno alla base della canalizzazione verticale.",
+            materials: [
+              `2x Coprigiunto Fronte/Retro: ${widthCm + 4 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
+              `2x Coprigiunto Laterale (Fianchi): ${heightCm + 2 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
+            ],
+          },
+          {
+            num: 7,
+            title: "✅ Canalizzazione Completata",
+            desc: "La canalizzazione verticale con giunti sfalsati (senza coprigiunto superiore) è ora completata con lo staffaggio, il tappo inferiore e il giunto di stabilizzazione a pavimento.",
+            materials: ["Canalizzazione assemblata e pronta all'uso"],
+          },
+        ];
+      }
     }
-  }, [isHorizontal, widthCm, heightCm, lengthCm, thicknessCm, thicknessMm]);
+  }, [isHorizontal, variant, widthCm, heightCm, lengthCm, thicknessCm, thicknessMm]);
 
   return (
     <div className="min-h-screen w-full flex flex-col p-4 md:p-6 text-white"
@@ -228,8 +330,8 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
       {/* Header navigazione */}
       <div className="w-full flex items-center justify-between pb-4 border-b border-white/5">
         <div className="flex items-center gap-3">
-          <Link href={project.id ? `/projects/${project.id}` : "/projects"} className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-white transition-colors">
-            ← Torna al Progetto
+          <Link href="/projects/istruzioni" className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-white transition-colors">
+            ← Torna alle Istruzioni
           </Link>
           <span className="text-gray-500">/</span>
           <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Archivio Istruzioni di Montaggio</span>
@@ -300,6 +402,7 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
                 length={lMm}
                 thickness={thicknessMm}
                 currentStep={currentStep}
+                variant={variant}
               />
             ) : (
               <div className="text-xs text-gray-500 font-bold animate-pulse">
@@ -449,14 +552,37 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
               {/* Distinta Taglio di Sintesi */}
               <div className="p-3.5 rounded-xl bg-black/20 border border-white/5 text-[10px] space-y-1.5 font-mono text-gray-400">
                 <div className="text-white font-bold mb-1">📐 DISTINTA DI TAGLIO PRECOMPILATA:</div>
-                <div className="flex justify-between">
-                  <span>• Fianchi (Laterali):</span>
-                  <span className="text-white font-bold">{dimFianchi.q}x {dimFianchi.w} x {dimFianchi.l} mm</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>• Coperchi (Fondo/Soffitto):</span>
-                  <span className="text-white font-bold">{dimCoperchi.q}x {dimCoperchi.w} x {dimCoperchi.l} mm</span>
-                </div>
+                {variant === "senza-giunto" ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span>• Fianco Sinistro (Dimezzato):</span>
+                      <span className="text-white font-bold">1x {dimFianchi.w} x {dimFianchi.l / 2} mm</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>• Fianco Destro (Intero):</span>
+                      <span className="text-white font-bold">1x {dimFianchi.w} x {dimFianchi.l} mm</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>• Fondo (Dimezzato):</span>
+                      <span className="text-white font-bold">1x {dimCoperchi.w} x {dimCoperchi.l / 2} mm</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>• Coperchio (Intero):</span>
+                      <span className="text-white font-bold">1x {dimCoperchi.w} x {dimCoperchi.l} mm</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between">
+                      <span>• Fianchi (Laterali):</span>
+                      <span className="text-white font-bold">{dimFianchi.q}x {dimFianchi.w} x {dimFianchi.l} mm</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>• Coperchi (Fondo/Soffitto):</span>
+                      <span className="text-white font-bold">{dimCoperchi.q}x {dimCoperchi.w} x {dimCoperchi.l} mm</span>
+                    </div>
+                  </>
+                )}
                 <div className="text-[9px] text-gray-500 italic mt-1.5">
                   Nota: calcolo basato su foro {widthCm}x{heightCm}cm, spessore {thicknessMm}mm.
                 </div>
