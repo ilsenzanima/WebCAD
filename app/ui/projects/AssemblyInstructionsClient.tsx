@@ -184,7 +184,7 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
       {/* Header navigazione */}
       <div className="w-full flex items-center justify-between pb-4 border-b border-white/5">
         <div className="flex items-center gap-3">
-          <Link href={`/projects/${project.id}`} className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-white transition-colors">
+          <Link href={project.id ? `/projects/${project.id}` : "/projects"} className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-white transition-colors">
             ← Torna al Progetto
           </Link>
           <span className="text-gray-500">/</span>
