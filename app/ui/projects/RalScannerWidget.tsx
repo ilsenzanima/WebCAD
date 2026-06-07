@@ -118,7 +118,7 @@ export default function RalScannerWidget({
     const canvas = canvasRef.current || document.createElement("canvas");
     canvas.width = 160;
     canvas.height = 120;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) return;
 
     // Disegna il video scalato sul canvas
