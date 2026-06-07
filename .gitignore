@@ -58,3 +58,6 @@ design_handoff_webcad_mobile/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# scratch folder
+scratch/

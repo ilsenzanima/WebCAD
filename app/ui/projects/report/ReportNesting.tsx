@@ -55,7 +55,7 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
       const result: { w: number; h: number }[] = [];
       let remainingH = h;
       let loops = 0;
-      while (remainingH > 0 && loops < 100) {
+      while (remainingH > 0 && loops < 6) {
         loops++;
         const currentH = Math.min(remainingH, maxH);
         result.push(...splitPiece(w, currentH, sW, sH, depth + 1));
@@ -76,7 +76,7 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
       const result: { w: number; h: number }[] = [];
       let remainingW = w;
       let loops = 0;
-      while (remainingW > 0 && loops < 100) {
+      while (remainingW > 0 && loops < 6) {
         loops++;
         const currentW = Math.min(remainingW, maxW);
         result.push(...splitPiece(currentW, h, sW, sH, depth + 1));
@@ -86,11 +86,18 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
     }
   };
 
+  let isCapped = false;
+
   // A. Estrazione materiali dalle Lastre 2D estruse in 3D
   allWalls.forEach((w) => {
+    if (sheetRequests.length >= 300) {
+      isCapped = true;
+      return;
+    }
     const dx = w.x2 - w.x1;
     const dy = w.y2 - w.y1;
-    const lenMm = Math.round(Math.sqrt(dx * dx + dy * dy) * 10); // in mm (1px = 10mm)
+    const rawLenMm = Math.round(Math.sqrt(dx * dx + dy * dy) * 10);
+    const lenMm = Math.min(30000, rawLenMm); // limitiamo a max 30m
     
     if (isNaN(lenMm) || lenMm <= 0) return;
 
@@ -99,14 +106,18 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
     // - Una lunghezza pari alla profondità di estrusione w.height (es: 3000mm)
     // Se la lunghezza di estrusione supera l'altezza del pannello commerciale (commercialSheetH = 2000mm),
     // spezziamo il pezzo longitudinalmente (es. un pezzo da 2000mm e uno da 1000mm).
-    let remainingLength = w.height || 3000;
+    let remainingLength = Math.min(10000, w.height || 3000); // limitiamo a max 10m
     if (isNaN(remainingLength) || remainingLength <= 0) remainingLength = 3000;
 
     let wallLoops = 0;
-    while (remainingLength > 0 && wallLoops < 100) {
+    while (remainingLength > 0 && wallLoops < 10) {
       wallLoops++;
       const currentPieceLen = Math.min(remainingLength, commercialSheetH);
       remainingLength -= currentPieceLen;
+      if (sheetRequests.length >= 300) {
+        isCapped = true;
+        break;
+      }
       sheetRequests.push({
         width: lenMm,
         height: currentPieceLen,
@@ -118,6 +129,10 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
   // A.2 Estrazione materiali dalle Note di Cantiere ("Pezzi da Tagliare")
   notes.forEach((note) => {
     (note.field_note_items ?? []).forEach((item) => {
+      if (sheetRequests.length >= 300) {
+        isCapped = true;
+        return;
+      }
       if (item.item_type === "dim_quadrata" && item.value_text) {
         try {
           const parsed = JSON.parse(item.value_text);
@@ -125,13 +140,18 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
           const isCut = parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null);
           if (!isCut) return;
 
-          const b = parseFloat(parsed.b);
-          const h = parseFloat(parsed.h);
-          // Cap a 200 pezzi per evitare blocchi per input errati
-          const q = Math.min(200, parseInt(parsed.q) || 1);
+          // Limitiamo a max 15m (1500cm) per evitare valori di test esagerati
+          const maxAllowedDimCm = 1500;
+          const parsedB = parseFloat(parsed.b);
+          const parsedH = parseFloat(parsed.h);
+          const b = isNaN(parsedB) ? 0 : Math.min(maxAllowedDimCm, parsedB);
+          const h = isNaN(parsedH) ? 0 : Math.min(maxAllowedDimCm, parsedH);
+          
+          // Cap a 50 pezzi per evitare blocchi per input errati
+          const q = Math.min(50, parseInt(parsed.q) || 1);
           const unit = parsed.unit || "cm";
 
-          if (!isNaN(b) && !isNaN(h) && b > 0 && h > 0 && isFinite(b) && isFinite(h)) {
+          if (b > 0 && h > 0 && isFinite(b) && isFinite(h)) {
             // Conversione in mm (1 cm = 10 mm)
             const factor = unit === "cm" ? 10 : 1;
             const wMm = Math.round(b * factor);
@@ -139,7 +159,15 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
 
             const splitPieces = splitPiece(wMm, hMm, commercialSheetW, commercialSheetH);
             for (let i = 0; i < q; i++) {
+              if (sheetRequests.length >= 300) {
+                isCapped = true;
+                break;
+              }
               splitPieces.forEach((sp) => {
+                if (sheetRequests.length >= 300) {
+                  isCapped = true;
+                  return;
+                }
                 sheetRequests.push({
                   width: sp.w,
                   height: sp.h,
@@ -321,8 +349,9 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
       let bestFrX = 0;
       let bestFrW = 0;
 
-      // Cerca la migliore collocazione tra tutti i fogli attuali
-      for (let s = 0; s < boards.length; s++) {
+      // Cerca la migliore collocazione solo negli ultimi 5 fogli per evitare rallentamenti O(N^2)
+      const startBoard = Math.max(0, boards.length - 5);
+      for (let s = startBoard; s < boards.length; s++) {
         const rects = freeRectsByBoard[s];
         for (let r = 0; r < rects.length; r++) {
           const fr = rects[r];
@@ -485,6 +514,13 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
 
   return (
     <div className="space-y-8">
+      {/* Banner di avviso se i dati sono stati limitati per sicurezza */}
+      {isCapped && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs leading-relaxed print:text-black print:border-gray-300">
+          ⚠️ <strong>Attenzione:</strong> Il calcolo del nesting è stato limitato a un massimo di 300 pezzi per garantire la stabilità e la velocità del report. Alcuni pezzi di dimensioni fuori scala o quantità eccessive inseriti nelle note sono stati ignorati o ridimensionati.
+        </div>
+      )}
+
       {/* Riepilogo Computo */}
       <div 
         className="p-6 rounded-3xl border print:border-none print:p-0"
