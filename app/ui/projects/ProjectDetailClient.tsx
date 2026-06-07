@@ -533,7 +533,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
           />
         </div>
 
-        {/* Pulsante Report & Ottimizzazione */}
+        {/* Pulsante Report & Ottimizzazione (Disattivato temporaneamente)
         <Link
           href={`/projects/${project.id}/report`}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95 whitespace-nowrap cursor-pointer"
@@ -542,6 +542,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
           <span className="hidden sm:inline">Report Cantiere</span>
           <span className="sm:hidden">Report</span>
         </Link>
+        */}
 
         {/* Pulsante Aggiungi Nota */}
         <button
