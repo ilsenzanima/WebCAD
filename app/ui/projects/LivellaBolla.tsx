@@ -580,13 +580,15 @@ export default function LivellaBolla({ onCapture, onClose }: LivellaBollaProps) 
           /* Calcolatore Fuori Bolla premium interattivo */
           <div className="border-b border-white/10 pb-3.5 mb-1.5 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold text-white/80 tracking-wider">📏 Lunghezza Rilievo</span>
+              <label htmlFor="length-input" className="text-[10px] uppercase font-bold text-white/80 tracking-wider cursor-pointer">📏 Lunghezza Rilievo</label>
               <span className="text-[10px] font-bold text-sky-400 font-mono">
                 Y: {formatOffset(fueraBollaY)} · X: {formatOffset(fueraBollaX)}
               </span>
             </div>
             <div className="flex gap-2">
               <input
+                id="length-input"
+                name="length"
                 type="number"
                 value={lengthValue}
                 onChange={(e) => setLengthValue(Math.max(1, parseFloat(e.target.value) || 0))}

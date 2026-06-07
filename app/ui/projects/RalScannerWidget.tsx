@@ -289,11 +289,14 @@ export default function RalScannerWidget({
             <div className="flex-1 flex flex-col bg-hsl(220 35% 6%) p-3 gap-2 overflow-hidden">
               {/* Campo di ricerca */}
               <input
+                id="ral-search-input"
+                name="ral-search"
                 type="text"
                 placeholder="Cerca codice o nome (es. 7016, Antracite)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full px-3 py-2 rounded-xl text-xs outline-none bg-white/5 border border-white/10 text-white placeholder-white/30"
+                aria-label="Cerca codice colore RAL"
               />
 
               {/* Elenco Colori Filtrati */}

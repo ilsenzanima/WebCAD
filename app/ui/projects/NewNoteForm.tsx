@@ -1898,6 +1898,8 @@ function ItemRow({
       {isNote && (
         <div className="flex-1 flex items-start gap-2 min-w-0">
           <textarea
+            id={`note-textarea-${item.id}`}
+            name={`note-textarea-${item.id}`}
             ref={inputRef as any}
             value={item.value_text ?? ""}
             onChange={(e) => onChange({ value_text: e.target.value })}
@@ -1910,6 +1912,7 @@ function ItemRow({
               minHeight: "45px",
             }}
             rows={2}
+            aria-label="Testo della nota"
           />
           {onOpenRalScanner && (
             <button
@@ -1927,6 +1930,8 @@ function ItemRow({
       {/* Materiale */}
       {isMateriale && (
         <select
+          id={`material-select-${item.id}`}
+          name={`material-select-${item.id}`}
           ref={selectRef}
           value={item.value_text ?? ""}
           onChange={(e) => onChange({ value_text: e.target.value })}
@@ -1936,6 +1941,7 @@ function ItemRow({
             border: "1px solid hsl(220 20% 22%)",
             color: "hsl(210 40% 96%)",
           }}
+          aria-label="Seleziona materiale"
         >
           <option value="">Seleziona materiale...</option>
           {catalogMaterials.map((mat) => (
@@ -2033,9 +2039,12 @@ function ItemRow({
               ) : (
                 <>
                   <input
+                    id={`file-input-${item.id}`}
+                    name={`file-input-${item.id}`}
                     ref={fileInputRef}
                     type="file"
                     accept="image/*,.glb,.gltf"
+                    aria-label="Carica foto o modello 3D"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
