@@ -193,8 +193,8 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
         },
         {
           num: 6,
-          title: "🔗 Giunto Coprigiunto Esterno",
-          desc: "Applica il giunto esterno largo da 10 a 20 cm a cavallo dell'estremità di uscita per unire le tratte della canalizzazione verticale. Taglia i 4 pezzi coprigiunto dallo stesso materiale per fare tutto il giro esterno.",
+          title: "🔗 Giunto Coprigiunto in Alto",
+          desc: "Applica il giunto esterno superiore largo da 10 a 20 cm a cavallo dell'estremità superiore per unire le tratte della canalizzazione verticale. Taglia i 4 pezzi coprigiunto dallo stesso materiale per fare tutto il giro esterno.",
           materials: [
             `2x Coprigiunto Fronte/Retro: ${widthCm + 4 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
             `2x Coprigiunto Laterale (Fianchi): ${heightCm + 2 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
@@ -202,8 +202,17 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
         },
         {
           num: 7,
+          title: "🔗 Giunto di Sostegno a Pavimento",
+          desc: "Installa il giunto di base a contatto con il pavimento (nella parte inferiore) in modo da distribuire il carico e dare stabilità e sostegno alla base della canalizzazione.",
+          materials: [
+            `2x Coprigiunto Fronte/Retro: ${widthCm + 4 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
+            `2x Coprigiunto Laterale (Fianchi): ${heightCm + 2 * thicknessCm} x da 10 a 20 cm (Spessore: ${thicknessMm} mm)`,
+          ],
+        },
+        {
+          num: 8,
           title: "✅ Canalizzazione Completata",
-          desc: "La canalizzazione verticale è ora completata con lo staffaggio a parete, le lastre sigillate, il tappo superiore di chiusura e la cornice del giunto esterno montata in posizione definitiva.",
+          desc: "La canalizzazione verticale è ora completata con lo staffaggio a parete, le lastre sigillate, il tappo inferiore di chiusura e i due giunti esterni montati in posizione definitiva.",
           materials: ["Canalizzazione assemblata e pronta all'uso"],
         },
       ];
@@ -388,7 +397,7 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
             <div className="space-y-4">
               <div className="flex justify-between items-center pb-2 border-b border-white/5">
                 <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-orange-500/10 text-orange-400 uppercase">
-                  PASSAGGIO {currentStep} DI 7
+                  PASSAGGIO {currentStep} DI {steps.length}
                 </span>
                 <span className="text-xs text-gray-400">
                   {isHorizontal ? "Canalizzazione Orizzontale" : "Canalizzazione Verticale"}
@@ -429,8 +438,8 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials }
                   ◀ Precedente
                 </button>
                 <button
-                  onClick={() => setCurrentStep((prev) => Math.min(7, prev + 1))}
-                  disabled={currentStep === 7}
+                  onClick={() => setCurrentStep((prev) => Math.min(steps.length, prev + 1))}
+                  disabled={currentStep === steps.length}
                   className="flex-1 py-3 px-4 rounded-xl text-xs font-bold bg-white text-black hover:bg-white/95 disabled:opacity-30 transition-all cursor-pointer text-center"
                 >
                   Successivo ▶
