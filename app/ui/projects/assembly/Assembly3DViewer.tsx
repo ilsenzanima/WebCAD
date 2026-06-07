@@ -36,7 +36,7 @@ export default function Assembly3DViewer({
     return {
       base: [
         0,
-        -h / 2 - t / 2 - (currentStep === 2 ? explosionOffset : 0),
+        -h / 2 - t / 2 + (currentStep === 2 ? explosionOffset : 0),
         0,
       ] as [number, number, number],
       leftSide: [
@@ -49,18 +49,19 @@ export default function Assembly3DViewer({
         0,
         0,
       ] as [number, number, number],
-      insulation: [
-        0,
-        0,
-        0,
-      ] as [number, number, number],
       top: [
         0,
-        h / 2 + t / 2 + (currentStep === 5 ? explosionOffset : 0),
+        h / 2 + t / 2 + (currentStep === 4 ? explosionOffset : 0),
         0,
       ] as [number, number, number],
+      tappo: [
+        0,
+        0,
+        -l / 2 - t / 2 - (currentStep === 5 ? explosionOffset : 0),
+      ] as [number, number, number],
+      collarZ: l / 2 + (currentStep === 6 ? explosionOffset : 0),
     };
-  }, [w, h, t, currentStep]);
+  }, [w, h, t, l, currentStep]);
 
   // Colori dei materiali
   const colors = {
@@ -68,8 +69,8 @@ export default function Assembly3DViewer({
     metalHighlight: "#ef4444", // rosso evidenziato per le guide attive
     panelStandard: "#e2e8f0", // grigio chiaro per le lastre silicato
     panelActive: "#3b82f6", // blu elettrico per la lastra attiva nel passaggio
-    insulationActive: "#eab308", // giallo/arancio per la lana di roccia attiva
-    insulationStandard: "#854d0e", // marrone/giallo scuro per lana inserita
+    tappoActive: "#10b981", // verde smeraldo per il tappo terminale attivo
+    tappoStandard: "#e2e8f0",
   };
 
   return (
@@ -90,67 +91,87 @@ export default function Assembly3DViewer({
           position={isVertical ? [0, l / 2 - 0.5, 0] : [0, 0, 0]}
           rotation={isVertical ? [Math.PI / 2, 0, 0] : [0, 0, 0]}
         >
-          {/* STEP 1: Guide a U e profili di supporto */}
+          {/* STEP 1: Struttura di Sostegno (Barre asolate) */}
           {currentStep >= 1 && (
             <group>
-              {/* Profilo guida inferiore (soffitto/struttura) */}
-              <mesh castShadow receiveShadow position={[0, -h / 2 - 0.01, 0]}>
-                <boxGeometry args={[w + 0.04, 0.02, l]} />
-                <meshStandardMaterial
-                  color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
-                  roughness={0.2}
-                  metalness={0.8}
-                />
-              </mesh>
-
               {/* Pendini / Aste di supporto metalliche (solo orizzontale) */}
               {!isVertical && (
                 <group>
-                  {/* Pendino Sinistro Anteriore */}
-                  <mesh position={[-w / 2 - 0.05, 0.5 - h / 2, -l / 2 + 0.2]}>
-                    <cylinderGeometry args={[0.006, 0.006, 1.0]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
+                  {/* Barra asolata 1 (supporto posteriore) */}
+                  <mesh
+                    castShadow
+                    receiveShadow
+                    position={[0, -h / 2 - t - 0.02, -l / 2 + 0.3]}
+                  >
+                    <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
+                    <meshStandardMaterial
+                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                      roughness={0.2}
+                      metalness={0.8}
+                    />
                   </mesh>
-                  {/* Pendino Destro Anteriore */}
-                  <mesh position={[w / 2 + 0.05, 0.5 - h / 2, -l / 2 + 0.2]}>
-                    <cylinderGeometry args={[0.006, 0.006, 1.0]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
-                  </mesh>
-                  {/* Pendino Sinistro Posteriore */}
-                  <mesh position={[-w / 2 - 0.05, 0.5 - h / 2, l / 2 - 0.2]}>
-                    <cylinderGeometry args={[0.006, 0.006, 1.0]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
-                  </mesh>
-                  {/* Pendino Destro Posteriore */}
-                  <mesh position={[w / 2 + 0.05, 0.5 - h / 2, l / 2 - 0.2]}>
-                    <cylinderGeometry args={[0.006, 0.006, 1.0]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
+                  {/* Barra asolata 2 (supporto anteriore) */}
+                  <mesh
+                    castShadow
+                    receiveShadow
+                    position={[0, -h / 2 - t - 0.02, l / 2 - 0.3]}
+                  >
+                    <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
+                    <meshStandardMaterial
+                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                      roughness={0.2}
+                      metalness={0.8}
+                    />
                   </mesh>
 
-                  {/* Traversine di supporto a C (sotto il cavedio) */}
-                  <mesh position={[0, -h / 2 - 0.025, -l / 2 + 0.2]}>
-                    <boxGeometry args={[w + 0.14, 0.02, 0.04]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.8} />
+                  {/* Pendini di sospensione verticali */}
+                  <mesh position={[-w / 2 - 0.06, 0.5 - h / 2, -l / 2 + 0.3]}>
+                    <cylinderGeometry args={[0.006, 0.006, 1.2]} />
+                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
                   </mesh>
-                  <mesh position={[0, -h / 2 - 0.025, l / 2 - 0.2]}>
-                    <boxGeometry args={[w + 0.14, 0.02, 0.04]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.8} />
+                  <mesh position={[w / 2 + 0.06, 0.5 - h / 2, -l / 2 + 0.3]}>
+                    <cylinderGeometry args={[0.006, 0.006, 1.2]} />
+                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
+                  </mesh>
+                  <mesh position={[-w / 2 - 0.06, 0.5 - h / 2, l / 2 - 0.3]}>
+                    <cylinderGeometry args={[0.006, 0.006, 1.2]} />
+                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
+                  </mesh>
+                  <mesh position={[w / 2 + 0.06, 0.5 - h / 2, l / 2 - 0.3]}>
+                    <cylinderGeometry args={[0.006, 0.006, 1.2]} />
+                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
                   </mesh>
                 </group>
               )}
 
-              {/* Fissaggi verticali a muro (se verticale) */}
+              {/* Fissaggi verticali a muro / Barre asolate a parete (se verticale) */}
               {isVertical && (
                 <group>
-                  {/* Staffa di ancoraggio parete 1 */}
-                  <mesh position={[-w / 2 - 0.03, -0.2, -l / 2 + 0.5]}>
-                    <boxGeometry args={[0.06, 0.02, 0.1]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
+                  {/* Barra asolata posteriore 1 */}
+                  <mesh
+                    castShadow
+                    receiveShadow
+                    position={[0, -h / 2 - t - 0.02, -l / 2 + 0.5]}
+                  >
+                    <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
+                    <meshStandardMaterial
+                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                      roughness={0.2}
+                      metalness={0.8}
+                    />
                   </mesh>
-                  {/* Staffa di ancoraggio parete 2 */}
-                  <mesh position={[w / 2 + 0.03, -0.2, l / 2 - 0.5]}>
-                    <boxGeometry args={[0.06, 0.02, 0.1]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
+                  {/* Barra asolata posteriore 2 */}
+                  <mesh
+                    castShadow
+                    receiveShadow
+                    position={[0, -h / 2 - t - 0.02, l / 2 - 0.5]}
+                  >
+                    <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
+                    <meshStandardMaterial
+                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                      roughness={0.2}
+                      metalness={0.8}
+                    />
                   </mesh>
                 </group>
               )}
@@ -196,24 +217,23 @@ export default function Assembly3DViewer({
             </group>
           )}
 
-          {/* STEP 4: Isolamento interno (Lana di Roccia) */}
+          {/* STEP 4: Lastra Superiore (Coperchio / Fronte) */}
           {currentStep >= 4 && (
-            <mesh position={positions.insulation}>
-              {/* Leggermente più piccolo per non clippare le lastre esterne */}
-              <boxGeometry args={[w - 0.004, h - 0.004, l - 0.01]} />
+            <mesh castShadow receiveShadow position={positions.top}>
+              <boxGeometry args={[w + 2 * t, t, l]} />
               <meshStandardMaterial
-                color={currentStep === 4 ? colors.insulationActive : colors.insulationStandard}
-                transparent
-                opacity={currentStep === 4 ? 0.75 : 0.45}
-                roughness={0.9}
+                color={currentStep === 4 ? colors.panelActive : colors.panelStandard}
+                roughness={0.8}
+                transparent={currentStep === 4}
+                opacity={currentStep === 4 ? 0.85 : 1}
               />
             </mesh>
           )}
 
-          {/* STEP 5: Lastra Superiore (Coperchio / Fronte) */}
+           {/* STEP 5: Tappo terminale di chiusura */}
           {currentStep >= 5 && (
-            <mesh castShadow receiveShadow position={positions.top}>
-              <boxGeometry args={[w + 2 * t, t, l]} />
+            <mesh castShadow receiveShadow position={positions.tappo}>
+              <boxGeometry args={[w + 2 * t, h + 2 * t, t]} />
               <meshStandardMaterial
                 color={currentStep === 5 ? colors.panelActive : colors.panelStandard}
                 roughness={0.8}
@@ -221,6 +241,52 @@ export default function Assembly3DViewer({
                 opacity={currentStep === 5 ? 0.85 : 1}
               />
             </mesh>
+          )}
+
+          {/* STEP 6: Giunto coprigiunto esterno (largo 200mm) */}
+          {currentStep >= 6 && (
+            <group>
+              {/* Bottom collar piece */}
+              <mesh castShadow receiveShadow position={[0, -h / 2 - 1.5 * t, positions.collarZ]}>
+                <boxGeometry args={[w + 4 * t, t, 0.2]} />
+                <meshStandardMaterial
+                  color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
+                  roughness={0.8}
+                  transparent={currentStep === 6}
+                  opacity={currentStep === 6 ? 0.85 : 1}
+                />
+              </mesh>
+              {/* Top collar piece */}
+              <mesh castShadow receiveShadow position={[0, h / 2 + 1.5 * t, positions.collarZ]}>
+                <boxGeometry args={[w + 4 * t, t, 0.2]} />
+                <meshStandardMaterial
+                  color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
+                  roughness={0.8}
+                  transparent={currentStep === 6}
+                  opacity={currentStep === 6 ? 0.85 : 1}
+                />
+              </mesh>
+              {/* Left collar piece */}
+              <mesh castShadow receiveShadow position={[-w / 2 - 1.5 * t, 0, positions.collarZ]}>
+                <boxGeometry args={[t, h + 2 * t, 0.2]} />
+                <meshStandardMaterial
+                  color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
+                  roughness={0.8}
+                  transparent={currentStep === 6}
+                  opacity={currentStep === 6 ? 0.85 : 1}
+                />
+              </mesh>
+              {/* Right collar piece */}
+              <mesh castShadow receiveShadow position={[w / 2 + 1.5 * t, 0, positions.collarZ]}>
+                <boxGeometry args={[t, h + 2 * t, 0.2]} />
+                <meshStandardMaterial
+                  color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
+                  roughness={0.8}
+                  transparent={currentStep === 6}
+                  opacity={currentStep === 6 ? 0.85 : 1}
+                />
+              </mesh>
+            </group>
           )}
         </group>
 

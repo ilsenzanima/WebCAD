@@ -44,6 +44,7 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
 
   const navItems = [
     { href: "/projects", icon: "📐", label: "Progetti" },
+    { href: "/projects/istruzioni", icon: "🛠️", label: "Istruzioni Montaggio", isSubItem: true },
     { href: "/settings", icon: "⚙️", label: "Impostazioni" },
   ];
 

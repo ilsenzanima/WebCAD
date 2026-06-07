@@ -10,10 +10,12 @@ import GlobalCalcTrigger from "@/app/ui/dashboard/GlobalCalcTrigger";
 import GlobalBollaTrigger from "@/app/ui/dashboard/GlobalBollaTrigger";
 import GlobalRalTrigger from "@/app/ui/dashboard/GlobalRalTrigger";
 import OfflineModeToggle from "@/app/ui/dashboard/OfflineModeToggle";
+import SidebarNav from "@/app/ui/dashboard/SidebarNav";
 import type { ReactNode } from "react";
 
 const navItems = [
   { href: "/projects", icon: "📐", label: "Progetti" },
+  { href: "/projects/istruzioni", icon: "🛠️", label: "Istruzioni Montaggio", isSubItem: true },
 ];
 
 const bottomNavItems = [
@@ -78,23 +80,7 @@ export default async function DashboardLayout({
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 px-3 py-4 space-y-1">
-            <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider"
-              style={{ color: "hsl(215 15% 40%)" }}>
-              Menu
-            </p>
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150"
-                style={{ color: "hsl(215 20% 65%)" }}
-              >
-                <span className="text-base w-5 text-center">{item.icon}</span>
-                <span>{item.label}</span>
-              </Link>
-            ))}
-          </nav>
+          <SidebarNav items={navItems} />
 
           {/* Bottom Nav (prima del profilo) */}
           <div className="px-3 pb-2 space-y-1" style={{ borderTop: "1px solid hsl(220 20% 16%)", paddingTop: "0.75rem" }}>

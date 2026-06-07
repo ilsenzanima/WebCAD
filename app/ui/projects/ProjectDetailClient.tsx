@@ -533,15 +533,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
           />
         </div>
 
-        {/* Pulsante Istruzioni di Montaggio */}
-        <Link
-          href={`/projects/${project.id}/istruzioni`}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95 whitespace-nowrap cursor-pointer"
-        >
-          <span>🛠️</span>
-          <span className="hidden sm:inline">Istruzioni Montaggio</span>
-          <span className="sm:hidden">Istruzioni</span>
-        </Link>
+
 
         {/* Pulsante Aggiungi Nota */}
         <button
