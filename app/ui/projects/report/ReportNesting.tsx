@@ -28,8 +28,15 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
   const linearRequests: LinearMaterialRequest[] = [];
   const sheetRequests: SheetMaterialRequest[] = [];
 
-  // Helper ricorsivo per dividere i pezzi che superano la dimensione del foglio
-  const splitPiece = (w: number, h: number, sW: number, sH: number): { w: number; h: number }[] => {
+  // Helper ricorsivo per dividere i pezzi che superano la dimensione del foglio con guardie di sicurezza
+  const splitPiece = (w: number, h: number, sW: number, sH: number, depth = 0): { w: number; h: number }[] => {
+    if (isNaN(w) || isNaN(h) || w <= 0 || h <= 0 || !isFinite(w) || !isFinite(h)) {
+      return [];
+    }
+    if (depth > 12) {
+      // Circuito di sicurezza per evitare stack overflow in caso di scomposizioni infinite
+      return [{ w: Math.min(w, sW), h: Math.min(h, sH) }];
+    }
     if ((w <= sW && h <= sH) || (w <= sH && h <= sW)) {
       return [{ w, h }];
     }
@@ -47,9 +54,11 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
       }
       const result: { w: number; h: number }[] = [];
       let remainingH = h;
-      while (remainingH > 0) {
+      let loops = 0;
+      while (remainingH > 0 && loops < 100) {
+        loops++;
         const currentH = Math.min(remainingH, maxH);
-        result.push(...splitPiece(w, currentH, sW, sH));
+        result.push(...splitPiece(w, currentH, sW, sH, depth + 1));
         remainingH -= currentH;
       }
       return result;
@@ -66,9 +75,11 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
       }
       const result: { w: number; h: number }[] = [];
       let remainingW = w;
-      while (remainingW > 0) {
+      let loops = 0;
+      while (remainingW > 0 && loops < 100) {
+        loops++;
         const currentW = Math.min(remainingW, maxW);
-        result.push(...splitPiece(currentW, h, sW, sH));
+        result.push(...splitPiece(currentW, h, sW, sH, depth + 1));
         remainingW -= currentW;
       }
       return result;
@@ -81,13 +92,19 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
     const dy = w.y2 - w.y1;
     const lenMm = Math.round(Math.sqrt(dx * dx + dy * dy) * 10); // in mm (1px = 10mm)
     
+    if (isNaN(lenMm) || lenMm <= 0) return;
+
     // Le lastre del cassonetto sono caratterizzate da:
     // - Una larghezza pari a lenMm (sezione frontale)
     // - Una lunghezza pari alla profondità di estrusione w.height (es: 3000mm)
     // Se la lunghezza di estrusione supera l'altezza del pannello commerciale (commercialSheetH = 2000mm),
     // spezziamo il pezzo longitudinalmente (es. un pezzo da 2000mm e uno da 1000mm).
     let remainingLength = w.height || 3000;
-    while (remainingLength > 0) {
+    if (isNaN(remainingLength) || remainingLength <= 0) remainingLength = 3000;
+
+    let wallLoops = 0;
+    while (remainingLength > 0 && wallLoops < 100) {
+      wallLoops++;
       const currentPieceLen = Math.min(remainingLength, commercialSheetH);
       remainingLength -= currentPieceLen;
       sheetRequests.push({
@@ -110,10 +127,11 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
 
           const b = parseFloat(parsed.b);
           const h = parseFloat(parsed.h);
-          const q = parseInt(parsed.q) || 1;
+          // Cap a 200 pezzi per evitare blocchi per input errati
+          const q = Math.min(200, parseInt(parsed.q) || 1);
           const unit = parsed.unit || "cm";
 
-          if (!isNaN(b) && !isNaN(h) && b > 0 && h > 0) {
+          if (!isNaN(b) && !isNaN(h) && b > 0 && h > 0 && isFinite(b) && isFinite(h)) {
             // Conversione in mm (1 cm = 10 mm)
             const factor = unit === "cm" ? 10 : 1;
             const wMm = Math.round(b * factor);
@@ -437,6 +455,12 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
 
       // Rimuoviamo i rettangoli ridondanti
       pruneFreeRectangles(s);
+
+      // Circuito di sicurezza: se il numero di rettangoli liberi supera 300 (frammentazione estrema),
+      // lo limitiamo per prevenire l'esplosione esponenziale e il conseguente blocco della pagina.
+      if (freeRectsByBoard[s] && freeRectsByBoard[s].length > 300) {
+        freeRectsByBoard[s] = freeRectsByBoard[s].slice(0, 150);
+      }
     });
 
     return boards;
