@@ -8,6 +8,7 @@ export interface UserTag {
   user_id: string;
   section: string;
   name: string;
+  thickness_mm?: number;
   created_at: string;
 }
 
@@ -19,7 +20,7 @@ export async function getUserTags(section: string): Promise<UserTag[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("user_tags")
-    .select("id, user_id, section, name, created_at")
+    .select("id, user_id, section, name, thickness_mm, created_at")
     .eq("section", section)
     .order("name", { ascending: true });
 
@@ -30,6 +31,7 @@ export async function getUserTags(section: string): Promise<UserTag[]> {
 export async function createUserTag(
   section: string,
   name: string,
+  thicknessMm: number = 0,
 ): Promise<{ success: boolean; tag?: UserTag; error?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -41,12 +43,41 @@ export async function createUserTag(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("user_tags")
-    .insert({ user_id: user.id, section, name: trimmed })
-    .select("id, user_id, section, name, created_at")
+    .insert({ user_id: user.id, section, name: trimmed, thickness_mm: thicknessMm })
+    .select("id, user_id, section, name, thickness_mm, created_at")
     .single();
 
   if (error) {
     if (error.code === "23505") return { success: false, error: "Tag già esistente" };
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath("/catalog/configurazione");
+  revalidatePath("/catalog/new");
+  return { success: true, tag: data };
+}
+
+export async function updateUserTag(
+  id: string,
+  name: string,
+  thicknessMm: number = 0,
+): Promise<{ success: boolean; tag?: UserTag; error?: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Non autenticato" };
+
+  const trimmed = name.trim();
+  if (!trimmed) return { success: false, error: "Nome non valido" };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("user_tags")
+    .update({ name: trimmed, thickness_mm: thicknessMm })
+    .eq("id", id)
+    .select("id, user_id, section, name, thickness_mm, created_at")
+    .single();
+
+  if (error) {
     return { success: false, error: error.message };
   }
 

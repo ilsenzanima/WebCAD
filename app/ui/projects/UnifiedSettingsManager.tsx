@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { createUserTag, deleteUserTag, type UserTag } from "@/app/actions/settings";
+import { createUserTag, deleteUserTag, updateUserTag, type UserTag } from "@/app/actions/settings";
 
 type TabKey = "material_category" | "material_unit";
 
@@ -18,7 +18,16 @@ export default function UnifiedSettingsManager({
   const [activeTab, setActiveTab] = useState<TabKey>("material_category");
   const [materialCategories, setMaterialCategories] = useState(initialMaterialCategories);
   const [materialUnits, setMaterialUnits] = useState(initialMaterialUnits);
+  
+  // Stati per la creazione
   const [inputValue, setInputValue] = useState("");
+  const [thicknessValue, setThicknessValue] = useState("0");
+
+  // Stati per la modifica (editing)
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [editingThickness, setEditingThickness] = useState("0");
+
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -29,7 +38,13 @@ export default function UnifiedSettingsManager({
   ];
 
   const currentItems = useMemo(() => {
-    if (activeTab === "material_category") return materialCategories.map((item) => ({ id: item.id, name: item.name }));
+    if (activeTab === "material_category") {
+      return materialCategories.map((item) => ({
+        id: item.id,
+        name: item.name,
+        thickness_mm: item.thickness_mm ?? 0,
+      }));
+    }
     return materialUnits.map((item) => ({ id: item.id, name: item.name }));
   }, [activeTab, materialCategories, materialUnits]);
 
@@ -37,9 +52,11 @@ export default function UnifiedSettingsManager({
     const value = inputValue.trim();
     if (!value) return;
 
+    const thickness = activeTab === "material_category" ? (parseFloat(thicknessValue) || 0) : 0;
+
     setError(null);
     startTransition(async () => {
-      const res = await createUserTag(activeTab, value);
+      const res = await createUserTag(activeTab, value, thickness);
       if (res.success && res.tag) {
         if (activeTab === "material_category") {
           setMaterialCategories((prev) => [...prev, res.tag!].sort((a, b) => a.name.localeCompare(b.name)));
@@ -47,8 +64,35 @@ export default function UnifiedSettingsManager({
           setMaterialUnits((prev) => [...prev, res.tag!].sort((a, b) => a.name.localeCompare(b.name)));
         }
         setInputValue("");
+        setThicknessValue("0");
       } else {
         setError(res.error ?? "Errore durante la creazione");
+      }
+    });
+  }
+
+  function handleUpdate(id: string) {
+    const name = editingName.trim();
+    if (!name) return;
+
+    const thickness = activeTab === "material_category" ? (parseFloat(editingThickness) || 0) : 0;
+
+    setError(null);
+    startTransition(async () => {
+      const res = await updateUserTag(id, name, thickness);
+      if (res.success && res.tag) {
+        if (activeTab === "material_category") {
+          setMaterialCategories((prev) =>
+            prev.map((item) => (item.id === id ? res.tag! : item)).sort((a, b) => a.name.localeCompare(b.name))
+          );
+        } else {
+          setMaterialUnits((prev) =>
+            prev.map((item) => (item.id === id ? res.tag! : item)).sort((a, b) => a.name.localeCompare(b.name))
+          );
+        }
+        setEditingId(null);
+      } else {
+        setError(res.error ?? "Errore durante l'aggiornamento");
       }
     });
   }
@@ -77,7 +121,11 @@ export default function UnifiedSettingsManager({
         {tabs.map((tab) => (
           <button
             key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
+            onClick={() => {
+              setActiveTab(tab.key);
+              setEditingId(null);
+              setError(null);
+            }}
             className="px-4 py-2 rounded-full text-sm font-semibold transition-all cursor-pointer"
             style={{
               background: activeTab === tab.key ? "hsl(220 90% 56%)" : "hsl(220 26% 14%)",
@@ -91,19 +139,34 @@ export default function UnifiedSettingsManager({
       </div>
 
       <div className="rounded-2xl p-5 space-y-4" style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 20%)" }}>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-3">
           <input
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-            placeholder="Inserisci nuova voce..."
+            placeholder={activeTab === "material_category" ? "Nome materiale (es. Lastra Silicato)..." : "Unità di misura (es. cm)..."}
             className="flex-1 px-4 py-2.5 rounded-xl text-sm outline-none"
             style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
           />
+          {activeTab === "material_category" && (
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                step="0.1"
+                value={thicknessValue}
+                onChange={(e) => setThicknessValue(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                placeholder="Spessore (mm)"
+                className="w-32 px-4 py-2.5 rounded-xl text-sm outline-none font-bold"
+                style={{ background: "hsl(220 32% 10%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
+              />
+              <span className="text-xs text-gray-400">mm</span>
+            </div>
+          )}
           <button
             onClick={handleAdd}
             disabled={!inputValue.trim() || isPending}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 cursor-pointer"
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50 cursor-pointer whitespace-nowrap"
             style={{ background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" }}
           >
             Aggiungi
@@ -112,28 +175,99 @@ export default function UnifiedSettingsManager({
 
         {error && <p className="text-sm" style={{ color: "hsl(0 80% 70%)" }}>⚠️ {error}</p>}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-2">
           {currentItems.length === 0 ? (
-            <span className="text-sm" style={{ color: "hsl(215 15% 45%)" }}>Nessuna voce configurata.</span>
+            <span className="text-sm col-span-full" style={{ color: "hsl(215 15% 45%)" }}>Nessuna voce configurata.</span>
           ) : (
-            currentItems.map((item) => (
-              <span
-                key={item.id}
-                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-all"
-                style={{ background: "hsl(220 32% 20%)", color: "hsl(210 40% 96%)" }}
-              >
-                {item.name}
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  className="w-5 h-5 rounded-full text-xs cursor-pointer flex items-center justify-center"
-                  style={{ background: "hsl(0 60% 24%)", color: "hsl(0 70% 75%)" }}
-                  disabled={isPending && deletingId === item.id}
-                  aria-label={`Elimina ${item.name}`}
+            currentItems.map((item: any) => {
+              const isEditing = editingId === item.id;
+
+              if (isEditing) {
+                return (
+                  <div
+                    key={item.id}
+                    className="p-3.5 rounded-xl border flex flex-col gap-2.5 col-span-1"
+                    style={{ background: "hsl(220 32% 10%)", borderColor: "hsl(220 90% 56% / 0.5)" }}
+                  >
+                    <input
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      placeholder="Nome voce..."
+                      className="w-full px-3 py-1.5 rounded-lg text-xs outline-none bg-white/5 border border-white/10 text-white"
+                    />
+                    {activeTab === "material_category" && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={editingThickness}
+                          onChange={(e) => setEditingThickness(e.target.value)}
+                          placeholder="Spessore (mm)"
+                          className="w-full px-3 py-1.5 rounded-lg text-xs outline-none bg-white/5 border border-white/10 text-white font-bold"
+                        />
+                        <span className="text-[10px] text-gray-400">mm</span>
+                      </div>
+                    )}
+                    <div className="flex justify-end gap-1.5 mt-1">
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/5 hover:bg-white/10 text-white cursor-pointer"
+                      >
+                        Annulla
+                      </button>
+                      <button
+                        onClick={() => handleUpdate(item.id)}
+                        disabled={isPending || !editingName.trim()}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-white cursor-pointer bg-gradient-to-r from-blue-600 to-sky-600"
+                      >
+                        Salva
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={item.id}
+                  className="flex justify-between items-center px-4 py-3 rounded-xl border transition-all hover:bg-white/[0.02]"
+                  style={{ background: "hsl(220 32% 18% / 0.4)", borderColor: "hsl(220 20% 22%)" }}
                 >
-                  x
-                </button>
-              </span>
-            ))
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-sm font-semibold text-white truncate">{item.name}</span>
+                    {activeTab === "material_category" && (
+                      <span className="text-[10px] text-gray-400 font-bold mt-0.5">
+                        📐 Spessore: {item.thickness_mm} mm
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {/* Pulsante Modifica */}
+                    <button
+                      onClick={() => {
+                        setEditingId(item.id);
+                        setEditingName(item.name);
+                        setEditingThickness(String(item.thickness_mm ?? 0));
+                        setError(null);
+                      }}
+                      className="w-7 h-7 rounded-lg text-xs hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                      title={`Modifica ${item.name}`}
+                    >
+                      ✏️
+                    </button>
+                    {/* Pulsante Elimina */}
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      className="w-7 h-7 rounded-lg text-xs hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-colors cursor-pointer flex items-center justify-center"
+                      disabled={isPending && deletingId === item.id}
+                      title={`Elimina ${item.name}`}
+                    >
+                      {isPending && deletingId === item.id ? "..." : "🗑️"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </div>
