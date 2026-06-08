@@ -25,7 +25,7 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
   // Stati del configuratore
   const [variant, setVariant] = useState<"con-giunto" | "senza-giunto" | "pezzo-unico" | "derivata-dritte">(initialVariant);
   const [subgroup, setSubgroup] = useState<"orizzontali" | "verticali">("orizzontali");
-  const [itemType, setItemType] = useState<"dritte" | "curve">("dritte");
+  const [itemType, setItemType] = useState<"dritte" | "curve" | "canne-shunt">("dritte");
   const [selectedMaterialId, setSelectedMaterialId] = useState<string>("");
   
   // Input testuali per consentire la cancellazione temporanea delle cifre
@@ -372,7 +372,7 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
           ];
         }
       }
-    } else {
+    } else if (itemType === "curve") {
       // CURVE 90°
       const L_in = lengthCm / 2;
       const L_out = lengthCm / 2;
@@ -590,7 +590,60 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
           ];
         }
       }
+    } else if (itemType === "canne-shunt") {
+      return [
+        {
+          num: 1,
+          title: "🛠️ Staffaggio e Sostegno",
+          desc: "Fissa le staffe a parete e le barre asolate di supporto per sostenere il collettore primario verticale.",
+          materials: ["Barre asolate di supporto", "Staffe a parete e tasselli"],
+        },
+        {
+          num: 2,
+          title: "🧱 Collettore Primario (Schiena e Fianchi)",
+          desc: `Posiziona la schiena posteriore larga ${widthCm + 2 * thicknessCm} cm e i due fianchi laterali da ${heightCm} cm per formare il corpo principale del canale verticale. *IMPORTANTE: Applicare il collante e le viti sui bordi.*`,
+          materials: [
+            `1x Lastra Schiena: ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+            `2x Lastre Fianchi: ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+            "Viti e collante tagliafuoco"
+          ],
+        },
+        {
+          num: 3,
+          title: "📐 Setto Deviatore Interno (Antiriflusso)",
+          desc: `Taglia e posiziona la lastra del setto deviatore interno inclinato a 45° per separare il flusso secondario da quello primario ed evitare il riflusso. *IMPORTANTE: Sigillare accuratamente con collante.*`,
+          materials: [`1x Setto Deviatore Interno: ${widthCm} x 35 cm (Spessore: ${thicknessMm} mm)`, "Collante tagliafuoco"],
+        },
+        {
+          num: 4,
+          title: "🧱 Innesto Secondario (Collettore di Piano)",
+          desc: `Prepara e fissa le lastre dell'innesto secondario che confluisce frontalmente nel canale primario. *IMPORTANTE: Incollare e avvitare.*`,
+          materials: [
+            `Lastre per canale secondario (innesto): spessore ${thicknessMm} mm`,
+            "Viti e collante tagliafuoco"
+          ],
+        },
+        {
+          num: 5,
+          title: "🔒 Chiusura Anteriore (Fronte)",
+          desc: `Monta la lastra frontale sagomata con il foro di innesto per chiudere ermeticamente l'intera canna shunt. *IMPORTANTE: Applicare il collante su tutti i bordi di contatto.*`,
+          materials: [`1x Lastra Frontale (forata): ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`, "Viti e collante tagliafuoco"],
+        },
+        {
+          num: 6,
+          title: "🔗 Giunti Coprigiunto Esterni",
+          desc: "Applica i coprigiunti sulle estremità superiore e inferiore del collettore primario per la connessione alle altre canne shunt verticali dei piani adiacenti.",
+          materials: ["Coprigiunti esterni (larghi da 10 a 20 cm)", "Viti e collante tagliafuoco"],
+        },
+        {
+          num: 7,
+          title: "✅ Canna Shunt Completata",
+          desc: "La canna shunt antiriflusso per canalizzazioni verticali è completata, incollata, avvitata e pronta al collegamento di piano.",
+          materials: ["Canna Shunt assemblata e pronta all'uso"],
+        },
+      ];
     }
+    return [];
   }, [itemType, isHorizontal, variant, widthCm, heightCm, lengthCm, thicknessCm, thicknessMm]);
 
   return (
@@ -626,7 +679,10 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
               <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
                 <button
                   onClick={() => { setSubgroup("orizzontali"); setCurrentStep(1); }}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  disabled={itemType === "canne-shunt"}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    itemType === "canne-shunt" ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                  } ${
                     subgroup === "orizzontali" ? "bg-white text-black" : "text-gray-400 hover:text-white"
                   }`}
                 >
@@ -634,7 +690,10 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
                 </button>
                 <button
                   onClick={() => { setSubgroup("verticali"); setCurrentStep(1); }}
-                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  disabled={itemType === "canne-shunt"}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    itemType === "canne-shunt" ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
+                  } ${
                     subgroup === "verticali" ? "bg-white text-black" : "text-gray-400 hover:text-white"
                   }`}
                 >
@@ -645,7 +704,11 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
 
             <div className="flex gap-2">
               <button
-                onClick={() => setItemType("dritte")}
+                onClick={() => {
+                  setItemType("dritte");
+                  setVariant("con-giunto");
+                  setCurrentStep(1);
+                }}
                 className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                   itemType === "dritte" ? "bg-orange-500/20 border-orange-500 text-orange-400" : "bg-white/5 border-white/5 text-gray-400"
                 }`}
@@ -663,6 +726,19 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
                 }`}
               >
                 ↳ Curve 90°
+              </button>
+              <button
+                onClick={() => {
+                  setItemType("canne-shunt");
+                  setSubgroup("verticali");
+                  setVariant("pezzo-unico"); // riusiamo pezzo-unico come stato di default per evitare errori di tipo
+                  setCurrentStep(1);
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                  itemType === "canne-shunt" ? "bg-orange-500/20 border-orange-500 text-orange-400" : "bg-white/5 border-white/5 text-gray-400"
+                }`}
+              >
+                ⑂ Canne Shunt
               </button>
             </div>
           </div>
@@ -754,13 +830,19 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
                         ⎵ Dritte senza Giunto (Giunti Sfalsati)
                       </option>
                     </>
-                  ) : (
+                  ) : itemType === "curve" ? (
                     <>
                       <option value="pezzo-unico" style={{ background: "hsl(220 32% 10%)" }}>
                         📐 Pezzo Unico (Sagomato)
                       </option>
                       <option value="derivata-dritte" style={{ background: "hsl(220 32% 10%)" }}>
                         ⎵ Derivata da Dritte (Sormonti)
+                      </option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="pezzo-unico" style={{ background: "hsl(220 32% 10%)" }}>
+                        ⑂ Standard Antiriflusso
                       </option>
                     </>
                   )}
@@ -903,7 +985,7 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
                       </div>
                     </>
                   )
-                ) : (
+                ) : itemType === "curve" ? (
                   // Curve 90°
                   variant === "pezzo-unico" ? (
                     isHorizontal ? (
@@ -995,6 +1077,50 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
                       </>
                     )
                   )
+                ) : (
+                  // canne-shunt
+                  <>
+                    <div className="flex justify-between font-bold text-white mb-0.5">
+                      <span>• Collettore Primario:</span>
+                    </div>
+                    <div className="flex justify-between pl-2">
+                      <span>- 1x Schiena Posteriore:</span>
+                      <span className="text-white font-bold">{((widthCm + 2 * thicknessCm) * 10).toFixed(0)} x {(lengthCm * 10).toFixed(0)} mm</span>
+                    </div>
+                    <div className="flex justify-between pl-2">
+                      <span>- 2x Fianchi SX/DX:</span>
+                      <span className="text-white font-bold">{(heightCm * 10).toFixed(0)} x {(lengthCm * 10).toFixed(0)} mm</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-white mt-1 mb-0.5">
+                      <span>• Setto Interno:</span>
+                    </div>
+                    <div className="flex justify-between pl-2">
+                      <span>- 1x Setto Deviatore:</span>
+                      <span className="text-white font-bold">{(widthCm * 10).toFixed(0)} x 350 mm</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-white mt-1 mb-0.5">
+                      <span>• Innesto Secondario:</span>
+                    </div>
+                    <div className="flex justify-between pl-2">
+                      <span>- 2x Fondo / Coperchio:</span>
+                      <span className="text-white font-bold">{((widthCm + 2 * thicknessCm) * 10).toFixed(0)} x 300 mm</span>
+                    </div>
+                    <div className="flex justify-between pl-2">
+                      <span>- 2x Fianchi:</span>
+                      <span className="text-white font-bold">200 x 300 mm</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-white mt-1 mb-0.5">
+                      <span>• Chiusura Anteriore:</span>
+                    </div>
+                    <div className="flex justify-between pl-2">
+                      <span>- 1x Fronte Inf. (Forato):</span>
+                      <span className="text-white font-bold">{((widthCm + 2 * thicknessCm) * 10).toFixed(0)} x {((lengthCm / 2 - 20) * 10).toFixed(0)} mm</span>
+                    </div>
+                    <div className="flex justify-between pl-2">
+                      <span>- 1x Fronte Sup.:</span>
+                      <span className="text-white font-bold">{((widthCm + 2 * thicknessCm) * 10).toFixed(0)} x {((lengthCm / 2 - 10) * 10).toFixed(0)} mm</span>
+                    </div>
+                  </>
                 )}
                 <div className="text-[9px] text-gray-500 italic mt-1.5">
                   Nota: calcolo basato su foro {widthCm}x{heightCm}cm, spessore {thicknessMm}mm.

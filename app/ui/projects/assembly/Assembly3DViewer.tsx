@@ -12,7 +12,7 @@ interface ViewerProps {
   thickness: number; // in mm
   currentStep: number; // 1 a 10
   variant?: "con-giunto" | "senza-giunto" | "pezzo-unico" | "derivata-dritte";
-  itemType?: "dritte" | "curve";
+  itemType?: "dritte" | "curve" | "canne-shunt";
 }
 
 export default function Assembly3DViewer({
@@ -516,7 +516,7 @@ export default function Assembly3DViewer({
                 </group>
               )}
             </group>
-          ) : (
+          ) : itemType === "curve" ? (
             // CURVE 90°
             <group>
               {!isVertical ? (
@@ -820,18 +820,57 @@ export default function Assembly3DViewer({
                   {/* STEP 1: Staffaggio a parete */}
                   {currentStep >= 1 && (
                     <group>
-                      {/* Staffa 1 (Ingresso, lungo Z) */}
-                      <mesh castShadow receiveShadow position={[-w / 2 - t - 0.02, 0, -curvePositions.L_in / 2]}>
-                        <boxGeometry args={[0.04, h + 0.16, 0.04]} />
+                      {/* --- Supporto Verticale (Tratto Ingresso) --- */}
+                      {/* Barra di fondo a parete */}
+                      <mesh castShadow receiveShadow position={[0, -h / 2 - t - 0.02, -curvePositions.L_in / 2]}>
+                        <boxGeometry args={[w + 2 * t + 0.16, 0.04, 0.04]} />
                         <meshStandardMaterial
                           color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
                           roughness={0.2}
                           metalness={0.8}
                         />
                       </mesh>
-                      {/* Staffa 2 (Uscita, lungo Y) */}
-                      <mesh castShadow receiveShadow position={[curvePositions.L_out / 2, 0, h / 2 + t + 0.02]} rotation={[0, Math.PI / 2, 0]}>
-                        <boxGeometry args={[0.04, w + 0.16, 0.04]} />
+                      {/* Staffa laterale sinistra */}
+                      <mesh castShadow receiveShadow position={[-w / 2 - t - 0.01, 0, -curvePositions.L_in / 2]}>
+                        <boxGeometry args={[0.02, h + 2 * t + 0.06, 0.02]} />
+                        <meshStandardMaterial
+                          color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                          roughness={0.2}
+                          metalness={0.8}
+                        />
+                      </mesh>
+                      {/* Staffa laterale destra */}
+                      <mesh castShadow receiveShadow position={[w / 2 + t + 0.01, 0, -curvePositions.L_in / 2]}>
+                        <boxGeometry args={[0.02, h + 2 * t + 0.06, 0.02]} />
+                        <meshStandardMaterial
+                          color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                          roughness={0.2}
+                          metalness={0.8}
+                        />
+                      </mesh>
+
+                      {/* --- Supporto a Mensola Cantilever (Tratto Uscita) --- */}
+                      {/* Braccio sinistro della mensola */}
+                      <mesh castShadow receiveShadow position={[-w / 2 - t - 0.02, curvePositions.L_out / 2 - h / 4, -h / 2 - t - 0.02]}>
+                        <boxGeometry args={[0.04, curvePositions.L_out + h / 2, 0.04]} />
+                        <meshStandardMaterial
+                          color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                          roughness={0.2}
+                          metalness={0.8}
+                        />
+                      </mesh>
+                      {/* Braccio destro della mensola */}
+                      <mesh castShadow receiveShadow position={[w / 2 + t + 0.02, curvePositions.L_out / 2 - h / 4, -h / 2 - t - 0.02]}>
+                        <boxGeometry args={[0.04, curvePositions.L_out + h / 2, 0.04]} />
+                        <meshStandardMaterial
+                          color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                          roughness={0.2}
+                          metalness={0.8}
+                        />
+                      </mesh>
+                      {/* Traverso di unione mensola */}
+                      <mesh castShadow receiveShadow position={[0, curvePositions.L_out - 0.02, -h / 2 - t - 0.02]}>
+                        <boxGeometry args={[w + 2 * t + 0.08, 0.04, 0.04]} />
                         <meshStandardMaterial
                           color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
                           roughness={0.2}
@@ -1090,6 +1129,213 @@ export default function Assembly3DViewer({
                       </group>
                     </group>
                   )}
+                </group>
+              )}
+            </group>
+          ) : (
+            // 3. CANNE SHUNT (Verticale con Innesto di Piano e Setto Deviatore)
+            <group>
+              {/* STEP 1: Staffaggio a parete */}
+              {currentStep >= 1 && (
+                <group>
+                  {/* Barra di fondo a parete */}
+                  <mesh castShadow receiveShadow position={[0, -h / 2 - t - 0.02, 0]}>
+                    <boxGeometry args={[w + 2 * t + 0.16, 0.04, 0.04]} />
+                    <meshStandardMaterial
+                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                      roughness={0.2}
+                      metalness={0.8}
+                    />
+                  </mesh>
+                  {/* Staffa laterale sinistra */}
+                  <mesh castShadow receiveShadow position={[-w / 2 - t - 0.01, 0, 0]}>
+                    <boxGeometry args={[0.02, h + 2 * t + 0.06, 0.02]} />
+                    <meshStandardMaterial
+                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                      roughness={0.2}
+                      metalness={0.8}
+                    />
+                  </mesh>
+                  {/* Staffa laterale destra */}
+                  <mesh castShadow receiveShadow position={[w / 2 + t + 0.01, 0, 0]}>
+                    <boxGeometry args={[0.02, h + 2 * t + 0.06, 0.02]} />
+                    <meshStandardMaterial
+                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                      roughness={0.2}
+                      metalness={0.8}
+                    />
+                  </mesh>
+                </group>
+              )}
+
+              {/* STEP 2: Collettore Primario (Schiena e Fianchi) */}
+              {currentStep >= 2 && (
+                <group>
+                  {/* Schiena Posteriore */}
+                  <mesh castShadow receiveShadow position={[0, -h / 2 - t / 2 - (currentStep === 2 ? 0.15 : 0), 0]}>
+                    <boxGeometry args={[w + 2 * t, t, l]} />
+                    <meshStandardMaterial
+                      color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 2}
+                      opacity={currentStep === 2 ? 0.85 : 1}
+                    />
+                  </mesh>
+                  {/* Fianco SX */}
+                  <mesh castShadow receiveShadow position={[-w / 2 - t / 2 - (currentStep === 2 ? 0.15 : 0), 0, 0]}>
+                    <boxGeometry args={[t, h, l]} />
+                    <meshStandardMaterial
+                      color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 2}
+                      opacity={currentStep === 2 ? 0.85 : 1}
+                    />
+                  </mesh>
+                  {/* Fianco DX */}
+                  <mesh castShadow receiveShadow position={[w / 2 + t / 2 + (currentStep === 2 ? 0.15 : 0), 0, 0]}>
+                    <boxGeometry args={[t, h, l]} />
+                    <meshStandardMaterial
+                      color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 2}
+                      opacity={currentStep === 2 ? 0.85 : 1}
+                    />
+                  </mesh>
+                </group>
+              )}
+
+              {/* STEP 3: Setto Deviatore Interno (Antiriflusso) */}
+              {currentStep >= 3 && (
+                <mesh
+                  castShadow
+                  receiveShadow
+                  position={[0, -0.02, -(currentStep === 3 ? 0.15 : 0)]}
+                  rotation={[Math.PI / 4, 0, 0]}
+                >
+                  <boxGeometry args={[w, t, 0.35]} />
+                  <meshStandardMaterial
+                    color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
+                    roughness={0.8}
+                    transparent={currentStep === 3}
+                    opacity={currentStep === 3 ? 0.85 : 1}
+                  />
+                </mesh>
+              )}
+
+              {/* STEP 4: Innesto Secondario (T-Branch) */}
+              {currentStep >= 4 && (
+                <group>
+                  {/* Fondo Innesto */}
+                  <mesh castShadow receiveShadow position={[0, h / 2 + t / 2 + 0.15 + (currentStep === 4 ? 0.15 : 0), -0.2 - t / 2]}>
+                    <boxGeometry args={[w + 2 * t, 0.3, t]} />
+                    <meshStandardMaterial
+                      color={currentStep === 4 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 4}
+                      opacity={currentStep === 4 ? 0.85 : 1}
+                    />
+                  </mesh>
+                  {/* Coperchio Innesto */}
+                  <mesh castShadow receiveShadow position={[0, h / 2 + t / 2 + 0.15 + (currentStep === 4 ? 0.15 : 0), 0 + t / 2]}>
+                    <boxGeometry args={[w + 2 * t, 0.3, t]} />
+                    <meshStandardMaterial
+                      color={currentStep === 4 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 4}
+                      opacity={currentStep === 4 ? 0.85 : 1}
+                    />
+                  </mesh>
+                  {/* Fianco SX Innesto */}
+                  <mesh castShadow receiveShadow position={[-w / 2 - t / 2, h / 2 + t / 2 + 0.15 + (currentStep === 4 ? 0.15 : 0), -0.1]}>
+                    <boxGeometry args={[t, 0.3, 0.2]} />
+                    <meshStandardMaterial
+                      color={currentStep === 4 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 4}
+                      opacity={currentStep === 4 ? 0.85 : 1}
+                    />
+                  </mesh>
+                  {/* Fianco DX Innesto */}
+                  <mesh castShadow receiveShadow position={[w / 2 + t / 2, h / 2 + t / 2 + 0.15 + (currentStep === 4 ? 0.15 : 0), -0.1]}>
+                    <boxGeometry args={[t, 0.3, 0.2]} />
+                    <meshStandardMaterial
+                      color={currentStep === 4 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 4}
+                      opacity={currentStep === 4 ? 0.85 : 1}
+                    />
+                  </mesh>
+                </group>
+              )}
+
+              {/* STEP 5: Chiusura Anteriore (Fronte del primario forato) */}
+              {currentStep >= 5 && (
+                <group>
+                  {/* Fronte Inferiore */}
+                  <mesh castShadow receiveShadow position={[0, h / 2 + t / 2 + (currentStep === 5 ? 0.15 : 0), -l / 4 - 0.1]}>
+                    <boxGeometry args={[w + 2 * t, t, l / 2 - 0.2]} />
+                    <meshStandardMaterial
+                      color={currentStep === 5 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 5}
+                      opacity={currentStep === 5 ? 0.85 : 1}
+                    />
+                  </mesh>
+                  {/* Fronte Superiore */}
+                  <mesh castShadow receiveShadow position={[0, h / 2 + t / 2 + (currentStep === 5 ? 0.15 : 0), l / 4 + 0.05]}>
+                    <boxGeometry args={[w + 2 * t, t, l / 2 - 0.1]} />
+                    <meshStandardMaterial
+                      color={currentStep === 5 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 5}
+                      opacity={currentStep === 5 ? 0.85 : 1}
+                    />
+                  </mesh>
+                </group>
+              )}
+
+              {/* STEP 6: Coprigiunti Esterni */}
+              {currentStep >= 6 && (
+                <group>
+                  {/* Coprigiunto Superiore (Z = l/2) */}
+                  <group position={[0, 0, l / 2 + (currentStep === 6 ? 0.15 : 0)]}>
+                    <mesh castShadow receiveShadow position={[0, -h / 2 - 1.5 * t, 0]}>
+                      <boxGeometry args={[w + 4 * t, t, 0.15]} />
+                      <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
+                    </mesh>
+                    <mesh castShadow receiveShadow position={[0, h / 2 + 1.5 * t, 0]}>
+                      <boxGeometry args={[w + 4 * t, t, 0.15]} />
+                      <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
+                    </mesh>
+                    <mesh castShadow receiveShadow position={[-w / 2 - 1.5 * t, 0, 0]}>
+                      <boxGeometry args={[t, h + 2 * t, 0.15]} />
+                      <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
+                    </mesh>
+                    <mesh castShadow receiveShadow position={[w / 2 + 1.5 * t, 0, 0]}>
+                      <boxGeometry args={[t, h + 2 * t, 0.15]} />
+                      <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
+                    </mesh>
+                  </group>
+
+                  {/* Coprigiunto Inferiore (Z = -l/2) */}
+                  <group position={[0, 0, -l / 2 - (currentStep === 6 ? 0.15 : 0)]}>
+                    <mesh castShadow receiveShadow position={[0, -h / 2 - 1.5 * t, 0]}>
+                      <boxGeometry args={[w + 4 * t, t, 0.15]} />
+                      <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
+                    </mesh>
+                    <mesh castShadow receiveShadow position={[0, h / 2 + 1.5 * t, 0]}>
+                      <boxGeometry args={[w + 4 * t, t, 0.15]} />
+                      <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
+                    </mesh>
+                    <mesh castShadow receiveShadow position={[-w / 2 - 1.5 * t, 0, 0]}>
+                      <boxGeometry args={[t, h + 2 * t, 0.15]} />
+                      <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
+                    </mesh>
+                    <mesh castShadow receiveShadow position={[w / 2 + 1.5 * t, 0, 0]}>
+                      <boxGeometry args={[t, h + 2 * t, 0.15]} />
+                      <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
+                    </mesh>
+                  </group>
                 </group>
               )}
             </group>
