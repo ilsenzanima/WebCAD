@@ -26,29 +26,17 @@ interface Props {
 // Componente 3D per l'Elbow (Curva 90 gradi)
 function ElbowMesh({ type, w_outer, h_outer, isSelected, onClick }: any) {
   let size: [number, number, number] = [w_outer, h_outer, w_outer];
-  let position: [number, number, number] = [0, 0, 0];
-
-  if (type === "Destra") {
-    size = [w_outer, h_outer, w_outer];
-    position = [w_outer / 2, 0, 0];
-  } else if (type === "Sinistra") {
-    size = [w_outer, h_outer, w_outer];
-    position = [-w_outer / 2, 0, 0];
-  } else if (type === "Alto") {
+  if (type === "Alto" || type === "Basso") {
     size = [w_outer, h_outer, h_outer];
-    position = [0, h_outer / 2, 0];
-  } else if (type === "Basso") {
-    size = [w_outer, h_outer, h_outer];
-    position = [0, -h_outer / 2, 0];
   }
 
   return (
-    <mesh position={position} castShadow receiveShadow onClick={onClick}>
+    <mesh position={[0, 0, 0]} castShadow receiveShadow onClick={onClick}>
       <boxGeometry args={size} />
       <meshStandardMaterial
-        color={isSelected ? "hsl(220, 90%, 56%)" : "hsl(38, 92%, 50%)"}
-        roughness={0.4}
-        metalness={0.2}
+        color={isSelected ? "hsl(220, 90%, 56%)" : "#cbd5e1"}
+        roughness={0.8}
+        metalness={0.1}
       />
     </mesh>
   );
@@ -138,45 +126,51 @@ function RouteScene({ calculatedPath, w, h, t, selectedSegmentId, setSelectedSeg
                 />
               </mesh>
 
-              {/* Orditura metallica a U - Angolari esterni (4 spigoli) */}
-              <mesh position={[-w / 2 - t + 0.01, -t / 2 + 0.01, 0]}>
-                <boxGeometry args={[0.02, 0.02, elem.length]} />
-                <meshStandardMaterial color="#94a3b8" roughness={0.2} metalness={0.8} />
-              </mesh>
-              <mesh position={[w / 2 + t - 0.01, -t / 2 + 0.01, 0]}>
-                <boxGeometry args={[0.02, 0.02, elem.length]} />
-                <meshStandardMaterial color="#94a3b8" roughness={0.2} metalness={0.8} />
-              </mesh>
-              <mesh position={[-w / 2 - t + 0.01, h + t / 2 - 0.01, 0]}>
-                <boxGeometry args={[0.02, 0.02, elem.length]} />
-                <meshStandardMaterial color="#94a3b8" roughness={0.2} metalness={0.8} />
-              </mesh>
-              <mesh position={[w / 2 + t - 0.01, h + t / 2 - 0.01, 0]}>
-                <boxGeometry args={[0.02, 0.02, elem.length]} />
-                <meshStandardMaterial color="#94a3b8" roughness={0.2} metalness={0.8} />
-              </mesh>
+              {/* Staffe / Barre di supporto e pendini sotto la canalizzazione */}
+              {elem.length > 0.6 && (
+                <group>
+                  {(elem.length <= 1.8 ? [0] : [-elem.length / 2 + 0.4, elem.length / 2 - 0.4]).map((zPos, idx) => (
+                    <group key={`support-${idx}`} position={[0, 0, zPos]}>
+                      {/* Barra asolata di supporto sotto il canale */}
+                      <mesh position={[0, -t / 2 - 0.02, 0]} castShadow receiveShadow>
+                        <boxGeometry args={[w_outer + 0.16, 0.04, 0.04]} />
+                        <meshStandardMaterial color="#94a3b8" roughness={0.2} metalness={0.8} />
+                      </mesh>
+                      {/* Pendini verticali di sospensione a soffitto */}
+                      <mesh position={[-w_outer / 2 - 0.06, 1.0, 0]} castShadow>
+                        <cylinderGeometry args={[0.008, 0.008, 2.0]} />
+                        <meshStandardMaterial color="#94a3b8" roughness={0.1} metalness={0.9} />
+                      </mesh>
+                      <mesh position={[w_outer / 2 + 0.06, 1.0, 0]} castShadow>
+                        <cylinderGeometry args={[0.008, 0.008, 2.0]} />
+                        <meshStandardMaterial color="#94a3b8" roughness={0.1} metalness={0.9} />
+                      </mesh>
+                    </group>
+                  ))}
+                </group>
+              )}
 
-              {/* Coprigiunti / Collari di giunzione se previsti */}
+              {/* Coprigiunti in lastra di Silicato (passo 120cm) se previsti */}
               {elem.length > 0.1 && (
                 <group>
-                  {/* Collare inizio */}
-                  <mesh position={[0, h / 2 + t / 2, -elem.length / 2 + 0.02]}>
-                    <boxGeometry args={[w_outer + 0.01, h_outer + 0.01, 0.03]} />
-                    <meshStandardMaterial color="#475569" roughness={0.4} metalness={0.6} transparent opacity={0.6} />
+                  {/* Coprigiunto inizio */}
+                  <mesh position={[0, h / 2 + t / 2, -elem.length / 2 + 0.075]} castShadow receiveShadow>
+                    <boxGeometry args={[w_outer + 2 * t, h_outer + 2 * t, 0.15]} />
+                    <meshStandardMaterial color="#cbd5e1" roughness={0.8} transparent opacity={0.85} />
                   </mesh>
-                  {/* Collare fine */}
-                  <mesh position={[0, h / 2 + t / 2, elem.length / 2 - 0.02]}>
-                    <boxGeometry args={[w_outer + 0.01, h_outer + 0.01, 0.03]} />
-                    <meshStandardMaterial color="#475569" roughness={0.4} metalness={0.6} transparent opacity={0.6} />
+                  {/* Coprigiunto fine */}
+                  <mesh position={[0, h / 2 + t / 2, elem.length / 2 - 0.075]} castShadow receiveShadow>
+                    <boxGeometry args={[w_outer + 2 * t, h_outer + 2 * t, 0.15]} />
+                    <meshStandardMaterial color="#cbd5e1" roughness={0.8} transparent opacity={0.85} />
                   </mesh>
-                  {/* Collari intermedi ogni 1.2 m */}
+                  {/* Coprigiunti intermedi ogni 1.2 m */}
                   {Array.from({ length: Math.floor(elem.length / 1.2) }).map((_, kIdx) => {
                     const zPos = -elem.length / 2 + 1.2 * (kIdx + 1);
-                    if (zPos < elem.length / 2 - 0.05) {
+                    if (zPos < elem.length / 2 - 0.1) {
                       return (
-                        <mesh key={`collar-${kIdx}`} position={[0, h / 2 + t / 2, zPos]}>
-                          <boxGeometry args={[w_outer + 0.01, h_outer + 0.01, 0.03]} />
-                          <meshStandardMaterial color="#475569" roughness={0.4} metalness={0.6} />
+                        <mesh key={`collar-${kIdx}`} position={[0, h / 2 + t / 2, zPos]} castShadow receiveShadow>
+                          <boxGeometry args={[w_outer + 2 * t, h_outer + 2 * t, 0.15]} />
+                          <meshStandardMaterial color="#cbd5e1" roughness={0.8} />
                         </mesh>
                       );
                     }
@@ -422,7 +416,7 @@ export default function CanalizzazioneDisegnoEditor({
           type: "elbow",
           segmentId: seg.id,
           svolta: seg.svolta,
-          center: posElbow,
+          center: posTurn,
           quaternion: elbowRotation,
           sizeD: D,
           w_outer,
@@ -657,7 +651,7 @@ export default function CanalizzazioneDisegnoEditor({
             <div><strong>Titolo Tracciato:</strong> ${title}</div>
             <div><strong>Materiale Lastre:</strong> ${selectedMaterial?.name || "Generico"} (${thicknessMm} mm)</div>
             <div><strong>Dimensioni Foro Interno:</strong> ${foroW} x ${foroH} cm</div>
-            <div><strong>Coprigiunti / Orditura U:</strong> ${conGiunti ? "Attivi (Passo 120cm)" : "Non Attivi"}</div>
+            <div><strong>Coprigiunti in Silicato:</strong> ${conGiunti ? "Attivi (Passo 120cm)" : "Non Attivi"}</div>
           </div>
         </div>
 
@@ -669,7 +663,7 @@ export default function CanalizzazioneDisegnoEditor({
             <div><strong>Superficie Totale Lastre:</strong> ${computations.totalPlatesAreaM2.toFixed(2)} m²</div>
             <div><strong>Lastre da Ordinare (Fogli):</strong> ~${computations.totalSheets} pezzi</div>
             <div><strong>Numero di Viti Stimato:</strong> ~${computations.totalScrews} pezzi</div>
-            <div><strong>Orditura metallica a U (Giunti):</strong> ${computations.totalProfileM.toFixed(2)} m</div>
+            <div><strong>Coprigiunti in Silicato:</strong> ${computations.totalProfileM.toFixed(2)} m</div>
           </div>
         </div>
 
@@ -848,7 +842,7 @@ export default function CanalizzazioneDisegnoEditor({
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <span className="text-xs text-white/70">Orditura metallica a U (Giunti coprigiunto)</span>
+              <span className="text-xs text-white/70">Coprigiunti in Silicato (Passo 120cm)</span>
               <label className="relative inline-flex items-center cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -1058,13 +1052,13 @@ export default function CanalizzazioneDisegnoEditor({
                 <span className="text-sm font-bold text-white">~{computations.totalScrews} pezzi</span>
               </div>
               <div className="p-3 bg-white/[0.01] border border-white/5 rounded-xl">
-                <span className="text-[10px] text-white/40 block">Orditura U (Giunti)</span>
+                <span className="text-[10px] text-white/40 block">Coprigiunti Silicato</span>
                 <span className="text-sm font-bold text-white">{computations.totalProfileM.toFixed(2)} m</span>
               </div>
             </div>
             
             <div className="mt-4 p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-[10px] text-amber-300/80 leading-relaxed">
-              💡 <strong>Nota per l'installatore:</strong> Inserire l'orditura metallica a U o C (50x50 mm) in tutti i contatti con solaio o pareti, e negli angoli dove necessario per garantire la corretta tenuta meccanica delle lastre.
+              💡 <strong>Nota per l'installatore:</strong> I coprigiunti esterni in lastra di silicato vanno incollati e avvitati a cavallo di ogni giunzione. La canalizzazione deve essere supportata da staffe di sostegno (barre asolate e pendini) a interasse massimo di 120 cm.
             </div>
           </div>
         </div>
