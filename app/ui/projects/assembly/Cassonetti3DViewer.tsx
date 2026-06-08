@@ -485,13 +485,21 @@ export default function Cassonetti3DViewer({
                   yTappo = ((k - layersCount) * t / 2) * ySign;
                 }
 
+                const isOuter = k === layersCount;
+                const zTappoAnt = isOuter
+                  ? l / 2 + t / 2
+                  : l / 2 - t / 2 - (layersCount - 1 - k) * t;
+                const zTappoPost = isOuter
+                  ? -l / 2 - t / 2
+                  : -l / 2 + t / 2 + (layersCount - 1 - k) * t;
+
                 return (
                   <group key={k}>
                     {/* Tappo Anteriore (Z = l/2) */}
                     <mesh
                       castShadow
                       receiveShadow
-                      position={[xTappo, yTappo, l / 2 + (k - 0.5) * t + (currentStep === stepTappi ? exp * k : 0)]}
+                      position={[xTappo, yTappo, zTappoAnt + (currentStep === stepTappi ? exp * k : 0)]}
                     >
                       <boxGeometry args={[wTappo, hTappo, t]} />
                       <meshStandardMaterial
@@ -506,7 +514,7 @@ export default function Cassonetti3DViewer({
                     <mesh
                       castShadow
                       receiveShadow
-                      position={[xTappo, yTappo, -l / 2 - (k - 0.5) * t - (currentStep === stepTappi ? exp * k : 0)]}
+                      position={[xTappo, yTappo, zTappoPost - (currentStep === stepTappi ? exp * k : 0)]}
                     >
                       <boxGeometry args={[wTappo, hTappo, t]} />
                       <meshStandardMaterial

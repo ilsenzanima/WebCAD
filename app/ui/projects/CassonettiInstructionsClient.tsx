@@ -171,7 +171,7 @@ export default function CassonettiInstructionsClient({
           desc: `Fissa meccanicamente la lastra (o lo strato di lastre) del fianco esterno all'orditura metallica tramite viti autoperforanti per silicato (passo max 20 cm). *NOTA: In caso di più strati, alternare l'incrocio delle lastre d'angolo per evitare giunti allineati.*`,
           materials: [
             ...listFianchi2Lati,
-            "Viti per silicato (Fissaggio a secco)",
+            "Viti",
           ],
         },
         {
@@ -182,16 +182,16 @@ export default function CassonettiInstructionsClient({
             : `Fissa la lastra inferiore (fondo) in sormonto sotto lo spessore del fianco laterale ed all'orditura metallica a parete.`,
           materials: [
             ...listFondo2Lati,
-            "Viti per silicato (Fissaggio a secco)",
+            "Viti",
           ],
         },
         {
           num: 4,
           title: "🛑 Tappi Terminali di Chiusura (Opzionali)",
-          desc: `Applica i 2 tappi di chiusura alle estremità del cassonetto (inizio e fine tratta). Ciascun tappo copre l'intero ingombro esterno ed è composto da ${layersCount} strati fissati meccanicamente all'orditura interna.`,
+          desc: `Applica i 2 tappi di chiusura alle estremità del cassonetto (inizio e fine tratta). Ciascun tappo copre l'intero ingombro esterno ed è composto da ${layersCount} strati fissati meccanicamente all'orditura interna. *SUGGERIMENTO: Inserire spezzoni di orditura metallica interna lungo il perimetro di giunzione dove necessario, così da garantire una solida tenuta meccanica e l'ancoraggio delle viti.*`,
           materials: [
             ...listTappi2Lati,
-            "Viti per silicato",
+            "Viti",
           ],
         },
         {
@@ -217,7 +217,7 @@ export default function CassonettiInstructionsClient({
           desc: `Fissa le due lastre dei fianchi esterni all'orditura metallica tramite viti. Per configurazioni plurilastra, alternare lo sfalsamento d'angolo ad incastro tra i vari strati.`,
           materials: [
             ...listFianchi3Lati,
-            "Viti per silicato",
+            "Viti",
           ],
         },
         {
@@ -228,16 +228,16 @@ export default function CassonettiInstructionsClient({
             : `Fissa la lastra inferiore (fondo) a sormonto sotto lo spessore dei due fianchi. Fissaggio solo con viti.`,
           materials: [
             ...listFondo3Lati,
-            "Viti per silicato",
+            "Viti",
           ],
         },
         {
           num: 4,
           title: "🛑 Tappi Terminali di Chiusura (Opzionali)",
-          desc: `Applica i 2 tappi di chiusura sulle estremità. Ciascun tappo copre l'intero ingombro ed è composto da ${layersCount} strati fissati meccanicamente all'orditura metallica perimetrale.`,
+          desc: `Applica i 2 tappi di chiusura sulle estremità. Ciascun tappo copre l'intero ingombro ed è composto da ${layersCount} strati fissati meccanicamente all'orditura metallica perimetrale. *SUGGERIMENTO: Inserire spezzoni di orditura metallica interna lungo il perimetro di giunzione dove necessario, così da garantire una solida tenuta meccanica e l'ancoraggio delle viti.*`,
           materials: [
             ...listTappi3Lati,
-            "Viti per silicato",
+            "Viti",
           ],
         },
         {
@@ -266,7 +266,7 @@ export default function CassonettiInstructionsClient({
             : `Fissa la lastra superiore a ridosso del solaio ancorandola all'orditura metallica di supporto superiore.`,
           materials: [
             ...listSchiena4Lati,
-            "Viti per silicato",
+            "Viti",
           ],
         },
         {
@@ -275,7 +275,7 @@ export default function CassonettiInstructionsClient({
           desc: `Monta le due lastre dei fianchi laterali ortogonalmente alla schiena/coperchio. *IMPORTANTE: Per la versione a 4 lati, sfalsare longitudinalmente i giunti dei fianchi rispetto a fondo/coperchio. Fissaggio a secco con sole viti.*`,
           materials: [
             ...listFianchi4Lati,
-            "Viti per silicato",
+            "Viti",
           ],
         },
         {
@@ -286,16 +286,16 @@ export default function CassonettiInstructionsClient({
             : `Avvita la lastra inferiore (fondo) per sigillare a scatola chiusa il cassonetto a 4 lati.`,
           materials: [
             ...listFondo4Lati,
-            "Viti per silicato",
+            "Viti",
           ],
         },
         {
           num: 5,
           title: "🛑 Tappi Terminali di Chiusura (Opzionali)",
-          desc: `Fissa i 2 tappi terminali di chiusura alle estremità della tratta. Ciascun tappo copre l'intero ingombro esterno ed è composto da ${layersCount} strati di lastre fissati all'orditura metallica interna.`,
+          desc: `Fissa i 2 tappi terminali di chiusura alle estremità della tratta. Ciascun tappo copre l'intero ingombro esterno ed è composto da ${layersCount} strati di lastre fissati all'orditura metallica interna. *SUGGERIMENTO: Inserire spezzoni di orditura metallica interna lungo il perimetro di giunzione dove necessario, così da garantire una solida tenuta meccanica e l'ancoraggio delle viti.*`,
           materials: [
             ...listTappi4Lati,
-            "Viti per silicato",
+            "Viti",
           ],
         },
         {
