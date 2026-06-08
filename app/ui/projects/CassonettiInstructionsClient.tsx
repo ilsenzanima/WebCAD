@@ -145,12 +145,6 @@ export default function CassonettiInstructionsClient({
         },
         {
           num: 5,
-          title: "🔗 Giunti Coprigiunto Esterni",
-          desc: "Avvita le strisce coprigiunto esterne in silicato (larghezza 15 cm) a cavallo di tutte le giunzioni trasversali tra i vari pannelli tramite viti di cucitura. Non utilizzare colla.",
-          materials: ["Coprigiunti in silicato (larghezza 15 cm)", "Viti per silicato"],
-        },
-        {
-          num: 6,
           title: "✅ Cassonetto Completato",
           desc: `Il cassonetto copri impianti a 2 lati ${isParete ? "a cavedio verticale" : "a solaio"} è ultimato ed assemblato interamente a secco con sole viti.`,
           materials: ["Cassonetto finito"],
@@ -197,12 +191,6 @@ export default function CassonettiInstructionsClient({
         },
         {
           num: 5,
-          title: "🔗 Giunti Coprigiunto Esterni",
-          desc: "Fissa con viti le strisce coprigiunto in silicato sulle giunzioni esterne trasversali per sigillare meccanicamente le giunzioni.",
-          materials: ["Coprigiunti in silicato", "Viti per silicato"],
-        },
-        {
-          num: 6,
           title: "✅ Cassonetto Completato",
           desc: `Il cassonetto copri impianti a 3 lati ${isParete ? "a cavedio verticale" : "a solaio"} è ultimato, assemblato con sole viti senza uso di colla.`,
           materials: ["Cassonetto 3 lati completato"],
@@ -261,12 +249,6 @@ export default function CassonettiInstructionsClient({
         },
         {
           num: 6,
-          title: "🔗 Giunti Coprigiunto Esterni",
-          desc: "Fissa con viti i coprigiunti esterni in silicato a cavallo di tutte le giunzioni longitudinali e trasversali per sigillare l'intero cassonetto su tutti e quattro i lati.",
-          materials: ["Coprigiunti in silicato", "Viti per silicato"],
-        },
-        {
-          num: 7,
           title: "✅ Cassonetto Completato",
           desc: "Il cassonetto isolato a 4 lati è interamente montato con orditura interna a U o a C ed assemblato a secco con sole viti.",
           materials: ["Cassonetto 4 lati completato"],
