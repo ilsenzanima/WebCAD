@@ -20,7 +20,12 @@ const RegisterSchema = z.object({
     .string()
     .min(2, { message: "Il nome deve essere di almeno 2 caratteri." })
     .trim(),
-  email: z.string().email({ message: "Inserisci un indirizzo email valido." }),
+  email: z
+    .string()
+    .email({ message: "Inserisci un indirizzo email valido." })
+    .refine((val) => val.endsWith("@opifiresafe.com"), {
+      message: "Registrazione consentita solo con email aziendale @opifiresafe.com.",
+    }),
   password: z
     .string()
     .min(8, { message: "La password deve essere di almeno 8 caratteri." })

@@ -84,14 +84,14 @@ export default function RegisterPage() {
             className="block text-sm font-medium"
             style={{ color: "hsl(215 20% 75%)" }}
           >
-            Email professionale
+            Email aziendale
           </label>
           <input
             id="email"
             name="email"
             type="email"
             autoComplete="email"
-            placeholder="nome@azienda.it"
+            placeholder="nome@opifiresafe.com"
             required
             className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-[hsl(215_15%_40%)] transition-all duration-200"
             style={{
