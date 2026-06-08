@@ -127,10 +127,10 @@ export default function CassonettiInstructionsClient({
           num: 3,
           title: isParete ? `🔒 Lastra Frontale di Chiusura${layersText}` : `🧱 Lastra Inferiore (Fondo)${layersText}`,
           desc: isParete
-            ? `Avvita la lastra frontale di chiusura larga ${(widthCm + tCm).toFixed(1)} cm in battuta sullo spessore del fianco montato al passo precedente, ancorandola sull'altro lato all'orditura metallica fissata a parete.`
-            : `Fissa la lastra inferiore (fondo) larga ${(widthCm + tCm).toFixed(1)} x ${lengthCm} cm in sormonto sotto lo spessore del fianco laterale ed all'orditura metallica a parete.`,
+            ? `Avvita la lastra frontale di chiusura (larghezza a partire da ${(widthCm + (layersCount + 1) * tCm).toFixed(1)} cm, vedi distinta di taglio per ogni strato) in battuta sullo spessore del fianco montato al passo precedente, ancorandola sull'altro lato all'orditura metallica fissata a parete.`
+            : `Fissa la lastra inferiore (fondo) (larghezza a partire da ${(widthCm + (layersCount + 1) * tCm).toFixed(1)} cm, vedi distinta di taglio per ogni strato) x ${lengthCm} cm in sormonto sotto lo spessore del fianco laterale ed all'orditura metallica a parete.`,
           materials: [
-            `${layersCount}x Lastra ${isParete ? "Frontale" : "Fondo"}: ${(widthCm + tCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${tMm} mm)`,
+            `${layersCount}x Lastra ${isParete ? "Frontale" : "Fondo"}: (da ${(widthCm + (layersCount + 1) * tCm).toFixed(1)} cm, vedi distinta) x ${lengthCm} cm (Spessore: ${tMm} mm)`,
             "Viti per silicato (Fissaggio a secco)",
           ],
         },
@@ -139,7 +139,7 @@ export default function CassonettiInstructionsClient({
           title: "🛑 Tappi Terminali di Chiusura (Opzionali)",
           desc: `Applica i 2 tappi di chiusura alle estremità del cassonetto (inizio e fine tratta). Ciascun tappo copre l'intero ingombro esterno ed è composto da ${layersCount} strati fissati meccanicamente all'orditura interna.`,
           materials: [
-            `${2 * layersCount}x Lastre Tappo: ${(widthCm + tCm).toFixed(1)} x ${(heightCm + tCm).toFixed(1)} cm (Spessore: ${tMm} mm)`,
+            `${2 * layersCount}x Lastre Tappo: (da ${(widthCm + (layersCount + 1) * tCm).toFixed(1)} x ${(heightCm + (layersCount + 1) * tCm).toFixed(1)} cm, vedi distinta) (Spessore: ${tMm} mm)`,
             "Viti per silicato",
           ],
         },
@@ -185,7 +185,7 @@ export default function CassonettiInstructionsClient({
           title: "🛑 Tappi Terminali di Chiusura (Opzionali)",
           desc: `Applica i 2 tappi di chiusura sulle estremità. Ciascun tappo copre l'intero ingombro ed è composto da ${layersCount} strati fissati meccanicamente all'orditura metallica perimetrale.`,
           materials: [
-            `${2 * layersCount}x Lastre Tappo: ${(widthCm + 2 * tCm).toFixed(1)} x ${(heightCm + tCm).toFixed(1)} cm (Spessore: ${tMm} mm)`,
+            `${2 * layersCount}x Lastre Tappo: (da ${(widthCm + 2 * tCm).toFixed(1)} x ${(heightCm + (layersCount + 1) * tCm).toFixed(1)} cm, vedi distinta) (Spessore: ${tMm} mm)`,
             "Viti per silicato",
           ],
         },
@@ -275,26 +275,26 @@ export default function CassonettiInstructionsClient({
           list.push({
             name: `• Lastra Fianco${layerName}:`,
             qty: 1,
-            w: hMm + (k - 1) * thicknessMm,
+            w: hMm + (layersCount + k - 1) * thicknessMm,
             l: lMm,
           });
           list.push({
             name: `• Lastra Frontale/Fondo${layerName}:`,
             qty: 1,
-            w: wMm + k * thicknessMm,
+            w: wMm + (layersCount + k) * thicknessMm,
             l: lMm,
           });
         } else {
           list.push({
             name: `• Lastra Fianco${layerName}:`,
             qty: 1,
-            w: hMm + k * thicknessMm,
+            w: hMm + (layersCount + k) * thicknessMm,
             l: lMm,
           });
           list.push({
             name: `• Lastra Frontale/Fondo${layerName}:`,
             qty: 1,
-            w: wMm + (k - 1) * thicknessMm,
+            w: wMm + (layersCount + k - 1) * thicknessMm,
             l: lMm,
           });
         }
@@ -303,7 +303,7 @@ export default function CassonettiInstructionsClient({
           list.push({
             name: `• Lastre Fianchi (SX/DX)${layerName}:`,
             qty: 2,
-            w: hMm + (k - 1) * thicknessMm,
+            w: hMm + (layersCount + k - 1) * thicknessMm,
             l: lMm,
           });
           list.push({
@@ -316,7 +316,7 @@ export default function CassonettiInstructionsClient({
           list.push({
             name: `• Lastre Fianchi (SX/DX)${layerName}:`,
             qty: 2,
-            w: hMm + k * thicknessMm,
+            w: hMm + (layersCount + k) * thicknessMm,
             l: lMm,
           });
           list.push({
@@ -365,11 +365,11 @@ export default function CassonettiInstructionsClient({
       let hTappo = hMm + 2 * k * thicknessMm;
 
       if (sides === "2-lati") {
-        wTappo = wMm + k * thicknessMm;
-        hTappo = hMm + k * thicknessMm;
+        wTappo = wMm + (layersCount + k) * thicknessMm;
+        hTappo = hMm + (layersCount + k) * thicknessMm;
       } else if (sides === "3-lati") {
         wTappo = wMm + 2 * k * thicknessMm;
-        hTappo = hMm + k * thicknessMm;
+        hTappo = hMm + (layersCount + k) * thicknessMm;
       }
 
       list.push({

@@ -410,7 +410,9 @@ export default function Cassonetti3DViewer({
                 const yFianco = isOdd
                   ? ((k - 1 - layersCount) * t / 2) * ySign
                   : ((k - layersCount) * t / 2) * ySign;
-                const xFondo = (isOdd ? k : k - 1) * t / 2;
+                const xFondo = isOdd
+                  ? (k - layersCount) * t / 2
+                  : (k - 1 - layersCount) * t / 2;
 
                 return (
                   <group key={k}>
@@ -446,7 +448,7 @@ export default function Cassonetti3DViewer({
                           0
                         ]}
                       >
-                        <boxGeometry args={[isOdd ? w + k * t : w + (k - 1) * t, t, l]} />
+                        <boxGeometry args={[isOdd ? w + (layersCount + k) * t : w + (layersCount + k - 1) * t, t, l]} />
                         <meshStandardMaterial
                           color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
                           roughness={0.8}
@@ -473,14 +475,14 @@ export default function Cassonetti3DViewer({
                 let yTappo = 0;
 
                 if (sides === "2-lati") {
-                  wTappo = w + k * t;
-                  hTappo = h + k * t;
-                  xTappo = k * t / 2;
-                  yTappo = (k * t / 2) * ySign;
+                  wTappo = w + (layersCount + k) * t;
+                  hTappo = h + (layersCount + k) * t;
+                  xTappo = (k - layersCount) * t / 2;
+                  yTappo = ((k - layersCount) * t / 2) * ySign;
                 } else if (sides === "3-lati") {
                   wTappo = w + 2 * k * t;
-                  hTappo = h + k * t;
-                  yTappo = (k * t / 2) * ySign;
+                  hTappo = h + (layersCount + k) * t;
+                  yTappo = ((k - layersCount) * t / 2) * ySign;
                 }
 
                 return (
