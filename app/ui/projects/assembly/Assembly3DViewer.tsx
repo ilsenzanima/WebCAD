@@ -6,10 +6,10 @@ import { useMemo, useRef } from "react";
 import * as THREE from "three";
 
 function AnimatedSmokeParticle({ path, speed = 1.0, delay = 0 }: { path: THREE.Vector3[], speed?: number, delay?: number }) {
-  const meshRef = useRef<THREE.Mesh>(null);
+  const groupRef = useRef<THREE.Group>(null);
   
   useFrame((state) => {
-    if (!meshRef.current) return;
+    if (!groupRef.current) return;
     const time = state.clock.getElapsedTime() * speed + delay;
     const progress = (time % 2) / 2; // progress 0 to 1 every 2 seconds
     
@@ -20,14 +20,17 @@ function AnimatedSmokeParticle({ path, speed = 1.0, delay = 0 }: { path: THREE.V
     const start = path[segmentIndex];
     const end = path[segmentIndex + 1];
     
-    meshRef.current.position.lerpVectors(start, end, segmentProgress);
+    groupRef.current.position.lerpVectors(start, end, segmentProgress);
+    groupRef.current.lookAt(end);
   });
   
   return (
-    <mesh ref={meshRef}>
-      <sphereGeometry args={[0.015, 16, 16]} />
-      <meshStandardMaterial color="#f97316" emissive="#f97316" emissiveIntensity={3} transparent opacity={0.9} />
-    </mesh>
+    <group ref={groupRef}>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[0.015, 0.04, 8]} />
+        <meshStandardMaterial color="#f97316" emissive="#f97316" emissiveIntensity={3.5} transparent opacity={0.9} />
+      </mesh>
+    </group>
   );
 }
 
@@ -62,16 +65,16 @@ export default function Assembly3DViewer({
 
   // Percorsi per le particelle di fumo delle canne-shunt
   const path1 = useMemo(() => [
-    new THREE.Vector3(w / 2 + t, h / 2 + t / 2 + 0.3, -0.1),
-    new THREE.Vector3(w / 2 + t, 0, -0.1),
-    new THREE.Vector3(w / 2 + t, 0, l / 4 - 0.2),
-    new THREE.Vector3(-w / 2 - t, 0, l / 4 + 0.1),
-    new THREE.Vector3(-w / 2 - t, 0, l / 2 + 0.15)
+    new THREE.Vector3(w / 2 + t, h / 2 + t / 2 + 0.3, 0.1),
+    new THREE.Vector3(w / 2 + t, 0, 0.1),
+    new THREE.Vector3(w / 2 + t, 0, -l / 4 + 0.1),
+    new THREE.Vector3(-w / 2 - t, 0, -l / 4 - 0.1),
+    new THREE.Vector3(-w / 2 - t, 0, -l / 2 - 0.15)
   ], [w, t, l, h]);
 
   const path2 = useMemo(() => [
-    new THREE.Vector3(-w / 2 - t, 0, -l / 2 - 0.15),
-    new THREE.Vector3(-w / 2 - t, 0, l / 2 + 0.15)
+    new THREE.Vector3(-w / 2 - t, 0, l / 2 + 0.15),
+    new THREE.Vector3(-w / 2 - t, 0, -l / 2 - 0.15)
   ], [w, t, l]);
 
   // Posizioni calcolate con offset di "esplosione" se lo step è attivo
@@ -1232,10 +1235,10 @@ export default function Assembly3DViewer({
                       opacity={currentStep === 2 ? 0.85 : 1}
                     />
                   </mesh>
-                  {/* Parete Divisoria Centrale SX (con finestra di passaggio a 3/4 altezza: Z = l/4) */}
-                  {/* Divisoria Inferiore SX */}
-                  <mesh castShadow receiveShadow position={[-t / 2 - (currentStep === 2 ? 0.15 : 0), 0, -l / 8 - 0.05]}>
-                    <boxGeometry args={[t, h, 0.75 * l - 0.1]} />
+                  {/* Parete Divisoria Centrale SX (con finestra di passaggio a 3/4 altezza: Z = -l/4) */}
+                  {/* Divisoria Inferiore SX (alto reale, Z negativo) */}
+                  <mesh castShadow receiveShadow position={[-t / 2 - (currentStep === 2 ? 0.15 : 0), 0, -3 * l / 8 - 0.05]}>
+                    <boxGeometry args={[t, h, 0.25 * l - 0.1]} />
                     <meshStandardMaterial
                       color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
                       roughness={0.8}
@@ -1243,9 +1246,9 @@ export default function Assembly3DViewer({
                       opacity={currentStep === 2 ? 0.85 : 1}
                     />
                   </mesh>
-                  {/* Divisoria Superiore SX */}
-                  <mesh castShadow receiveShadow position={[-t / 2 - (currentStep === 2 ? 0.15 : 0), 0, 0.375 * l + 0.05]}>
-                    <boxGeometry args={[t, h, 0.25 * l - 0.1]} />
+                  {/* Divisoria Superiore SX (basso reale, Z positivo) */}
+                  <mesh castShadow receiveShadow position={[-t / 2 - (currentStep === 2 ? 0.15 : 0), 0, l / 8 + 0.05]}>
+                    <boxGeometry args={[t, h, 0.75 * l - 0.1]} />
                     <meshStandardMaterial
                       color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
                       roughness={0.8}
@@ -1280,9 +1283,9 @@ export default function Assembly3DViewer({
                     />
                   </mesh>
                   {/* Parete Divisoria Centrale DX (con finestra di passaggio, adiacente a quella SX, a 3/4 altezza) */}
-                  {/* Divisoria Inferiore DX */}
-                  <mesh castShadow receiveShadow position={[t / 2 + (currentStep === 3 ? 0.15 : 0), 0, -l / 8 - 0.05]}>
-                    <boxGeometry args={[t, h, 0.75 * l - 0.1]} />
+                  {/* Divisoria Inferiore DX (alto reale, Z negativo) */}
+                  <mesh castShadow receiveShadow position={[t / 2 + (currentStep === 3 ? 0.15 : 0), 0, -3 * l / 8 - 0.05]}>
+                    <boxGeometry args={[t, h, 0.25 * l - 0.1]} />
                     <meshStandardMaterial
                       color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
                       roughness={0.8}
@@ -1290,9 +1293,9 @@ export default function Assembly3DViewer({
                       opacity={currentStep === 3 ? 0.85 : 1}
                     />
                   </mesh>
-                  {/* Divisoria Superiore DX */}
-                  <mesh castShadow receiveShadow position={[t / 2 + (currentStep === 3 ? 0.15 : 0), 0, 0.375 * l + 0.05]}>
-                    <boxGeometry args={[t, h, 0.25 * l - 0.1]} />
+                  {/* Divisoria Superiore DX (basso reale, Z positivo) */}
+                  <mesh castShadow receiveShadow position={[t / 2 + (currentStep === 3 ? 0.15 : 0), 0, l / 8 + 0.05]}>
+                    <boxGeometry args={[t, h, 0.75 * l - 0.1]} />
                     <meshStandardMaterial
                       color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
                       roughness={0.8}
@@ -1304,8 +1307,8 @@ export default function Assembly3DViewer({
                   <mesh
                     castShadow
                     receiveShadow
-                    position={[w / 2 + t + (currentStep === 3 ? 0.15 : 0), 0, l / 4 - 0.1]}
-                    rotation={[0, -Math.atan2(0.2, w), 0]}
+                    position={[w / 2 + t + (currentStep === 3 ? 0.15 : 0), 0, -l / 4]}
+                    rotation={[0, Math.atan2(0.2, w), 0]}
                   >
                     <boxGeometry args={[Math.sqrt(w * w + 0.04), h, t]} />
                     <meshStandardMaterial
@@ -1338,9 +1341,9 @@ export default function Assembly3DViewer({
               {/* STEP 5: Chiusura Canale Shunt (Fronte DX Inferiore e Superiore) */}
               {currentStep >= 5 && (
                 <group>
-                  {/* Fronte DX Inferiore (Lascia libera l'altezza dell'innesto a Z = -0.1) */}
-                  <mesh castShadow receiveShadow position={[w / 2 + t, h / 2 + t / 2 + (currentStep === 5 ? 0.15 : 0), -l / 4 - 0.1]}>
-                    <boxGeometry args={[w + 2 * t, t, l / 2 - 0.2]} />
+                  {/* Fronte DX Inferiore (alto reale, Z negativo) */}
+                  <mesh castShadow receiveShadow position={[w / 2 + t, h / 2 + t / 2 + (currentStep === 5 ? 0.15 : 0), -l / 4]}>
+                    <boxGeometry args={[w + 2 * t, t, l / 2]} />
                     <meshStandardMaterial
                       color={currentStep === 5 ? colors.panelActive : colors.panelStandard}
                       roughness={0.8}
@@ -1348,9 +1351,9 @@ export default function Assembly3DViewer({
                       opacity={currentStep === 5 ? 0.85 : (currentStep === 9 ? 0.25 : 1)}
                     />
                   </mesh>
-                  {/* Fronte DX Superiore */}
-                  <mesh castShadow receiveShadow position={[w / 2 + t, h / 2 + t / 2 + (currentStep === 5 ? 0.15 : 0), l / 4]}>
-                    <boxGeometry args={[w + 2 * t, t, l / 2]} />
+                  {/* Fronte DX Superiore (basso reale, Z positivo, lascia libera la luce dell'innesto a Z = +0.1) */}
+                  <mesh castShadow receiveShadow position={[w / 2 + t, h / 2 + t / 2 + (currentStep === 5 ? 0.15 : 0), l / 4 + 0.1]}>
+                    <boxGeometry args={[w + 2 * t, t, l / 2 - 0.2]} />
                     <meshStandardMaterial
                       color={currentStep === 5 ? colors.panelActive : colors.panelStandard}
                       roughness={0.8}
@@ -1410,7 +1413,7 @@ export default function Assembly3DViewer({
               {currentStep >= 7 && (
                 <group>
                   {/* Fondo Innesto */}
-                  <mesh castShadow receiveShadow position={[w / 2 + t, h / 2 + t / 2 + 0.15 + (currentStep === 7 ? 0.15 : 0), -0.2 - t / 2]}>
+                  <mesh castShadow receiveShadow position={[w / 2 + t, h / 2 + t / 2 + 0.15 + (currentStep === 7 ? 0.15 : 0), 0 - t / 2]}>
                     <boxGeometry args={[w + 2 * t, 0.3, t]} />
                     <meshStandardMaterial
                       color={currentStep === 7 ? colors.panelActive : colors.panelStandard}
@@ -1420,7 +1423,7 @@ export default function Assembly3DViewer({
                     />
                   </mesh>
                   {/* Coperchio Innesto */}
-                  <mesh castShadow receiveShadow position={[w / 2 + t, h / 2 + t / 2 + 0.15 + (currentStep === 7 ? 0.15 : 0), 0 + t / 2]}>
+                  <mesh castShadow receiveShadow position={[w / 2 + t, h / 2 + t / 2 + 0.15 + (currentStep === 7 ? 0.15 : 0), 0.2 + t / 2]}>
                     <boxGeometry args={[w + 2 * t, 0.3, t]} />
                     <meshStandardMaterial
                       color={currentStep === 7 ? colors.panelActive : colors.panelStandard}
@@ -1430,7 +1433,7 @@ export default function Assembly3DViewer({
                     />
                   </mesh>
                   {/* Fianco SX Innesto */}
-                  <mesh castShadow receiveShadow position={[t / 2 + (currentStep === 7 ? -0.05 : 0), h / 2 + t / 2 + 0.15 + (currentStep === 7 ? 0.15 : 0), -0.1]}>
+                  <mesh castShadow receiveShadow position={[t / 2 + (currentStep === 7 ? -0.05 : 0), h / 2 + t / 2 + 0.15 + (currentStep === 7 ? 0.15 : 0), 0.1]}>
                     <boxGeometry args={[t, 0.3, 0.2]} />
                     <meshStandardMaterial
                       color={currentStep === 7 ? colors.panelActive : colors.panelStandard}
@@ -1440,7 +1443,7 @@ export default function Assembly3DViewer({
                     />
                   </mesh>
                   {/* Fianco DX Innesto */}
-                  <mesh castShadow receiveShadow position={[w + 1.5 * t + (currentStep === 7 ? 0.05 : 0), h / 2 + t / 2 + 0.15 + (currentStep === 7 ? 0.15 : 0), -0.1]}>
+                  <mesh castShadow receiveShadow position={[w + 1.5 * t + (currentStep === 7 ? 0.05 : 0), h / 2 + t / 2 + 0.15 + (currentStep === 7 ? 0.15 : 0), 0.1]}>
                     <boxGeometry args={[t, 0.3, 0.2]} />
                     <meshStandardMaterial
                       color={currentStep === 7 ? colors.panelActive : colors.panelStandard}
