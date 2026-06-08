@@ -67,7 +67,7 @@ export default function Cassonetti3DViewer({
 
         {/* Gruppo principale ruotato se a parete (verticale) */}
         <group
-          position={isVertical ? [0, l / 2 - 0.4, 0] : [0, 0, 0]}
+          position={isVertical ? [0, l / 2 - 1.2, 0] : [0, 0, 0]}
           rotation={isVertical ? [Math.PI / 2, 0, 0] : [0, 0, 0]}
         >
           {/* PARETI DI SUPPORTO (MURATURA ESISTENTE) */}
@@ -81,8 +81,15 @@ export default function Cassonetti3DViewer({
 
           {/* Parete Laterale Sinistra (solo se 2 lati, a rappresentare l'angolo) */}
           {sides === "2-lati" && (
-            <mesh position={[-w / 2 - (layersCount * t) - 0.02, 0, 0]} receiveShadow>
-              <boxGeometry args={[0.04, h + 0.3, l + 0.4]} />
+            <mesh
+              position={[
+                -w / 2 - (layersCount * t) - 0.02,
+                (0.055 - (layersCount * t) / 2) * ySign,
+                0
+              ]}
+              receiveShadow
+            >
+              <boxGeometry args={[0.04, h + layersCount * t + 0.19, l + 0.4]} />
               <meshStandardMaterial color={colors.wallBackground} roughness={0.9} />
             </mesh>
           )}
@@ -93,7 +100,7 @@ export default function Cassonetti3DViewer({
               {/* --- PROFILI DI GUIDA (A contatto con solai o pareti) --- */}
               {/* Profilo guida DX a solaio/parete (per 2-lati e 3-lati) */}
               {sides !== "4-lati" && (
-                <mesh castShadow receiveShadow position={[w / 2 - 0.025, (-h / 2 - 0.025 - (layersCount * t)) * ySign, 0]}>
+                <mesh castShadow receiveShadow position={[w / 2 - 0.025, (-h / 2 + 0.025 - (layersCount * t)) * ySign, 0]}>
                   <boxGeometry args={[0.05, 0.05, l]} />
                   <meshStandardMaterial
                     color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
@@ -105,7 +112,7 @@ export default function Cassonetti3DViewer({
 
               {/* Profilo guida SX a solaio (solo per 3-lati) */}
               {sides === "3-lati" && (
-                <mesh castShadow receiveShadow position={[-w / 2 + 0.025, (-h / 2 - 0.025 - (layersCount * t)) * ySign, 0]}>
+                <mesh castShadow receiveShadow position={[-w / 2 + 0.025, (-h / 2 + 0.025 - (layersCount * t)) * ySign, 0]}>
                   <boxGeometry args={[0.05, 0.05, l]} />
                   <meshStandardMaterial
                     color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
@@ -117,7 +124,7 @@ export default function Cassonetti3DViewer({
 
               {/* Profilo guida a parete SX (solo per 2-lati) */}
               {sides === "2-lati" && (
-                <mesh castShadow receiveShadow position={[-w / 2 - 0.025 - (layersCount * t), (h / 2 - 0.025) * ySign, 0]}>
+                <mesh castShadow receiveShadow position={[-w / 2 + 0.025 - (layersCount * t), (h / 2 - 0.025) * ySign, 0]}>
                   <boxGeometry args={[0.05, 0.05, l]} />
                   <meshStandardMaterial
                     color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
@@ -177,24 +184,24 @@ export default function Cassonetti3DViewer({
               {/* Pendinaggio di Sospensione e Barra Asolata (Solo per 4 Lati) */}
               {sides === "4-lati" && (
                 <group>
-                  {/* Barra asolata inferiore */}
-                  <mesh castShadow receiveShadow position={[0, (-h / 2 - (layersCount * t) - 0.025) * ySign, 0]}>
-                    <boxGeometry args={[w + 2 * layersCount * t + 0.1, 0.03, 0.03]} />
+                  {/* Barra asolata inferiore (sempre sotto il cassonetto, assoluto) */}
+                  <mesh castShadow receiveShadow position={[0, -h / 2 - (layersCount * t) - 0.02, 0]}>
+                    <boxGeometry args={[w + 2 * layersCount * t + 0.16, 0.04, 0.04]} />
                     <meshStandardMaterial
                       color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
-                      roughness={0.4}
+                      roughness={0.2}
                       metalness={0.8}
                     />
                   </mesh>
-                  {/* Pendini filettati laterali (DX e SX) */}
+                  {/* Pendini filettati verticali (DX e SX, sempre appesi dal soffitto) */}
                   {!isVertical && (
                     <group>
-                      <mesh position={[-w / 2 - layersCount * t - 0.04, (0.175 - layersCount * t * 0.5) * ySign, 0]}>
-                        <cylinderGeometry args={[0.005, 0.005, h + layersCount * t + 0.45]} />
+                      <mesh position={[-w / 2 - layersCount * t - 0.06, 0.48 - h / 4 - layersCount * t * 0.5, 0]}>
+                        <cylinderGeometry args={[0.006, 0.006, 1.04 + h / 2 + layersCount * t]} />
                         <meshStandardMaterial color={colors.metalStructure} roughness={0.2} metalness={0.9} />
                       </mesh>
-                      <mesh position={[w / 2 + layersCount * t + 0.04, (0.175 - layersCount * t * 0.5) * ySign, 0]}>
-                        <cylinderGeometry args={[0.005, 0.005, h + layersCount * t + 0.45]} />
+                      <mesh position={[w / 2 + layersCount * t + 0.06, 0.48 - h / 4 - layersCount * t * 0.5, 0]}>
+                        <cylinderGeometry args={[0.006, 0.006, 1.04 + h / 2 + layersCount * t]} />
                         <meshStandardMaterial color={colors.metalStructure} roughness={0.2} metalness={0.9} />
                       </mesh>
                     </group>
@@ -318,7 +325,10 @@ export default function Cassonetti3DViewer({
                 const showStep3 = currentStep >= 3;
 
                 const layerOffset = (k - 1) * t;
-                const hFianco = isOdd ? h + (k - 1) * t : h + k * t;
+                const hFianco = isOdd ? h + (layersCount + k - 1) * t : h + (layersCount + k) * t;
+                const yFianco = isOdd
+                  ? ((k - 1 - layersCount) * t / 2) * ySign
+                  : ((k - layersCount) * t / 2) * ySign;
 
                 return (
                   <group key={k}>
@@ -329,7 +339,7 @@ export default function Cassonetti3DViewer({
                         receiveShadow
                         position={[
                           -w / 2 - t / 2 - layerOffset - (currentStep === 2 ? exp * k : 0),
-                          ((isOdd ? k - 1 : k) * t / 2) * ySign,
+                          yFianco,
                           0
                         ]}
                       >
@@ -350,7 +360,7 @@ export default function Cassonetti3DViewer({
                         receiveShadow
                         position={[
                           w / 2 + t / 2 + layerOffset + (currentStep === 2 ? exp * k : 0),
-                          ((isOdd ? k - 1 : k) * t / 2) * ySign,
+                          yFianco,
                           0
                         ]}
                       >
@@ -396,7 +406,10 @@ export default function Cassonetti3DViewer({
                 const showStep3 = currentStep >= 3;
 
                 const layerOffset = (k - 1) * t;
-                const hFianco = isOdd ? h + (k - 1) * t : h + k * t;
+                const hFianco = isOdd ? h + (layersCount + k - 1) * t : h + (layersCount + k) * t;
+                const yFianco = isOdd
+                  ? ((k - 1 - layersCount) * t / 2) * ySign
+                  : ((k - layersCount) * t / 2) * ySign;
                 const xFondo = (isOdd ? k : k - 1) * t / 2;
 
                 return (
@@ -408,7 +421,7 @@ export default function Cassonetti3DViewer({
                         receiveShadow
                         position={[
                           w / 2 + t / 2 + layerOffset + (currentStep === 2 ? exp * k : 0),
-                          ((isOdd ? k - 1 : k) * t / 2) * ySign,
+                          yFianco,
                           0
                         ]}
                       >
@@ -453,7 +466,6 @@ export default function Cassonetti3DViewer({
             <group>
               {Array.from({ length: layersCount }).map((_, idx) => {
                 const k = idx + 1;
-                const layerOffset = (k - 1) * t;
 
                 let wTappo = w + 2 * k * t;
                 let hTappo = h + 2 * k * t;
@@ -508,6 +520,32 @@ export default function Cassonetti3DViewer({
             </group>
           )}
         </group>
+
+        {/* Zoccolo / Giunto di base a contatto con il pavimento (solo per 4-lati verticale al passo completato) */}
+        {sides === "4-lati" && isVertical && currentStep >= 6 && (
+          <group position={[0, -1.2, 0]}>
+            {/* Frontale */}
+            <mesh castShadow receiveShadow position={[0, 0, h / 2 + layersCount * t + 0.002]}>
+              <boxGeometry args={[w + 2 * layersCount * t + 0.05, 0.15, 0.01]} />
+              <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
+            </mesh>
+            {/* Posteriore */}
+            <mesh castShadow receiveShadow position={[0, 0, -h / 2 - layersCount * t - 0.002]}>
+              <boxGeometry args={[w + 2 * layersCount * t + 0.05, 0.15, 0.01]} />
+              <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
+            </mesh>
+            {/* Destra */}
+            <mesh castShadow receiveShadow position={[w / 2 + layersCount * t + 0.002, 0, 0]}>
+              <boxGeometry args={[0.01, 0.15, h + 2 * layersCount * t]} />
+              <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
+            </mesh>
+            {/* Sinistra */}
+            <mesh castShadow receiveShadow position={[-w / 2 - layersCount * t - 0.002, 0, 0]}>
+              <boxGeometry args={[0.01, 0.15, h + 2 * layersCount * t]} />
+              <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
+            </mesh>
+          </group>
+        )}
 
         {/* Griglia a terra */}
         <Grid

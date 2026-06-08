@@ -250,8 +250,12 @@ export default function CassonettiInstructionsClient({
         {
           num: 6,
           title: "✅ Cassonetto Completato",
-          desc: "Il cassonetto isolato a 4 lati è interamente montato con orditura interna a U o a C ed assemblato a secco con sole viti.",
-          materials: ["Cassonetto 4 lati completato"],
+          desc: isParete
+            ? "Il cassonetto isolato a 4 lati è completato. Per questa versione verticale (a parete), applicare il giunto coprigiunto di base a contatto con il pavimento nella parte inferiore per sigillare la base del cassonetto."
+            : "Il cassonetto isolato a 4 lati è interamente montato con orditura interna a U o a C ed assemblato a secco con sole viti.",
+          materials: isParete
+            ? ["Cassonetto completato", "Giunto coprigiunto di base a pavimento"]
+            : ["Cassonetto 4 lati completato"],
         },
       ];
     }
