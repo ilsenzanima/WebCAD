@@ -244,10 +244,14 @@ export async function updateFieldNote(noteId: string, formData: {
     const { error: itemsError } = await (supabase as any)
       .from("field_note_items")
       .insert(
-        formData.items.map((item) => ({
-          note_id: noteId,
-          ...item,
-        }))
+        formData.items.map((item) => {
+          const { id, ...rest } = item as any;
+          return {
+            note_id: noteId,
+            ...rest,
+            ...(id && !id.startsWith("temp_") ? { id } : {}),
+          };
+        })
       );
     if (itemsError) return { success: false, error: itemsError.message };
   }
@@ -306,10 +310,14 @@ export async function createFieldNote(formData: {
     const { error: itemsError } = await (supabase as any)
       .from("field_note_items")
       .insert(
-        formData.items.map((item) => ({
-          note_id: note.id,
-          ...item,
-        }))
+        formData.items.map((item) => {
+          const { id, ...rest } = item as any;
+          return {
+            note_id: note.id,
+            ...rest,
+            ...(id && !id.startsWith("temp_") ? { id } : {}),
+          };
+        })
       );
     if (itemsError) return { success: false, error: itemsError.message };
   }
