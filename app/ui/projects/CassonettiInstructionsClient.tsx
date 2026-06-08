@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Cassonetti3DViewer from "./assembly/Cassonetti3DViewer";
 
@@ -12,7 +12,7 @@ interface Project {
 interface MaterialCategory {
   id: string;
   name: string;
-  tags?: string[];
+  thickness_mm?: number;
 }
 
 interface CassonettiInstructionsClientProps {
@@ -24,113 +24,188 @@ export default function CassonettiInstructionsClient({
   project,
   catalogMaterials,
 }: CassonettiInstructionsClientProps) {
-  // Stato parametri dimensionali (in cm)
-  const [widthCm, setWidthCm] = useState(40);
-  const [heightCm, setHeightCm] = useState(30);
-  const [lengthCm, setLengthCm] = useState(100);
-  const [thicknessCm, setThicknessCm] = useState(3); // default 30mm
+  const [mounted, setMounted] = useState(false);
 
-  // Stato tipo di montaggio e configurazione lati
+  // Stato materiale dal database
+  const [selectedMaterialId, setSelectedMaterialId] = useState<string>("");
+
+  // Input testuali per inserimento manuale da form
+  const [widthCmInput, setWidthCmInput] = useState<string>("40");
+  const [heightCmInput, setHeightCmInput] = useState<string>("30");
+  const [lengthCmInput, setLengthCmInput] = useState<string>("100");
+
+  // Calcolo sicuro delle dimensioni per il motore 3D
+  const widthCm = useMemo(() => Math.max(10, parseInt(widthCmInput) || 10), [widthCmInput]);
+  const heightCm = useMemo(() => Math.max(10, parseInt(heightCmInput) || 10), [heightCmInput]);
+  const lengthCm = useMemo(() => Math.max(50, parseInt(lengthCmInput) || 50), [lengthCmInput]);
+
+  // Stato tipo di montaggio, configurazione lati e numero di strati
   const [positioning, setPositioning] = useState<"solaio" | "parete">("solaio");
   const [sides, setSides] = useState<"2-lati" | "3-lati" | "4-lati">("3-lati");
+  const [layersCount, setLayersCount] = useState<number>(1); // Default 1 strato, max 3
 
   // Step attivo delle istruzioni
   const [currentStep, setCurrentStep] = useState(1);
 
-  // Spessori in mm per comodità
-  const thicknessMm = thicknessCm * 10;
+  // Inizializza cercando per default "L500 sp.50"
+  useEffect(() => {
+    setMounted(true);
+    if (catalogMaterials.length > 0) {
+      const defaultMat = catalogMaterials.find((m) =>
+        m.name.toLowerCase().includes("l500 sp.50")
+      );
+      if (defaultMat) {
+        setSelectedMaterialId(defaultMat.id);
+      } else {
+        setSelectedMaterialId(catalogMaterials[0].id);
+      }
+    }
+  }, [catalogMaterials]);
+
+  // Materiale selezionato
+  const activeMaterial = useMemo(() => {
+    const mat = catalogMaterials.find((m) => m.id === selectedMaterialId);
+    if (mat) {
+      return {
+        name: mat.name,
+        thickness_mm: mat.thickness_mm ?? 50,
+      };
+    }
+    return {
+      name: "Silicato standard",
+      thickness_mm: 50, // default 50mm
+    };
+  }, [catalogMaterials, selectedMaterialId]);
+
+  const thicknessMm = activeMaterial.thickness_mm;
+  const thicknessCm = thicknessMm * 0.1;
   const wMm = widthCm * 10;
   const hMm = heightCm * 10;
   const lMm = lengthCm * 10;
 
-  // Generazione dinamica dei passaggi in base a posizionamento e lati
+  // Gestione blur per validare i campi numerici
+  const handleBlur = (val: string, setVal: (s: string) => void, min: number, max: number) => {
+    const parsed = parseInt(val);
+    if (isNaN(parsed) || parsed < min) {
+      setVal(min.toString());
+    } else if (parsed > max) {
+      setVal(max.toString());
+    } else {
+      setVal(parsed.toString());
+    }
+  };
+
+  // Generazione dinamica dei passaggi didattici
   const steps = useMemo(() => {
     const isParete = positioning === "parete";
+    const tCm = thicknessCm;
+    const tMm = thicknessMm;
+
+    // Descrizione plurilastre
+    const layersText = layersCount > 1 ? ` (da ripetere per i ${layersCount} strati con sormonti alternati ad incrocio)` : "";
 
     if (sides === "2-lati") {
       return [
         {
           num: 1,
-          title: "🛠️ Struttura e Guide di Ancoraggio",
+          title: "🛠️ Struttura ed Orditura Metallica a U o a C",
           desc: isParete
-            ? "Fissa verticalmente all'angolo tra le due pareti i profili metallici di supporto ad L utilizzando tasselli adatti alla muratura."
-            : "Fissa a solaio e a parete gli angolari metallici di supporto ad L lungo l'angolo di scorrimento degli impianti.",
-          materials: ["Profili metallici ad L", "Tasselli di ancoraggio e viti"],
+            ? "Fissa verticalmente all'angolo tra le due pareti i profili metallici di guida (Orditura metallica a U o a C da 50x50 mm) utilizzando tasselli adatti alla muratura. Non utilizzare colla."
+            : "Fissa a solaio e a parete i profili metallici di guida (Orditura metallica a U o a C da 50x50 mm) lungo l'angolo di scorrimento degli impianti. Fissaggio esclusivamente meccanico.",
+          materials: ["Profili Orditura metallica a U o a C (50x50 mm)", "Tasselli e viti di fissaggio"],
         },
         {
           num: 2,
-          title: "🧱 Lastra Fianco Esterno",
-          desc: `Monta la lastra del fianco esterno da ${heightCm} x ${lengthCm} cm fissandola meccanicamente alle guide metalliche. *IMPORTANTE: Applicare il collante tagliafuoco su tutti i bordi di contatto.*`,
+          title: `🧱 Lastre Fianco Esterno${layersText}`,
+          desc: `Fissa meccanicamente la lastra (o lo strato di lastre) del fianco esterno da ${heightCm} x ${lengthCm} cm all'orditura metallica tramite viti autoperforanti per silicato (passo max 20 cm). *NOTA: In caso di più strati, alternare l'incrocio delle lastre d'angolo per evitare giunti allineati.*`,
           materials: [
-            `1x Lastra Fianco: ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
-            "Collante e viti per silicato",
+            `${layersCount}x Lastra Fianco: ${heightCm} x ${lengthCm} cm (Spessore unitario: ${tMm} mm)`,
+            "Viti per silicato (Fissaggio a secco)",
           ],
         },
         {
           num: 3,
-          title: isParete ? "🔒 Lastra Frontale di Chiusura" : "🧱 Lastra Inferiore (Fondo)",
+          title: isParete ? `🔒 Lastra Frontale di Chiusura${layersText}` : `🧱 Lastra Inferiore (Fondo)${layersText}`,
           desc: isParete
-            ? `Posiziona e fissa la lastra frontale larga ${(widthCm + thicknessCm).toFixed(1)} cm in battuta sullo spessore del fianco precedentemente montato, sigillando il lato opposto direttamente a parete.`
-            : `Fissa la lastra inferiore (fondo) larga ${(widthCm + thicknessCm).toFixed(1)} x ${lengthCm} cm. La lastra si sormonta in battuta sotto lo spessore del fianco e tocca a parete sul lato opposto.`,
+            ? `Avvita la lastra frontale di chiusura larga ${(widthCm + tCm).toFixed(1)} cm in battuta sullo spessore del fianco montato al passo precedente, ancorandola sull'altro lato all'orditura metallica fissata a parete.`
+            : `Fissa la lastra inferiore (fondo) larga ${(widthCm + tCm).toFixed(1)} x ${lengthCm} cm in sormonto sotto lo spessore del fianco laterale ed all'orditura metallica a parete.`,
           materials: [
-            `1x Lastra ${isParete ? "Frontale" : "Fondo"}: ${(widthCm + thicknessCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
-            "Viti e collante tagliafuoco",
+            `${layersCount}x Lastra ${isParete ? "Frontale" : "Fondo"}: ${(widthCm + tCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${tMm} mm)`,
+            "Viti per silicato (Fissaggio a secco)",
           ],
         },
         {
           num: 4,
-          title: "🔗 Giunti Coprigiunto Esterni",
-          desc: "Applica le strisce coprigiunto esterne in silicato (larghezza 15 cm) a cavallo di tutte le giunzioni trasversali tra i pannelli per garantire la tenuta all'aria e al fuoco.",
-          materials: ["Coprigiunti esterni in silicato (larghezza 15 cm)", "Viti e collante tagliafuoco"],
+          title: "🛑 Tappi Terminali di Chiusura (Opzionali)",
+          desc: `Applica i 2 tappi di chiusura alle estremità del cassonetto (inizio e fine tratta). Ciascun tappo copre l'intero ingombro esterno ed è composto da ${layersCount} strati fissati meccanicamente all'orditura interna.`,
+          materials: [
+            `${2 * layersCount}x Lastre Tappo: ${(widthCm + tCm).toFixed(1)} x ${(heightCm + tCm).toFixed(1)} cm (Spessore: ${tMm} mm)`,
+            "Viti per silicato",
+          ],
         },
         {
           num: 5,
+          title: "🔗 Giunti Coprigiunto Esterni",
+          desc: "Avvita le strisce coprigiunto esterne in silicato (larghezza 15 cm) a cavallo di tutte le giunzioni trasversali tra i vari pannelli tramite viti di cucitura. Non utilizzare colla.",
+          materials: ["Coprigiunti in silicato (larghezza 15 cm)", "Viti per silicato"],
+        },
+        {
+          num: 6,
           title: "✅ Cassonetto Completato",
-          desc: `L'assemblaggio del cassonetto copri impianti a 2 lati ${isParete ? "a parete" : "a solaio"} è ultimato. Sigillare eventuali fessure residue con sigillante tagliafuoco intumescente.`,
-          materials: ["Sigillante intumescente tagliafuoco"],
+          desc: `Il cassonetto copri impianti a 2 lati ${isParete ? "a cavedio verticale" : "a solaio"} è ultimato ed assemblato interamente a secco con sole viti.`,
+          materials: ["Cassonetto finito"],
         },
       ];
     } else if (sides === "3-lati") {
       return [
         {
           num: 1,
-          title: "🛠️ Tracciamento e Fissaggio Guide",
+          title: "🛠️ Struttura ed Orditura Metallica a U o a C",
           desc: isParete
-            ? "Tassella verticalmente a parete i due profili metallici di supporto ad L paralleli che guideranno l'ancoraggio dei fianchi."
-            : "Traccia sul soffitto la larghezza del cassonetto e fissa i due profili metallici di supporto paralleli per appendere i fianchi.",
-          materials: ["Profili metallici di supporto", "Tasselli di ancoraggio e viti"],
+            ? "Tassella verticalmente a parete i due profili di guida paralleli (Orditura metallica a U o a C da 50x50 mm) che definiranno la larghezza del cavedio a 3 lati."
+            : "Fissa a solaio i due profili metallici di guida paralleli (Orditura metallica a U o a C da 50x50 mm) per appendere i fianchi. Fissaggio solo meccanico tramite tasselli.",
+          materials: ["Profili Orditura metallica a U o a C (50x50 mm)", "Tasselli e viti di fissaggio"],
         },
         {
           num: 2,
-          title: "🧱 Fianchi Laterali (SX e DX)",
-          desc: `Monta le due lastre dei fianchi esterni da ${heightCm} x ${lengthCm} cm fissandole alle guide metalliche. *IMPORTANTE: Applicare il collante sui bordi superiori.*`,
+          title: `🧱 Fianchi Laterali (SX e DX)${layersText}`,
+          desc: `Fissa le due lastre dei fianchi esterni da ${heightCm} x ${lengthCm} cm all'orditura metallica tramite viti. Per configurazioni plurilastra, alternare lo sfalsamento d'angolo ad incastro tra i vari strati.`,
           materials: [
-            `2x Lastre Fianchi: ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
-            "Collante e viti per silicato",
+            `${2 * layersCount}x Lastre Fianchi: ${heightCm} x ${lengthCm} cm (Spessore: ${tMm} mm)`,
+            "Viti per silicato",
           ],
         },
         {
           num: 3,
-          title: isParete ? "🔒 Lastra Frontale di Chiusura" : "🧱 Lastra Inferiore (Fondo)",
+          title: isParete ? `🔒 Lastra Frontale di Chiusura${layersText}` : `🧱 Lastra Inferiore (Fondo)${layersText}`,
           desc: isParete
-            ? `Monta la lastra frontale di chiusura larga ${(widthCm + 2 * thicknessCm).toFixed(1)} cm fissandola a sormonto sullo spessore di entrambi i fianchi laterali.`
-            : `Fissa la lastra inferiore (fondo) larga ${(widthCm + 2 * thicknessCm).toFixed(1)} x ${lengthCm} cm a sormonto sotto lo spessore di entrambi i fianchi laterali.`,
+            ? `Avvita la lastra frontale di chiusura larga ${(widthCm + 2 * tCm).toFixed(1)} cm a sormonto sullo spessore di entrambi i fianchi laterali esterni, fissandola meccanicamente.`
+            : `Fissa la lastra inferiore (fondo) larga ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm a sormonto sotto lo spessore dei due fianchi. Fissaggio solo con viti.`,
           materials: [
-            `1x Lastra ${isParete ? "Frontale" : "Fondo"}: ${(widthCm + 2 * thicknessCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
-            "Viti e collante tagliafuoco",
+            `${layersCount}x Lastra ${isParete ? "Frontale" : "Fondo"}: ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${tMm} mm)`,
+            "Viti per silicato",
           ],
         },
         {
           num: 4,
-          title: "🔗 Giunti Coprigiunto Esterni",
-          desc: "Applica le strisce coprigiunto in silicato (larghezza 15 cm) a cavallo di tutte le giunzioni esterne per assicurare la perfetta continuità tagliafuoco.",
-          materials: ["Coprigiunti esterni in silicato", "Viti e collante tagliafuoco"],
+          title: "🛑 Tappi Terminali di Chiusura (Opzionali)",
+          desc: `Applica i 2 tappi di chiusura sulle estremità. Ciascun tappo copre l'intero ingombro ed è composto da ${layersCount} strati fissati meccanicamente all'orditura metallica perimetrale.`,
+          materials: [
+            `${2 * layersCount}x Lastre Tappo: ${(widthCm + 2 * tCm).toFixed(1)} x ${(heightCm + tCm).toFixed(1)} cm (Spessore: ${tMm} mm)`,
+            "Viti per silicato",
+          ],
         },
         {
           num: 5,
+          title: "🔗 Giunti Coprigiunto Esterni",
+          desc: "Fissa con viti le strisce coprigiunto in silicato sulle giunzioni esterne trasversali per sigillare meccanicamente le giunzioni.",
+          materials: ["Coprigiunti in silicato", "Viti per silicato"],
+        },
+        {
+          num: 6,
           title: "✅ Cassonetto Completato",
-          desc: `Il cassonetto copri impianti a 3 lati ${isParete ? "a parete (U)" : "a solaio (U)"} è ultimato e pronto per la sigillatura dei giunti perimetrali a muro.`,
-          materials: ["Sigillante intumescente tagliafuoco"],
+          desc: `Il cassonetto copri impianti a 3 lati ${isParete ? "a cavedio verticale" : "a solaio"} è ultimato, assemblato con sole viti senza uso di colla.`,
+          materials: ["Cassonetto 3 lati completato"],
         },
       ];
     } else {
@@ -138,58 +213,189 @@ export default function CassonettiInstructionsClient({
       return [
         {
           num: 1,
-          title: "🛠️ Struttura di Sostegno e Sospensione",
+          title: "🛠️ Orditura Metallica a U o a C & Supporti",
           desc: isParete
-            ? "Fissa a parete le staffe metalliche di sostegno posizionandole lungo la linea di sviluppo verticale del cavedio."
-            : "Installa i pendini filettati a soffitto e livella le barre asolate di fondo per creare l'appoggio per il cassonetto sospeso.",
-          materials: ["Pendini e barre asolate" , "Staffe a parete e tasselli"],
+            ? "Installa le staffe metalliche di sostegno ed i profili di orditura interna a U o a C (50x50 mm) su tutti e quattro gli angoli interni del cavedio verticale."
+            : "Installa i pendini di sospensione e le barre asolate di fondo (solo per 4 lati). Fissa l'orditura metallica interna a U o a C (50x50 mm) su tutti e quattro gli angoli interni del cassonetto.",
+          materials: ["Profili Orditura a U o a C (50x50 mm)", "Pendini e barre asolate" , "Staffe a parete e tasselli"],
         },
         {
           num: 2,
-          title: isParete ? "🧱 Schiena Posteriore" : "🧱 Lastra Superiore (Coperchio)",
+          title: isParete ? `🧱 Schiena Posteriore${layersText}` : `🧱 Lastra Superiore (Coperchio)${layersText}`,
           desc: isParete
-            ? `Fissa la schiena posteriore larga ${(widthCm + 2 * thicknessCm).toFixed(1)} x ${lengthCm} cm alle staffe a parete prima di assemblare gli altri lati.`
-            : `Posiziona la lastra superiore larga ${(widthCm + 2 * thicknessCm).toFixed(1)} x ${lengthCm} cm a ridosso del solaio appoggiandola sulla parte alta della struttura.`,
+            ? `Fissa la schiena posteriore larga ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm fissandola meccanicamente all'orditura ed alle staffe a parete.`
+            : `Fissa la lastra superiore larga ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm a ridosso del solaio ancorandola all'orditura metallica di supporto superiore.`,
           materials: [
-            `1x Lastra ${isParete ? "Schiena" : "Coperchio"}: ${(widthCm + 2 * thicknessCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
-            "Viti e collante tagliafuoco",
+            `${layersCount}x Lastra ${isParete ? "Schiena" : "Coperchio"}: ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${tMm} mm)`,
+            "Viti per silicato",
           ],
         },
         {
           num: 3,
-          title: "📐 Fianchi Laterali (SX e DX)",
-          desc: `Fissa le due lastre dei fianchi laterali da ${heightCm} x ${lengthCm} cm ortogonalmente alla schiena/coperchio. *IMPORTANTE: Incollare e avvitare lungo tutti i bordi di contatto.*`,
+          title: `📐 Fianchi Laterali (SX e DX) Sfalsati${layersText}`,
+          desc: `Monta le due lastre dei fianchi laterali da ${heightCm} x ${lengthCm} cm ortogonalmente alla schiena/coperchio. *IMPORTANTE: Per la versione a 4 lati, sfalsare longitudinalmente i giunti dei fianchi rispetto a fondo/coperchio. Fissaggio a secco con sole viti.*`,
           materials: [
-            `2x Lastre Fianchi: ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
-            "Viti e collante tagliafuoco",
+            `${2 * layersCount}x Lastre Fianchi: ${heightCm} x ${lengthCm} cm (Spessore: ${tMm} mm)`,
+            "Viti per silicato",
           ],
         },
         {
           num: 4,
-          title: isParete ? "🔒 Lastra Frontale di Chiusura" : "🧱 Lastra Inferiore (Fondo)",
+          title: isParete ? `🔒 Lastra Frontale di Chiusura${layersText}` : `🧱 Lastra Inferiore (Fondo)${layersText}`,
           desc: isParete
-            ? `Monta la lastra frontale di chiusura larga ${(widthCm + 2 * thicknessCm).toFixed(1)} cm per sigillare ermeticamente il cavedio a 4 lati.`
-            : `Fissa la lastra inferiore (fondo) larga ${(widthCm + 2 * thicknessCm).toFixed(1)} x ${lengthCm} cm per completare la chiusura della condotta sospesa.`,
+            ? `Chiudi il cavedio montando la lastra frontale di chiusura larga ${(widthCm + 2 * tCm).toFixed(1)} cm ed avvitandola su tutta l'orditura d'angolo.`
+            : `Avvita la lastra inferiore (fondo) larga ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm per sigillare a scatola chiusa il cassonetto a 4 lati.`,
           materials: [
-            `1x Lastra ${isParete ? "Frontale" : "Fondo"}: ${(widthCm + 2 * thicknessCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
-            "Viti e collante tagliafuoco",
+            `${layersCount}x Lastra ${isParete ? "Frontale" : "Fondo"}: ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${tMm} mm)`,
+            "Viti per silicato",
           ],
         },
         {
           num: 5,
-          title: "🔗 Giunti Coprigiunto Esterni",
-          desc: "Applica i coprigiunti in silicato sulle giunzioni perimetrali tra i segmenti, avvolgendo l'intero cassonetto su tutti i lati per garantire l'isolamento continuo.",
-          materials: ["Coprigiunti esterni in silicato", "Viti e collante tagliafuoco"],
+          title: "🛑 Tappi Terminali di Chiusura (Opzionali)",
+          desc: `Fissa i 2 tappi terminali di chiusura alle estremità della tratta. Ciascun tappo copre l'intero ingombro esterno ed è composto da ${layersCount} strati di lastre fissati all'orditura metallica interna.`,
+          materials: [
+            `${2 * layersCount}x Lastre Tappo: ${(widthCm + 2 * tCm).toFixed(1)} x ${(heightCm + 2 * tCm).toFixed(1)} cm (Spessore: ${tMm} mm)`,
+            "Viti per silicato",
+          ],
         },
         {
           num: 6,
+          title: "🔗 Giunti Coprigiunto Esterni",
+          desc: "Fissa con viti i coprigiunti esterni in silicato a cavallo di tutte le giunzioni longitudinali e trasversali per sigillare l'intero cassonetto su tutti e quattro i lati.",
+          materials: ["Coprigiunti in silicato", "Viti per silicato"],
+        },
+        {
+          num: 7,
           title: "✅ Cassonetto Completato",
-          desc: `Il cassonetto isolato a 4 lati ${isParete ? "verticale" : "orizzontale"} è completato con successo.`,
-          materials: ["Cassonetto 4 lati assemblato"],
+          desc: "Il cassonetto isolato a 4 lati è interamente montato con orditura interna a U o a C ed assemblato a secco con sole viti.",
+          materials: ["Cassonetto 4 lati completato"],
         },
       ];
     }
-  }, [positioning, sides, widthCm, heightCm, lengthCm, thicknessCm, thicknessMm]);
+  }, [positioning, sides, widthCm, heightCm, lengthCm, thicknessCm, thicknessMm, layersCount]);
+
+  // Calcoli distinta di taglio dinamica con plurilastre a sormonti incrociati
+  const cutsList = useMemo(() => {
+    const tCm = thicknessCm;
+    const list = [];
+
+    for (let k = 1; k <= layersCount; k++) {
+      const isOdd = k % 2 !== 0;
+      const layerName = layersCount === 1 ? "" : ` (Strato ${k} - ${isOdd ? "Interno" : "Esterno"})`;
+
+      if (sides === "2-lati") {
+        if (isOdd) {
+          list.push({
+            name: `• Lastra Fianco${layerName}:`,
+            qty: 1,
+            w: hMm + (k - 1) * thicknessMm,
+            l: lMm,
+          });
+          list.push({
+            name: `• Lastra Frontale/Fondo${layerName}:`,
+            qty: 1,
+            w: wMm + k * thicknessMm,
+            l: lMm,
+          });
+        } else {
+          list.push({
+            name: `• Lastra Fianco${layerName}:`,
+            qty: 1,
+            w: hMm + k * thicknessMm,
+            l: lMm,
+          });
+          list.push({
+            name: `• Lastra Frontale/Fondo${layerName}:`,
+            qty: 1,
+            w: wMm + (k - 1) * thicknessMm,
+            l: lMm,
+          });
+        }
+      } else if (sides === "3-lati") {
+        if (isOdd) {
+          list.push({
+            name: `• Lastre Fianchi (SX/DX)${layerName}:`,
+            qty: 2,
+            w: hMm + (k - 1) * thicknessMm,
+            l: lMm,
+          });
+          list.push({
+            name: `• Lastra Frontale/Fondo${layerName}:`,
+            qty: 1,
+            w: wMm + 2 * k * thicknessMm,
+            l: lMm,
+          });
+        } else {
+          list.push({
+            name: `• Lastre Fianchi (SX/DX)${layerName}:`,
+            qty: 2,
+            w: hMm + k * thicknessMm,
+            l: lMm,
+          });
+          list.push({
+            name: `• Lastra Frontale/Fondo${layerName}:`,
+            qty: 1,
+            w: wMm + 2 * (k - 1) * thicknessMm,
+            l: lMm,
+          });
+        }
+      } else {
+        // 4 LATI
+        if (isOdd) {
+          list.push({
+            name: `• Lastre Fianchi (SX/DX)${layerName}:`,
+            qty: 2,
+            w: hMm + 2 * (k - 1) * thicknessMm,
+            l: lMm,
+          });
+          list.push({
+            name: `• Lastre Frontale/Retro (Fondo/Coperchio)${layerName}:`,
+            qty: 2,
+            w: wMm + 2 * k * thicknessMm,
+            l: lMm,
+          });
+        } else {
+          list.push({
+            name: `• Lastre Fianchi (SX/DX)${layerName}:`,
+            qty: 2,
+            w: hMm + 2 * k * thicknessMm,
+            l: lMm,
+          });
+          list.push({
+            name: `• Lastre Frontale/Retro (Fondo/Coperchio)${layerName}:`,
+            qty: 2,
+            w: wMm + 2 * (k - 1) * thicknessMm,
+            l: lMm,
+          });
+        }
+      }
+    }
+
+    // Aggiunta Tappi terminali opzionali (sempre 2 tappi per ciascun strato)
+    for (let k = 1; k <= layersCount; k++) {
+      const layerName = layersCount === 1 ? "" : ` (Strato ${k})`;
+      let wTappo = wMm + 2 * k * thicknessMm;
+      let hTappo = hMm + 2 * k * thicknessMm;
+
+      if (sides === "2-lati") {
+        wTappo = wMm + k * thicknessMm;
+        hTappo = hMm + k * thicknessMm;
+      } else if (sides === "3-lati") {
+        wTappo = wMm + 2 * k * thicknessMm;
+        hTappo = hMm + k * thicknessMm;
+      }
+
+      list.push({
+        name: `• Tappi Terminali Opzionali${layerName}:`,
+        qty: 2,
+        w: wTappo,
+        h: hTappo,
+      });
+    }
+
+    return list;
+  }, [sides, widthCm, heightCm, lengthCm, thicknessMm, layersCount]);
 
   return (
     <div
@@ -288,21 +494,39 @@ export default function CassonettiInstructionsClient({
 
           {/* Visualizzatore 3D (Canvas) */}
           <div
-            className="flex-1 rounded-3xl overflow-hidden min-h-[350px] lg:min-h-[500px] relative border"
+            className="flex-1 rounded-3xl overflow-hidden min-h-[350px] lg:min-h-[500px] relative border flex items-center justify-center bg-black/40"
             style={{
-              background: "radial-gradient(circle at center, hsl(220 25% 10%), hsl(220 30% 4%))",
               borderColor: "hsl(220 20% 18%)",
             }}
           >
-            <Cassonetti3DViewer
-              positioning={positioning}
-              sides={sides}
-              width={widthCm * 10}
-              height={heightCm * 10}
-              length={lengthCm * 10}
-              thickness={thicknessCm * 10}
-              currentStep={currentStep}
-            />
+            {mounted ? (
+              <Cassonetti3DViewer
+                positioning={positioning}
+                sides={sides}
+                width={wMm}
+                height={hMm}
+                length={lMm}
+                thickness={thicknessMm}
+                currentStep={currentStep}
+                layersCount={layersCount}
+              />
+            ) : (
+              <div className="text-xs text-gray-500 font-bold animate-pulse">
+                Caricamento motore 3D interattivo...
+              </div>
+            )}
+
+            {/* Indicatori Overlay sul Canvas */}
+            <div className="absolute top-4 left-4 p-3 rounded-xl bg-black/75 border border-white/10 text-[10px] space-y-1 font-mono">
+              <p className="text-gray-400 font-bold">DIMENSIONI INTERNE (FORO):</p>
+              <p className="text-white">Larghezza: <span className="text-amber-400 font-bold">{widthCm} cm</span></p>
+              <p className="text-white">Altezza: <span className="text-amber-400 font-bold">{heightCm} cm</span></p>
+              <p className="text-white">Lunghezza: <span className="text-amber-400 font-bold">{lengthCm} cm</span></p>
+              <p className="text-gray-400 font-bold mt-2">STRATI LASTRE:</p>
+              <p className="text-white">Numero lastre: <span className="text-amber-400 font-bold">{layersCount}</span></p>
+              <p className="text-gray-400 font-bold mt-2">MATERIALE SELEZIONATO:</p>
+              <p className="text-emerald-400 font-bold truncate max-w-[150px]">{activeMaterial.name} ({thicknessMm} mm)</p>
+            </div>
 
             {/* Indicatore dello Step attivo sovrapposto in basso a sinistra */}
             <div className="absolute bottom-4 left-4 px-3.5 py-2 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-bold text-gray-300">
@@ -313,7 +537,7 @@ export default function CassonettiInstructionsClient({
 
         {/* LATO DESTRO: Configurazione Parametri, Distinta e Istruzioni (5 colonne) */}
         <div className="lg:col-span-5 flex flex-col space-y-4">
-          {/* Box Parametri Slider */}
+          {/* Box Parametri Form */}
           <div
             className="p-5 rounded-2xl space-y-4"
             style={{
@@ -322,77 +546,83 @@ export default function CassonettiInstructionsClient({
             }}
           >
             <h3 className="text-xs font-bold text-white uppercase tracking-wider border-b border-white/5 pb-2">
-              📐 Parametri Geometria (cm)
+              📐 Configura Geometria & Materiale
             </h3>
 
-            {/* Slider Larghezza */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Larghezza Interna (W):</span>
-                <span className="text-amber-400 font-bold">{widthCm} cm</span>
-              </div>
-              <input
-                type="range"
-                min="20"
-                max="120"
-                step="5"
-                value={widthCm}
-                onChange={(e) => setWidthCm(Number(e.target.value))}
-                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
-              />
+            {/* Dropdown Materiale */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase">Spessore Materiale Lastre</label>
+              <select
+                value={selectedMaterialId}
+                onChange={(e) => setSelectedMaterialId(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl text-xs outline-none bg-black/30 border border-white/10 text-white cursor-pointer font-bold"
+              >
+                {catalogMaterials.map((m) => (
+                  <option key={m.id} value={m.id} className="bg-slate-900 text-white">
+                    {m.name} ({m.thickness_mm ?? 50} mm)
+                  </option>
+                ))}
+              </select>
             </div>
 
-            {/* Slider Altezza */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Altezza Interna (H):</span>
-                <span className="text-amber-400 font-bold">{heightCm} cm</span>
-              </div>
-              <input
-                type="range"
-                min="20"
-                max="100"
-                step="5"
-                value={heightCm}
-                onChange={(e) => setHeightCm(Number(e.target.value))}
-                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
-              />
-            </div>
-
-            {/* Slider Lunghezza */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Lunghezza Segmento (L):</span>
-                <span className="text-amber-400 font-bold">{lengthCm} cm</span>
-              </div>
-              <input
-                type="range"
-                min="50"
-                max="150"
-                step="10"
-                value={lengthCm}
-                onChange={(e) => setLengthCm(Number(e.target.value))}
-                className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
-              />
-            </div>
-
-            {/* Selettore Spessore */}
-            <div className="space-y-2 pt-2 border-t border-white/5">
-              <span className="text-xs text-gray-400">Spessore Lastra Silicato:</span>
+            {/* Selettore Numero Strati (Plurilastra) */}
+            <div className="space-y-2 pt-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase">Numero di Lastre per Lato (Strati)</label>
               <div className="flex gap-2">
-                {[3, 4, 5].map((val) => (
+                {[1, 2, 3].map((val) => (
                   <button
                     key={val}
-                    onClick={() => setThicknessCm(val)}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
-                      thicknessCm === val
-                        ? "bg-white text-black font-extrabold border-white"
+                    onClick={() => {
+                      setLayersCount(val);
+                      setCurrentStep(1);
+                    }}
+                    className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      layersCount === val
+                        ? "bg-amber-500/20 border-amber-500 text-amber-400 font-extrabold"
                         : "bg-white/5 border-white/5 text-gray-400 hover:bg-white/10"
                     }`}
                   >
-                    {val * 10} mm
+                    {val} {val === 1 ? "Lastra" : "Lastre"}
                   </button>
                 ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-white/5">
+              {/* Input Larghezza */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-gray-400 uppercase">Larghezza (W) cm</label>
+                <input
+                  type="number"
+                  value={widthCmInput}
+                  onChange={(e) => setWidthCmInput(e.target.value)}
+                  onBlur={() => handleBlur(widthCmInput, setWidthCmInput, 10, 150)}
+                  className="w-full px-3 py-2 rounded-xl text-xs outline-none bg-black/30 border border-white/10 text-white font-bold"
+                />
+              </div>
+
+              {/* Input Altezza */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-gray-400 uppercase">Altezza (H) cm</label>
+                <input
+                  type="number"
+                  value={heightCmInput}
+                  onChange={(e) => setHeightCmInput(e.target.value)}
+                  onBlur={() => handleBlur(heightCmInput, setHeightCmInput, 10, 150)}
+                  className="w-full px-3 py-2 rounded-xl text-xs outline-none bg-black/30 border border-white/10 text-white font-bold"
+                />
+              </div>
+
+              {/* Input Lunghezza */}
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-gray-400 uppercase">Lunghezza (L) cm</label>
+                <input
+                  type="number"
+                  value={lengthCmInput}
+                  onChange={(e) => setLengthCmInput(e.target.value)}
+                  onBlur={() => handleBlur(lengthCmInput, setLengthCmInput, 50, 300)}
+                  className="w-full px-3 py-2 rounded-xl text-xs outline-none bg-black/30 border border-white/10 text-white font-bold"
+                />
               </div>
             </div>
           </div>
@@ -454,42 +684,16 @@ export default function CassonettiInstructionsClient({
               </div>
 
               {/* Distinta Taglio di Sintesi */}
-              <div className="p-3.5 rounded-xl bg-black/20 border border-white/5 text-[10px] space-y-1.5 font-mono text-gray-400">
+              <div className="p-3.5 rounded-xl bg-black/20 border border-white/5 text-[10px] space-y-1.5 font-mono text-gray-400 max-h-[180px] overflow-y-auto">
                 <div className="text-white font-bold mb-1">📐 DISTINTA DI TAGLIO PRECOMPILATA:</div>
-                {sides === "2-lati" ? (
-                  <>
-                    <div className="flex justify-between">
-                      <span>• Fianco Esterno:</span>
-                      <span className="text-white font-bold">1x {hMm} x {lMm} mm</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>• Frontale / Fondo:</span>
-                      <span className="text-white font-bold">1x {wMm + thicknessMm} x {lMm} mm</span>
-                    </div>
-                  </>
-                ) : sides === "3-lati" ? (
-                  <>
-                    <div className="flex justify-between">
-                      <span>• Fianchi Laterali (SX/DX):</span>
-                      <span className="text-white font-bold">2x {hMm} x {lMm} mm</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>• Frontale / Fondo:</span>
-                      <span className="text-white font-bold">1x {wMm + 2 * thicknessMm} x {lMm} mm</span>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex justify-between">
-                      <span>• Fianchi Laterali (SX/DX):</span>
-                      <span className="text-white font-bold">2x {hMm} x {lMm} mm</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>• Frontale / Retro (Fondo/Coperchio):</span>
-                      <span className="text-white font-bold">2x {wMm + 2 * thicknessMm} x {lMm} mm</span>
-                    </div>
-                  </>
-                )}
+                {cutsList.map((cut, idx) => (
+                  <div key={idx} className="flex justify-between border-b border-white/5 pb-1 last:border-b-0">
+                    <span>{cut.name}</span>
+                    <span className="text-white font-bold">
+                      {cut.qty}x {cut.w.toFixed(0)} x {cut.h !== undefined ? cut.h.toFixed(0) : (cut.l ?? 0).toFixed(0)} mm
+                    </span>
+                  </div>
+                ))}
                 <div className="text-[9px] text-gray-500 italic mt-1.5">
                   Nota: calcolo basato su ingombro {widthCm}x{heightCm}cm, spessore {thicknessMm}mm.
                 </div>

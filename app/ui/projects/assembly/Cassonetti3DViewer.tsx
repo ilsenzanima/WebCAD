@@ -13,6 +13,7 @@ interface CassonettiViewerProps {
   length: number; // in mm
   thickness: number; // in mm
   currentStep: number;
+  layersCount: number; // 1, 2, 3
 }
 
 export default function Cassonetti3DViewer({
@@ -23,6 +24,7 @@ export default function Cassonetti3DViewer({
   length,
   thickness,
   currentStep,
+  layersCount,
 }: CassonettiViewerProps) {
   // Scala in metri per Three.js
   const w = width * 0.001;
@@ -41,14 +43,18 @@ export default function Cassonetti3DViewer({
     wallBackground: "#475569", // grigio scuro per pareti in muratura
   };
 
-  // Calcolo delle posizioni con esplosione didattica
   const exp = 0.15; // offset esplosione 15 cm
+
+  // Determinazione dello step in cui si montano i tappi
+  const stepTappi = sides === "4-lati" ? 5 : 4;
+  // Determinazione dello step in cui si montano i coprigiunti
+  const stepCoprigiunti = sides === "4-lati" ? 6 : 5;
 
   return (
     <div className="w-full h-full relative">
       <Canvas
         camera={{
-          position: isVertical ? [1.8, 1.5, 2.5] : [1.8, 1.5, 2.5],
+          position: isVertical ? [2, 1.8, 3] : [2, 1.8, 2.5],
           fov: 50,
         }}
         shadows
@@ -65,37 +71,27 @@ export default function Cassonetti3DViewer({
           {/* PARETI DI SUPPORTO (MURATURA ESISTENTE) */}
           {/* Parete di Fondo (Solaio superiore se orizzontale, muro posteriore se verticale) */}
           {sides !== "4-lati" && (
-            <mesh position={[0, -h / 2 - t - 0.02, 0]} receiveShadow>
-              <boxGeometry args={[w + 0.6, 0.04, l + 0.4]} />
+            <mesh position={[0, -h / 2 - (layersCount * t) - 0.02, 0]} receiveShadow>
+              <boxGeometry args={[w + 0.8, 0.04, l + 0.4]} />
               <meshStandardMaterial color={colors.wallBackground} roughness={0.9} />
             </mesh>
           )}
 
           {/* Parete Laterale Sinistra (solo se 2 lati, a rappresentare l'angolo) */}
           {sides === "2-lati" && (
-            <mesh position={[-w / 2 - t - 0.02, 0, 0]} receiveShadow>
-              <boxGeometry args={[0.04, h + 0.2, l + 0.4]} />
+            <mesh position={[-w / 2 - (layersCount * t) - 0.02, 0, 0]} receiveShadow>
+              <boxGeometry args={[0.04, h + 0.3, l + 0.4]} />
               <meshStandardMaterial color={colors.wallBackground} roughness={0.9} />
             </mesh>
           )}
 
-          {/* STEP 1: Guide metalliche di ancoraggio */}
+          {/* STEP 1: Orditura metallica a U o a C (50x50 mm) */}
           {currentStep >= 1 && (
             <group>
-              {/* Profilo guida DX a parete/soffitto */}
-              <mesh castShadow receiveShadow position={[w / 2, -h / 2 - t / 2, 0]}>
-                <boxGeometry args={[0.03, 0.03, l]} />
-                <meshStandardMaterial
-                  color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
-                  roughness={0.4}
-                  metalness={0.8}
-                />
-              </mesh>
-
-              {/* Profilo guida SX a parete/soffitto (solo per 3 e 4 lati, per 2 lati c'è l'angolo a muro) */}
-              {sides !== "2-lati" && sides !== "4-lati" && (
-                <mesh castShadow receiveShadow position={[-w / 2, -h / 2 - t / 2, 0]}>
-                  <boxGeometry args={[0.03, 0.03, l]} />
+              {/* Profilo guida DX a parete/soffitto (tassellato a muro/solaio) */}
+              {sides !== "4-lati" && (
+                <mesh castShadow receiveShadow position={[w / 2 - 0.025, -h / 2 - 0.025 - (layersCount * t), 0]}>
+                  <boxGeometry args={[0.05, 0.05, l]} />
                   <meshStandardMaterial
                     color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
                     roughness={0.4}
@@ -104,214 +100,416 @@ export default function Cassonetti3DViewer({
                 </mesh>
               )}
 
-              {/* Se 4 lati, usiamo staffaggio a barra asolata inferiore di supporto */}
+              {/* Profilo guida SX a parete/soffitto (tassellato a solaio/muro, non c'è in 2 lati) */}
+              {sides === "3-lati" && (
+                <mesh castShadow receiveShadow position={[-w / 2 + 0.025, -h / 2 - 0.025 - (layersCount * t), 0]}>
+                  <boxGeometry args={[0.05, 0.05, l]} />
+                  <meshStandardMaterial
+                    color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                    roughness={0.4}
+                    metalness={0.8}
+                  />
+                </mesh>
+              )}
+
+              {/* Profilo guida per l'angolo del cassonetto a 2 lati (fianco-solaio) */}
+              {sides === "2-lati" && (
+                <mesh castShadow receiveShadow position={[-w / 2 - 0.025 - (layersCount * t), h / 2 - 0.025, 0]}>
+                  <boxGeometry args={[0.05, 0.05, l]} />
+                  <meshStandardMaterial
+                    color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                    roughness={0.4}
+                    metalness={0.8}
+                  />
+                </mesh>
+              )}
+
+              {/* Orditura metallica interna a U o a C (50x50 mm) su tutti gli angoli interni formed by slabs */}
+              {/* Angolo Interno SX Inferiore */}
+              {sides !== "2-lati" && (
+                <mesh castShadow receiveShadow position={[-w / 2 + 0.025, -h / 2 + 0.025, 0]}>
+                  <boxGeometry args={[0.05, 0.05, l]} />
+                  <meshStandardMaterial
+                    color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                    roughness={0.4}
+                    metalness={0.8}
+                  />
+                </mesh>
+              )}
+
+              {/* Angolo Interno DX Inferiore */}
+              <mesh castShadow receiveShadow position={[w / 2 - 0.025, -h / 2 + 0.025, 0]}>
+                <boxGeometry args={[0.05, 0.05, l]} />
+                <meshStandardMaterial
+                  color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                  roughness={0.4}
+                  metalness={0.8}
+                />
+              </mesh>
+
+              {/* Angolo Interno SX Superiore */}
+              {sides === "4-lati" && (
+                <mesh castShadow receiveShadow position={[-w / 2 + 0.025, h / 2 - 0.025, 0]}>
+                  <boxGeometry args={[0.05, 0.05, l]} />
+                  <meshStandardMaterial
+                    color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                    roughness={0.4}
+                    metalness={0.8}
+                  />
+                </mesh>
+              )}
+
+              {/* Angolo Interno DX Superiore */}
+              {(sides === "3-lati" || sides === "4-lati" || sides === "2-lati") && (
+                <mesh castShadow receiveShadow position={[w / 2 - 0.025, h / 2 - 0.025, 0]}>
+                  <boxGeometry args={[0.05, 0.05, l]} />
+                  <meshStandardMaterial
+                    color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                    roughness={0.4}
+                    metalness={0.8}
+                  />
+                </mesh>
+              )}
+
+              {/* Pendinaggio di Sospensione e Barra Asolata (Solo per 4 Lati) */}
               {sides === "4-lati" && (
                 <group>
-                  <mesh castShadow receiveShadow position={[0, -h / 2 - t - 0.02, 0]}>
-                    <boxGeometry args={[w + 2 * t + 0.1, 0.03, 0.03]} />
+                  {/* Barra asolata inferiore */}
+                  <mesh castShadow receiveShadow position={[0, -h / 2 - (layersCount * t) - 0.025, 0]}>
+                    <boxGeometry args={[w + 2 * layersCount * t + 0.1, 0.03, 0.03]} />
                     <meshStandardMaterial
                       color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
                       roughness={0.4}
                       metalness={0.8}
                     />
                   </mesh>
+                  {/* Pendini filettati laterali (DX e SX) */}
+                  {!isVertical && (
+                    <group>
+                      <mesh position={[-w / 2 - layersCount * t - 0.04, h / 2 + 0.2, 0]}>
+                        <cylinderGeometry args={[0.005, 0.005, h + layersCount * t + 0.4]} />
+                        <meshStandardMaterial color={colors.metalStructure} roughness={0.2} metalness={0.9} />
+                      </mesh>
+                      <mesh position={[w / 2 + layersCount * t + 0.04, h / 2 + 0.2, 0]}>
+                        <cylinderGeometry args={[0.005, 0.005, h + layersCount * t + 0.4]} />
+                        <meshStandardMaterial color={colors.metalStructure} roughness={0.2} metalness={0.9} />
+                      </mesh>
+                    </group>
+                  )}
                 </group>
               )}
             </group>
           )}
 
-          {/* LASTRE IN SILICATO */}
+          {/* DISEGNO DELLE LASTRE IN SILICATO (Plurilastre con sormonti alternati) */}
 
           {/* CONFIGURAZIONE: 4 LATI */}
           {sides === "4-lati" && (
             <group>
-              {/* Retro / Schiena (Step 2) */}
-              {currentStep >= 2 && (
-                <mesh
-                  castShadow
-                  receiveShadow
-                  position={[0, -h / 2 - t / 2 - (currentStep === 2 ? exp : 0), 0]}
-                >
-                  <boxGeometry args={[w + 2 * t, t, l]} />
-                  <meshStandardMaterial
-                    color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
-                    roughness={0.8}
-                    transparent={currentStep === 2}
-                    opacity={currentStep === 2 ? 0.85 : 1}
-                  />
-                </mesh>
-              )}
+              {/* Loop per ciascuno strato k */}
+              {Array.from({ length: layersCount }).map((_, idx) => {
+                const k = idx + 1;
+                const isOdd = k % 2 !== 0;
+                const showStep2 = currentStep >= 2;
+                const showStep3 = currentStep >= 3;
+                const showStep4 = currentStep >= 4;
 
-              {/* Fianco SX (Step 3) */}
-              {currentStep >= 3 && (
-                <mesh
-                  castShadow
-                  receiveShadow
-                  position={[-w / 2 - t / 2 - (currentStep === 3 ? exp : 0), 0, 0]}
-                >
-                  <boxGeometry args={[t, h, l]} />
-                  <meshStandardMaterial
-                    color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
-                    roughness={0.8}
-                    transparent={currentStep === 3}
-                    opacity={currentStep === 3 ? 0.85 : 1}
-                  />
-                </mesh>
-              )}
+                // Spessori e quote in base allo strato
+                const layerOffset = (k - 1) * t;
 
-              {/* Fianco DX (Step 3) */}
-              {currentStep >= 3 && (
-                <mesh
-                  castShadow
-                  receiveShadow
-                  position={[w / 2 + t / 2 + (currentStep === 3 ? exp : 0), 0, 0]}
-                >
-                  <boxGeometry args={[t, h, l]} />
-                  <meshStandardMaterial
-                    color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
-                    roughness={0.8}
-                    transparent={currentStep === 3}
-                    opacity={currentStep === 3 ? 0.85 : 1}
-                  />
-                </mesh>
-              )}
+                // Calcolo dello sfalsamento dei giunti longitudinali per i fianchi (Step 3)
+                // Fianchi divisi a metà (sfalsati) o interi
+                return (
+                  <group key={k}>
+                    {/* Retro / Schiena (Step 2) */}
+                    {showStep2 && (
+                      <mesh
+                        castShadow
+                        receiveShadow
+                        position={[0, -h / 2 - t / 2 - layerOffset - (currentStep === 2 ? exp * k : 0), 0]}
+                      >
+                        <boxGeometry args={[isOdd ? w + 2 * k * t : w + 2 * (k - 1) * t, t, l]} />
+                        <meshStandardMaterial
+                          color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
+                          roughness={0.8}
+                          transparent={currentStep === 2}
+                          opacity={currentStep === 2 ? 0.85 : 1}
+                        />
+                      </mesh>
+                    )}
 
-              {/* Fronte / Coperchio (Step 4) */}
-              {currentStep >= 4 && (
-                <mesh
-                  castShadow
-                  receiveShadow
-                  position={[0, h / 2 + t / 2 + (currentStep === 4 ? exp : 0), 0]}
-                >
-                  <boxGeometry args={[w + 2 * t, t, l]} />
-                  <meshStandardMaterial
-                    color={currentStep === 4 ? colors.panelActive : colors.panelStandard}
-                    roughness={0.8}
-                    transparent={currentStep === 4}
-                    opacity={currentStep === 4 ? 0.85 : 1}
-                  />
-                </mesh>
-              )}
+                    {/* Fianchi SX e DX (Step 3) con sfalsamento longitudinali per il primo strato */}
+                    {showStep3 && (
+                      <group>
+                        {/* Fianco SX */}
+                        <mesh
+                          castShadow
+                          receiveShadow
+                          position={[-w / 2 - t / 2 - layerOffset - (currentStep === 3 ? exp * k : 0), 0, 0]}
+                        >
+                          <boxGeometry
+                            args={[
+                              t,
+                              isOdd ? h + 2 * (k - 1) * t : h + 2 * k * t,
+                              l,
+                            ]}
+                          />
+                          <meshStandardMaterial
+                            color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
+                            roughness={0.8}
+                            transparent={currentStep === 3}
+                            opacity={currentStep === 3 ? 0.85 : 1}
+                          />
+                        </mesh>
+
+                        {/* Fianco DX */}
+                        <mesh
+                          castShadow
+                          receiveShadow
+                          position={[w / 2 + t / 2 + layerOffset + (currentStep === 3 ? exp * k : 0), 0, 0]}
+                        >
+                          <boxGeometry
+                            args={[
+                              t,
+                              isOdd ? h + 2 * (k - 1) * t : h + 2 * k * t,
+                              l,
+                            ]}
+                          />
+                          <meshStandardMaterial
+                            color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
+                            roughness={0.8}
+                            transparent={currentStep === 3}
+                            opacity={currentStep === 3 ? 0.85 : 1}
+                          />
+                        </mesh>
+                      </group>
+                    )}
+
+                    {/* Fronte (Step 4) */}
+                    {showStep4 && (
+                      <mesh
+                        castShadow
+                        receiveShadow
+                        position={[0, h / 2 + t / 2 + layerOffset + (currentStep === 4 ? exp * k : 0), 0]}
+                      >
+                        <boxGeometry args={[isOdd ? w + 2 * k * t : w + 2 * (k - 1) * t, t, l]} />
+                        <meshStandardMaterial
+                          color={currentStep === 4 ? colors.panelActive : colors.panelStandard}
+                          roughness={0.8}
+                          transparent={currentStep === 4}
+                          opacity={currentStep === 4 ? 0.85 : 1}
+                        />
+                      </mesh>
+                    )}
+                  </group>
+                );
+              })}
             </group>
           )}
 
           {/* CONFIGURAZIONE: 3 LATI */}
           {sides === "3-lati" && (
             <group>
-              {/* Fianco SX (Step 2) */}
-              {currentStep >= 2 && (
-                <mesh
-                  castShadow
-                  receiveShadow
-                  position={[-w / 2 - t / 2 - (currentStep === 2 ? exp : 0), 0, 0]}
-                >
-                  <boxGeometry args={[t, h, l]} />
-                  <meshStandardMaterial
-                    color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
-                    roughness={0.8}
-                    transparent={currentStep === 2}
-                    opacity={currentStep === 2 ? 0.85 : 1}
-                  />
-                </mesh>
-              )}
+              {Array.from({ length: layersCount }).map((_, idx) => {
+                const k = idx + 1;
+                const isOdd = k % 2 !== 0;
+                const showStep2 = currentStep >= 2;
+                const showStep3 = currentStep >= 3;
 
-              {/* Fianco DX (Step 2) */}
-              {currentStep >= 2 && (
-                <mesh
-                  castShadow
-                  receiveShadow
-                  position={[w / 2 + t / 2 + (currentStep === 2 ? exp : 0), 0, 0]}
-                >
-                  <boxGeometry args={[t, h, l]} />
-                  <meshStandardMaterial
-                    color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
-                    roughness={0.8}
-                    transparent={currentStep === 2}
-                    opacity={currentStep === 2 ? 0.85 : 1}
-                  />
-                </mesh>
-              )}
+                const layerOffset = (k - 1) * t;
 
-              {/* Fronte (Step 3) */}
-              {currentStep >= 3 && (
-                <mesh
-                  castShadow
-                  receiveShadow
-                  position={[0, h / 2 + t / 2 + (currentStep === 3 ? exp : 0), 0]}
-                >
-                  <boxGeometry args={[w + 2 * t, t, l]} />
-                  <meshStandardMaterial
-                    color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
-                    roughness={0.8}
-                    transparent={currentStep === 3}
-                    opacity={currentStep === 3 ? 0.85 : 1}
-                  />
-                </mesh>
-              )}
+                return (
+                  <group key={k}>
+                    {/* Fianco SX (Step 2) */}
+                    {showStep2 && (
+                      <mesh
+                        castShadow
+                        receiveShadow
+                        position={[-w / 2 - t / 2 - layerOffset - (currentStep === 2 ? exp * k : 0), 0, 0]}
+                      >
+                        <boxGeometry args={[t, isOdd ? h + 2 * (k - 1) * t : h + 2 * k * t, l]} />
+                        <meshStandardMaterial
+                          color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
+                          roughness={0.8}
+                          transparent={currentStep === 2}
+                          opacity={currentStep === 2 ? 0.85 : 1}
+                        />
+                      </mesh>
+                    )}
+
+                    {/* Fianco DX (Step 2) */}
+                    {showStep2 && (
+                      <mesh
+                        castShadow
+                        receiveShadow
+                        position={[w / 2 + t / 2 + layerOffset + (currentStep === 2 ? exp * k : 0), 0, 0]}
+                      >
+                        <boxGeometry args={[t, isOdd ? h + 2 * (k - 1) * t : h + 2 * k * t, l]} />
+                        <meshStandardMaterial
+                          color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
+                          roughness={0.8}
+                          transparent={currentStep === 2}
+                          opacity={currentStep === 2 ? 0.85 : 1}
+                        />
+                      </mesh>
+                    )}
+
+                    {/* Fronte (Step 3) */}
+                    {showStep3 && (
+                      <mesh
+                        castShadow
+                        receiveShadow
+                        position={[0, h / 2 + t / 2 + layerOffset + (currentStep === 3 ? exp * k : 0), 0]}
+                      >
+                        <boxGeometry args={[isOdd ? w + 2 * k * t : w + 2 * (k - 1) * t, t, l]} />
+                        <meshStandardMaterial
+                          color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
+                          roughness={0.8}
+                          transparent={currentStep === 3}
+                          opacity={currentStep === 3 ? 0.85 : 1}
+                        />
+                      </mesh>
+                    )}
+                  </group>
+                );
+              })}
             </group>
           )}
 
           {/* CONFIGURAZIONE: 2 LATI */}
           {sides === "2-lati" && (
             <group>
-              {/* Fianco DX (Step 2) - l'unico fianco esterno, a SX c'è l'angolo a muro */}
-              {currentStep >= 2 && (
-                <mesh
-                  castShadow
-                  receiveShadow
-                  position={[w / 2 + t / 2 + (currentStep === 2 ? exp : 0), 0, 0]}
-                >
-                  <boxGeometry args={[t, h, l]} />
-                  <meshStandardMaterial
-                    color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
-                    roughness={0.8}
-                    transparent={currentStep === 2}
-                    opacity={currentStep === 2 ? 0.85 : 1}
-                  />
-                </mesh>
-              )}
+              {Array.from({ length: layersCount }).map((_, idx) => {
+                const k = idx + 1;
+                const isOdd = k % 2 !== 0;
+                const showStep2 = currentStep >= 2;
+                const showStep3 = currentStep >= 3;
 
-              {/* Fronte (Step 3) - sormonta solo il fianco DX, a SX va in battuta a muro */}
-              {currentStep >= 3 && (
-                <mesh
-                  castShadow
-                  receiveShadow
-                  position={[t / 2, h / 2 + t / 2 + (currentStep === 3 ? exp : 0), 0]}
-                >
-                  <boxGeometry args={[w + t, t, l]} />
-                  <meshStandardMaterial
-                    color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
-                    roughness={0.8}
-                    transparent={currentStep === 3}
-                    opacity={currentStep === 3 ? 0.85 : 1}
-                  />
-                </mesh>
-              )}
+                const layerOffset = (k - 1) * t;
+
+                return (
+                  <group key={k}>
+                    {/* Fianco DX (Step 2) */}
+                    {showStep2 && (
+                      <mesh
+                        castShadow
+                        receiveShadow
+                        position={[w / 2 + t / 2 + layerOffset + (currentStep === 2 ? exp * k : 0), 0, 0]}
+                      >
+                        <boxGeometry args={[t, isOdd ? h + 2 * (k - 1) * t : h + 2 * k * t, l]} />
+                        <meshStandardMaterial
+                          color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
+                          roughness={0.8}
+                          transparent={currentStep === 2}
+                          opacity={currentStep === 2 ? 0.85 : 1}
+                        />
+                      </mesh>
+                    )}
+
+                    {/* Fronte (Step 3) - sormonta solo il fianco DX, a SX va in battuta a muro */}
+                    {showStep3 && (
+                      <mesh
+                        castShadow
+                        receiveShadow
+                        position={[t / 2 + layerOffset / 2, h / 2 + t / 2 + layerOffset + (currentStep === 3 ? exp * k : 0), 0]}
+                      >
+                        <boxGeometry args={[isOdd ? w + k * t : w + (k - 1) * t, t, l]} />
+                        <meshStandardMaterial
+                          color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
+                          roughness={0.8}
+                          transparent={currentStep === 3}
+                          opacity={currentStep === 3 ? 0.85 : 1}
+                        />
+                      </mesh>
+                    )}
+                  </group>
+                );
+              })}
             </group>
           )}
 
-          {/* STEP 4/5 (in base ai lati): Giunti Coprigiunti Esterni */}
-          {((sides === "4-lati" && currentStep >= 5) || (sides !== "4-lati" && currentStep >= 4)) && (
+          {/* STEP TAPPI OPZIONALI (Due Tappi, uno per lato terminale) */}
+          {currentStep >= stepTappi && (
+            <group>
+              {Array.from({ length: layersCount }).map((_, idx) => {
+                const k = idx + 1;
+                const layerOffset = (k - 1) * t;
+
+                let wTappo = w + 2 * k * t;
+                let hTappo = h + 2 * k * t;
+                let xTappo = 0;
+                let yTappo = 0;
+
+                if (sides === "2-lati") {
+                  wTappo = w + k * t;
+                  hTappo = h + k * t;
+                  xTappo = k * t / 2;
+                  yTappo = k * t / 2;
+                } else if (sides === "3-lati") {
+                  wTappo = w + 2 * k * t;
+                  hTappo = h + k * t;
+                  yTappo = k * t / 2;
+                }
+
+                return (
+                  <group key={k}>
+                    {/* Tappo Anteriore (Z = l/2) */}
+                    <mesh
+                      castShadow
+                      receiveShadow
+                      position={[xTappo, yTappo, l / 2 + (k - 0.5) * t + (currentStep === stepTappi ? exp * k : 0)]}
+                    >
+                      <boxGeometry args={[wTappo, hTappo, t]} />
+                      <meshStandardMaterial
+                        color={currentStep === stepTappi ? colors.panelActive : colors.panelStandard}
+                        roughness={0.8}
+                        transparent={currentStep === stepTappi}
+                        opacity={currentStep === stepTappi ? 0.85 : 1}
+                      />
+                    </mesh>
+
+                    {/* Tappo Posteriore (Z = -l/2) */}
+                    <mesh
+                      castShadow
+                      receiveShadow
+                      position={[xTappo, yTappo, -l / 2 - (k - 0.5) * t - (currentStep === stepTappi ? exp * k : 0)]}
+                    >
+                      <boxGeometry args={[wTappo, hTappo, t]} />
+                      <meshStandardMaterial
+                        color={currentStep === stepTappi ? colors.panelActive : colors.panelStandard}
+                        roughness={0.8}
+                        transparent={currentStep === stepTappi}
+                        opacity={currentStep === stepTappi ? 0.85 : 1}
+                      />
+                    </mesh>
+                  </group>
+                );
+              })}
+            </group>
+          )}
+
+          {/* STEP COPRIGIUNTI ESTERNI */}
+          {currentStep >= stepCoprigiunti && (
             <group>
               {/* Coprigiunto superiore a Z = l/2 */}
               <group position={[0, 0, l / 2]}>
-                <mesh castShadow receiveShadow position={[0, h / 2 + t + 0.005, 0]}>
-                  <boxGeometry args={[w + 4 * t, 0.01, 0.15]} />
+                <mesh castShadow receiveShadow position={[0, h / 2 + layersCount * t + 0.005, 0]}>
+                  <boxGeometry args={[w + 2 * layersCount * t + 0.05, 0.01, 0.15]} />
                   <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                 </mesh>
                 {sides === "4-lati" && (
-                  <mesh castShadow receiveShadow position={[0, -h / 2 - t - 0.005, 0]}>
-                    <boxGeometry args={[w + 4 * t, 0.01, 0.15]} />
+                  <mesh castShadow receiveShadow position={[0, -h / 2 - layersCount * t - 0.005, 0]}>
+                    <boxGeometry args={[w + 2 * layersCount * t + 0.05, 0.01, 0.15]} />
                     <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                   </mesh>
                 )}
-                <mesh castShadow receiveShadow position={[w / 2 + t + 0.005, 0, 0]}>
-                  <boxGeometry args={[0.01, h + 2 * t, 0.15]} />
+                <mesh castShadow receiveShadow position={[w / 2 + layersCount * t + 0.005, 0, 0]}>
+                  <boxGeometry args={[0.01, h + 2 * layersCount * t, 0.15]} />
                   <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                 </mesh>
                 {sides !== "2-lati" && (
-                  <mesh castShadow receiveShadow position={[-w / 2 - t - 0.005, 0, 0]}>
-                    <boxGeometry args={[0.01, h + 2 * t, 0.15]} />
+                  <mesh castShadow receiveShadow position={[-w / 2 - layersCount * t - 0.005, 0, 0]}>
+                    <boxGeometry args={[0.01, h + 2 * layersCount * t, 0.15]} />
                     <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                   </mesh>
                 )}
@@ -319,23 +517,23 @@ export default function Cassonetti3DViewer({
 
               {/* Coprigiunto inferiore a Z = -l/2 */}
               <group position={[0, 0, -l / 2]}>
-                <mesh castShadow receiveShadow position={[0, h / 2 + t + 0.005, 0]}>
-                  <boxGeometry args={[w + 4 * t, 0.01, 0.15]} />
+                <mesh castShadow receiveShadow position={[0, h / 2 + layersCount * t + 0.005, 0]}>
+                  <boxGeometry args={[w + 2 * layersCount * t + 0.05, 0.01, 0.15]} />
                   <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                 </mesh>
                 {sides === "4-lati" && (
-                  <mesh castShadow receiveShadow position={[0, -h / 2 - t - 0.005, 0]}>
-                    <boxGeometry args={[w + 4 * t, 0.01, 0.15]} />
+                  <mesh castShadow receiveShadow position={[0, -h / 2 - layersCount * t - 0.005, 0]}>
+                    <boxGeometry args={[w + 2 * layersCount * t + 0.05, 0.01, 0.15]} />
                     <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                   </mesh>
                 )}
-                <mesh castShadow receiveShadow position={[w / 2 + t + 0.005, 0, 0]}>
-                  <boxGeometry args={[0.01, h + 2 * t, 0.15]} />
+                <mesh castShadow receiveShadow position={[w / 2 + layersCount * t + 0.005, 0, 0]}>
+                  <boxGeometry args={[0.01, h + 2 * layersCount * t, 0.15]} />
                   <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                 </mesh>
                 {sides !== "2-lati" && (
-                  <mesh castShadow receiveShadow position={[-w / 2 - t - 0.005, 0, 0]}>
-                    <boxGeometry args={[0.01, h + 2 * t, 0.15]} />
+                  <mesh castShadow receiveShadow position={[-w / 2 - layersCount * t - 0.005, 0, 0]}>
+                    <boxGeometry args={[0.01, h + 2 * layersCount * t, 0.15]} />
                     <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                   </mesh>
                 )}
@@ -344,7 +542,7 @@ export default function Cassonetti3DViewer({
           )}
         </group>
 
-        {/* Griglia di appoggio */}
+        {/* Griglia a terra */}
         <Grid
           position={[0, -1.2, 0]}
           args={[10, 10]}
