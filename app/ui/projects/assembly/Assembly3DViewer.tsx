@@ -7,6 +7,7 @@ import * as THREE from "three";
 
 function AnimatedSmokeParticle({ path, speed = 1.0, delay = 0 }: { path: THREE.Vector3[], speed?: number, delay?: number }) {
   const groupRef = useRef<THREE.Group>(null);
+  const materialRef = useRef<THREE.MeshStandardMaterial>(null);
   
   useFrame((state) => {
     if (!groupRef.current) return;
@@ -22,13 +23,28 @@ function AnimatedSmokeParticle({ path, speed = 1.0, delay = 0 }: { path: THREE.V
     
     groupRef.current.position.lerpVectors(start, end, segmentProgress);
     groupRef.current.lookAt(end);
+    
+    // Effetto particellare fumo: si espande e si dissolve
+    const scale = 0.5 + progress * 1.5;
+    groupRef.current.scale.setScalar(scale);
+    
+    if (materialRef.current) {
+      materialRef.current.opacity = 0.75 * (1 - progress);
+    }
   });
   
   return (
     <group ref={groupRef}>
       <mesh rotation={[Math.PI / 2, 0, 0]}>
         <coneGeometry args={[0.015, 0.04, 8]} />
-        <meshStandardMaterial color="#f97316" emissive="#f97316" emissiveIntensity={3.5} transparent opacity={0.9} />
+        <meshStandardMaterial
+          ref={materialRef}
+          color="#f1f5f9"
+          emissive="#cbd5e1"
+          emissiveIntensity={0.6}
+          transparent
+          opacity={0.75}
+        />
       </mesh>
     </group>
   );
@@ -1308,7 +1324,7 @@ export default function Assembly3DViewer({
                     castShadow
                     receiveShadow
                     position={[w / 2 + t + (currentStep === 3 ? 0.15 : 0), 0, -l / 4]}
-                    rotation={[0, Math.atan2(0.2, w), 0]}
+                    rotation={[0, -Math.atan2(0.2, w), 0]}
                   >
                     <boxGeometry args={[Math.sqrt(w * w + 0.04), h, t]} />
                     <meshStandardMaterial

@@ -13,10 +13,10 @@ export default function AssemblyInstructionsHubPage() {
     {
       id: "cassonetti",
       title: "📦 Cassonetti Copri Impianti",
-      desc: "Istruzioni di montaggio per i cassonetti di protezione e cavedi copri impianti verticali e orizzontali.",
-      badge: "Soon",
-      href: "#",
-      active: false,
+      desc: "Istruzioni di montaggio 3D interattive e parametriche per cavedi e cassonetti copri impianti a parete (verticali) o solaio (orizzontali), a 2, 3 o 4 lati.",
+      badge: "Disponibile",
+      href: "/projects/istruzioni/cassonetti",
+      active: true,
     },
     {
       id: "serrande",
