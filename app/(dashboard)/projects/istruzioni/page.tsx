@@ -2,27 +2,29 @@ import Link from "next/link";
 
 export default function AssemblyInstructionsHubPage() {
   const categories = [
-    { id: "canalizzazioni", label: "📁 Canalizzazioni", active: true },
-    { id: "raccordi", label: "📐 Raccordi & Curve (Soon)", active: false },
-    { id: "serrande", label: "🔥 Serrande & Giunti (Soon)", active: false },
-  ];
-
-  const models = [
     {
-      id: "dritte-con-giunto",
-      title: "▬ Canale Dritto con Giunto",
-      desc: "Montaggio standard della canalizzazione dritta (orizzontale o verticale) utilizzando i coprigiunti esterni di testa largo da 10 a 20 cm per unire le tratte.",
-      steps: "7 / 8 Passaggi",
-      badge: "Standard",
-      href: "/projects/istruzioni/dritte-con-giunto",
+      id: "canalizzazioni",
+      title: "📁 Canalizzazioni Antincendio",
+      desc: "Istruzioni di montaggio 3D interattive e parametriche per canalizzazioni dritte (orizzontali e verticali), con opzione con giunto esterno o a giunti sfalsati.",
+      badge: "Disponibile",
+      href: "/projects/istruzioni/canalizzazioni",
+      active: true,
     },
     {
-      id: "dritte-senza-giunto",
-      title: "⎵ Canale Dritto senza Giunto (Sfalsato)",
-      desc: "Tecnica di montaggio a giunti sfalsati. Si inizia tagliando a metà lunghezza il fondo e un fianco, per poi proseguire con lastre intere a scavalco senza l'uso di coprigiunti esterni.",
-      steps: "6 / 7 Passaggi",
-      badge: "Avanzato",
-      href: "/projects/istruzioni/dritte-senza-giunto",
+      id: "cassonetti",
+      title: "📦 Cassonetti Copri Impianti",
+      desc: "Istruzioni di montaggio per i cassonetti di protezione e cavedi copri impianti verticali e orizzontali.",
+      badge: "Soon",
+      href: "#",
+      active: false,
+    },
+    {
+      id: "serrande",
+      title: "🔥 Serrande Tagliafuoco",
+      desc: "Istruzioni per l'installazione e sigillatura di serrande tagliafuoco e giunti di dilatazione.",
+      badge: "Soon",
+      href: "#",
+      active: false,
     },
   ];
 
@@ -55,33 +57,18 @@ export default function AssemblyInstructionsHubPage() {
           🛠️ Archivio Istruzioni di Montaggio
         </h1>
         <p className="text-xs md:text-sm text-gray-400 max-w-2xl leading-relaxed">
-          Seleziona una categoria e consulta le schede di montaggio 3D interattive e parametriche per l'assemblaggio corretto delle canalizzazioni antincendio.
+          Seleziona una categoria e consulta le schede di montaggio 3D interattive per l'assemblaggio corretto delle canalizzazioni e dei sistemi antincendio.
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-white/5 pb-px gap-1 mb-8 overflow-x-auto">
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            disabled={!cat.active}
-            className={`px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all border-b-2 whitespace-nowrap ${
-              cat.active
-                ? "border-orange-500 text-orange-400 bg-orange-500/5 cursor-pointer"
-                : "border-transparent text-gray-500 cursor-not-allowed hover:text-gray-400"
-            }`}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
-
       {/* Grid Modelli */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {models.map((model) => (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {categories.map((model) => (
           <div
             key={model.id}
-            className="p-6 rounded-2xl flex flex-col justify-between space-y-6 transition-all duration-300 hover:scale-[1.01]"
+            className={`p-6 rounded-2xl flex flex-col justify-between space-y-6 transition-all duration-300 ${
+              model.active ? "hover:scale-[1.01]" : "opacity-60"
+            }`}
             style={{
               background: "hsl(220 26% 14% / 0.8)",
               border: "1px solid hsl(220 20% 20%)",
@@ -90,14 +77,11 @@ export default function AssemblyInstructionsHubPage() {
           >
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 uppercase font-mono">
-                  {model.steps}
-                </span>
                 <span
                   className={`text-[9px] font-extrabold px-2 py-0.5 rounded uppercase ${
-                    model.badge === "Standard"
-                      ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                      : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                    model.active
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                      : "bg-white/5 text-gray-400 border border-white/5"
                   }`}
                 >
                   {model.badge}
@@ -107,12 +91,21 @@ export default function AssemblyInstructionsHubPage() {
               <p className="text-xs text-gray-400 leading-relaxed">{model.desc}</p>
             </div>
 
-            <Link
-              href={model.href}
-              className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-white text-black hover:bg-white/95 transition-all text-center block cursor-pointer"
-            >
-              Apri Istruzioni 3D →
-            </Link>
+            {model.active ? (
+              <Link
+                href={model.href}
+                className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-white text-black hover:bg-white/95 transition-all text-center block cursor-pointer"
+              >
+                Apri Istruzioni 3D →
+              </Link>
+            ) : (
+              <button
+                disabled
+                className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-white/5 text-gray-500 cursor-not-allowed border border-white/5 text-center block"
+              >
+                Prossimamente
+              </button>
+            )}
           </div>
         ))}
       </div>

@@ -19,10 +19,11 @@ interface Props {
   variant?: "con-giunto" | "senza-giunto";
 }
 
-export default function AssemblyInstructionsClient({ project, catalogMaterials, variant = "con-giunto" }: Props) {
+export default function AssemblyInstructionsClient({ project, catalogMaterials, variant: initialVariant = "con-giunto" }: Props) {
   const [mounted, setMounted] = useState(false);
 
   // Stati del configuratore
+  const [variant, setVariant] = useState<"con-giunto" | "senza-giunto">(initialVariant);
   const [subgroup, setSubgroup] = useState<"orizzontali" | "verticali">("orizzontali");
   const [itemType, setItemType] = useState<"dritte" | "curve">("dritte");
   const [selectedMaterialId, setSelectedMaterialId] = useState<string>("");
@@ -163,7 +164,7 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
           },
         ];
       } else {
-        // Orizzontale senza giunto (sfalsato)
+        // Orizzontale senza giunto (sfalsato) - Esteso a due segmenti
         return [
           {
             num: 1,
@@ -173,35 +174,56 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
           },
           {
             num: 2,
-            title: "🧱 Lastra Inferiore (Fondo Sfalsato)",
-            desc: `Taglia la prima lastra di fondo a metà lunghezza pari a ${lengthCm / 2} cm e larghezza ${widthCm + 2 * thicknessCm} cm. Appoggiala e fissala sulle barre asolate. Le successive tratte utilizzeranno lastre intere per sfalsare i giunti.`,
-            materials: [`1x Lastra Fondo (Mezza): ${widthCm + 2 * thicknessCm} x ${lengthCm / 2} cm (Spessore: ${thicknessMm} mm)`],
+            title: "🧱 Primo Fondo Sfalsato (Dimezzato)",
+            desc: `Taglia la prima lastra di fondo a metà lunghezza pari a ${lengthCm / 2} cm e larghezza ${widthCm + 2 * thicknessCm} cm. Appoggiala e fissala sulle barre asolate.`,
+            materials: [`1x Primo Fondo (Mezzo): ${widthCm + 2 * thicknessCm} x ${lengthCm / 2} cm (Spessore: ${thicknessMm} mm)`],
           },
           {
             num: 3,
-            title: "📐 Lastre Fianchi (Laterali Sfalsati)",
-            desc: `Taglia il fianco sinistro a metà lunghezza pari a ${lengthCm / 2} cm. Il fianco destro va tagliato e montato a lunghezza intera pari a ${lengthCm} cm. Questa disposizione sfalsata garantisce la tenuta strutturale.`,
+            title: "📐 Primi Fianchi Sfalsati (Laterali)",
+            desc: `Taglia il fianco sinistro a metà lunghezza pari a ${lengthCm / 2} cm. Il fianco destro va tagliato e montato a lunghezza intera pari a ${lengthCm} cm. Questa disposizione sfalsata garantisce l'overlap strutturale.`,
             materials: [
-              `1x Fianco Sinistro (Mezzo): ${heightCm} x ${lengthCm / 2} cm (Spessore: ${thicknessMm} mm)`,
-              `1x Fianco Destro (Intero): ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+              `1x Fianco SX 1 (Mezzo): ${heightCm} x ${lengthCm / 2} cm (Spessore: ${thicknessMm} mm)`,
+              `1x Fianco DX 1 (Intero): ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
             ],
           },
           {
             num: 4,
-            title: "🔒 Chiusura Superiore (Coperchio Intero)",
-            desc: `Taglia la lastra superiore (coperchio) a lunghezza intera pari a ${lengthCm} cm e larghezza ${widthCm + 2 * thicknessCm} cm. Posizionala a chiusura del canale a cavallo dei giunti inferiori per sigillare il canale.`,
-            materials: [`1x Lastra Coperchio (Intera): ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+            title: "🔒 Primo Coperchio (Intero)",
+            desc: `Taglia il coperchio superiore del primo segmento a lunghezza intera pari a ${lengthCm} cm e larghezza ${widthCm + 2 * thicknessCm} cm. Posizionalo a chiusura del canale a cavallo dei giunti inferiori.`,
+            materials: [`1x Coperchio 1 (Intero): ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
           },
           {
             num: 5,
             title: "🛑 Tappo Terminale di Chiusura (Facoltativo)",
-            desc: `Taglia il tappo di chiusura terminale con larghezza pari a ${widthCm + 2 * thicknessCm} cm e altezza pari a ${heightCm + 2 * thicknessCm} cm. Posizionalo all'estremità per chiudere il cavedio.`,
+            desc: `Taglia il tappo di chiusura terminale con larghezza pari a ${widthCm + 2 * thicknessCm} cm e altezza pari a ${heightCm + 2 * thicknessCm} cm. Posizionalo all'estremità iniziale per chiudere la testa della canalizzazione.`,
             materials: [`1x Tappo Terminale: ${widthCm + 2 * thicknessCm} x ${heightCm + 2 * thicknessCm} cm (Spessore: ${thicknessMm} mm)`],
           },
           {
             num: 6,
+            title: "🧱 Secondo Fondo (Intero)",
+            desc: `Taglia la seconda lastra di fondo a lunghezza intera pari a ${lengthCm} cm. Posizionala a partire dal giunto del primo fondo, sormontando il fianco destro e il coperchio del primo segmento per creare l'incastro sfalsato.`,
+            materials: [`1x Secondo Fondo (Intero): ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 7,
+            title: "📐 Secondi Fianchi (Interi)",
+            desc: `Taglia e monta le due lastre dei fianchi laterali del secondo segmento, entrambe a lunghezza intera pari a ${lengthCm} cm. Si posizioneranno a scavalco dei giunti dei pannelli sottostanti.`,
+            materials: [
+              `1x Fianco SX 2 (Intero): ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+              `1x Fianco DX 2 (Intero): ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+            ],
+          },
+          {
+            num: 8,
+            title: "🔒 Secondo Coperchio (Intero)",
+            desc: `Taglia e fissa il secondo coperchio superiore a lunghezza intera pari a ${lengthCm} cm per sigillare il secondo segmento della canalizzazione.`,
+            materials: [`1x Coperchio 2 (Intero): ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 9,
             title: "✅ Canalizzazione Completata",
-            desc: "La canalizzazione con giunti sfalsati (senza coprigiunti esterni) è ora completata. Le lastre sfalsate garantiscono la tenuta senza spessori esterni.",
+            desc: "La canalizzazione con giunti sfalsati (senza coprigiunti esterni) è completata per due segmenti, mostrando l'incastro autobloccante dei pannelli.",
             materials: ["Canalizzazione assemblata e pronta all'uso"],
           },
         ];
@@ -266,7 +288,7 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
           },
         ];
       } else {
-        // Verticale senza giunto (sfalsato)
+        // Verticale senza giunto (sfalsato) - Esteso a due segmenti
         return [
           {
             num: 1,
@@ -276,24 +298,24 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
           },
           {
             num: 2,
-            title: "🧱 Lastra Posteriore (Schiena Sfalsata)",
+            title: "🧱 Prima Schiena Sfalsata (Dimezzata)",
             desc: `Taglia la prima lastra posteriore (schiena) a metà altezza pari a ${lengthCm / 2} cm e larghezza ${widthCm + 2 * thicknessCm} cm. Fissala sulle barre asolate.`,
-            materials: [`1x Lastra Schiena (Mezza): ${widthCm + 2 * thicknessCm} x ${lengthCm / 2} cm (Spessore: ${thicknessMm} mm)`],
+            materials: [`1x Schiena 1 (Mezza): ${widthCm + 2 * thicknessCm} x ${lengthCm / 2} cm (Spessore: ${thicknessMm} mm)`],
           },
           {
             num: 3,
-            title: "📐 Lastre Fianchi (Laterali Sfalsati)",
-            desc: `Taglia il fianco sinistro a metà altezza pari a ${lengthCm / 2} cm. Il fianco destro va tagliato e montato ad altezza intera pari a ${lengthCm} cm. Questa disposizione sfalsata garantisce la stabilità meccanica.`,
+            title: "📐 Primi Fianchi Sfalsati (Laterali)",
+            desc: `Taglia il fianco sinistro a metà altezza pari a ${lengthCm / 2} cm. Il fianco destro va tagliato e montato ad altezza intera pari a ${lengthCm} cm. Questa disposição sfalsata garantisce la stabilità meccanica.`,
             materials: [
-              `1x Fianco Sinistro (Mezzo): ${heightCm} x ${lengthCm / 2} cm (Spessore: ${thicknessMm} mm)`,
-              `1x Fianco Destro (Intero): ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+              `1x Fianco SX 1 (Mezzo): ${heightCm} x ${lengthCm / 2} cm (Spessore: ${thicknessMm} mm)`,
+              `1x Fianco DX 1 (Intero): ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
             ],
           },
           {
             num: 4,
-            title: "🔒 Chiusura Anteriore (Fronte Intero)",
-            desc: `Taglia la lastra frontale ad altezza intera pari a ${lengthCm} cm e larghezza ${widthCm + 2 * thicknessCm} cm. Avvitala sul lato anteriore per chiudere il cavedio verticale.`,
-            materials: [`1x Lastra Frontale (Intera): ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+            title: "🔒 Primo Fronte (Intero)",
+            desc: `Taglia la prima lastra frontale ad altezza intera pari a ${lengthCm} cm e larghezza ${widthCm + 2 * thicknessCm} cm. Avvitala sul lato anteriore per chiudere il cavedio verticale.`,
+            materials: [`1x Fronte 1 (Intero): ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
           },
           {
             num: 5,
@@ -303,6 +325,27 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
           },
           {
             num: 6,
+            title: "🧱 Seconda Schiena (Intera)",
+            desc: `Taglia la seconda lastra posteriore (schiena) ad altezza intera pari a ${lengthCm} cm. Posizionala a prolungamento della prima schiena.`,
+            materials: [`1x Schiena 2 (Intera): ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 7,
+            title: "📐 Secondi Fianchi (Interi)",
+            desc: `Taglia e monta le due lastre dei fianchi laterali del secondo segmento, entrambe ad altezza intera pari a ${lengthCm} cm.`,
+            materials: [
+              `1x Fianco SX 2 (Intero): ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+              `1x Fianco DX 2 (Intero): ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+            ],
+          },
+          {
+            num: 8,
+            title: "🔒 Secondo Fronte (Intero)",
+            desc: `Taglia e fissa il secondo pannello frontale ad altezza intera pari a ${lengthCm} cm per chiudere e completare il secondo segmento.`,
+            materials: [`1x Fronte 2 (Intero): ${widthCm + 2 * thicknessCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`],
+          },
+          {
+            num: 9,
             title: "🔗 Giunto di Sostegno a Pavimento",
             desc: "Installa il giunto di base a contatto con il pavimento (nella parte inferiore) in modo da distribuire il carico e dare stabilità e sostegno alla base della canalizzazione verticale.",
             materials: [
@@ -311,10 +354,10 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
             ],
           },
           {
-            num: 7,
+            num: 10,
             title: "✅ Canalizzazione Completata",
             desc: "La canalizzazione verticale con giunti sfalsati (senza coprigiunto superiore) è ora completata con lo staffaggio, il tappo inferiore e il giunto di stabilizzazione a pavimento.",
-            materials: ["Canalizzazione assemblata e pronta all'uso"],
+            materials: ["Canalizzazione verticale assemblata e pronta all'uso"],
           },
         ];
       }
@@ -456,6 +499,26 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
                 )}
               </div>
 
+              {/* Tecnica di Montaggio */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase">Tecnica di Montaggio</label>
+                <select
+                  value={variant}
+                  onChange={(e) => {
+                    setVariant(e.target.value as "con-giunto" | "senza-giunto");
+                    setCurrentStep(1);
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl text-xs outline-none bg-black/30 border border-white/10 text-white cursor-pointer font-bold"
+                >
+                  <option value="con-giunto" style={{ background: "hsl(220 32% 10%)" }}>
+                    ▬ Dritte con Giunto
+                  </option>
+                  <option value="senza-giunto" style={{ background: "hsl(220 32% 10%)" }}>
+                    ⎵ Dritte senza Giunto (Giunti Sfalsati)
+                  </option>
+                </select>
+              </div>
+
               {/* Dimensioni */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
@@ -555,20 +618,28 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
                 {variant === "senza-giunto" ? (
                   <>
                     <div className="flex justify-between">
-                      <span>• Fianco Sinistro (Dimezzato):</span>
+                      <span>• Fianco SX (Dimezzato):</span>
                       <span className="text-white font-bold">1x {dimFianchi.w} x {dimFianchi.l / 2} mm</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>• Fianco Destro (Intero):</span>
+                      <span>• Fianco SX (Intero):</span>
                       <span className="text-white font-bold">1x {dimFianchi.w} x {dimFianchi.l} mm</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>• Fondo (Dimezzato):</span>
+                      <span>• Fianco DX (Intero):</span>
+                      <span className="text-white font-bold">2x {dimFianchi.w} x {dimFianchi.l} mm</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>• Fondo / Schiena (Dimezzato):</span>
                       <span className="text-white font-bold">1x {dimCoperchi.w} x {dimCoperchi.l / 2} mm</span>
                     </div>
                     <div className="flex justify-between">
-                      <span>• Coperchio (Intero):</span>
+                      <span>• Fondo / Schiena (Intero):</span>
                       <span className="text-white font-bold">1x {dimCoperchi.w} x {dimCoperchi.l} mm</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>• Coperchio / Fronte (Intero):</span>
+                      <span className="text-white font-bold">2x {dimCoperchi.w} x {dimCoperchi.l} mm</span>
                     </div>
                   </>
                 ) : (

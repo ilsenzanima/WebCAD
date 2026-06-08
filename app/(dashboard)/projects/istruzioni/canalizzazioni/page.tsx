@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getUserTags } from "@/app/actions/settings";
 import AssemblyInstructionsClient from "@/app/ui/projects/AssemblyInstructionsClient";
 
-export default async function DritteConGiuntoPage() {
+export default async function CanalizzazioniIstruzioniPage() {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -12,13 +12,12 @@ export default async function DritteConGiuntoPage() {
   }
 
   const materials = await getUserTags("material_category");
-  const project = { id: "", name: "Dritte con Giunto" };
+  const project = { id: "", name: "Canalizzazioni Antincendio" };
 
   return (
     <AssemblyInstructionsClient
       project={project}
       catalogMaterials={materials}
-      variant="con-giunto"
     />
   );
 }

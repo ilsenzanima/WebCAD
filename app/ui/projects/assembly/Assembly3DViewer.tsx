@@ -45,7 +45,7 @@ export default function Assembly3DViewer({
       : l / 2 + (currentStep === 6 ? explosionOffset : 0);
 
     const collarBottomZ = isVertical
-      ? l / 2 + (currentStep === (variant === "senza-giunto" ? 6 : 7) ? explosionOffset : 0)
+      ? l / 2 + (currentStep === (variant === "senza-giunto" ? 9 : 7) ? explosionOffset : 0)
       : 0;
 
     const isSenzaGiunto = variant === "senza-giunto";
@@ -53,6 +53,12 @@ export default function Assembly3DViewer({
     const leftZ = isSenzaGiunto ? (isVertical ? l / 4 : -l / 4) : 0;
     const rightZ = 0;
     const topZ = 0;
+
+    // Secondo Segmento (solo se senza-giunto)
+    const base2Z = isVertical ? -l / 2 : l / 2;
+    const left2Z = isVertical ? -l / 2 : l / 2;
+    const right2Z = isVertical ? -l : l;
+    const top2Z = isVertical ? -l : l;
 
     return {
       base: [
@@ -75,6 +81,29 @@ export default function Assembly3DViewer({
         h / 2 + t / 2 + (currentStep === 4 ? explosionOffset : 0),
         topZ,
       ] as [number, number, number],
+      
+      // Secondo Segmento
+      base2: [
+        0,
+        -h / 2 - t / 2 + (currentStep === 6 ? explosionOffset : 0),
+        base2Z,
+      ] as [number, number, number],
+      leftSide2: [
+        -w / 2 - t / 2 - (currentStep === 7 ? explosionOffset : 0),
+        0,
+        left2Z,
+      ] as [number, number, number],
+      rightSide2: [
+        w / 2 + t / 2 + (currentStep === 7 ? explosionOffset : 0),
+        0,
+        right2Z,
+      ] as [number, number, number],
+      top2: [
+        0,
+        h / 2 + t / 2 + (currentStep === 8 ? explosionOffset : 0),
+        top2Z,
+      ] as [number, number, number],
+
       tappo: [
         0,
         0,
@@ -84,6 +113,22 @@ export default function Assembly3DViewer({
       collarBottomZ,
     };
   }, [w, h, t, l, currentStep, isVertical, variant]);
+
+  // Posizioni Z per le barre asolate e i pendini in orizzontale
+  const supportZPositions = useMemo(() => {
+    if (variant === "senza-giunto") {
+      return [-l / 2 + 0.3, 0, l / 2, l, 3 * l / 2 - 0.3];
+    }
+    return [-l / 2 + 0.3, 0, l / 2 - 0.3];
+  }, [l, variant]);
+
+  // Posizioni Z per le staffe a muro in verticale
+  const verticalBracketZPositions = useMemo(() => {
+    if (variant === "senza-giunto") {
+      return [l / 2 - 0.3, 0, -l / 2, -l, -3 * l / 2 + 0.3];
+    }
+    return [l / 2 - 0.5, 0, -l / 2 + 0.5];
+  }, [l, variant]);
 
   // Colori dei materiali
   const colors = {
@@ -99,7 +144,7 @@ export default function Assembly3DViewer({
     <div className="w-full h-full relative">
       <Canvas
         camera={{
-          position: isVertical ? [2, 2.5, 3] : [2, 1.8, 2.5],
+          position: isVertical ? [2, 1.6, 3] : [2, 1.8, 2.5],
           fov: 50,
         }}
         shadows
@@ -119,81 +164,40 @@ export default function Assembly3DViewer({
               {/* Pendini / Aste di supporto metalliche (solo orizzontale) */}
               {!isVertical && (
                 <group>
-                  {/* Barra asolata 1 (supporto posteriore) */}
-                  <mesh
-                    castShadow
-                    receiveShadow
-                    position={[0, -h / 2 - t - 0.02, -l / 2 + 0.3]}
-                  >
-                    <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
-                    <meshStandardMaterial
-                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
-                      roughness={0.2}
-                      metalness={0.8}
-                    />
-                  </mesh>
-                  {/* Barra asolata 2 (supporto anteriore) */}
-                  <mesh
-                    castShadow
-                    receiveShadow
-                    position={[0, -h / 2 - t - 0.02, l / 2 - 0.3]}
-                  >
-                    <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
-                    <meshStandardMaterial
-                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
-                      roughness={0.2}
-                      metalness={0.8}
-                    />
-                  </mesh>
-                  {/* Barra asolata 3 (supporto centrale) */}
-                  <mesh
-                    castShadow
-                    receiveShadow
-                    position={[0, -h / 2 - t - 0.02, 0]}
-                  >
-                    <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
-                    <meshStandardMaterial
-                      color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
-                      roughness={0.2}
-                      metalness={0.8}
-                    />
-                  </mesh>
+                  {supportZPositions.map((zPos, idx) => (
+                    <group key={idx}>
+                      {/* Barra asolata */}
+                      <mesh
+                        castShadow
+                        receiveShadow
+                        position={[0, -h / 2 - t - 0.02, zPos]}
+                      >
+                        <boxGeometry args={[w + 0.16, 0.04, 0.04]} />
+                        <meshStandardMaterial
+                          color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
+                          roughness={0.2}
+                          metalness={0.8}
+                        />
+                      </mesh>
 
-                  {/* Pendini di sospensione verticali (posteriori, centrali, anteriori) */}
-                  <mesh position={[-w / 2 - 0.06, 0.5 - h / 2, -l / 2 + 0.3]}>
-                    <cylinderGeometry args={[0.006, 0.006, 1.2]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
-                  </mesh>
-                  <mesh position={[w / 2 + 0.06, 0.5 - h / 2, -l / 2 + 0.3]}>
-                    <cylinderGeometry args={[0.006, 0.006, 1.2]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
-                  </mesh>
-                  
-                  {/* Pendini centrali */}
-                  <mesh position={[-w / 2 - 0.06, 0.5 - h / 2, 0]}>
-                    <cylinderGeometry args={[0.006, 0.006, 1.2]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
-                  </mesh>
-                  <mesh position={[w / 2 + 0.06, 0.5 - h / 2, 0]}>
-                    <cylinderGeometry args={[0.006, 0.006, 1.2]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
-                  </mesh>
-
-                  <mesh position={[-w / 2 - 0.06, 0.5 - h / 2, l / 2 - 0.3]}>
-                    <cylinderGeometry args={[0.006, 0.006, 1.2]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
-                  </mesh>
-                  <mesh position={[w / 2 + 0.06, 0.5 - h / 2, l / 2 - 0.3]}>
-                    <cylinderGeometry args={[0.006, 0.006, 1.2]} />
-                    <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
-                  </mesh>
+                      {/* Pendini di sospensione verticali (sinistra e destra) */}
+                      <mesh position={[-w / 2 - 0.06, 0.5 - h / 2, zPos]}>
+                        <cylinderGeometry args={[0.006, 0.006, 1.2]} />
+                        <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
+                      </mesh>
+                      <mesh position={[w / 2 + 0.06, 0.5 - h / 2, zPos]}>
+                        <cylinderGeometry args={[0.006, 0.006, 1.2]} />
+                        <meshStandardMaterial color={colors.metalStructure} metalness={0.7} />
+                      </mesh>
+                    </group>
+                  ))}
                 </group>
               )}
 
               {/* Fissaggi verticali a muro / Staffe antiribaltamento (se verticale) */}
               {isVertical && (
                 <group>
-                  {[-l / 2 + 0.5, 0, l / 2 - 0.5].map((zPos, idx) => (
+                  {verticalBracketZPositions.map((zPos, idx) => (
                     <group key={idx}>
                       {/* Barra asolata frontale */}
                       <mesh
@@ -304,6 +308,58 @@ export default function Assembly3DViewer({
                 roughness={0.8}
                 transparent={currentStep === 5}
                 opacity={currentStep === 5 ? 0.85 : 1}
+              />
+            </mesh>
+          )}
+
+          {/* STEP 6 (variante senza-giunto): Secondo Fondo (Intero) */}
+          {variant === "senza-giunto" && currentStep >= 6 && (
+            <mesh castShadow receiveShadow position={positions.base2}>
+              <boxGeometry args={[w + 2 * t, t, l]} />
+              <meshStandardMaterial
+                color={currentStep === 6 ? colors.panelActive : colors.panelStandard}
+                roughness={0.8}
+                transparent={currentStep === 6}
+                opacity={currentStep === 6 ? 0.85 : 1}
+              />
+            </mesh>
+          )}
+
+          {/* STEP 7 (variante senza-giunto): Secondi Fianchi Laterali (Interi) */}
+          {variant === "senza-giunto" && currentStep >= 7 && (
+            <group>
+              {/* Fianco Sinistro 2 */}
+              <mesh castShadow receiveShadow position={positions.leftSide2}>
+                <boxGeometry args={[t, h, l]} />
+                <meshStandardMaterial
+                  color={currentStep === 7 ? colors.panelActive : colors.panelStandard}
+                  roughness={0.8}
+                  transparent={currentStep === 7}
+                  opacity={currentStep === 7 ? 0.85 : 1}
+                />
+              </mesh>
+              {/* Fianco Destro 2 */}
+              <mesh castShadow receiveShadow position={positions.rightSide2}>
+                <boxGeometry args={[t, h, l]} />
+                <meshStandardMaterial
+                  color={currentStep === 7 ? colors.panelActive : colors.panelStandard}
+                  roughness={0.8}
+                  transparent={currentStep === 7}
+                  opacity={currentStep === 7 ? 0.85 : 1}
+                />
+              </mesh>
+            </group>
+          )}
+
+          {/* STEP 8 (variante senza-giunto): Secondo Coperchio (Intero) */}
+          {variant === "senza-giunto" && currentStep >= 8 && (
+            <mesh castShadow receiveShadow position={positions.top2}>
+              <boxGeometry args={[w + 2 * t, t, l]} />
+              <meshStandardMaterial
+                color={currentStep === 8 ? colors.panelActive : colors.panelStandard}
+                roughness={0.8}
+                transparent={currentStep === 8}
+                opacity={currentStep === 8 ? 0.85 : 1}
               />
             </mesh>
           )}
