@@ -146,7 +146,7 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
     return Array.from(allLevelsMap.values());
   }, [drawings, cachedLevels, mounted]);
 
-  const [activeTab, setActiveTab] = useState<"note" | "tagli" | "pdf">("note");
+  const [activeTab, setActiveTab] = useState<"note" | "disegni" | "tagli" | "pdf">("note");
 
   // Unisce le note caricate dal server con quelle presenti nello store offline per questo progetto
   const projectNotes = useMemo(() => {
@@ -168,7 +168,11 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
   }, [notesList, cachedFieldNotes, project.id, mounted]);
 
   const standardNotes = useMemo(() => {
-    return projectNotes.filter((n) => n.type_name !== "Taglio" && n.type_name !== "PDF");
+    return projectNotes.filter((n) => n.type_name !== "Taglio" && n.type_name !== "PDF" && n.type_name !== "Disegno");
+  }, [projectNotes]);
+
+  const disegnoNotes = useMemo(() => {
+    return projectNotes.filter((n) => n.type_name === "Disegno");
   }, [projectNotes]);
 
   const taglioNotes = useMemo(() => {
@@ -255,6 +259,22 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
       "Taglio"
     );
     router.push(`/projects/${project.id}/tagli/${tempNoteId}`);
+  };
+
+  // Gestore per l'inserimento diretto di un disegno di canalizzazione senza modali
+  const handleAddDisegnoDirectly = () => {
+    const tempNoteId = generateTempId();
+    const initialItems = [
+      { id: generateTempId(), item_type: "nota" as const, value_text: "Disegno: Nuovo Tracciato", sort_order: 0 },
+    ];
+    useOfflineStore.getState().saveFieldNoteItemsOptimistic(
+      tempNoteId,
+      project.id,
+      null, // level_id nullo (livello generale di progetto)
+      initialItems,
+      "Disegno"
+    );
+    router.push(`/projects/${project.id}/disegni/${tempNoteId}`);
   };
 
   // Filtra le note del progetto che contengono elementi con pezzi da tagliare (nesting)
@@ -570,6 +590,17 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
         </button>
         <button
           type="button"
+          onClick={() => setActiveTab("disegni")}
+          className={`pb-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            activeTab === "disegni"
+              ? "border-[hsl(220,90%,56%)] text-white"
+              : "border-transparent text-white/40 hover:text-white/70"
+          }`}
+        >
+          📐 Disegno ({disegnoNotes.length})
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab("tagli")}
           className={`pb-3 px-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
             activeTab === "tagli"
@@ -871,6 +902,119 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
               <p className="text-sm" style={{ color: "hsl(215 15% 50%)" }}>Nessun appunto o disegno trovato.</p>
             </div>
           )
+        )}
+
+        {activeTab === "disegni" && (
+          /* ── Tab Disegni Raggruppati ── */
+          <div className="space-y-4">
+            {disegnoNotes.length > 0 && (
+              <div className="flex justify-end print:hidden">
+                <button
+                  type="button"
+                  onClick={handleAddDisegnoDirectly}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all bg-white/5 border border-white/10 hover:bg-white/10 active:scale-95 flex items-center gap-1 cursor-pointer"
+                >
+                  <span>📐</span> Nuovo Disegno Tratta
+                </button>
+              </div>
+            )}
+            {disegnoNotes.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {disegnoNotes.map((note) => {
+                  const titleItem = note.field_note_items?.find(i => i.item_type === "nota" && i.sort_order === 0);
+                  const noteTitle = titleItem?.value_text?.replace("Disegno: ", "") || `Disegno #${note.note_number}`;
+                  
+                  const materialItem = note.field_note_items?.find(i => i.item_type === "materiale");
+                  const matName = materialItem?.value_text || "Generico";
+
+                  const segmentsItem = note.field_note_items?.find(i => i.item_type === "dim_quadrata" && i.sort_order === 1);
+                  let segmentsCount = 0;
+                  try {
+                    if (segmentsItem?.value_text) {
+                      const parsed = JSON.parse(segmentsItem.value_text);
+                      if (Array.isArray(parsed)) segmentsCount = parsed.length;
+                    }
+                  } catch {}
+
+                  const formattedDate = mounted ? new Date(note.created_at).toLocaleDateString("it-IT", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }) : "—";
+
+                  return (
+                    <div 
+                      key={note.id}
+                      onClick={() => router.push(`/projects/${project.id}/disegni/${note.id}`)}
+                      className="p-5 bg-white/[0.015] border border-white/5 rounded-2xl flex flex-col justify-between gap-4 hover:bg-white/[0.03] transition-all cursor-pointer select-none"
+                      style={{ borderColor: "hsl(220 20% 20% / 0.25)" }}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span
+                            className="text-[9px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                            style={{ background: "rgba(245, 158, 11, 0.15)", color: "#f59e0b", border: "1px solid rgba(245, 158, 11, 0.2)" }}
+                          >
+                            📐 3D Route
+                          </span>
+                          <span className="text-[10px] text-white/40">{formattedDate}</span>
+                        </div>
+                        <h4 className="text-sm font-bold text-white leading-snug">
+                          {noteTitle}
+                        </h4>
+                        <div className="flex items-center gap-4 text-xs text-white/50 pt-1">
+                          <span className="flex items-center gap-1">📦 <strong className="text-white/80 font-semibold">{matName}</strong></span>
+                          <span className="flex items-center gap-1">📐 <strong className="text-white/80 font-semibold">{segmentsCount}</strong> {segmentsCount === 1 ? "segmento" : "segmenti"}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex justify-end gap-2 border-t border-white/5 pt-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (confirm("Sei sicuro di voler eliminare questo disegno di canalizzazione?")) {
+                              useOfflineStore.getState().deleteFieldNoteOptimistic(note.id, project.id);
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-xl text-xs font-semibold text-red-400 hover:bg-red-500/10 border border-red-500/10 transition-colors"
+                        >
+                          Elimina
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/projects/${project.id}/disegni/${note.id}`);
+                          }}
+                          className="px-4 py-1.5 rounded-xl text-xs font-semibold text-white transition-all bg-[hsl(220,90%,56%)] hover:bg-[hsl(220,85%,48%)] active:scale-95 cursor-pointer"
+                        >
+                          Configura →
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-16 text-center rounded-2xl border border-dashed border-white/10 bg-white/[0.01]">
+                <div className="text-3xl mb-3">📐</div>
+                <h4 className="text-sm font-bold text-white mb-1">Nessun disegno creato</h4>
+                <p className="text-xs text-white/40 max-w-xs mx-auto mb-4">
+                  Disegna un percorso 3D completo per canalizzazioni, calcolando i singoli spezzoni e raccordi.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleAddDisegnoDirectly}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-white bg-[hsl(220,90%,56%)] hover:bg-[hsl(220,85%,48%)] active:scale-95 cursor-pointer"
+                >
+                  Crea Primo Disegno
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {activeTab === "tagli" && (
