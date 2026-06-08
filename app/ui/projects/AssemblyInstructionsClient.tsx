@@ -600,38 +600,42 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
         },
         {
           num: 2,
-          title: "🧱 Corpo dei Canali (Schiena, Fianchi e Divisoria)",
-          desc: `Posiziona la schiena posteriore larga ${(2 * widthCm + 3 * thicknessCm).toFixed(1)} cm. Fissa i due fianchi esterni da ${heightCm} cm e la parete divisoria centrale da ${heightCm} cm a X = 0 (la quale presenta una finestra di passaggio fumo da 20 cm tra Z = 0 e Z = 0.2). *IMPORTANTE: Applicare il collante e le viti sui bordi.*`,
+          title: "🧱 Canale Dritto - Retro e Fianchi",
+          desc: `Posiziona la schiena posteriore sinistra larga ${(widthCm + 2 * thicknessCm).toFixed(1)} cm. Fissa il fianco esterno sinistro da ${heightCm} cm e la parete divisoria centrale da ${heightCm} cm (la quale presenta una finestra di passaggio fumo da 20 cm). *IMPORTANTE: Applicare il collante e le viti sui bordi.*`,
           materials: [
-            `1x Lastra Schiena (Doppia): ${(2 * widthCm + 3 * thicknessCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
-            `2x Lastre Fianchi Esterni: ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+            `1x Lastra Schiena SX: ${(widthCm + 2 * thicknessCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+            `1x Lastra Fianco Esterno SX: ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
             `1x Parete Divisoria Centrale: ${heightCm} x ${lengthCm} cm (con finestra passaggio fumo) (Spessore: ${thicknessMm} mm)`,
             "Viti e collante tagliafuoco"
           ],
         },
         {
           num: 3,
-          title: "📐 Setto Deviatore Interno (Antiriflusso)",
-          desc: `Taglia e posiziona la lastra del setto deviatore interno inclinato a 45° all'interno del canale di destra (shunt). Deve convogliare il fumo dall'innesto verso la finestra centrale della parete divisoria. *IMPORTANTE: Sigillare accuratamente con collante.*`,
-          materials: [`1x Setto Deviatore Interno: ${widthCm} x 35 cm (Spessore: ${thicknessMm} mm)`, "Collante tagliafuoco"],
+          title: "🧱 Canale Shunt - Retro, Fianco DX e Deflettore",
+          desc: `Accosta la schiena posteriore destra larga ${(widthCm + thicknessCm).toFixed(1)} cm in battuta contro quella sinistra. Fissa il fianco esterno destro da ${heightCm} cm e installa il deviatore antiriflusso inclinato a 45° nel canale di destra. *IMPORTANTE: Applicare il collante e le viti.*`,
+          materials: [
+            `1x Lastra Schiena DX: ${(widthCm + thicknessCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+            `1x Lastra Fianco Esterno DX: ${heightCm} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
+            `1x Setto Deviatore Interno: ${widthCm} x 35 cm (Spessore: ${thicknessMm} mm)`,
+            "Viti e collante tagliafuoco"
+          ],
         },
         {
           num: 4,
-          title: "🧱 Innesto Secondario (Collettore di Piano)",
-          desc: `Prepara e fissa frontalmente le lastre dell'innesto secondario sporgente del canale di destra (shunt). *IMPORTANTE: Incollare e avvitare.*`,
+          title: "🔒 Chiusura Canale Dritto (Fronte SX)",
+          desc: `Monta la lastra frontale sinistra intera da ${(widthCm + 2 * thicknessCm).toFixed(1)} cm per chiudere ermeticamente il canale dritto. *IMPORTANTE: Incollare e avvitare.*`,
           materials: [
-            `Lastre per canale secondario (innesto): spessore ${thicknessMm} mm`,
+            `1x Lastra Frontale SX (Intera): ${(widthCm + 2 * thicknessCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
             "Viti e collante tagliafuoco"
           ],
         },
         {
           num: 5,
-          title: "🔒 Chiusura Anteriore (Fronte SX e DX)",
-          desc: `Monta la lastra frontale sinistra intera (per il canale dritto) e le due lastre frontali destre (inferiore e superiore per il canale shunt) per chiudere ermeticamente entrambi i canali lasciando libera la luce dell'innesto. *IMPORTANTE: Incollare e avvitare.*`,
+          title: "🔒 Chiusura Canale Shunt (Fronte DX)",
+          desc: `Monta le due lastre frontali destre (inferiore e superiore) da ${(widthCm + thicknessCm).toFixed(1)} cm per chiudere il canale shunt, lasciando libera la luce dell'innesto di piano. *IMPORTANTE: Incollare e avvitare.*`,
           materials: [
-            `1x Lastra Frontale SX (Intera): ${(widthCm + 1.5 * thicknessCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${thicknessMm} mm)`,
-            `1x Lastra Frontale DX Inf. (Forata): ${(widthCm + 1.5 * thicknessCm).toFixed(1)} x ${(lengthCm / 2 - 20).toFixed(0)} cm (Spessore: ${thicknessMm} mm)`,
-            `1x Lastra Frontale DX Sup.: ${(widthCm + 1.5 * thicknessCm).toFixed(1)} x ${(lengthCm / 2).toFixed(0)} cm (Spessore: ${thicknessMm} mm)`,
+            `1x Lastra Frontale DX Inf.: ${(widthCm + thicknessCm).toFixed(1)} x ${(lengthCm / 2 - 20).toFixed(0)} cm (Spessore: ${thicknessMm} mm)`,
+            `1x Lastra Frontale DX Sup.: ${(widthCm + thicknessCm).toFixed(1)} x ${(lengthCm / 2).toFixed(0)} cm (Spessore: ${thicknessMm} mm)`,
             "Viti e collante tagliafuoco"
           ],
         },
@@ -643,8 +647,17 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
         },
         {
           num: 7,
+          title: "🔌 Innesto Secondario (Facoltativo)",
+          desc: "Prepara e fissa frontalmente le lastre dell'innesto secondario (collettore di piano) sporgente dal canale di destra (shunt). *Nota: questo componente è facoltativo.*",
+          materials: [
+            `Lastre per canale secondario (innesto): spessore ${thicknessMm} mm`,
+            "Viti e collante tagliafuoco"
+          ],
+        },
+        {
+          num: 8,
           title: "✅ Spaccato e Percorso del Fumo",
-          desc: "La canna shunt a doppio canale parallelo è completata. Nello spaccato si osserva il funzionamento dell'antiriflusso: il fumo entra dal canale destro, risale il deviatore ed entra nel canale dritto principale di sinistra tramite la finestra.",
+          desc: "La canna shunt a doppio canale parallelo è completata. Nello spaccato del canale shunt si osserva il funzionamento dell'antiriflusso: il fumo entra dal canale destro, risale il deviatore ed entra nel canale dritto principale di sinistra tramite la finestra.",
           materials: ["Canna Shunt a doppio canale parallelo completata"],
         },
       ];
@@ -1087,11 +1100,15 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
                   // canne-shunt
                   <>
                     <div className="flex justify-between font-bold text-white mb-0.5">
-                      <span>• Struttura Canali (Doppio):</span>
+                      <span>• Struttura Canali:</span>
                     </div>
                     <div className="flex justify-between pl-2">
-                      <span>- 1x Schiena Posteriore (Doppia):</span>
-                      <span className="text-white font-bold">{((2 * widthCm + 3 * thicknessCm) * 10).toFixed(0)} x {(lengthCm * 10).toFixed(0)} mm</span>
+                      <span>- 1x Schiena SX (Dritto):</span>
+                      <span className="text-white font-bold">{((widthCm + 2 * thicknessCm) * 10).toFixed(0)} x {(lengthCm * 10).toFixed(0)} mm</span>
+                    </div>
+                    <div className="flex justify-between pl-2">
+                      <span>- 1x Schiena DX (Shunt):</span>
+                      <span className="text-white font-bold">{((widthCm + thicknessCm) * 10).toFixed(0)} x {(lengthCm * 10).toFixed(0)} mm</span>
                     </div>
                     <div className="flex justify-between pl-2">
                       <span>- 2x Fianchi Esterni SX/DX:</span>
@@ -1109,7 +1126,7 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
                       <span className="text-white font-bold">{(widthCm * 10).toFixed(0)} x 350 mm</span>
                     </div>
                     <div className="flex justify-between font-bold text-white mt-1 mb-0.5">
-                      <span>• Innesto Secondario:</span>
+                      <span>• Innesto (Facoltativo):</span>
                     </div>
                     <div className="flex justify-between pl-2">
                       <span>- 2x Fondo / Coperchio:</span>
@@ -1124,15 +1141,15 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
                     </div>
                     <div className="flex justify-between pl-2">
                       <span>- 1x Fronte SX (Dritto - Intero):</span>
-                      <span className="text-white font-bold">{((widthCm + 1.5 * thicknessCm) * 10).toFixed(0)} x {(lengthCm * 10).toFixed(0)} mm</span>
+                      <span className="text-white font-bold">{((widthCm + 2 * thicknessCm) * 10).toFixed(0)} x {(lengthCm * 10).toFixed(0)} mm</span>
                     </div>
                     <div className="flex justify-between pl-2">
                       <span>- 1x Fronte DX Inf. (Shunt - Inf.):</span>
-                      <span className="text-white font-bold">{((widthCm + 1.5 * thicknessCm) * 10).toFixed(0)} x {((lengthCm / 2 - 20) * 10).toFixed(0)} mm</span>
+                      <span className="text-white font-bold">{((widthCm + thicknessCm) * 10).toFixed(0)} x {((lengthCm / 2 - 20) * 10).toFixed(0)} mm</span>
                     </div>
                     <div className="flex justify-between pl-2">
                       <span>- 1x Fronte DX Sup. (Shunt - Sup.):</span>
-                      <span className="text-white font-bold">{((widthCm + 1.5 * thicknessCm) * 10).toFixed(0)} x {((lengthCm / 2) * 10).toFixed(0)} mm</span>
+                      <span className="text-white font-bold">{((widthCm + thicknessCm) * 10).toFixed(0)} x {((lengthCm / 2) * 10).toFixed(0)} mm</span>
                     </div>
                   </>
                 )}

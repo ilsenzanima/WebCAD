@@ -1140,7 +1140,7 @@ export default function Assembly3DViewer({
                 <group>
                   {/* Barra di fondo a parete (Larga per contenere entrambi i canali) */}
                   <mesh castShadow receiveShadow position={[0, -h / 2 - t - 0.02, 0]}>
-                    <boxGeometry args={[2 * w + 3 * t + 0.16, 0.04, 0.04]} />
+                    <boxGeometry args={[2 * w + 2 * t + 0.16, 0.04, 0.04]} />
                     <meshStandardMaterial
                       color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
                       roughness={0.2}
@@ -1148,7 +1148,7 @@ export default function Assembly3DViewer({
                     />
                   </mesh>
                   {/* Staffa laterale sinistra */}
-                  <mesh castShadow receiveShadow position={[-w - 1.5 * t - 0.01, 0, 0]}>
+                  <mesh castShadow receiveShadow position={[-w - t - 0.01, 0, 0]}>
                     <boxGeometry args={[0.02, h + 2 * t + 0.06, 0.02]} />
                     <meshStandardMaterial
                       color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
@@ -1157,7 +1157,7 @@ export default function Assembly3DViewer({
                     />
                   </mesh>
                   {/* Staffa laterale destra */}
-                  <mesh castShadow receiveShadow position={[w + 1.5 * t + 0.01, 0, 0]}>
+                  <mesh castShadow receiveShadow position={[w + t + 0.01, 0, 0]}>
                     <boxGeometry args={[0.02, h + 2 * t + 0.06, 0.02]} />
                     <meshStandardMaterial
                       color={currentStep === 1 ? colors.metalHighlight : colors.metalStructure}
@@ -1168,12 +1168,12 @@ export default function Assembly3DViewer({
                 </group>
               )}
 
-              {/* STEP 2: Corpo del Canale (Schiena, Fianchi Esterni e Parete Divisoria) */}
+              {/* STEP 2: Canale Dritto (Retro SX, Fianco SX e Divisoria Centrale) */}
               {currentStep >= 2 && (
                 <group>
-                  {/* Schiena Posteriore (Unica per entrambi i canali, larghezza 2w + 3t) */}
-                  <mesh castShadow receiveShadow position={[0, -h / 2 - t / 2 - (currentStep === 2 ? 0.15 : 0), 0]}>
-                    <boxGeometry args={[2 * w + 3 * t, t, l]} />
+                  {/* Schiena SX (Copre da -w - 1.5t a 0.5t, quindi larghezza w + 2t) */}
+                  <mesh castShadow receiveShadow position={[-w / 2 - 0.5 * t, -h / 2 - t / 2 - (currentStep === 2 ? 0.15 : 0), 0]}>
+                    <boxGeometry args={[w + 2 * t, t, l]} />
                     <meshStandardMaterial
                       color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
                       roughness={0.8}
@@ -1182,7 +1182,7 @@ export default function Assembly3DViewer({
                     />
                   </mesh>
                   {/* Fianco SX Esterno */}
-                  <mesh castShadow receiveShadow position={[-w - 1.5 * t - (currentStep === 2 ? 0.15 : 0), 0, 0]}>
+                  <mesh castShadow receiveShadow position={[-w - t - (currentStep === 2 ? 0.15 : 0), 0, 0]}>
                     <boxGeometry args={[t, h, l]} />
                     <meshStandardMaterial
                       color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
@@ -1191,19 +1191,9 @@ export default function Assembly3DViewer({
                       opacity={currentStep === 2 ? 0.85 : 1}
                     />
                   </mesh>
-                  {/* Fianco DX Esterno */}
-                  <mesh castShadow receiveShadow position={[w + 1.5 * t + (currentStep === 2 ? 0.15 : 0), 0, 0]}>
-                    <boxGeometry args={[t, h, l]} />
-                    <meshStandardMaterial
-                      color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
-                      roughness={0.8}
-                      transparent={currentStep === 2}
-                      opacity={currentStep === 2 ? 0.85 : 1}
-                    />
-                  </mesh>
-                  {/* Parete Divisoria Centrale a X = 0 (Divisa in due pezzi per la finestra passaggio fumi) */}
+                  {/* Parete Divisoria Centrale (con finestra di passaggio) */}
                   {/* Divisoria Inferiore */}
-                  <mesh castShadow receiveShadow position={[0, 0, -l / 4 - (currentStep === 2 ? 0.15 : 0)]}>
+                  <mesh castShadow receiveShadow position={[0 + (currentStep === 2 ? 0.15 : 0), 0, -l / 4]}>
                     <boxGeometry args={[t, h, l / 2]} />
                     <meshStandardMaterial
                       color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
@@ -1213,7 +1203,7 @@ export default function Assembly3DViewer({
                     />
                   </mesh>
                   {/* Divisoria Superiore */}
-                  <mesh castShadow receiveShadow position={[0, 0, l / 4 + 0.1 - (currentStep === 2 ? 0.15 : 0)]}>
+                  <mesh castShadow receiveShadow position={[0 + (currentStep === 2 ? 0.15 : 0), 0, l / 4 + 0.1]}>
                     <boxGeometry args={[t, h, l / 2 - 0.2]} />
                     <meshStandardMaterial
                       color={currentStep === 2 ? colors.panelActive : colors.panelStandard}
@@ -1225,103 +1215,81 @@ export default function Assembly3DViewer({
                 </group>
               )}
 
-              {/* STEP 3: Setto Deviatore Interno (Antiriflusso nel canale di destra) */}
+              {/* STEP 3: Canale Shunt (Retro DX, Fianco DX e Setto Deviatore) */}
               {currentStep >= 3 && (
-                <mesh
-                  castShadow
-                  receiveShadow
-                  position={[w / 2 + t / 2, 0, -0.1 - (currentStep === 3 ? 0.15 : 0)]}
-                  rotation={[Math.PI / 6, 0, -Math.PI / 6]}
-                >
-                  <boxGeometry args={[w, t, 0.35]} />
-                  <meshStandardMaterial
-                    color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
-                    roughness={0.8}
-                    transparent={currentStep === 3}
-                    opacity={currentStep === 3 ? 0.85 : 1}
-                  />
-                </mesh>
-              )}
-
-              {/* STEP 4: Innesto Secondario (Collettore di piano sul canale shunt a destra) */}
-              {currentStep >= 4 && (
                 <group>
-                  {/* Fondo Innesto */}
-                  <mesh castShadow receiveShadow position={[w / 2 + t / 2, h / 2 + t / 2 + 0.15 + (currentStep === 4 ? 0.15 : 0), -0.2 - t / 2]}>
-                    <boxGeometry args={[w + 2 * t, 0.3, t]} />
+                  {/* Schiena DX (Va in battuta su retro SX e copre il fianco DX, larghezza w + t) */}
+                  <mesh castShadow receiveShadow position={[w / 2 + t, -h / 2 - t / 2 - (currentStep === 3 ? 0.15 : 0), 0]}>
+                    <boxGeometry args={[w + t, t, l]} />
                     <meshStandardMaterial
-                      color={currentStep === 4 ? colors.panelActive : colors.panelStandard}
+                      color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
                       roughness={0.8}
-                      transparent={currentStep === 4}
-                      opacity={currentStep === 4 ? 0.85 : 1}
+                      transparent={currentStep === 3}
+                      opacity={currentStep === 3 ? 0.85 : 1}
                     />
                   </mesh>
-                  {/* Coperchio Innesto */}
-                  <mesh castShadow receiveShadow position={[w / 2 + t / 2, h / 2 + t / 2 + 0.15 + (currentStep === 4 ? 0.15 : 0), 0 + t / 2]}>
-                    <boxGeometry args={[w + 2 * t, 0.3, t]} />
+                  {/* Fianco DX Esterno */}
+                  <mesh castShadow receiveShadow position={[w + t + (currentStep === 3 ? 0.15 : 0), 0, 0]}>
+                    <boxGeometry args={[t, h, l]} />
                     <meshStandardMaterial
-                      color={currentStep === 4 ? colors.panelActive : colors.panelStandard}
+                      color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
                       roughness={0.8}
-                      transparent={currentStep === 4}
-                      opacity={currentStep === 4 ? 0.85 : 1}
+                      transparent={currentStep === 3}
+                      opacity={currentStep === 3 ? 0.85 : 1}
                     />
                   </mesh>
-                  {/* Fianco SX Innesto (si allinea a X = 0) */}
-                  <mesh castShadow receiveShadow position={[0, h / 2 + t / 2 + 0.15 + (currentStep === 4 ? 0.15 : 0), -0.1]}>
-                    <boxGeometry args={[t, 0.3, 0.2]} />
+                  {/* Setto Deviatore Interno (Antiriflusso inclinato) */}
+                  <mesh
+                    castShadow
+                    receiveShadow
+                    position={[w / 2 + t / 2 + (currentStep === 3 ? 0.15 : 0), 0, -0.1]}
+                    rotation={[Math.PI / 6, 0, -Math.PI / 6]}
+                  >
+                    <boxGeometry args={[w, t, 0.35]} />
                     <meshStandardMaterial
-                      color={currentStep === 4 ? colors.panelActive : colors.panelStandard}
+                      color={currentStep === 3 ? colors.panelActive : colors.panelStandard}
                       roughness={0.8}
-                      transparent={currentStep === 4}
-                      opacity={currentStep === 4 ? 0.85 : 1}
-                    />
-                  </mesh>
-                  {/* Fianco DX Innesto (si allinea a X = w + t) */}
-                  <mesh castShadow receiveShadow position={[w + t, h / 2 + t / 2 + 0.15 + (currentStep === 4 ? 0.15 : 0), -0.1]}>
-                    <boxGeometry args={[t, 0.3, 0.2]} />
-                    <meshStandardMaterial
-                      color={currentStep === 4 ? colors.panelActive : colors.panelStandard}
-                      roughness={0.8}
-                      transparent={currentStep === 4 || currentStep === 7}
-                      opacity={currentStep === 4 ? 0.85 : (currentStep === 7 ? 0.25 : 1)}
+                      transparent={currentStep === 3}
+                      opacity={currentStep === 3 ? 0.85 : 1}
                     />
                   </mesh>
                 </group>
               )}
 
-              {/* STEP 5: Chiusura Anteriore (Fronte SX intero + Fronte DX diviso con foro innesto) */}
+              {/* STEP 4: Chiusura Canale Dritto (Fronte SX) */}
+              {currentStep >= 4 && (
+                <mesh castShadow receiveShadow position={[-w / 2 - 0.5 * t, h / 2 + t / 2 + (currentStep === 4 ? 0.15 : 0), 0]}>
+                  <boxGeometry args={[w + 2 * t, t, l]} />
+                  <meshStandardMaterial
+                    color={currentStep === 4 ? colors.panelActive : colors.panelStandard}
+                    roughness={0.8}
+                    transparent={currentStep === 4}
+                    opacity={currentStep === 4 ? 0.85 : 1}
+                  />
+                </mesh>
+              )}
+
+              {/* STEP 5: Chiusura Canale Shunt (Fronte DX Inferiore e Superiore) */}
               {currentStep >= 5 && (
                 <group>
-                  {/* Fronte SX (Canale dritto intero) */}
-                  <mesh castShadow receiveShadow position={[-w / 2 - 0.75 * t, h / 2 + t / 2 + (currentStep === 5 ? 0.15 : 0), 0]}>
-                    <boxGeometry args={[w + 1.5 * t, t, l]} />
+                  {/* Fronte DX Inferiore */}
+                  <mesh castShadow receiveShadow position={[w / 2 + t, h / 2 + t / 2 + (currentStep === 5 ? 0.15 : 0), -l / 4 - 0.1]}>
+                    <boxGeometry args={[w + t, t, l / 2 - 0.2]} />
                     <meshStandardMaterial
                       color={currentStep === 5 ? colors.panelActive : colors.panelStandard}
                       roughness={0.8}
-                      transparent={currentStep === 5}
-                      opacity={currentStep === 5 ? 0.85 : 1}
+                      transparent={currentStep === 5 || currentStep === 8}
+                      opacity={currentStep === 5 ? 0.85 : (currentStep === 8 ? 0.25 : 1)}
                     />
                   </mesh>
-                  
-                  {/* Fronte DX Inferiore (Canale shunt) */}
-                  <mesh castShadow receiveShadow position={[w / 2 + 0.75 * t, h / 2 + t / 2 + (currentStep === 5 ? 0.15 : 0), -l / 4 - 0.1]}>
-                    <boxGeometry args={[w + 1.5 * t, t, l / 2 - 0.2]} />
+                  {/* Fronte DX Superiore */}
+                  <mesh castShadow receiveShadow position={[w / 2 + t, h / 2 + t / 2 + (currentStep === 5 ? 0.15 : 0), l / 4]}>
+                    <boxGeometry args={[w + t, t, l / 2]} />
                     <meshStandardMaterial
                       color={currentStep === 5 ? colors.panelActive : colors.panelStandard}
                       roughness={0.8}
-                      transparent={currentStep === 5 || currentStep === 7}
-                      opacity={currentStep === 5 ? 0.85 : (currentStep === 7 ? 0.25 : 1)}
-                    />
-                  </mesh>
-                  
-                  {/* Fronte DX Superiore (Canale shunt) */}
-                  <mesh castShadow receiveShadow position={[w / 2 + 0.75 * t, h / 2 + t / 2 + (currentStep === 5 ? 0.15 : 0), l / 4]}>
-                    <boxGeometry args={[w + 1.5 * t, t, l / 2]} />
-                    <meshStandardMaterial
-                      color={currentStep === 5 ? colors.panelActive : colors.panelStandard}
-                      roughness={0.8}
-                      transparent={currentStep === 5 || currentStep === 7}
-                      opacity={currentStep === 5 ? 0.85 : (currentStep === 7 ? 0.25 : 1)}
+                      transparent={currentStep === 5 || currentStep === 8}
+                      opacity={currentStep === 5 ? 0.85 : (currentStep === 8 ? 0.25 : 1)}
                     />
                   </mesh>
                 </group>
@@ -1340,11 +1308,11 @@ export default function Assembly3DViewer({
                       <boxGeometry args={[2 * w + 5 * t, t, 0.15]} />
                       <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                     </mesh>
-                    <mesh castShadow receiveShadow position={[-w - 2.5 * t, 0, 0]}>
+                    <mesh castShadow receiveShadow position={[-w - 2 * t, 0, 0]}>
                       <boxGeometry args={[t, h + 2 * t, 0.15]} />
                       <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                     </mesh>
-                    <mesh castShadow receiveShadow position={[w + 2.5 * t, 0, 0]}>
+                    <mesh castShadow receiveShadow position={[w + 2 * t, 0, 0]}>
                       <boxGeometry args={[t, h + 2 * t, 0.15]} />
                       <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                     </mesh>
@@ -1360,11 +1328,11 @@ export default function Assembly3DViewer({
                       <boxGeometry args={[2 * w + 5 * t, t, 0.15]} />
                       <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                     </mesh>
-                    <mesh castShadow receiveShadow position={[-w - 2.5 * t, 0, 0]}>
+                    <mesh castShadow receiveShadow position={[-w - 2 * t, 0, 0]}>
                       <boxGeometry args={[t, h + 2 * t, 0.15]} />
                       <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                     </mesh>
-                    <mesh castShadow receiveShadow position={[w + 2.5 * t, 0, 0]}>
+                    <mesh castShadow receiveShadow position={[w + 2 * t, 0, 0]}>
                       <boxGeometry args={[t, h + 2 * t, 0.15]} />
                       <meshStandardMaterial color={colors.panelStandard} roughness={0.8} />
                     </mesh>
@@ -1372,24 +1340,70 @@ export default function Assembly3DViewer({
                 </group>
               )}
 
-              {/* STEP 7: Percorso del fumo luminescente (Solo al passo finale) */}
-              {currentStep === 7 && (
+              {/* STEP 7: Innesto Secondario (Collettore di piano facoltativo) */}
+              {currentStep >= 7 && (
                 <group>
-                  {/* Fumo 1: Ingresso orizzontale */}
-                  <mesh position={[w / 2 + t / 2, h / 2 + 0.1, -0.1]} rotation={[Math.PI / 2, 0, 0]}>
-                    <cylinderGeometry args={[0.015, 0.015, 0.3]} />
+                  {/* Fondo Innesto */}
+                  <mesh castShadow receiveShadow position={[w / 2 + t / 2, h / 2 + t / 2 + 0.15 + (currentStep === 7 ? 0.15 : 0), -0.2 - t / 2]}>
+                    <boxGeometry args={[w + 2 * t, 0.3, t]} />
+                    <meshStandardMaterial
+                      color={currentStep === 7 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 7 || currentStep === 8}
+                      opacity={currentStep === 7 ? 0.85 : (currentStep === 8 ? 0.25 : 1)}
+                    />
+                  </mesh>
+                  {/* Coperchio Innesto */}
+                  <mesh castShadow receiveShadow position={[w / 2 + t / 2, h / 2 + t / 2 + 0.15 + (currentStep === 7 ? 0.15 : 0), 0 + t / 2]}>
+                    <boxGeometry args={[w + 2 * t, 0.3, t]} />
+                    <meshStandardMaterial
+                      color={currentStep === 7 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 7 || currentStep === 8}
+                      opacity={currentStep === 7 ? 0.85 : (currentStep === 8 ? 0.25 : 1)}
+                    />
+                  </mesh>
+                  {/* Fianco SX Innesto */}
+                  <mesh castShadow receiveShadow position={[0 + (currentStep === 7 ? 0.05 : 0), h / 2 + t / 2 + 0.15 + (currentStep === 7 ? 0.15 : 0), -0.1]}>
+                    <boxGeometry args={[t, 0.3, 0.2]} />
+                    <meshStandardMaterial
+                      color={currentStep === 7 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 7 || currentStep === 8}
+                      opacity={currentStep === 7 ? 0.85 : (currentStep === 8 ? 0.25 : 1)}
+                    />
+                  </mesh>
+                  {/* Fianco DX Innesto */}
+                  <mesh castShadow receiveShadow position={[w + t + (currentStep === 7 ? 0.05 : 0), h / 2 + t / 2 + 0.15 + (currentStep === 7 ? 0.15 : 0), -0.1]}>
+                    <boxGeometry args={[t, 0.3, 0.2]} />
+                    <meshStandardMaterial
+                      color={currentStep === 7 ? colors.panelActive : colors.panelStandard}
+                      roughness={0.8}
+                      transparent={currentStep === 7 || currentStep === 8}
+                      opacity={currentStep === 7 ? 0.85 : (currentStep === 8 ? 0.25 : 1)}
+                    />
+                  </mesh>
+                </group>
+              )}
+
+              {/* STEP 8: Spaccato e Percorso del fumo luminescente (Solo al passo finale) */}
+              {currentStep === 8 && (
+                <group>
+                  {/* Fumo 1: Ingresso orizzontale (lungo Y) */}
+                  <mesh position={[w / 2 + t / 2, h / 2 + 0.1, -0.1]}>
+                    <cylinderGeometry args={[0.015, 0.015, 0.25]} />
                     <meshStandardMaterial color="#f97316" emissive="#f97316" emissiveIntensity={2.5} transparent opacity={0.8} />
                   </mesh>
 
-                  {/* Fumo 2: Salita diagonale lungo il deviatore ed attraverso la finestra centrale */}
-                  <mesh position={[w / 4 + t / 4, 0, 0]} rotation={[0, 0, -Math.PI / 4]}>
-                    <cylinderGeometry args={[0.015, 0.015, 0.28]} />
+                  {/* Fumo 2: Salita diagonale lungo il deviatore ed attraverso la finestra centrale (lungo X-Z) */}
+                  <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, -Math.PI / 3, 0]}>
+                    <cylinderGeometry args={[0.015, 0.015, 0.39]} />
                     <meshStandardMaterial color="#f97316" emissive="#f97316" emissiveIntensity={2.5} transparent opacity={0.8} />
                   </mesh>
 
-                  {/* Fumo 3: Salita verticale nel collettore principale di sinistra */}
-                  <mesh position={[-w / 2 - t / 2, 0, l / 4 + 0.05]}>
-                    <cylinderGeometry args={[0.015, 0.015, l / 2 + 0.1]} />
+                  {/* Fumo 3: Salita verticale nel collettore principale di sinistra (lungo Z) */}
+                  <mesh position={[-w / 2 - t / 2, 0, l / 4 + 0.05]} rotation={[Math.PI / 2, 0, 0]}>
+                    <cylinderGeometry args={[0.015, 0.015, l / 2 - 0.1]} />
                     <meshStandardMaterial color="#f97316" emissive="#f97316" emissiveIntensity={2.5} transparent opacity={0.8} />
                   </mesh>
                 </group>
