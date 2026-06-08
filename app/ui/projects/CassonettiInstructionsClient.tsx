@@ -104,6 +104,57 @@ export default function CassonettiInstructionsClient({
     // Descrizione plurilastre
     const layersText = layersCount > 1 ? ` (da ripetere per i ${layersCount} strati con sormonti alternati ad incrocio)` : "";
 
+    // Calcolo dinamico dei pezzi strato per strato da mostrare negli step
+    const listFianchi2Lati: string[] = [];
+    const listFondo2Lati: string[] = [];
+    const listTappi2Lati: string[] = [];
+
+    const listFianchi3Lati: string[] = [];
+    const listFondo3Lati: string[] = [];
+    const listTappi3Lati: string[] = [];
+
+    const listSchiena4Lati: string[] = [];
+    const listFianchi4Lati: string[] = [];
+    const listFondo4Lati: string[] = [];
+    const listTappi4Lati: string[] = [];
+
+    for (let k = 1; k <= layersCount; k++) {
+      const isOdd = k % 2 !== 0;
+      const labelStrato = layersCount === 1 ? "" : ` (Strato ${k} - ${isOdd ? "Interno" : "Esterno"})`;
+      const labelTappo = layersCount === 1 ? "" : ` (Strato ${k})`;
+
+      // 2 LATI
+      const hFianco2 = isOdd ? heightCm + (layersCount + k - 1) * tCm : heightCm + (layersCount + k) * tCm;
+      const wFondo2 = isOdd ? widthCm + (layersCount + k) * tCm : widthCm + (layersCount + k - 1) * tCm;
+      const wTappo2 = widthCm + (layersCount + k) * tCm;
+      const hTappo2 = heightCm + (layersCount + k) * tCm;
+
+      listFianchi2Lati.push(`1x Lastra Fianco${labelStrato}: ${hFianco2.toFixed(1)} x ${lengthCm.toFixed(1)} cm (sp. ${tMm} mm)`);
+      listFondo2Lati.push(`1x Lastra ${isParete ? "Frontale" : "Fondo"}${labelStrato}: ${wFondo2.toFixed(1)} x ${lengthCm.toFixed(1)} cm (sp. ${tMm} mm)`);
+      listTappi2Lati.push(`2x Lastre Tappo${labelTappo}: ${wTappo2.toFixed(1)} x ${hTappo2.toFixed(1)} cm (sp. ${tMm} mm)`);
+
+      // 3 LATI
+      const hFianco3 = isOdd ? heightCm + (layersCount + k - 1) * tCm : heightCm + (layersCount + k) * tCm;
+      const wFondo3 = isOdd ? widthCm + 2 * k * tCm : widthCm + 2 * (k - 1) * tCm;
+      const wTappo3 = widthCm + 2 * k * tCm;
+      const hTappo3 = heightCm + (layersCount + k) * tCm;
+
+      listFianchi3Lati.push(`2x Lastre Fianchi (SX/DX)${labelStrato}: ${hFianco3.toFixed(1)} x ${lengthCm.toFixed(1)} cm (sp. ${tMm} mm)`);
+      listFondo3Lati.push(`1x Lastra ${isParete ? "Frontale" : "Fondo"}${labelStrato}: ${wFondo3.toFixed(1)} x ${lengthCm.toFixed(1)} cm (sp. ${tMm} mm)`);
+      listTappi3Lati.push(`2x Lastre Tappo${labelTappo}: ${wTappo3.toFixed(1)} x ${hTappo3.toFixed(1)} cm (sp. ${tMm} mm)`);
+
+      // 4 LATI
+      const wFondo4 = isOdd ? widthCm + 2 * k * tCm : widthCm + 2 * (k - 1) * tCm;
+      const hFianco4 = isOdd ? heightCm + 2 * (k - 1) * tCm : heightCm + 2 * k * tCm;
+      const wTappo4 = widthCm + 2 * k * tCm;
+      const hTappo4 = heightCm + 2 * k * tCm;
+
+      listSchiena4Lati.push(`1x Lastra ${isParete ? "Schiena" : "Coperchio"}${labelStrato}: ${wFondo4.toFixed(1)} x ${lengthCm.toFixed(1)} cm (sp. ${tMm} mm)`);
+      listFianchi4Lati.push(`2x Lastre Fianchi (SX/DX)${labelStrato}: ${hFianco4.toFixed(1)} x ${lengthCm.toFixed(1)} cm (sp. ${tMm} mm)`);
+      listFondo4Lati.push(`1x Lastra ${isParete ? "Frontale" : "Fondo"}${labelStrato}: ${wFondo4.toFixed(1)} x ${lengthCm.toFixed(1)} cm (sp. ${tMm} mm)`);
+      listTappi4Lati.push(`2x Lastre Tappo${labelTappo}: ${wTappo4.toFixed(1)} x ${hTappo4.toFixed(1)} cm (sp. ${tMm} mm)`);
+    }
+
     if (sides === "2-lati") {
       return [
         {
@@ -117,9 +168,9 @@ export default function CassonettiInstructionsClient({
         {
           num: 2,
           title: `🧱 Lastre Fianco Esterno${layersText}`,
-          desc: `Fissa meccanicamente la lastra (o lo strato di lastre) del fianco esterno da ${heightCm} x ${lengthCm} cm all'orditura metallica tramite viti autoperforanti per silicato (passo max 20 cm). *NOTA: In caso di più strati, alternare l'incrocio delle lastre d'angolo per evitare giunti allineati.*`,
+          desc: `Fissa meccanicamente la lastra (o lo strato di lastre) del fianco esterno all'orditura metallica tramite viti autoperforanti per silicato (passo max 20 cm). *NOTA: In caso di più strati, alternare l'incrocio delle lastre d'angolo per evitare giunti allineati.*`,
           materials: [
-            `${layersCount}x Lastra Fianco: ${heightCm} x ${lengthCm} cm (Spessore unitario: ${tMm} mm)`,
+            ...listFianchi2Lati,
             "Viti per silicato (Fissaggio a secco)",
           ],
         },
@@ -127,10 +178,10 @@ export default function CassonettiInstructionsClient({
           num: 3,
           title: isParete ? `🔒 Lastra Frontale di Chiusura${layersText}` : `🧱 Lastra Inferiore (Fondo)${layersText}`,
           desc: isParete
-            ? `Avvita la lastra frontale di chiusura (larghezza a partire da ${(widthCm + (layersCount + 1) * tCm).toFixed(1)} cm, vedi distinta di taglio per ogni strato) in battuta sullo spessore del fianco montato al passo precedente, ancorandola sull'altro lato all'orditura metallica fissata a parete.`
-            : `Fissa la lastra inferiore (fondo) (larghezza a partire da ${(widthCm + (layersCount + 1) * tCm).toFixed(1)} cm, vedi distinta di taglio per ogni strato) x ${lengthCm} cm in sormonto sotto lo spessore del fianco laterale ed all'orditura metallica a parete.`,
+            ? `Avvita la lastra frontale di chiusura in battuta sullo spessore del fianco montato al passo precedente, ancorandola sull'altro lato all'orditura metallica fissata a parete.`
+            : `Fissa la lastra inferiore (fondo) in sormonto sotto lo spessore del fianco laterale ed all'orditura metallica a parete.`,
           materials: [
-            `${layersCount}x Lastra ${isParete ? "Frontale" : "Fondo"}: (da ${(widthCm + (layersCount + 1) * tCm).toFixed(1)} cm, vedi distinta) x ${lengthCm} cm (Spessore: ${tMm} mm)`,
+            ...listFondo2Lati,
             "Viti per silicato (Fissaggio a secco)",
           ],
         },
@@ -139,7 +190,7 @@ export default function CassonettiInstructionsClient({
           title: "🛑 Tappi Terminali di Chiusura (Opzionali)",
           desc: `Applica i 2 tappi di chiusura alle estremità del cassonetto (inizio e fine tratta). Ciascun tappo copre l'intero ingombro esterno ed è composto da ${layersCount} strati fissati meccanicamente all'orditura interna.`,
           materials: [
-            `${2 * layersCount}x Lastre Tappo: (da ${(widthCm + (layersCount + 1) * tCm).toFixed(1)} x ${(heightCm + (layersCount + 1) * tCm).toFixed(1)} cm, vedi distinta) (Spessore: ${tMm} mm)`,
+            ...listTappi2Lati,
             "Viti per silicato",
           ],
         },
@@ -163,9 +214,9 @@ export default function CassonettiInstructionsClient({
         {
           num: 2,
           title: `🧱 Fianchi Laterali (SX e DX)${layersText}`,
-          desc: `Fissa le due lastre dei fianchi esterni da ${heightCm} x ${lengthCm} cm all'orditura metallica tramite viti. Per configurazioni plurilastra, alternare lo sfalsamento d'angolo ad incastro tra i vari strati.`,
+          desc: `Fissa le due lastre dei fianchi esterni all'orditura metallica tramite viti. Per configurazioni plurilastra, alternare lo sfalsamento d'angolo ad incastro tra i vari strati.`,
           materials: [
-            `${2 * layersCount}x Lastre Fianchi: ${heightCm} x ${lengthCm} cm (Spessore: ${tMm} mm)`,
+            ...listFianchi3Lati,
             "Viti per silicato",
           ],
         },
@@ -173,10 +224,10 @@ export default function CassonettiInstructionsClient({
           num: 3,
           title: isParete ? `🔒 Lastra Frontale di Chiusura${layersText}` : `🧱 Lastra Inferiore (Fondo)${layersText}`,
           desc: isParete
-            ? `Avvita la lastra frontale di chiusura larga ${(widthCm + 2 * tCm).toFixed(1)} cm a sormonto sullo spessore di entrambi i fianchi laterali esterni, fissandola meccanicamente.`
-            : `Fissa la lastra inferiore (fondo) larga ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm a sormonto sotto lo spessore dei due fianchi. Fissaggio solo con viti.`,
+            ? `Avvita la lastra frontale di chiusura a sormonto sullo spessore di entrambi i fianchi laterali esterni, fissandola meccanicamente.`
+            : `Fissa la lastra inferiore (fondo) a sormonto sotto lo spessore dei due fianchi. Fissaggio solo con viti.`,
           materials: [
-            `${layersCount}x Lastra ${isParete ? "Frontale" : "Fondo"}: ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${tMm} mm)`,
+            ...listFondo3Lati,
             "Viti per silicato",
           ],
         },
@@ -185,7 +236,7 @@ export default function CassonettiInstructionsClient({
           title: "🛑 Tappi Terminali di Chiusura (Opzionali)",
           desc: `Applica i 2 tappi di chiusura sulle estremità. Ciascun tappo copre l'intero ingombro ed è composto da ${layersCount} strati fissati meccanicamente all'orditura metallica perimetrale.`,
           materials: [
-            `${2 * layersCount}x Lastre Tappo: (da ${(widthCm + 2 * tCm).toFixed(1)} x ${(heightCm + (layersCount + 1) * tCm).toFixed(1)} cm, vedi distinta) (Spessore: ${tMm} mm)`,
+            ...listTappi3Lati,
             "Viti per silicato",
           ],
         },
@@ -211,19 +262,19 @@ export default function CassonettiInstructionsClient({
           num: 2,
           title: isParete ? `🧱 Schiena Posteriore${layersText}` : `🧱 Lastra Superiore (Coperchio)${layersText}`,
           desc: isParete
-            ? `Fissa la schiena posteriore larga ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm fissandola meccanicamente all'orditura ed alle staffe a parete.`
-            : `Fissa la lastra superiore larga ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm a ridosso del solaio ancorandola all'orditura metallica di supporto superiore.`,
+            ? `Fissa la schiena posteriore fissandola meccanicamente all'orditura ed alle staffe a parete.`
+            : `Fissa la lastra superiore a ridosso del solaio ancorandola all'orditura metallica di supporto superiore.`,
           materials: [
-            `${layersCount}x Lastra ${isParete ? "Schiena" : "Coperchio"}: ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${tMm} mm)`,
+            ...listSchiena4Lati,
             "Viti per silicato",
           ],
         },
         {
           num: 3,
           title: `📐 Fianchi Laterali (SX e DX) Sfalsati${layersText}`,
-          desc: `Monta le due lastre dei fianchi laterali da ${heightCm} x ${lengthCm} cm ortogonalmente alla schiena/coperchio. *IMPORTANTE: Per la versione a 4 lati, sfalsare longitudinalmente i giunti dei fianchi rispetto a fondo/coperchio. Fissaggio a secco con sole viti.*`,
+          desc: `Monta le due lastre dei fianchi laterali ortogonalmente alla schiena/coperchio. *IMPORTANTE: Per la versione a 4 lati, sfalsare longitudinalmente i giunti dei fianchi rispetto a fondo/coperchio. Fissaggio a secco con sole viti.*`,
           materials: [
-            `${2 * layersCount}x Lastre Fianchi: ${heightCm} x ${lengthCm} cm (Spessore: ${tMm} mm)`,
+            ...listFianchi4Lati,
             "Viti per silicato",
           ],
         },
@@ -231,10 +282,10 @@ export default function CassonettiInstructionsClient({
           num: 4,
           title: isParete ? `🔒 Lastra Frontale di Chiusura${layersText}` : `🧱 Lastra Inferiore (Fondo)${layersText}`,
           desc: isParete
-            ? `Chiudi il cavedio montando la lastra frontale di chiusura larga ${(widthCm + 2 * tCm).toFixed(1)} cm ed avvitandola su tutta l'orditura d'angolo.`
-            : `Avvita la lastra inferiore (fondo) larga ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm per sigillare a scatola chiusa il cassonetto a 4 lati.`,
+            ? `Chiudi il cavedio montando la lastra frontale di chiusura ed avvitandola su tutta l'orditura d'angolo.`
+            : `Avvita la lastra inferiore (fondo) per sigillare a scatola chiusa il cassonetto a 4 lati.`,
           materials: [
-            `${layersCount}x Lastra ${isParete ? "Frontale" : "Fondo"}: ${(widthCm + 2 * tCm).toFixed(1)} x ${lengthCm} cm (Spessore: ${tMm} mm)`,
+            ...listFondo4Lati,
             "Viti per silicato",
           ],
         },
@@ -243,7 +294,7 @@ export default function CassonettiInstructionsClient({
           title: "🛑 Tappi Terminali di Chiusura (Opzionali)",
           desc: `Fissa i 2 tappi terminali di chiusura alle estremità della tratta. Ciascun tappo copre l'intero ingombro esterno ed è composto da ${layersCount} strati di lastre fissati all'orditura metallica interna.`,
           materials: [
-            `${2 * layersCount}x Lastre Tappo: ${(widthCm + 2 * tCm).toFixed(1)} x ${(heightCm + 2 * tCm).toFixed(1)} cm (Spessore: ${tMm} mm)`,
+            ...listTappi4Lati,
             "Viti per silicato",
           ],
         },
