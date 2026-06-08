@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect } from "react";
+import Link from "next/link";
 import { changePassword, logout } from "@/app/actions/auth";
 import UnifiedSettingsManager from "./UnifiedSettingsManager";
 import { APP_VERSION } from "@/lib/version";
@@ -24,7 +25,7 @@ export default function SettingsClient({
   initialMaterialCategories,
   initialMaterialUnits,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<"profile" | "config" | "mobile">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "config" | "mobile" | "render">("profile");
   const [isPending, startTransition] = useTransition();
   const [localVersion, setLocalVersion] = useState(APP_VERSION);
 
@@ -55,6 +56,7 @@ export default function SettingsClient({
   const tabs = [
     { key: "profile" as const, label: "Profilo & Sicurezza", icon: "👤" },
     { key: "config" as const, label: "Configurazione Voci", icon: "🏷️" },
+    { key: "render" as const, label: "Render per Disegno", icon: "🎨" },
     { key: "mobile" as const, label: "App Mobile (Download)", icon: "📲" },
   ];
 
@@ -251,6 +253,37 @@ export default function SettingsClient({
             initialMaterialCategories={initialMaterialCategories}
             initialMaterialUnits={initialMaterialUnits}
           />
+        </div>
+      )}
+
+      {/* ─── TAB 4: RENDER PER DISEGNO ────────────────── */}
+      {activeTab === "render" && (
+        <div
+          className="p-6 rounded-2xl border space-y-4 animate-fade-in"
+          style={{
+            background: "hsl(220 26% 14%)",
+            borderColor: "hsl(220 20% 20%)",
+          }}
+        >
+          <div className="space-y-1">
+            <span className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Libreria Pezzi Speciali</span>
+            <h3 className="text-base font-bold text-white">🎨 Visualizzatore Render per Disegno</h3>
+          </div>
+          <p className="text-xs text-white/60 leading-relaxed">
+            Consulta ed esporta i pezzi speciali parametrici 3D (curve, canne shunt, tratti con coprigiunti) pronti per essere raffigurati nei disegni tecnici. Questo strumento è utile per generare rendering di riferimento in scala.
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/projects/istruzioni/render-disegno"
+              className="inline-flex items-center justify-center py-3 px-6 rounded-xl font-bold text-xs text-white transition-all hover:brightness-110 active:scale-95"
+              style={{
+                background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+                boxShadow: "0 6px 20px hsl(220 90% 56% / 0.3)",
+              }}
+            >
+              Apri Visualizzatore 3D →
+            </Link>
+          </div>
         </div>
       )}
 

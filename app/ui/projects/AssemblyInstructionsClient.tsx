@@ -34,17 +34,19 @@ export default function AssemblyInstructionsClient({ project, catalogMaterials, 
   const [lengthCmInput, setLengthCmInput] = useState<string>("250");
 
   // Calcolo delle dimensioni effettive (numericamente sicure per il motore 3D e i calcoli)
-  const widthCm = useMemo(() => Math.max(10, parseInt(widthCmInput) || 10), [widthCmInput]);
-  const heightCm = useMemo(() => Math.max(10, parseInt(heightCmInput) || 10), [heightCmInput]);
-  const lengthCm = useMemo(() => Math.max(50, parseInt(lengthCmInput) || 50), [lengthCmInput]);
+  const widthCm = useMemo(() => Math.max(1, parseInt(widthCmInput) || 10), [widthCmInput]);
+  const heightCm = useMemo(() => Math.max(1, parseInt(heightCmInput) || 10), [heightCmInput]);
+  const lengthCm = useMemo(() => Math.max(1, parseInt(lengthCmInput) || 50), [lengthCmInput]);
 
   // Step attivo delle istruzioni
   const [currentStep, setCurrentStep] = useState<number>(1);
 
   const handleBlur = (val: string, setVal: (s: string) => void, min: number, max: number) => {
     const parsed = parseInt(val);
-    if (isNaN(parsed) || parsed < min) {
+    if (isNaN(parsed) || val.trim() === "") {
       setVal(min.toString());
+    } else if (parsed <= 0) {
+      setVal("1");
     } else if (parsed > max) {
       setVal(max.toString());
     } else {

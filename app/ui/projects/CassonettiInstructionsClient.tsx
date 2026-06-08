@@ -35,9 +35,9 @@ export default function CassonettiInstructionsClient({
   const [lengthCmInput, setLengthCmInput] = useState<string>("100");
 
   // Calcolo sicuro delle dimensioni per il motore 3D
-  const widthCm = useMemo(() => Math.max(10, parseInt(widthCmInput) || 10), [widthCmInput]);
-  const heightCm = useMemo(() => Math.max(10, parseInt(heightCmInput) || 10), [heightCmInput]);
-  const lengthCm = useMemo(() => Math.max(50, parseInt(lengthCmInput) || 50), [lengthCmInput]);
+  const widthCm = useMemo(() => Math.max(1, parseInt(widthCmInput) || 10), [widthCmInput]);
+  const heightCm = useMemo(() => Math.max(1, parseInt(heightCmInput) || 10), [heightCmInput]);
+  const lengthCm = useMemo(() => Math.max(1, parseInt(lengthCmInput) || 50), [lengthCmInput]);
 
   // Stato tipo di montaggio, configurazione lati e numero di strati
   const [positioning, setPositioning] = useState<"solaio" | "parete">("solaio");
@@ -86,8 +86,10 @@ export default function CassonettiInstructionsClient({
   // Gestione blur per validare i campi numerici
   const handleBlur = (val: string, setVal: (s: string) => void, min: number, max: number) => {
     const parsed = parseInt(val);
-    if (isNaN(parsed) || parsed < min) {
+    if (isNaN(parsed) || val.trim() === "") {
       setVal(min.toString());
+    } else if (parsed <= 0) {
+      setVal("1");
     } else if (parsed > max) {
       setVal(max.toString());
     } else {
