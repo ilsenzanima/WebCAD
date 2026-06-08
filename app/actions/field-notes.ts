@@ -426,13 +426,13 @@ export async function getLevelNoteText(levelId: string): Promise<string> {
 
         switch (item.item_type) {
           case "base":
-            desc = `Base: ${valNum} ${valUnit || "mm"}`;
+            desc = `Base: ${valNum} ${valUnit || "mm"}${valText ? ` (${valText})` : ""}`;
             break;
           case "altezza":
-            desc = `Altezza: ${valNum} ${valUnit || "mm"}`;
+            desc = `Altezza: ${valNum} ${valUnit || "mm"}${valText ? ` (${valText})` : ""}`;
             break;
           case "spessore":
-            desc = `Spessore: ${valNum} ${valUnit || "mm"}`;
+            desc = `Spessore: ${valNum} ${valUnit || "mm"}${valText ? ` (${valText})` : ""}`;
             break;
           case "lana_interna":
             desc = `Lana Interna: ${valBool ? "Sì" : "No"}`;
@@ -443,10 +443,11 @@ export async function getLevelNoteText(levelId: string): Promise<string> {
           case "dim_quadrata":
             try {
               const parsed = valText ? JSON.parse(valText) : {};
+              const refStr = parsed.refTitle ? `[${parsed.refTitle}] ` : "";
               if (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null)) {
-                desc = `Pezzo da tagliare: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"} (Qtà: ${parsed.q})`;
+                desc = `Pezzo da tagliare: ${refStr}${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"} (Qtà: ${parsed.q})`;
               } else {
-                desc = `Dimensione Quadrata: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"}`;
+                desc = `Dimensione Quadrata: ${refStr}${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"}`;
               }
             } catch {
               desc = `Dimensione Quadrata: ${valNum || 0} ${valUnit || "cm"}`;
@@ -455,7 +456,8 @@ export async function getLevelNoteText(levelId: string): Promise<string> {
           case "dim_cubica":
             try {
               const parsed = valText ? JSON.parse(valText) : {};
-              desc = `Sezione 3D: ${parsed.b || 0} x ${parsed.h || 0} x ${parsed.d || 0} ${parsed.unit || "cm"}`;
+              const refStr = parsed.refTitle ? `[${parsed.refTitle}] ` : "";
+              desc = `Sezione 3D: ${refStr}${parsed.b || 0} x ${parsed.h || 0} x ${parsed.d || 0} ${parsed.unit || "cm"}`;
             } catch {
               desc = `Dimensione Cubica: ${valNum || 0} ${valUnit || "cm"}`;
             }

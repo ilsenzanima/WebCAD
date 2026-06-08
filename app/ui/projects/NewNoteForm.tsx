@@ -518,9 +518,9 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
           value_num: MEASURE_TYPES.includes(item.item_type) ? (item.value_num ?? null) : null,
           value_unit: MEASURE_TYPES.includes(item.item_type) ? (item.value_unit ?? "cm") : null,
           value_bool: BOOL_TYPES.includes(item.item_type) ? (item.value_bool ?? true) : null,
-          // nota, foto e posizione usano value_text; composite salvano JSON in value_text
+          // nota, foto e posizione usano value_text; composite salvano JSON in value_text; anche le misure singole ora usano value_text per il nome di riferimento
           value_text:
-            (item.item_type === "nota" || item.item_type === "foto" || item.item_type === "posizione" || item.item_type === "materiale")
+            (item.item_type === "nota" || item.item_type === "foto" || item.item_type === "posizione" || item.item_type === "materiale" || MEASURE_TYPES.includes(item.item_type))
               ? (item.value_text ?? null)
               : COMPOSITE_TYPES.includes(item.item_type)
               ? JSON.stringify(item.composite ?? {})
@@ -1079,19 +1079,19 @@ export default function NewNoteForm({ projectId, levelId, noteTypes, initialNote
                         </button>
                         <button
                           type="button"
-                          onClick={() => addItem("dim_quadrata", { isCutPiece: true })}
-                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
-                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
-                        >
-                          ✂️ Pezzo da tagliare
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => addItem("dim_cubica")}
                           className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
                           style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
                         >
                           ⬛ Dimensioni cubiche
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addItem("dim_quadrata", { isCutPiece: true })}
+                          className="w-full text-left px-4 py-3 text-sm hover:bg-white/5 transition-colors text-[hsl(210,40%,90%)]"
+                          style={{ borderBottom: "1px solid hsl(220 20% 18%)" }}
+                        >
+                          ✂️ Pezzo da tagliare
                         </button>
                         <button
                           type="button"
@@ -1746,64 +1746,78 @@ function ItemRow({
             </button>
           </div>
         </div>
-        <div className="flex gap-2">
-          <div className="flex items-center gap-1 flex-1 min-w-0">
-            <span className="text-[10px] text-gray-500">L:</span>
-            <input
-              ref={inputRef}
-              type="number"
-              min="0"
-              step="0.1"
-              value={cv.b ?? ""}
-              onChange={(e) => updateComposite({ b: e.target.value ? parseFloat(e.target.value) : null })}
-              placeholder="Base"
-              className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
-              style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
-            />
-          </div>
-          <div className="flex items-center gap-1 flex-1 min-w-0">
-            <span className="text-[10px] text-gray-500">H:</span>
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              value={cv.h ?? ""}
-              onChange={(e) => updateComposite({ h: e.target.value ? parseFloat(e.target.value) : null })}
-              placeholder="Altezza"
-              className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
-              style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
-            />
-          </div>
-          {item.item_type === "dim_quadrata" && cv.isCutPiece && (
-            <div className="flex items-center gap-1 w-20 flex-shrink-0">
-              <span className="text-[10px] text-gray-500">Q:</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={cv.q ?? 1}
-                onChange={(e) => updateComposite({ q: e.target.value ? parseInt(e.target.value) : 1 })}
-                placeholder="Qtà"
-                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
-                style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(142 60% 75%)" }}
-              />
-            </div>
-          )}
-          {isDim3D && (
+        <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex gap-2 flex-1">
             <div className="flex items-center gap-1 flex-1 min-w-0">
-              <span className="text-[10px] text-gray-500">P:</span>
+              <span className="text-[10px] text-gray-500 font-semibold">L:</span>
               <input
+                ref={inputRef}
                 type="number"
                 min="0"
                 step="0.1"
-                value={cv.d ?? ""}
-                onChange={(e) => updateComposite({ d: e.target.value ? parseFloat(e.target.value) : null })}
-                placeholder="Prof."
+                value={cv.b ?? ""}
+                onChange={(e) => updateComposite({ b: e.target.value ? parseFloat(e.target.value) : null })}
+                placeholder="Base"
                 className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
                 style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
               />
             </div>
-          )}
+            <div className="flex items-center gap-1 flex-1 min-w-0">
+              <span className="text-[10px] text-gray-500 font-semibold">H:</span>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={cv.h ?? ""}
+                onChange={(e) => updateComposite({ h: e.target.value ? parseFloat(e.target.value) : null })}
+                placeholder="Altezza"
+                className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
+              />
+            </div>
+            {item.item_type === "dim_quadrata" && cv.isCutPiece && (
+              <div className="flex items-center gap-1 w-20 flex-shrink-0">
+                <span className="text-[10px] text-gray-500 font-semibold">Q:</span>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={cv.q ?? 1}
+                  onChange={(e) => updateComposite({ q: e.target.value ? parseInt(e.target.value) : 1 })}
+                  placeholder="Qtà"
+                  className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                  style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(142 60% 75%)" }}
+                />
+              </div>
+            )}
+            {isDim3D && (
+              <div className="flex items-center gap-1 flex-1 min-w-0">
+                <span className="text-[10px] text-gray-500 font-semibold">P:</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={cv.d ?? ""}
+                  onChange={(e) => updateComposite({ d: e.target.value ? parseFloat(e.target.value) : null })}
+                  placeholder="Prof."
+                  className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+                  style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 40% 96%)" }}
+                />
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1 sm:max-w-[180px] w-full flex-shrink-0">
+            <span className="text-[10px] text-gray-500 font-semibold">Rif:</span>
+            <input
+              type="text"
+              value={cv.refTitle ?? ""}
+              onChange={(e) => updateComposite({ refTitle: e.target.value || undefined })}
+              placeholder="Riferimento (es. Mensola)"
+              className="w-full px-2 py-1.5 rounded-lg text-xs outline-none"
+              style={{ background: "hsl(220 26% 14%)", border: "1px solid hsl(220 20% 22%)", color: "hsl(210 30% 80%)" }}
+              autoComplete="off"
+            />
+          </div>
         </div>
       </div>
     );
@@ -1834,40 +1848,55 @@ function ItemRow({
 
       {/* Input misura */}
       {isMeasure && (
-        <div className="flex flex-1 items-center gap-1.5 min-w-0">
-          <div className="flex-1 relative">
-            <input
-              ref={inputRef}
-              type="number"
-              min="0"
-              step="0.1"
-              value={item.value_num ?? ""}
-              onChange={(e) =>
-                onChange({ value_num: e.target.value ? parseFloat(e.target.value) : null })
-              }
-              placeholder="0"
-              className="w-full px-2.5 py-1.5 rounded-lg text-xs outline-none"
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <div className="flex-1 relative">
+              <input
+                ref={inputRef}
+                type="number"
+                min="0"
+                step="0.1"
+                value={item.value_num ?? ""}
+                onChange={(e) =>
+                  onChange({ value_num: e.target.value ? parseFloat(e.target.value) : null })
+                }
+                placeholder="0"
+                className="w-full px-2.5 py-1.5 rounded-lg text-xs outline-none"
+                style={{
+                  background: "hsl(220 26% 14%)",
+                  border: "1px solid hsl(220 20% 22%)",
+                  color: "hsl(210 40% 96%)",
+                }}
+                data-1p-ignore
+                autoComplete="off"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => onChange({ value_unit: item.value_unit === "mm" ? "cm" : "mm" })}
+              className="px-2 py-1.5 rounded-lg text-xs font-bold transition-all flex-shrink-0"
               style={{
-                background: "hsl(220 26% 14%)",
-                border: "1px solid hsl(220 20% 22%)",
-                color: "hsl(210 40% 96%)",
+                background: "hsl(220 26% 18%)",
+                border: "1px solid hsl(220 20% 24%)",
+                color: item.value_unit === "mm" ? "hsl(220 90% 70%)" : "hsl(210 40% 85%)",
               }}
-              data-1p-ignore
-              autoComplete="off"
-            />
+            >
+              {item.value_unit ?? "cm"}
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => onChange({ value_unit: item.value_unit === "mm" ? "cm" : "mm" })}
-            className="px-2 py-1.5 rounded-lg text-xs font-bold transition-all flex-shrink-0"
+          <input
+            type="text"
+            value={item.value_text ?? ""}
+            onChange={(e) => onChange({ value_text: e.target.value })}
+            placeholder="Riferimento (es. Porta)"
+            className="flex-1 sm:max-w-[180px] px-2.5 py-1.5 rounded-lg text-xs outline-none"
             style={{
-              background: "hsl(220 26% 18%)",
-              border: "1px solid hsl(220 20% 24%)",
-              color: item.value_unit === "mm" ? "hsl(220 90% 70%)" : "hsl(210 40% 85%)",
+              background: "hsl(220 26% 14%)",
+              border: "1px solid hsl(220 20% 22%)",
+              color: "hsl(210 30% 80%)",
             }}
-          >
-            {item.value_unit ?? "cm"}
-          </button>
+            autoComplete="off"
+          />
         </div>
       )}
 

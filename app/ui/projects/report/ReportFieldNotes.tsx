@@ -130,19 +130,19 @@ export default function ReportFieldNotes({ notes, levels, onImageClick }: Props)
       case "base":
         return (
           <div key={item.id} className="text-xs text-gray-400 print:text-gray-700">
-            ↔ <span className="font-semibold text-gray-300 print:text-black">Larghezza:</span> {item.value_num} {item.value_unit || "cm"}
+            ↔ <span className="font-semibold text-gray-300 print:text-black">Larghezza:</span> {item.value_num} {item.value_unit || "cm"}{item.value_text ? ` (${item.value_text})` : ""}
           </div>
         );
       case "altezza":
         return (
           <div key={item.id} className="text-xs text-gray-400 print:text-gray-700">
-            ↕ <span className="font-semibold text-gray-300 print:text-black">Altezza:</span> {item.value_num} {item.value_unit || "cm"}
+            ↕ <span className="font-semibold text-gray-300 print:text-black">Altezza:</span> {item.value_num} {item.value_unit || "cm"}{item.value_text ? ` (${item.value_text})` : ""}
           </div>
         );
       case "spessore":
         return (
           <div key={item.id} className="text-xs text-gray-400 print:text-gray-700">
-            ↗ <span className="font-semibold text-gray-300 print:text-black">Spessore:</span> {item.value_num} {item.value_unit || "cm"}
+            ↗ <span className="font-semibold text-gray-300 print:text-black">Spessore:</span> {item.value_num} {item.value_unit || "cm"}{item.value_text ? ` (${item.value_text})` : ""}
           </div>
         );
       case "lana_interna":
@@ -160,16 +160,17 @@ export default function ReportFieldNotes({ notes, levels, onImageClick }: Props)
       case "dim_quadrata":
         try {
           const parsed = JSON.parse(item.value_text || "{}");
+          const refStr = parsed.refTitle ? `[${parsed.refTitle}] ` : "";
           if (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null)) {
             return (
               <div key={item.id} className="text-xs text-gray-400 print:text-gray-700">
-                ✂️ <span className="font-semibold text-gray-300 print:text-black">Pezzo da tagliare:</span> {parsed.b || 0} x {parsed.h || 0} {parsed.unit || "cm"} <span className="text-emerald-400 font-bold print:text-black">(Qtà: {parsed.q || 1})</span>
+                ✂️ <span className="font-semibold text-gray-300 print:text-black">Pezzo da tagliare:</span> {refStr}{parsed.b || 0} x {parsed.h || 0} {parsed.unit || "cm"} <span className="text-emerald-400 font-bold print:text-black">(Qtà: {parsed.q || 1})</span>
               </div>
             );
           }
           return (
             <div key={item.id} className="text-xs text-gray-400 print:text-gray-700">
-              📐 <span className="font-semibold text-gray-300 print:text-black">Dimensione quadrata:</span> {parsed.b || 0} x {parsed.h || 0} {parsed.unit || "cm"}
+              📐 <span className="font-semibold text-gray-300 print:text-black">Dimensione quadrata:</span> {refStr}{parsed.b || 0} x {parsed.h || 0} {parsed.unit || "cm"}
             </div>
           );
         } catch {
@@ -182,9 +183,10 @@ export default function ReportFieldNotes({ notes, levels, onImageClick }: Props)
       case "dim_cubica":
         try {
           const parsed = JSON.parse(item.value_text || "{}");
+          const refStr = parsed.refTitle ? `[${parsed.refTitle}] ` : "";
           return (
             <div key={item.id} className="text-xs text-gray-400 print:text-gray-700">
-              ⬛ <span className="font-semibold text-gray-300 print:text-black">Dimensione Cubica:</span> {parsed.b || 0} x {parsed.h || 0} x {parsed.d || 0} {parsed.unit || "cm"}
+              ⬛ <span className="font-semibold text-gray-300 print:text-black">Dimensione Cubica:</span> {refStr}{parsed.b || 0} x {parsed.h || 0} x {parsed.d || 0} {parsed.unit || "cm"}
             </div>
           );
         } catch {

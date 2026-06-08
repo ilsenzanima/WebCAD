@@ -171,7 +171,9 @@ export default function ReportNesting({ allWalls, all3DBoxes, notes = [] }: Prop
                 sheetRequests.push({
                   width: sp.w,
                   height: sp.h,
-                  label: `Nota #${note.note_number} (${wMm}x${hMm}mm)`,
+                  label: parsed.refTitle
+                    ? `Nota #${note.note_number} - ${parsed.refTitle} (${wMm}x${hMm}mm)`
+                    : `Nota #${note.note_number} (${wMm}x${hMm}mm)`,
                 });
               });
             }

@@ -334,18 +334,19 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
           } else if (item.item_type === "foto") {
             items.push("📷 Foto Allegata (Con Quote)");
           } else if (item.item_type === "base") {
-            items.push(`↔ Larghezza: ${item.value_num} ${item.value_unit || "cm"}`);
+            items.push(`↔ Larghezza: ${item.value_num} ${item.value_unit || "cm"}${item.value_text ? ` (${item.value_text})` : ""}`);
           } else if (item.item_type === "altezza") {
-            items.push(`↕ Altezza: ${item.value_num} ${item.value_unit || "cm"}`);
+            items.push(`↕ Altezza: ${item.value_num} ${item.value_unit || "cm"}${item.value_text ? ` (${item.value_text})` : ""}`);
           } else if (item.item_type === "spessore") {
-            items.push(`↗ Spessore: ${item.value_num} ${item.value_unit || "cm"}`);
+            items.push(`↗ Spessore: ${item.value_num} ${item.value_unit || "cm"}${item.value_text ? ` (${item.value_text})` : ""}`);
           } else if (item.item_type === "dim_quadrata" && item.value_text) {
             try {
               const parsed = JSON.parse(item.value_text);
+              const refStr = parsed.refTitle ? `[${parsed.refTitle}] ` : "";
               if (parsed.isCutPiece || (parsed.q !== undefined && parsed.q !== null)) {
-                items.push(`✂️ Pezzo: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"} (Qtà: ${parsed.q || 1})`);
+                items.push(`✂️ Pezzo: ${refStr}${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"} (Qtà: ${parsed.q || 1})`);
               } else {
-                items.push(`📐 Dim: ${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"}`);
+                items.push(`📐 Dim: ${refStr}${parsed.b || 0} x ${parsed.h || 0} ${parsed.unit || "cm"}`);
               }
             } catch {
               items.push(`📐 Dimensione quadrata`);
@@ -353,7 +354,8 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
           } else if (item.item_type === "dim_cubica" && item.value_text) {
             try {
               const parsed = JSON.parse(item.value_text);
-              items.push(`⬛ Vol: ${parsed.b || 0} x ${parsed.h || 0} x ${parsed.d || 0} ${parsed.unit || "cm"}`);
+              const refStr = parsed.refTitle ? `[${parsed.refTitle}] ` : "";
+              items.push(`⬛ Vol: ${refStr}${parsed.b || 0} x ${parsed.h || 0} x ${parsed.d || 0} ${parsed.unit || "cm"}`);
             } catch {
               items.push(`⬛ Dimensione Cubica`);
             }
@@ -796,11 +798,11 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                                             } else if (item.item_type === "materiale" && item.value_text) {
                                               desc = `📦 Materiale: ${item.value_text}`;
                                             } else if (item.item_type === "base" && item.value_num != null) {
-                                              desc = `↔ Larghezza: ${item.value_num} ${item.value_unit || "cm"}`;
+                                              desc = `↔ Larghezza: ${item.value_num} ${item.value_unit || "cm"}${item.value_text ? ` (${item.value_text})` : ""}`;
                                             } else if (item.item_type === "altezza" && item.value_num != null) {
-                                              desc = `↕ Altezza: ${item.value_num} ${item.value_unit || "cm"}`;
+                                              desc = `↕ Altezza: ${item.value_num} ${item.value_unit || "cm"}${item.value_text ? ` (${item.value_text})` : ""}`;
                                             } else if (item.item_type === "spessore" && item.value_num != null) {
-                                              desc = `↗ Spessore: ${item.value_num} ${item.value_unit || "cm"}`;
+                                              desc = `↗ Spessore: ${item.value_num} ${item.value_unit || "cm"}${item.value_text ? ` (${item.value_text})` : ""}`;
                                             } else if (item.item_type === "lana_interna") {
                                               desc = `✓ Lana Interna: ${item.value_bool ? "Presente" : "Non presente"}`;
                                             } else if (item.item_type === "dipintura") {
@@ -808,16 +810,18 @@ export default function ProjectDetailClient({ project, drawings, notesList }: Pr
                                             } else if (item.item_type === "dim_quadrata" && item.value_text) {
                                               try {
                                                 const cv = JSON.parse(item.value_text);
+                                                const refStr = cv.refTitle ? `[${cv.refTitle}] ` : "";
                                                 if (cv.isCutPiece || (cv.q !== undefined && cv.q !== null)) {
-                                                  desc = `✂️ Pezzo da taglio: ${cv.b || 0}x${cv.h || 0} ${cv.unit || "cm"} (Qtà: ${cv.q || 1})`;
+                                                  desc = `✂️ Pezzo da taglio: ${refStr}${cv.b || 0}x${cv.h || 0} ${cv.unit || "cm"} (Qtà: ${cv.q || 1})`;
                                                 } else {
-                                                  desc = `📐 Dimensione: ${cv.b || 0}x${cv.h || 0} ${cv.unit || "cm"}`;
+                                                  desc = `📐 Dimensione: ${refStr}${cv.b || 0}x${cv.h || 0} ${cv.unit || "cm"}`;
                                                 }
                                               } catch { desc = "📐 Dimensione quadrata"; }
                                             } else if (item.item_type === "dim_cubica" && item.value_text) {
                                               try {
                                                 const cv = JSON.parse(item.value_text);
-                                                desc = `⬛ Volume: ${cv.b || 0}x${cv.h || 0}x${cv.d || 0} ${cv.unit || "cm"}`;
+                                                const refStr = cv.refTitle ? `[${cv.refTitle}] ` : "";
+                                                desc = `⬛ Volume: ${refStr}${cv.b || 0}x${cv.h || 0}x${cv.d || 0} ${cv.unit || "cm"}`;
                                               } catch { desc = "⬛ Dimensione Cubica"; }
                                             } else if (item.item_type === "posizione" && item.value_text) {
                                               try {

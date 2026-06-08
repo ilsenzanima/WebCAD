@@ -298,7 +298,10 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
 
       <span className="text-sm font-semibold" style={{ color: "hsl(210 40% 90%)" }}>
         {isMeasure && item.value_num != null && (
-          <>{item.value_num} {item.value_unit ?? "cm"}</>
+          <>
+            {item.value_text && <span className="text-xs font-normal text-white/50 mr-1.5">[{item.value_text}]</span>}
+            <span>{item.value_num} {item.value_unit ?? "cm"}</span>
+          </>
         )}
         {isMeasure && item.value_num == null && (
           <span className="italic text-xs" style={{ color: "hsl(215 15% 40%)" }}>—</span>
@@ -341,10 +344,11 @@ function ItemDetail({ item }: { item: FieldNoteItem }) {
           try {
             const cv = item.value_text ? JSON.parse(item.value_text) : {};
             const u = cv.unit ?? "cm";
+            const refStr = cv.refTitle ? `[${cv.refTitle}] ` : "";
             if (item.item_type === "dim_quadrata") {
-              return <span className="text-xs font-mono">{cv.b ?? "—"}{u} × {cv.h ?? "—"}{u} {cv.q ? `(Qtà: ${cv.q})` : ""}</span>;
+              return <span className="text-xs font-mono">{refStr}{cv.b ?? "—"}{u} × {cv.h ?? "—"}{u} {cv.q ? `(Qtà: ${cv.q})` : ""}</span>;
             }
-            return <span className="text-xs font-mono">{cv.b ?? "—"}{u} × {cv.h ?? "—"}{u} × {cv.d ?? "—"}{u}</span>;
+            return <span className="text-xs font-mono">{refStr}{cv.b ?? "—"}{u} × {cv.h ?? "—"}{u} × {cv.d ?? "—"}{u}</span>;
           } catch { return <span className="text-xs italic" style={{ color: "hsl(215 15% 40%)" }}>—</span>; }
         })()}
       </span>
