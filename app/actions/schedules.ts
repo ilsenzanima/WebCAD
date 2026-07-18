@@ -4,13 +4,13 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export async function getSchedules() {
-  const supabase = await createClient();
+  const supabase = (await createClient()) as any;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Non autenticato");
 
   const { data, error } = await supabase
     .from("payment_schedules")
-    .select("*")
+    .select("*, expense_categories(name, color), suppliers(name)")
     .order("due_date", { ascending: true });
 
   if (error) throw new Error(error.message);
@@ -19,19 +19,23 @@ export async function getSchedules() {
 
 export async function createSchedule(formData: {
   amount: number;
-  category: string;
+  category_id: string | null;
+  supplier_id: string | null;
+  category_name: string;
   description: string;
   due_date: string;
   recurrence: "one-time" | "weekly" | "monthly" | "yearly";
 }) {
-  const supabase = await createClient();
+  const supabase = (await createClient()) as any;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Non autenticato");
 
   const { error } = await supabase.from("payment_schedules").insert({
     user_id: user.id,
     amount: formData.amount,
-    category: formData.category,
+    category: formData.category_name,
+    category_id: formData.category_id || null,
+    supplier_id: formData.supplier_id || null,
     description: formData.description || null,
     due_date: formData.due_date,
     recurrence: formData.recurrence,
@@ -45,7 +49,7 @@ export async function createSchedule(formData: {
 }
 
 export async function deleteSchedule(id: string) {
-  const supabase = await createClient();
+  const supabase = (await createClient()) as any;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Non autenticato");
 
@@ -62,7 +66,7 @@ export async function deleteSchedule(id: string) {
 }
 
 export async function paySchedule(id: string) {
-  const supabase = await createClient();
+  const supabase = (await createClient()) as any;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Non autenticato");
 
@@ -78,12 +82,14 @@ export async function paySchedule(id: string) {
     throw new Error(fetchError?.message || "Pianificazione non trovata");
   }
 
-  // 2. Crea la spesa corrispondente
+  // 2. Crea la spesa corrispondente (ereditando category_id e supplier_id)
   const today = new Date().toISOString().split("T")[0];
   const { error: expenseError } = await supabase.from("expenses").insert({
     user_id: user.id,
     amount: schedule.amount,
     category: schedule.category,
+    category_id: schedule.category_id,
+    supplier_id: schedule.supplier_id,
     description: `Pagamento programmato: ${schedule.description || "Nessuna descrizione"}`,
     date: today,
   });

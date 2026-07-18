@@ -12,15 +12,15 @@
   --brand-warning: 38 92% 50%;        /* Giallo warning */
   --brand-danger: 0 84% 60%;          /* Rosso errore */
 
-  /* Surface palette (dark mode first — app professionale) */
-  --surface-bg: 222 47% 6%;           /* Background principale */
-  --surface-panel: 220 32% 10%;       /* Panel/sidebar */
-  --surface-card: 220 26% 14%;        /* Card */
-  --surface-elevated: 220 22% 18%;    /* Dropdown, popup */
-  --surface-border: 220 20% 22%;      /* Bordi */
-  --surface-muted: 220 15% 35%;       /* Testo muted */
-  --surface-text: 210 40% 96%;        /* Testo principale */
-  --surface-text-dim: 215 20% 65%;    /* Testo secondario */
+  /* Surface palette (Grigi Neutri) */
+  --surface-bg: 240 10% 3.9%;         /* Background principale (Zinc-950) */
+  --surface-panel: 240 10% 10%;       /* Panel/sidebar (Zinc-900) */
+  --surface-card: 240 10% 15%;        /* Card (Zinc-850) */
+  --surface-elevated: 240 10% 20%;    /* Dropdown, popup (Zinc-800) */
+  --surface-border: 240 5% 18%;       /* Bordi leggermente visibili */
+  --surface-muted: 240 5% 40%;        /* Testo spento */
+  --surface-text: 240 5% 96%;         /* Testo principale */
+  --surface-text-dim: 240 5% 65%;     /* Testo secondario */
 
   /* Canvas */
   --canvas-bg: 228 39% 8%;

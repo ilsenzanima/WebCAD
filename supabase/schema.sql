@@ -6,6 +6,36 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================
+-- TABELLA: expense_categories (categorie spese)
+-- ============================================
+
+CREATE TABLE public.expense_categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name VARCHAR(100) NOT NULL,
+  color VARCHAR(50) DEFAULT 'indigo', -- colore badge
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, name)
+);
+
+COMMENT ON TABLE expense_categories IS 'Categorie personalizzate di spesa definite dall''utente.';
+
+-- ============================================
+-- TABELLA: suppliers (fornitori)
+-- ============================================
+
+CREATE TABLE public.suppliers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, name)
+);
+
+COMMENT ON TABLE suppliers IS 'Fornitori personalizzati definiti dall''utente.';
+
+-- ============================================
 -- TABELLA: expenses (spese effettive)
 -- ============================================
 
@@ -13,9 +43,11 @@ CREATE TABLE public.expenses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   amount NUMERIC(12, 2) NOT NULL,
-  category VARCHAR(100) NOT NULL,
+  category VARCHAR(100) NOT NULL, -- mantenuto per compatibilità / fallback
   description TEXT,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
+  category_id UUID REFERENCES public.expense_categories(id) ON DELETE SET NULL,
+  supplier_id UUID REFERENCES public.suppliers(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -30,11 +62,13 @@ CREATE TABLE public.payment_schedules (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   amount NUMERIC(12, 2) NOT NULL,
-  category VARCHAR(100) NOT NULL,
+  category VARCHAR(100) NOT NULL, -- mantenuto per compatibilità / fallback
   description TEXT,
   due_date DATE NOT NULL,
   is_paid BOOLEAN NOT NULL DEFAULT FALSE,
   recurrence VARCHAR(50) DEFAULT 'one-time', -- 'one-time', 'weekly', 'monthly', 'yearly'
+  category_id UUID REFERENCES public.expense_categories(id) ON DELETE SET NULL,
+  supplier_id UUID REFERENCES public.suppliers(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -49,13 +83,23 @@ CREATE INDEX idx_expenses_user ON public.expenses(user_id);
 CREATE INDEX idx_expenses_date ON public.expenses(date);
 CREATE INDEX idx_schedules_user ON public.payment_schedules(user_id);
 CREATE INDEX idx_schedules_due_date ON public.payment_schedules(due_date);
+CREATE INDEX idx_categories_user ON public.expense_categories(user_id);
+CREATE INDEX idx_suppliers_user ON public.suppliers(user_id);
 
 -- ============================================
 -- ROW LEVEL SECURITY (RLS)
 -- ============================================
 
+ALTER TABLE public.expense_categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payment_schedules ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Gli utenti gestiscono le proprie categorie" ON public.expense_categories
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Gli utenti gestiscono i propri fornitori" ON public.suppliers
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Gli utenti gestiscono le proprie spese" ON public.expenses
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);

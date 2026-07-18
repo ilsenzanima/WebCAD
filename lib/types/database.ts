@@ -5,20 +5,93 @@
  * ============================================
  */
 
+export interface ExpenseCategory {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string;
+  created_at: string;
+}
+
+export interface Supplier {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+}
+
+export interface Expense {
+  id: string;
+  user_id: string;
+  amount: number;
+  category: string; // fallback testuale
+  description: string | null;
+  date: string;
+  category_id: string | null; // FK -> expense_categories.id
+  supplier_id: string | null; // FK -> suppliers.id
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaymentSchedule {
+  id: string;
+  user_id: string;
+  amount: number;
+  category: string; // fallback testuale
+  description: string | null;
+  due_date: string;
+  is_paid: boolean;
+  recurrence: "one-time" | "weekly" | "monthly" | "yearly";
+  category_id: string | null; // FK -> expense_categories.id
+  supplier_id: string | null; // FK -> suppliers.id
+  created_at: string;
+  updated_at: string;
+}
+
+// ----- Database Schema (per Supabase Client tipizzato) -----
+
 export interface Database {
   public: {
     Tables: {
-      expenses: {
-        Row: {
-          id: string;
-          user_id: string;
-          amount: number;
-          category: string;
-          description: string | null;
-          date: string;
-          created_at: string;
-          updated_at: string;
+      expense_categories: {
+        Row: ExpenseCategory;
+        Insert: {
+          id?: string;
+          user_id?: string;
+          name: string;
+          color?: string;
+          created_at?: string;
         };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          color?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      suppliers: {
+        Row: Supplier;
+        Insert: {
+          id?: string;
+          user_id?: string;
+          name: string;
+          description?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          description?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      expenses: {
+        Row: Expense;
         Insert: {
           id?: string;
           user_id?: string;
@@ -26,6 +99,8 @@ export interface Database {
           category: string;
           description?: string | null;
           date?: string;
+          category_id?: string | null;
+          supplier_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -36,24 +111,30 @@ export interface Database {
           category?: string;
           description?: string | null;
           date?: string;
+          category_id?: string | null;
+          supplier_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "expenses_category_id_fkey";
+            columns: ["category_id"];
+            isOneToOne: false;
+            referencedRelation: "expense_categories";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "expenses_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "suppliers";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       payment_schedules: {
-        Row: {
-          id: string;
-          user_id: string;
-          amount: number;
-          category: string;
-          description: string | null;
-          due_date: string;
-          is_paid: boolean;
-          recurrence: "one-time" | "weekly" | "monthly" | "yearly";
-          created_at: string;
-          updated_at: string;
-        };
+        Row: PaymentSchedule;
         Insert: {
           id?: string;
           user_id?: string;
@@ -63,6 +144,8 @@ export interface Database {
           due_date: string;
           is_paid?: boolean;
           recurrence?: "one-time" | "weekly" | "monthly" | "yearly";
+          category_id?: string | null;
+          supplier_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -75,10 +158,27 @@ export interface Database {
           due_date?: string;
           is_paid?: boolean;
           recurrence?: "one-time" | "weekly" | "monthly" | "yearly";
+          category_id?: string | null;
+          supplier_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "payment_schedules_category_id_fkey";
+            columns: ["category_id"];
+            isOneToOne: false;
+            referencedRelation: "expense_categories";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payment_schedules_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "suppliers";
+            referencedColumns: ["id"];
+          }
+        ];
       };
     };
     Views: Record<string, never>;
@@ -86,6 +186,3 @@ export interface Database {
     Enums: Record<string, never>;
   };
 }
-
-export type Expense = Database["public"]["Tables"]["expenses"]["Row"];
-export type PaymentSchedule = Database["public"]["Tables"]["payment_schedules"]["Row"];

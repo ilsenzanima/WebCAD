@@ -3,95 +3,81 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-export async function getExpenses() {
+export async function getSuppliers() {
   const supabase = (await createClient()) as any;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Non autenticato");
 
   const { data, error } = await supabase
-    .from("expenses")
-    .select("*, expense_categories(name, color), suppliers(name)")
-    .order("date", { ascending: false });
+    .from("suppliers")
+    .select("*")
+    .order("name", { ascending: true });
 
   if (error) throw new Error(error.message);
   return data || [];
 }
 
-export async function createExpense(formData: {
-  amount: number;
-  category_id: string | null;
-  supplier_id: string | null;
-  category_name: string;
-  description: string;
-  date: string;
-}) {
+export async function createSupplier(formData: { name: string; description: string }) {
   const supabase = (await createClient()) as any;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Non autenticato");
 
-  const { error } = await supabase.from("expenses").insert({
+  const { error } = await supabase.from("suppliers").insert({
     user_id: user.id,
-    amount: formData.amount,
-    category: formData.category_name,
-    category_id: formData.category_id || null,
-    supplier_id: formData.supplier_id || null,
-    description: formData.description || null,
-    date: formData.date,
+    name: formData.name.trim(),
+    description: formData.description || null
   });
 
-  if (error) throw new Error(error.message);
-  revalidatePath("/dashboard");
+  if (error) {
+    if (error.message.includes("duplicate key")) {
+      throw new Error("Un fornitore con questo nome esiste già.");
+    }
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/expenses");
+  revalidatePath("/dashboard/schedules");
   return { success: true };
 }
 
-export async function updateExpense(
-  id: string,
-  formData: {
-    amount: number;
-    category_id: string | null;
-    supplier_id: string | null;
-    category_name: string;
-    description: string;
-    date: string;
-  }
-) {
+export async function updateSupplier(id: string, formData: { name: string; description: string }) {
   const supabase = (await createClient()) as any;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Non autenticato");
 
   const { error } = await supabase
-    .from("expenses")
+    .from("suppliers")
     .update({
-      amount: formData.amount,
-      category: formData.category_name,
-      category_id: formData.category_id || null,
-      supplier_id: formData.supplier_id || null,
-      description: formData.description || null,
-      date: formData.date,
+      name: formData.name.trim(),
+      description: formData.description || null
     })
     .eq("id", id)
     .eq("user_id", user.id);
 
   if (error) throw new Error(error.message);
-  revalidatePath("/dashboard");
+
+  revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/expenses");
+  revalidatePath("/dashboard/schedules");
   return { success: true };
 }
 
-export async function deleteExpense(id: string) {
+export async function deleteSupplier(id: string) {
   const supabase = (await createClient()) as any;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Non autenticato");
 
   const { error } = await supabase
-    .from("expenses")
+    .from("suppliers")
     .delete()
     .eq("id", id)
     .eq("user_id", user.id);
 
   if (error) throw new Error(error.message);
-  revalidatePath("/dashboard");
+
+  revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/expenses");
+  revalidatePath("/dashboard/schedules");
   return { success: true };
 }

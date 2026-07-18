@@ -1,24 +1,38 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import { type PaymentSchedule } from "@/lib/types/database";
+import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createSchedule, deleteSchedule, paySchedule } from "@/app/actions/schedules";
+import { DeleteIcon, ArrowLeftIcon, ArrowRightIcon, CheckIcon } from "./icons";
 
-interface SchedulesClientProps {
-  initialSchedules: PaymentSchedule[];
+// Estendiamo il tipo per includere le relazioni restituite dal join Supabase
+interface ScheduleWithRelations extends Omit<PaymentSchedule, "amount"> {
+  amount: number;
+  expense_categories?: {
+    name: string;
+    color: string;
+  } | null;
+  suppliers?: {
+    name: string;
+  } | null;
 }
 
-const CATEGORIES = [
-  "🏠 Casa & Affitto",
-  "🔌 Bollette & Utenze",
-  "🛒 Spesa & Alimentari",
-  "🚗 Auto & Trasporti",
-  "🍔 Svago & Ristoranti",
-  "💻 Tecnologia & Lavoro",
-  "🏥 Salute & Assicurazioni",
-  "💼 Tasse & Servizi",
-  "📦 Altro",
-];
+interface SchedulesClientProps {
+  initialSchedules: any[];
+  categories: ExpenseCategory[];
+  suppliers: Supplier[];
+}
+
+const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = {
+  indigo: { bg: "rgba(99,102,241,0.12)", text: "hsl(245 85% 75%)", border: "rgba(99,102,241,0.2)" },
+  rose: { bg: "rgba(239,68,68,0.12)", text: "hsl(0 80% 75%)", border: "rgba(239,68,68,0.2)" },
+  emerald: { bg: "rgba(16,185,129,0.12)", text: "hsl(150 70% 70%)", border: "rgba(16,185,129,0.2)" },
+  amber: { bg: "rgba(245,158,11,0.12)", text: "hsl(38 90% 70%)", border: "rgba(245,158,11,0.2)" },
+  sky: { bg: "rgba(14,165,233,0.12)", text: "hsl(200 85% 70%)", border: "rgba(14,165,233,0.2)" },
+  pink: { bg: "rgba(236,72,153,0.12)", text: "hsl(330 80% 75%)", border: "rgba(236,72,153,0.2)" },
+  purple: { bg: "rgba(168,85,247,0.12)", text: "hsl(270 80% 75%)", border: "rgba(168,85,247,0.2)" },
+  slate: { bg: "rgba(107,114,128,0.15)", text: "hsl(215 15% 75%)", border: "rgba(107,114,128,0.25)" },
+};
 
 const RECURRENCES = [
   { value: "one-time", label: "Una Tantum" },
@@ -27,25 +41,14 @@ const RECURRENCES = [
   { value: "yearly", label: "Annuale" },
 ];
 
-const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  "🏠 Casa & Affitto": { bg: "rgba(99,102,241,0.12)", text: "hsl(245 85% 75%)", border: "rgba(99,102,241,0.2)" },
-  "🔌 Bollette & Utenze": { bg: "rgba(245,158,11,0.12)", text: "hsl(38 90% 70%)", border: "rgba(245,158,11,0.2)" },
-  "🛒 Spesa & Alimentari": { bg: "rgba(16,185,129,0.12)", text: "hsl(150 70% 70%)", border: "rgba(16,185,129,0.2)" },
-  "🚗 Auto & Trasporti": { bg: "rgba(239,68,68,0.12)", text: "hsl(0 80% 75%)", border: "rgba(239,68,68,0.2)" },
-  "🍔 Svago & Ristoranti": { bg: "rgba(236,72,153,0.12)", text: "hsl(330 80% 75%)", border: "rgba(236,72,153,0.2)" },
-  "💻 Tecnologia & Lavoro": { bg: "rgba(14,165,233,0.12)", text: "hsl(200 85% 70%)", border: "rgba(14,165,233,0.2)" },
-  "🏥 Salute & Assicurazioni": { bg: "rgba(34,197,94,0.12)", text: "hsl(142 60% 70%)", border: "rgba(34,197,94,0.2)" },
-  "💼 Tasse & Servizi": { bg: "rgba(107,114,128,0.15)", text: "hsl(215 15% 75%)", border: "rgba(107,114,128,0.25)" },
-  "📦 Altro": { bg: "rgba(168,85,247,0.12)", text: "hsl(270 80% 75%)", border: "rgba(168,85,247,0.2)" },
-};
-
-export default function SchedulesClient({ initialSchedules }: SchedulesClientProps) {
-  const [schedules, setSchedules] = useState<PaymentSchedule[]>(initialSchedules);
+export default function SchedulesClient({ initialSchedules, categories, suppliers }: SchedulesClientProps) {
+  const [schedules, setSchedules] = useState<ScheduleWithRelations[]>(initialSchedules);
   const [isPending, startTransition] = useTransition();
 
   // Stati del form
   const [amount, setAmount] = useState("");
-  const [category, setCategory] = useState(CATEGORIES[0]);
+  const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
+  const [supplierId, setSupplierId] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState(new Date().toISOString().split("T")[0]);
   const [recurrence, setRecurrence] = useState<"one-time" | "weekly" | "monthly" | "yearly">("one-time");
@@ -69,7 +72,6 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
 
   const getFirstDayOfMonth = (y: number, m: number) => {
     const day = new Date(y, m, 1).getDay();
-    // Converti Domenica da 0 a 6, e sposta Lunedì come primo giorno (0)
     return day === 0 ? 6 : day - 1;
   };
 
@@ -133,7 +135,8 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
 
   const resetForm = () => {
     setAmount("");
-    setCategory(CATEGORIES[0]);
+    setCategoryId(categories[0]?.id || "");
+    setSupplierId("");
     setDescription("");
     setDueDate(selectedDate || new Date().toISOString().split("T")[0]);
     setRecurrence("one-time");
@@ -146,29 +149,42 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
       return;
     }
 
+    const selectedCat = categories.find(c => c.id === categoryId);
+    if (!selectedCat) {
+      alert("Seleziona una categoria valida");
+      return;
+    }
+
     startTransition(async () => {
       try {
         const payload = {
           amount: Number(amount),
-          category,
+          category_id: categoryId,
+          supplier_id: supplierId || null,
+          category_name: selectedCat.name, // fallback
           description,
           due_date: dueDate,
           recurrence,
         };
 
         await createSchedule(payload);
+        const matchingSupplier = suppliers.find(s => s.id === supplierId);
         
-        const newSched: PaymentSchedule = {
+        const newSched: ScheduleWithRelations = {
           id: Math.random().toString(),
           user_id: "",
           amount: Number(amount),
-          category,
+          category: selectedCat.name,
+          category_id: categoryId,
+          supplier_id: supplierId || null,
           description,
           due_date: dueDate,
           recurrence,
           is_paid: false,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          expense_categories: { name: selectedCat.name, color: selectedCat.color },
+          suppliers: matchingSupplier ? { name: matchingSupplier.name } : null
         };
         setSchedules(prev => [newSched, ...prev].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()));
         resetForm();
@@ -233,7 +249,6 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
     return true;
   });
 
-  // Filtro scadenze del giorno selezionato (sotto il calendario)
   const selectedDateSchedules = selectedDate ? getSchedulesForDate(selectedDate) : [];
 
   const formatCurrency = (val: number) => {
@@ -242,10 +257,10 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
-      {/* Header con animazione e Selettore Vista */}
+      {/* Header e Selettore Vista */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-in">
         <div>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
             Scadenziario Pagamenti
           </h1>
           <p className="text-sm text-slate-400 mt-1">
@@ -253,8 +268,7 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
           </p>
         </div>
 
-        {/* Toggle Vista Calendario / Lista */}
-        <div className="flex rounded-xl p-1 bg-slate-950 border border-white/5 font-semibold text-xs relative">
+        <div className="flex rounded-xl p-1 bg-zinc-950 border border-white/5 font-semibold text-xs relative">
           <button
             onClick={() => setViewMode("calendar")}
             className="px-4 py-2 rounded-lg transition-all duration-200"
@@ -284,8 +298,8 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
         <div
           className="rounded-2xl p-6 border h-fit shadow-xl backdrop-blur-md"
           style={{
-            background: "hsl(220 32% 10% / 0.8)",
-            borderColor: "hsl(220 20% 16% / 0.7)",
+            background: "hsl(240 10% 10% / 0.8)",
+            borderColor: "hsl(240 5% 18% / 0.7)",
           }}
         >
           <h2 className="text-base font-bold text-white mb-5 tracking-tight flex items-center gap-2">
@@ -306,8 +320,8 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                 required
                 className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
                 style={{
-                  background: "hsl(220 26% 14% / 0.8)",
-                  borderColor: "hsl(220 20% 22%)",
+                  background: "hsl(240 10% 4% / 0.8)",
+                  borderColor: "hsl(240 5% 18%)",
                 }}
               />
             </div>
@@ -316,17 +330,39 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
             <div className="space-y-1.5">
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Categoria</label>
               <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                required
                 className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom"
                 style={{
-                  background: "hsl(220 26% 14% / 0.8)",
-                  borderColor: "hsl(220 20% 22%)",
+                  background: "hsl(240 10% 4% / 0.8)",
+                  borderColor: "hsl(240 5% 18%)",
                 }}
               >
-                {CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat} style={{ background: "hsl(220 32% 10%)" }}>
-                    {cat}
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id} style={{ background: "hsl(240 10% 10%)" }}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Fornitore */}
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fornitore / Servizio</label>
+              <select
+                value={supplierId}
+                onChange={(e) => setSupplierId(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom"
+                style={{
+                  background: "hsl(240 10% 4% / 0.8)",
+                  borderColor: "hsl(240 5% 18%)",
+                }}
+              >
+                <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun Fornitore</option>
+                {suppliers.map((sup) => (
+                  <option key={sup.id} value={sup.id} style={{ background: "hsl(240 10% 10%)" }}>
+                    {sup.name}
                   </option>
                 ))}
               </select>
@@ -342,8 +378,8 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                 required
                 className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border text-left"
                 style={{
-                  background: "hsl(220 26% 14% / 0.8)",
-                  borderColor: "hsl(220 20% 22%)",
+                  background: "hsl(240 10% 4% / 0.8)",
+                  borderColor: "hsl(240 5% 18%)",
                 }}
               />
             </div>
@@ -356,12 +392,12 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                 onChange={(e) => setRecurrence(e.target.value as any)}
                 className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom"
                 style={{
-                  background: "hsl(220 26% 14% / 0.8)",
-                  borderColor: "hsl(220 20% 22%)",
+                  background: "hsl(240 10% 4% / 0.8)",
+                  borderColor: "hsl(240 5% 18%)",
                 }}
               >
                 {RECURRENCES.map((rec) => (
-                  <option key={rec.value} value={rec.value} style={{ background: "hsl(220 32% 10%)" }}>
+                  <option key={rec.value} value={rec.value} style={{ background: "hsl(240 10% 10%)" }}>
                     {rec.label}
                   </option>
                 ))}
@@ -370,16 +406,16 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
 
             {/* Descrizione */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Descrizione / Intestatario</label>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Note</label>
               <input
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="es. Affitto casa, Bolletta..."
+                placeholder="Note aggiuntive..."
                 className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
                 style={{
-                  background: "hsl(220 26% 14% / 0.8)",
-                  borderColor: "hsl(220 20% 22%)",
+                  background: "hsl(240 10% 4% / 0.8)",
+                  borderColor: "hsl(240 5% 18%)",
                 }}
               />
             </div>
@@ -405,11 +441,10 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
             <div
               className="rounded-2xl p-6 border shadow-xl backdrop-blur-md"
               style={{
-                background: "hsl(220 32% 10% / 0.8)",
-                borderColor: "hsl(220 20% 16% / 0.7)",
+                background: "hsl(240 10% 10% / 0.8)",
+                borderColor: "hsl(240 5% 18% / 0.7)",
               }}
             >
-              {/* Header Mese del Calendario */}
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-base font-extrabold text-white tracking-wide">
                   {monthNames[month]} {year}
@@ -418,21 +453,20 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                   <button
                     onClick={handlePrevMonth}
                     className="w-8 h-8 rounded-lg flex items-center justify-center border hover:bg-white/5 transition-all text-xs font-bold text-slate-300"
-                    style={{ borderColor: "hsl(220 20% 20% / 0.8)", background: "hsl(220 26% 14%)" }}
+                    style={{ borderColor: "hsl(240 5% 18%)", background: "hsl(240 10% 4%)" }}
                   >
-                    ◀
+                    <ArrowLeftIcon size={10} />
                   </button>
                   <button
                     onClick={handleNextMonth}
                     className="w-8 h-8 rounded-lg flex items-center justify-center border hover:bg-white/5 transition-all text-xs font-bold text-slate-300"
-                    style={{ borderColor: "hsl(220 20% 20% / 0.8)", background: "hsl(220 26% 14%)" }}
+                    style={{ borderColor: "hsl(240 5% 18%)", background: "hsl(240 10% 4%)" }}
                   >
-                    ▶
+                    <ArrowRightIcon size={10} />
                   </button>
                 </div>
               </div>
 
-              {/* Giorni della Settimana */}
               <div className="grid grid-cols-7 gap-1 text-center font-bold text-slate-500 text-[10px] uppercase tracking-wider mb-2">
                 <span>Lun</span>
                 <span>Mar</span>
@@ -443,8 +477,7 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                 <span>Dom</span>
               </div>
 
-              {/* Griglia Calendario (42 celle) */}
-              <div className="grid grid-cols-7 gap-1 bg-slate-950/20 p-1.5 rounded-xl border border-white/5">
+              <div className="grid grid-cols-7 gap-1 bg-zinc-950/20 p-1.5 rounded-xl border border-white/5">
                 {calendarCells.map((cell, idx) => {
                   const isSelected = selectedDate === cell.dateStr;
                   const daySchedules = getSchedulesForDate(cell.dateStr);
@@ -468,17 +501,15 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                         background: isSelected
                           ? "hsla(220, 90%, 56%, 0.12)"
                           : cell.isCurrentMonth
-                            ? "hsl(220 26% 14% / 0.4)"
+                            ? "hsl(240 10% 4% / 0.4)"
                             : "transparent",
                         opacity: cell.isCurrentMonth ? 1 : 0.3,
                       }}
                     >
-                      {/* Numero Giorno */}
                       <span className={`text-[10px] font-bold ${isToday ? "text-blue-400" : "text-white"}`}>
                         {cell.dayNum}
                       </span>
 
-                      {/* Indicatori Scadenze (Pallini colorati) */}
                       <div className="flex gap-0.5 justify-center w-full">
                         {hasPending && (
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.5)] animate-pulse" />
@@ -493,16 +524,16 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
               </div>
             </div>
 
-            {/* Dettaglio Scadenze del Giorno Selezionato */}
+            {/* Dettaglio Scadenze Giorno Selezionato */}
             <div
               className="rounded-2xl p-6 border shadow-xl backdrop-blur-md animate-fade-in"
               style={{
-                background: "hsl(220 32% 10% / 0.8)",
-                borderColor: "hsl(220 20% 16% / 0.7)",
+                background: "hsl(240 10% 10% / 0.8)",
+                borderColor: "hsl(240 5% 18% / 0.7)",
               }}
             >
-              <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                <span>📅</span> Dettaglio Scadenze: {selectedDate ? new Date(selectedDate).toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" }) : "-"}
+              <h3 className="text-sm font-bold text-white mb-4">
+                📅 Dettaglio Scadenze: {selectedDate ? new Date(selectedDate).toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" }) : "-"}
               </h3>
 
               {selectedDateSchedules.length === 0 ? (
@@ -510,20 +541,22 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
               ) : (
                 <div className="space-y-3">
                   {selectedDateSchedules.map((sched) => {
-                    const badge = CATEGORY_COLORS[sched.category] || { bg: "hsla(220, 20%, 30%, 0.12)", text: "white", border: "rgba(255,255,255,0.05)" };
+                    const catName = sched.expense_categories?.name || sched.category;
+                    const catColor = sched.expense_categories?.color || "slate";
+                    const badge = COLOR_MAP[catColor] || COLOR_MAP.slate;
                     
                     return (
                       <div
                         key={sched.id}
                         className="flex justify-between items-center p-3 rounded-xl border transition-all duration-150 hover:bg-white/5"
                         style={{
-                          background: "hsl(220 26% 14% / 0.6)",
-                          borderColor: "hsl(220 20% 20% / 0.5)",
+                          background: "hsl(240 10% 12% / 0.6)",
+                          borderColor: "hsl(240 5% 18% / 0.5)",
                         }}
                       >
                         <div className="min-w-0 flex-1 pr-3">
                           <div className="text-xs font-bold text-white truncate">
-                            {sched.description || "Pagamento programmato"}
+                            {sched.suppliers?.name || "Nessun Fornitore"}
                           </div>
                           <div className="text-[10px] flex items-center gap-1.5 mt-1 font-semibold">
                             <span
@@ -534,8 +567,14 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                                 borderColor: badge.border,
                               }}
                             >
-                              {sched.category}
+                              {catName}
                             </span>
+                            {sched.description && (
+                              <>
+                                <span className="text-slate-600">•</span>
+                                <span className="text-slate-400 truncate max-w-[120px]">{sched.description}</span>
+                              </>
+                            )}
                             <span className="text-slate-600">•</span>
                             <span className="text-slate-500 uppercase tracking-widest text-[7px]">{sched.recurrence}</span>
                           </div>
@@ -548,16 +587,16 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                             <button
                               onClick={() => handlePay(sched.id)}
                               disabled={isPending}
-                              className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/25 font-bold transition-all text-[9px]"
+                              className="px-2 py-1 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/25 font-bold transition-all text-[9px] flex items-center gap-1"
                             >
-                              Pagato ✔
+                              <CheckIcon size={9} /> Pagato
                             </button>
                           )}
                           <button
                             onClick={() => handleDelete(sched.id)}
                             className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
                           >
-                            🗑️
+                            <DeleteIcon size={12} />
                           </button>
                         </div>
                       </div>
@@ -574,8 +613,8 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
           <div
             className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-5 shadow-xl backdrop-blur-md animate-fade-in"
             style={{
-              background: "hsl(220 32% 10% / 0.8)",
-              borderColor: "hsl(220 20% 16% / 0.7)",
+              background: "hsl(240 10% 10% / 0.8)",
+              borderColor: "hsl(240 5% 18% / 0.7)",
             }}
           >
             {/* Filtro dello Stato */}
@@ -586,7 +625,7 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                 style={{
                   background: filterPaid === "pending" ? "hsla(38, 90%, 50%, 0.12)" : "transparent",
                   color: filterPaid === "pending" ? "hsl(38 90% 55%)" : "hsl(215 20% 65%)",
-                  border: `1px solid ${filterPaid === "pending" ? "hsl(38 90% 50% / 0.3)" : "hsl(220 20% 16% / 0.8)"}`,
+                  border: `1px solid ${filterPaid === "pending" ? "hsl(38 90% 50% / 0.3)" : "hsl(240 5% 18%)"}`,
                 }}
               >
                 ⏳ Da Pagare
@@ -597,7 +636,7 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                 style={{
                   background: filterPaid === "paid" ? "hsla(142, 70%, 45%, 0.12)" : "transparent",
                   color: filterPaid === "paid" ? "hsl(142 70% 45%)" : "hsl(215 20% 65%)",
-                  border: `1px solid ${filterPaid === "paid" ? "hsl(142 70% 45% / 0.3)" : "hsl(220 20% 16% / 0.8)"}`,
+                  border: `1px solid ${filterPaid === "paid" ? "hsl(142 70% 45% / 0.3)" : "hsl(240 5% 18%)"}`,
                 }}
               >
                 ✅ Pagati
@@ -608,7 +647,7 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                 style={{
                   background: filterPaid === "all" ? "hsla(220, 20%, 30%, 0.12)" : "transparent",
                   color: filterPaid === "all" ? "white" : "hsl(215 20% 65%)",
-                  border: `1px solid ${filterPaid === "all" ? "hsl(220 20% 30% / 0.3)" : "hsl(220 20% 16% / 0.8)"}`,
+                  border: `1px solid ${filterPaid === "all" ? "hsl(220 20% 30% / 0.3)" : "hsl(240 5% 18%)"}`,
                 }}
               >
                 Tutti
@@ -619,30 +658,33 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
             <div className="flex-1 overflow-x-auto pr-1">
               {filteredSchedules.length === 0 ? (
                 <div className="text-center py-16 text-slate-500 flex flex-col items-center justify-center">
-                  <span className="text-4xl mb-2">📅</span>
-                  <p className="text-sm">Nessun pagamento programmato trovato.</p>
+                  <span className="text-3xl mb-2">📅</span>
+                  <p className="text-sm">Nessuna scadenza trovata.</p>
                 </div>
               ) : (
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
-                    <tr className="border-b" style={{ borderColor: "hsl(220 20% 16% / 0.7)" }}>
+                    <tr className="border-b" style={{ borderColor: "hsl(240 5% 18% / 0.7)" }}>
                       <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Scadenza</th>
-                      <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Descrizione</th>
+                      <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Fornitore & Note</th>
                       <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Categoria</th>
                       <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Ricorrenza</th>
                       <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Importo</th>
                       <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-center">Azioni</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y" style={{ borderColor: "hsl(220 20% 16% / 0.4)" }}>
+                  <tbody className="divide-y" style={{ borderColor: "hsl(240 5% 18% / 0.3)" }}>
                     {filteredSchedules.map((sched, index) => {
                       const today = new Date();
                       const dueDateObj = new Date(sched.due_date);
                       const isOverdue = !sched.is_paid && dueDateObj < today;
-                      const badge = CATEGORY_COLORS[sched.category] || { bg: "hsla(220, 20%, 30%, 0.12)", text: "white", border: "rgba(255,255,255,0.05)" };
+                      
+                      const catName = sched.expense_categories?.name || sched.category;
+                      const catColor = sched.expense_categories?.color || "slate";
+                      const badge = COLOR_MAP[catColor] || COLOR_MAP.slate;
 
                       return (
-                        <tr key={sched.id} className="hover:bg-white/2 transition-all duration-150 group animate-fade-in" style={{ animationDelay: `${index * 20}ms` }}>
+                        <tr key={sched.id} className="hover:bg-white/2 transition-all duration-150 group animate-fade-in" style={{ animationDelay: `${index * 15}ms` }}>
                           <td className="py-4 font-semibold whitespace-nowrap">
                             <span
                               className="inline-flex items-center gap-1.5"
@@ -657,8 +699,15 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                               {dueDateObj.toLocaleDateString("it-IT")}
                             </span>
                           </td>
-                          <td className="py-4 text-white font-bold max-w-[180px] truncate">
-                            {sched.description || "Pagamento"}
+                          <td className="py-4 pr-3">
+                            <div className="text-white font-bold max-w-[200px] truncate">
+                              {sched.suppliers?.name || "Nessun Fornitore"}
+                            </div>
+                            {sched.description && (
+                              <div className="text-[10px] text-slate-400 mt-0.5 max-w-[200px] truncate">
+                                {sched.description}
+                              </div>
+                            )}
                           </td>
                           <td className="py-4">
                             <span
@@ -669,7 +718,7 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                                 borderColor: badge.border,
                               }}
                             >
-                              {sched.category}
+                              {catName}
                             </span>
                           </td>
                           <td className="py-4 text-slate-400 font-medium">
@@ -684,10 +733,10 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                                 <button
                                   onClick={() => handlePay(sched.id)}
                                   disabled={isPending}
-                                  className="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/25 font-bold transition-all duration-200 text-[10px]"
+                                  className="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/25 font-bold transition-all duration-200 text-[10px] flex items-center gap-1"
                                   title="Segna come Pagato"
                                 >
-                                  Pagato ✔
+                                  <CheckIcon size={10} /> Pagato
                                 </button>
                               )}
                               <button
@@ -695,7 +744,7 @@ export default function SchedulesClient({ initialSchedules }: SchedulesClientPro
                                 className="w-7 h-7 rounded-lg text-xs hover:bg-rose-500/10 hover:text-rose-400 border border-transparent hover:border-rose-500/20 flex items-center justify-center transition-all opacity-60 group-hover:opacity-100"
                                 title="Elimina"
                               >
-                                🗑️
+                                <DeleteIcon size={12} />
                               </button>
                             </div>
                           </td>

@@ -3,21 +3,55 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { type Expense, type PaymentSchedule } from "@/lib/types/database";
+import { ExpensesIcon, SchedulesIcon, OverviewIcon } from "./icons";
 
-interface OverviewClientProps {
-  expenses: Expense[];
-  schedules: PaymentSchedule[];
+// Tipo per estendere le relazioni
+interface ExpenseWithRelations extends Omit<Expense, "amount"> {
+  amount: number;
+  expense_categories?: {
+    name: string;
+    color: string;
+  } | null;
+  suppliers?: {
+    name: string;
+  } | null;
 }
 
+interface ScheduleWithRelations extends Omit<PaymentSchedule, "amount"> {
+  amount: number;
+  expense_categories?: {
+    name: string;
+    color: string;
+  } | null;
+  suppliers?: {
+    name: string;
+  } | null;
+}
+
+interface OverviewClientProps {
+  expenses: any[]; // Accetta tipo con relazioni
+  schedules: any[];
+}
+
+const COLOR_MAP: Record<string, string> = {
+  indigo: "linear-gradient(90deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+  rose: "linear-gradient(90deg, hsl(350 85% 55%), hsl(340 75% 45%))",
+  emerald: "linear-gradient(90deg, hsl(142 70% 45%), hsl(150 60% 40%))",
+  amber: "linear-gradient(90deg, hsl(38 90% 50%), hsl(30 80% 45%))",
+  sky: "linear-gradient(90deg, hsl(200 85% 50%), hsl(190 75% 45%))",
+  pink: "linear-gradient(90deg, hsl(330 85% 55%), hsl(320 75% 45%))",
+  purple: "linear-gradient(90deg, hsl(270 80% 55%), hsl(250 75% 50%))",
+  slate: "linear-gradient(90deg, hsl(215 15% 50%), hsl(215 10% 40%))",
+};
+
 export default function OverviewClient({ expenses, schedules }: OverviewClientProps) {
-  // Calcolo delle statistiche
   const stats = useMemo(() => {
     const today = new Date();
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
 
     // Spese mese corrente
-    const currentMonthExpenses = expenses.filter((e) => {
+    const currentMonthExpenses = expenses.filter((e: ExpenseWithRelations) => {
       const d = new Date(e.date);
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     });
@@ -28,7 +62,7 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
     const thirtyDaysLater = new Date();
     thirtyDaysLater.setDate(today.getDate() + 30);
 
-    const pendingSchedules = schedules.filter((s) => {
+    const pendingSchedules = schedules.filter((s: ScheduleWithRelations) => {
       if (s.is_paid) return false;
       const d = new Date(s.due_date);
       return d >= today && d <= thirtyDaysLater;
@@ -37,13 +71,19 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
     const totalPendingSchedules = pendingSchedules.reduce((sum, s) => sum + Number(s.amount), 0);
 
     // Spese per categoria (mese corrente)
-    const categoryMap: Record<string, number> = {};
-    currentMonthExpenses.forEach((e) => {
-      categoryMap[e.category] = (categoryMap[e.category] || 0) + Number(e.amount);
+    const categoryMap: Record<string, { value: number; color: string }> = {};
+    currentMonthExpenses.forEach((e: ExpenseWithRelations) => {
+      const catName = e.expense_categories?.name || e.category;
+      const catColor = e.expense_categories?.color || "slate";
+      
+      if (!categoryMap[catName]) {
+        categoryMap[catName] = { value: 0, color: catColor };
+      }
+      categoryMap[catName].value += Number(e.amount);
     });
 
     const categoriesData = Object.entries(categoryMap)
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, data]) => ({ name, value: data.value, color: data.color }))
       .sort((a, b) => b.value - a.value);
 
     // Ultime 5 spese
@@ -51,7 +91,7 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
 
     // Scadenze imminenti (prossime 5 non pagate)
     const upcomingSchedules = schedules
-      .filter((s) => !s.is_paid)
+      .filter((s: ScheduleWithRelations) => !s.is_paid)
       .slice(0, 5);
 
     return {
@@ -69,35 +109,34 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
-      {/* Header con gradiente e animazione */}
+      {/* Header */}
       <div className="animate-fade-in space-y-1">
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
           Panoramica Finanziaria
         </h1>
         <p className="text-sm text-slate-400">
-          Monitora le tue spese personali e pianifica i pagamenti imminenti con precisione.
+          Monitora le tue spese e pianifica i pagamenti imminenti con precisione.
         </p>
       </div>
 
-      {/* Grid delle schede KPI con Glassmorphism & Gradienti Neon */}
+      {/* Grid delle schede KPI */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         
-        {/* KPI 1: Spese Mese Corrente (Neon Rose/Red) */}
+        {/* KPI 1: Spese Mese Corrente */}
         <div
           className="rounded-2xl p-6 transition-all duration-300 hover:translate-y-[-4px] border relative overflow-hidden group shadow-lg"
           style={{
-            background: "linear-gradient(135deg, hsla(350, 60%, 15%, 0.15), hsla(220, 32%, 10%, 0.6))",
+            background: "linear-gradient(135deg, hsla(350, 60%, 15%, 0.15), hsla(240, 10% 10%, 0.6))",
             borderColor: "hsla(350, 60%, 50%, 0.15)",
             backdropFilter: "blur(12px)",
           }}
         >
-          {/* Effetto bagliore nello sfondo */}
           <div className="absolute top-[-50%] right-[-30%] w-60 h-60 rounded-full bg-rose-500/10 blur-[60px] pointer-events-none transition-transform duration-500 group-hover:scale-110" />
           
           <div className="flex justify-between items-start">
             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Spese Mese Corrente</span>
-            <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center border border-rose-500/20 text-sm">
-              💸
+            <div className="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center border border-rose-500/20 text-rose-400">
+              <ExpensesIcon size={16} />
             </div>
           </div>
           <div className="mt-5">
@@ -114,11 +153,11 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
           </div>
         </div>
 
-        {/* KPI 2: Pagamenti Imminenti (Neon Amber) */}
+        {/* KPI 2: Pagamenti Imminenti */}
         <div
           className="rounded-2xl p-6 transition-all duration-300 hover:translate-y-[-4px] border relative overflow-hidden group shadow-lg"
           style={{
-            background: "linear-gradient(135deg, hsla(38, 60%, 12%, 0.15), hsla(220, 32%, 10%, 0.6))",
+            background: "linear-gradient(135deg, hsla(38, 60%, 12%, 0.15), hsla(240, 10% 10%, 0.6))",
             borderColor: "hsla(38, 60%, 50%, 0.15)",
             backdropFilter: "blur(12px)",
           }}
@@ -127,8 +166,8 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
           
           <div className="flex justify-between items-start">
             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Scadenze a 30 Giorni</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-sm">
-              📅
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/20 text-amber-400">
+              <SchedulesIcon size={16} />
             </div>
           </div>
           <div className="mt-5">
@@ -141,11 +180,11 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
           </div>
         </div>
 
-        {/* KPI 3: Transazioni Totali (Neon Violet) */}
+        {/* KPI 3: Transazioni Totali */}
         <div
           className="rounded-2xl p-6 transition-all duration-300 hover:translate-y-[-4px] border relative overflow-hidden group md:col-span-2 lg:col-span-1 shadow-lg"
           style={{
-            background: "linear-gradient(135deg, hsla(245, 60%, 15%, 0.1), hsla(220, 32%, 10%, 0.6))",
+            background: "linear-gradient(135deg, hsla(245, 60%, 15%, 0.1), hsla(240, 10% 10%, 0.6))",
             borderColor: "hsla(245, 60%, 50%, 0.15)",
             backdropFilter: "blur(12px)",
           }}
@@ -154,8 +193,8 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
           
           <div className="flex justify-between items-start">
             <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Transazioni Totali</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 text-sm">
-              📊
+            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 text-indigo-400">
+              <OverviewIcon size={16} />
             </div>
           </div>
           <div className="mt-5 flex items-baseline gap-2">
@@ -165,29 +204,28 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
             <span className="text-slate-400 text-sm font-semibold">spese salvate</span>
           </div>
           <div className="mt-3 text-xs text-indigo-400 flex items-center gap-1.5 font-medium">
-            <span>{schedules.filter(s => !s.is_paid).length} scadenze nello scadenziario</span>
+            <span>{schedules.filter(s => !s.is_paid).length} scadenze attive</span>
           </div>
         </div>
       </div>
 
-      {/* Sezione Dettagli con Glassmorphism */}
+      {/* Sezione Dettagli */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Distribuzione Spese per Categoria */}
         <div
           className="lg:col-span-1 rounded-2xl p-6 border flex flex-col shadow-lg backdrop-blur-md"
           style={{
-            background: "hsl(220 32% 10% / 0.8)",
-            borderColor: "hsl(220 20% 16% / 0.7)",
+            background: "hsl(240 10% 10% / 0.8)",
+            borderColor: "hsl(240 5% 18% / 0.7)",
           }}
         >
           <h2 className="text-base font-bold text-white mb-5 tracking-tight flex items-center gap-2">
-            <span className="text-lg">📈</span> Categorie Spesa
+            <span className="text-blue-400"><OverviewIcon size={16} /></span> Distribuzione Categorie
           </h2>
           
           {stats.categoriesData.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-slate-500">
-              <span className="text-3xl mb-2">🍽️</span>
               <p className="text-xs">Nessuna spesa registrata in questo mese.</p>
             </div>
           ) : (
@@ -197,15 +235,7 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
                   ? (cat.value / stats.totalCurrentMonth) * 100 
                   : 0;
                 
-                // Colorazioni gradienti alternate per rendere il design dinamico
-                const gradientColors = [
-                  "linear-gradient(90deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-                  "linear-gradient(90deg, hsl(350 85% 55%), hsl(340 75% 45%))",
-                  "linear-gradient(90deg, hsl(142 70% 45%), hsl(150 60% 40%))",
-                  "linear-gradient(90deg, hsl(38 90% 50%), hsl(30 80% 45%))",
-                  "linear-gradient(90deg, hsl(270 80% 55%), hsl(250 75% 50%))"
-                ];
-                const gradient = gradientColors[index % gradientColors.length];
+                const gradient = COLOR_MAP[cat.color] || COLOR_MAP.slate;
 
                 return (
                   <div key={cat.name} className="space-y-1.5 animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
@@ -213,13 +243,12 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
                       <span>{cat.name}</span>
                       <span className="text-white">{formatCurrency(cat.value)} <span className="text-slate-400 font-normal">({percentage.toFixed(0)}%)</span></span>
                     </div>
-                    <div className="w-full h-2 rounded-full bg-slate-950 overflow-hidden border border-white/5">
+                    <div className="w-full h-2 rounded-full bg-zinc-950 overflow-hidden border border-white/5">
                       <div
                         className="h-full rounded-full transition-all duration-500"
                         style={{
                           width: `${percentage}%`,
                           background: gradient,
-                          boxShadow: "0 0 8px rgba(99,102,241,0.2)",
                         }}
                       />
                     </div>
@@ -234,13 +263,13 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
         <div
           className="lg:col-span-1 rounded-2xl p-6 border flex flex-col shadow-lg backdrop-blur-md"
           style={{
-            background: "hsl(220 32% 10% / 0.8)",
-            borderColor: "hsl(220 20% 16% / 0.7)",
+            background: "hsl(240 10% 10% / 0.8)",
+            borderColor: "hsl(240 5% 18% / 0.7)",
           }}
         >
           <div className="flex justify-between items-center mb-5">
             <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              <span className="text-lg">💸</span> Ultime Spese
+              <span className="text-rose-400"><ExpensesIcon size={16} /></span> Ultime Spese
             </h2>
             <Link href="/dashboard/expenses" className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors">
               Vedi tutte →
@@ -249,27 +278,26 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
 
           {stats.recentExpenses.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-slate-500">
-              <span className="text-3xl mb-2">💸</span>
               <p className="text-xs">Nessuna spesa salvata.</p>
             </div>
           ) : (
             <div className="space-y-3 flex-1 overflow-y-auto max-h-[300px] pr-1">
-              {stats.recentExpenses.map((exp, index) => (
+              {stats.recentExpenses.map((exp: ExpenseWithRelations, index) => (
                 <div
                   key={exp.id}
                   className="flex justify-between items-center p-3 rounded-xl border transition-all duration-200 hover:bg-white/5 hover:translate-x-1 animate-fade-in"
                   style={{
-                    background: "hsl(220 26% 14% / 0.6)",
-                    borderColor: "hsl(220 20% 20% / 0.5)",
+                    background: "hsl(240 10% 12% / 0.6)",
+                    borderColor: "hsl(240 5% 18% / 0.5)",
                     animationDelay: `${index * 50}ms`,
                   }}
                 >
                   <div className="min-w-0 flex-1 pr-3">
                     <div className="text-xs font-bold text-white truncate">
-                      {exp.description || "Senza descrizione"}
+                      {exp.suppliers?.name || "Nessun Fornitore"}
                     </div>
                     <div className="text-[10px] text-slate-400 flex items-center gap-1.5 mt-1 font-medium">
-                      <span>{exp.category}</span>
+                      <span>{exp.expense_categories?.name || exp.category}</span>
                       <span>•</span>
                       <span>{new Date(exp.date).toLocaleDateString("it-IT", { day: "numeric", month: "short" })}</span>
                     </div>
@@ -287,13 +315,13 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
         <div
           className="lg:col-span-1 rounded-2xl p-6 border flex flex-col shadow-lg backdrop-blur-md"
           style={{
-            background: "hsl(220 32% 10% / 0.8)",
-            borderColor: "hsl(220 20% 16% / 0.7)",
+            background: "hsl(240 10% 10% / 0.8)",
+            borderColor: "hsl(240 5% 18% / 0.7)",
           }}
         >
           <div className="flex justify-between items-center mb-5">
             <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              <span className="text-lg">📆</span> Scadenze Vicine
+              <span className="text-amber-400"><SchedulesIcon size={16} /></span> Scadenze Vicine
             </h2>
             <Link href="/dashboard/schedules" className="text-xs font-semibold text-blue-400 hover:text-blue-300 transition-colors">
               Gestisci →
@@ -302,12 +330,11 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
 
           {stats.upcomingSchedules.length === 0 ? (
             <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-slate-500">
-              <span className="text-3xl mb-2">📆</span>
               <p className="text-xs">Nessun pagamento programmato.</p>
             </div>
           ) : (
             <div className="space-y-3 flex-1 overflow-y-auto max-h-[300px] pr-1">
-              {stats.upcomingSchedules.map((sched, index) => {
+              {stats.upcomingSchedules.map((sched: ScheduleWithRelations, index) => {
                 const today = new Date();
                 const dueDate = new Date(sched.due_date);
                 const isOverdue = dueDate < today;
@@ -317,22 +344,21 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
                     key={sched.id}
                     className="flex justify-between items-center p-3 rounded-xl border transition-all duration-200 hover:bg-white/5 hover:translate-x-1 animate-fade-in"
                     style={{
-                      background: "hsl(220 26% 14% / 0.6)",
-                      borderColor: isOverdue ? "hsla(0, 80%, 60%, 0.25)" : "hsl(220 20% 20% / 0.5)",
+                      background: "hsl(240 10% 12% / 0.6)",
+                      borderColor: isOverdue ? "hsla(0, 80%, 60%, 0.25)" : "hsl(240 5% 18% / 0.5)",
                       animationDelay: `${index * 50}ms`,
                     }}
                   >
                     <div className="min-w-0 flex-1 pr-3">
                       <div className="text-xs font-bold text-white truncate">
-                        {sched.description || "Pagamento programmato"}
+                        {sched.suppliers?.name || "Nessun Fornitore"}
                       </div>
                       <div className="text-[10px] flex items-center gap-1.5 mt-1 font-semibold">
-                        <span style={{ color: isOverdue ? "hsl(0 84% 70%)" : "hsl(215 20% 65%)" }} className="flex items-center gap-1">
-                          {isOverdue && <span className="animate-pulse">⚠️</span>}
+                        <span style={{ color: isOverdue ? "hsl(0 84% 70%)" : "hsl(240 5% 65%)" }} className="flex items-center gap-1">
                           {dueDate.toLocaleDateString("it-IT", { day: "numeric", month: "short" })}
                         </span>
-                        <span className="text-slate-600">•</span>
-                        <span className="text-slate-500 uppercase tracking-widest text-[8px]">{sched.recurrence}</span>
+                        <span className="text-zinc-600">•</span>
+                        <span className="text-zinc-500 uppercase tracking-widest text-[8px]">{sched.recurrence}</span>
                       </div>
                     </div>
                     <div className="text-sm font-extrabold text-white flex-shrink-0">
