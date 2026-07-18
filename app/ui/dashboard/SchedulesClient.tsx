@@ -5,7 +5,6 @@ import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib
 import { createSchedule, deleteSchedule, paySchedule } from "@/app/actions/schedules";
 import { DeleteIcon, CheckIcon, SchedulesIcon } from "./icons";
 
-// Estendiamo il tipo per includere le relazioni
 interface ScheduleWithRelations extends Omit<PaymentSchedule, "amount"> {
   amount: number;
   expense_categories?: {
@@ -45,7 +44,6 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [schedules, setSchedules] = useState<ScheduleWithRelations[]>(initialSchedules);
   const [isPending, startTransition] = useTransition();
 
-  // Stati del form
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
   const [supplierId, setSupplierId] = useState("");
@@ -53,7 +51,6 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [dueDate, setDueDate] = useState(new Date().toISOString().split("T")[0]);
   const [recurrence, setRecurrence] = useState<"one-time" | "weekly" | "monthly" | "yearly">("one-time");
 
-  // Filtro
   const [filterPaid, setFilterPaid] = useState<"all" | "pending" | "paid">("pending");
 
   const resetForm = () => {
@@ -90,26 +87,12 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           recurrence,
         };
 
-        await createSchedule(payload);
-        const matchingSupplier = suppliers.find(s => s.id === supplierId);
-        
-        const newSched: ScheduleWithRelations = {
-          id: Math.random().toString(),
-          user_id: "",
-          amount: Number(amount),
-          category: selectedCat.name,
-          category_id: categoryId,
-          supplier_id: supplierId || null,
-          description,
-          due_date: dueDate,
-          recurrence,
-          is_paid: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          expense_categories: { name: selectedCat.name, color: selectedCat.color },
-          suppliers: matchingSupplier ? { name: matchingSupplier.name } : null
-        };
-        setSchedules(prev => [newSched, ...prev].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()));
+        const res = await createSchedule(payload);
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore durante il salvataggio");
+          return;
+        }
+        setSchedules(prev => [res.data, ...prev].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()));
         resetForm();
       } catch (err: any) {
         alert(err.message || "Errore durante la creazione");
@@ -120,7 +103,11 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const handlePay = (id: string) => {
     startTransition(async () => {
       try {
-        await paySchedule(id);
+        const res = await paySchedule(id);
+        if (!res.success) {
+          alert(res.error || "Errore durante il pagamento");
+          return;
+        }
         
         setSchedules(prev => 
           prev.map(sched => {
@@ -152,7 +139,11 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
     startTransition(async () => {
       try {
-        await deleteSchedule(id);
+        const res = await deleteSchedule(id);
+        if (!res.success) {
+          alert(res.error || "Errore durante l'eliminazione");
+          return;
+        }
         setSchedules(prev => prev.filter(item => item.id !== id));
       } catch (err: any) {
         alert(err.message || "Errore durante l'eliminazione");
@@ -182,7 +173,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Form di pianificazione (Neon Amber) */}
+        {/* Form di pianificazione */}
         <div
           className="rounded-2xl p-6 border h-fit shadow-[0_0_30px_rgba(245,158,11,0.02)] relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
@@ -312,7 +303,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
             {/* Descrizione */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Note / Dettaglio</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Note</label>
               <input
                 type="text"
                 value={description}
@@ -348,7 +339,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           </form>
         </div>
 
-        {/* Tabella Scadenze (2 colonne, Neon Slate/Indigo) */}
+        {/* Tabella Scadenze */}
         <div
           className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-5 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{

@@ -6,7 +6,6 @@ import { deleteExpense } from "@/app/actions/expenses";
 import { deleteSchedule, paySchedule } from "@/app/actions/schedules";
 import { ArrowLeftIcon, ArrowRightIcon, DeleteIcon, CheckIcon, SchedulesIcon, ExpensesIcon } from "./icons";
 
-// Tipi con relazioni estese
 interface ExpenseWithRelations extends Omit<Expense, "amount"> {
   amount: number;
   expense_categories?: {
@@ -50,11 +49,9 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
   const [schedules, setSchedules] = useState<ScheduleWithRelations[]>(initialSchedules);
   const [isPending, startTransition] = useTransition();
 
-  // Stato navigazione calendario
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(new Date().toISOString().split("T")[0]);
 
-  // Calcoli mese calendario
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
@@ -78,7 +75,6 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
   const calendarCells = useMemo(() => {
     const cells: { dateStr: string; dayNum: number; isCurrentMonth: boolean }[] = [];
     
-    // Giorni mese precedente
     const daysInPrevMonth = getDaysInMonth(year, month - 1);
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       const prevDay = daysInPrevMonth - i;
@@ -90,7 +86,6 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
       });
     }
 
-    // Giorni mese corrente
     for (let i = 1; i <= daysInMonth; i++) {
       const currentMonthDate = new Date(year, month, i);
       cells.push({
@@ -100,7 +95,6 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
       });
     }
 
-    // Giorni mese successivo per arrivare a 42 celle
     const remainingCells = 42 - cells.length;
     for (let i = 1; i <= remainingCells; i++) {
       const nextMonthDate = new Date(year, month + 1, i);
@@ -122,23 +116,23 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
     setCurrentDate(new Date(year, month + 1, 1));
   };
 
-  // Ottiene le spese per una data
   const getExpensesForDate = (dateStr: string) => {
     return expenses.filter(e => e.date === dateStr);
   };
 
-  // Ottiene i pagamenti per una data
   const getSchedulesForDate = (dateStr: string) => {
     return schedules.filter(s => s.due_date === dateStr);
   };
 
-  // Azione Segna come Pagato dal Calendario
   const handlePaySchedule = (id: string) => {
     startTransition(async () => {
       try {
-        await paySchedule(id);
+        const res = await paySchedule(id);
+        if (!res.success) {
+          alert(res.error || "Errore durante la registrazione del pagamento");
+          return;
+        }
         
-        // Aggiorna lo stato delle scadenze e inserisce la spesa localmente per non fare reload
         setSchedules(prev => 
           prev.map(sched => {
             if (sched.id !== id) return sched;
@@ -159,7 +153,6 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
           })
         );
 
-        // Aggiungiamo anche la nuova spesa registrata oggi
         const target = schedules.find(s => s.id === id);
         if (target) {
           const todayStr = new Date().toISOString().split("T")[0];
@@ -185,13 +178,16 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
     });
   };
 
-  // Eliminazione Spesa dal Calendario
   const handleDeleteExpense = (id: string) => {
     if (!confirm("Sei sicuro di voler eliminare questa spesa?")) return;
 
     startTransition(async () => {
       try {
-        await deleteExpense(id);
+        const res = await deleteExpense(id);
+        if (!res.success) {
+          alert(res.error || "Errore durante l'eliminazione");
+          return;
+        }
         setExpenses(prev => prev.filter(e => e.id !== id));
       } catch (err: any) {
         alert(err.message || "Errore durante l'eliminazione");
@@ -199,13 +195,16 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
     });
   };
 
-  // Eliminazione Scadenza dal Calendario
   const handleDeleteSchedule = (id: string) => {
     if (!confirm("Sei sicuro di voler eliminare questo pagamento programmato?")) return;
 
     startTransition(async () => {
       try {
-        await deleteSchedule(id);
+        const res = await deleteSchedule(id);
+        if (!res.success) {
+          alert(res.error || "Errore durante l'eliminazione");
+          return;
+        }
         setSchedules(prev => prev.filter(s => s.id !== id));
       } catch (err: any) {
         alert(err.message || "Errore durante l'eliminazione");
@@ -232,7 +231,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Calendario Mensile Unificato (2 Colonne) */}
+        {/* Calendario Mensile Unificato */}
         <div
           className="lg:col-span-2 rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
@@ -240,7 +239,6 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
             borderColor: "hsla(240, 5%, 18%, 0.7)",
           }}
         >
-          {/* Luce d'accento interna */}
           <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
 
           {/* Navigazione Mese */}
@@ -266,7 +264,6 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
             </div>
           </div>
 
-          {/* Intestazione giorni */}
           <div className="grid grid-cols-7 gap-1 text-center font-bold text-slate-500 text-[10px] uppercase tracking-wider mb-2 relative z-10">
             <span>Lun</span>
             <span>Mar</span>
@@ -277,7 +274,6 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
             <span>Dom</span>
           </div>
 
-          {/* Griglia Calendario */}
           <div className="grid grid-cols-7 gap-1 bg-zinc-950/20 p-1.5 rounded-xl border border-white/5 relative z-10">
             {calendarCells.map((cell, idx) => {
               const isSelected = selectedDate === cell.dateStr;
@@ -313,14 +309,12 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                     {cell.dayNum}
                   </span>
 
-                  {/* Somma delle spese del giorno se presenti */}
                   {totalExpenses > 0 && (
                     <span className="text-[8px] font-black text-rose-400/90 whitespace-nowrap truncate max-w-full">
                       -{Math.round(totalExpenses)}€
                     </span>
                   )}
 
-                  {/* Indicatori Visivi delle Scadenze */}
                   <div className="flex gap-0.5 justify-center w-full pb-0.5">
                     {hasPending && (
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.5)] animate-pulse" />
@@ -335,9 +329,8 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
           </div>
         </div>
 
-        {/* Dettaglio del Giorno Selezionato (1 Colonna) */}
+        {/* Dettaglio del Giorno Selezionato */}
         <div className="space-y-6 animate-fade-in">
-          {/* Info panel */}
           <div
             className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden backdrop-blur-xl"
             style={{

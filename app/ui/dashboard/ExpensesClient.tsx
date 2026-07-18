@@ -82,7 +82,11 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
         };
 
         if (editingId) {
-          await updateExpense(editingId, payload);
+          const res = await updateExpense(editingId, payload);
+          if (!res.success) {
+            alert(res.error || "Errore durante la modifica");
+            return;
+          }
           setExpenses(prev =>
             prev.map(item => {
               if (item.id !== editingId) return item;
@@ -96,23 +100,13 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
             })
           );
         } else {
-          await createExpense(payload);
-          const matchingSupplier = suppliers.find(s => s.id === supplierId);
-          const newExp: ExpenseWithRelations = {
-            id: Math.random().toString(),
-            user_id: "",
-            amount: Number(amount),
-            category: selectedCat.name,
-            category_id: categoryId,
-            supplier_id: supplierId || null,
-            description,
-            date,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            expense_categories: { name: selectedCat.name, color: selectedCat.color },
-            suppliers: matchingSupplier ? { name: matchingSupplier.name } : null
-          };
-          setExpenses(prev => [newExp, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+          const res = await createExpense(payload);
+          if (!res.success || !res.data) {
+            alert(res.error || "Errore durante il salvataggio");
+            return;
+          }
+          // Utilizziamo il record reale con il VERO ID generato da PostgreSQL
+          setExpenses(prev => [res.data, ...prev]);
         }
         resetForm();
       } catch (err: any) {
@@ -135,7 +129,11 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
 
     startTransition(async () => {
       try {
-        await deleteExpense(id);
+        const res = await deleteExpense(id);
+        if (!res.success) {
+          alert(res.error || "Errore durante l'eliminazione");
+          return;
+        }
         setExpenses(prev => prev.filter(item => item.id !== id));
       } catch (err: any) {
         alert(err.message || "Errore durante l'eliminazione");
@@ -167,7 +165,7 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Form di inserimento (Design Premium Neon Rose) */}
+        {/* Form di inserimento */}
         <div
           className="rounded-2xl p-6 border relative overflow-hidden group shadow-[0_0_30px_rgba(244,63,94,0.02)] backdrop-blur-xl animate-fade-in"
           style={{
@@ -175,7 +173,6 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
             borderColor: "hsla(350, 60%, 50%, 0.15)",
           }}
         >
-          {/* Luce d'accento interna */}
           <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-rose-500/5 blur-[50px] pointer-events-none" />
 
           <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2">
@@ -344,7 +341,7 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
           </form>
         </div>
 
-        {/* Tabella Spese (Design Premium Neon Slate/Indigo) */}
+        {/* Tabella Spese */}
         <div
           className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-5 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
@@ -352,7 +349,6 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
             borderColor: "hsla(240, 5%, 18%, 0.7)",
           }}
         >
-          {/* Luce d'accento interna */}
           <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
 
           {/* Barra Filtri */}
@@ -376,7 +372,7 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
             <select
               value={filterCategoryId}
               onChange={(e) => setFilterCategoryId(e.target.value)}
-              className="px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom"
+              className="px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
               style={{
                 background: "hsl(240 10% 4% / 0.6)",
                 borderColor: "hsl(240 5% 15% / 0.8)",
