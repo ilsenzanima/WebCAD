@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState } from "react";
-import Link from "next/link";
 import { login, type AuthFormState } from "@/app/actions/auth";
 
 export default function LoginPage() {
@@ -14,8 +13,8 @@ export default function LoginPage() {
     <div className="space-y-8">
       {/* Header */}
       <div className="space-y-2">
-        <h1 className="text-2xl font-bold text-white">Bentornato</h1>
-        <p style={{ color: "hsl(215 20% 65%)" }} className="text-sm">
+        <h1 className="text-2xl font-black text-white tracking-tight">Bentornato</h1>
+        <p style={{ color: "hsl(240 5% 65%)" }} className="text-xs font-semibold">
           Accedi al tuo gestionale privato
         </p>
       </div>
@@ -23,11 +22,11 @@ export default function LoginPage() {
       {/* Messaggio errore globale */}
       {state?.message && (
         <div
-          className="flex items-start gap-3 rounded-xl p-4 text-sm animate-fade-in"
+          className="flex items-start gap-3 rounded-xl p-3 text-xs animate-fade-in"
           style={{
-            background: "hsl(0 84% 60% / 0.12)",
-            border: "1px solid hsl(0 84% 60% / 0.3)",
-            color: "hsl(0 84% 75%)",
+            background: "rgba(220, 38, 38, 0.1)",
+            border: "1px solid rgba(220, 38, 38, 0.2)",
+            color: "hsl(0 80% 75%)",
           }}
           role="alert"
         >
@@ -42,8 +41,7 @@ export default function LoginPage() {
         <div className="space-y-1.5">
           <label
             htmlFor="email"
-            className="block text-sm font-medium"
-            style={{ color: "hsl(215 20% 75%)" }}
+            className="block text-[10px] font-bold uppercase text-slate-400"
           >
             Email
           </label>
@@ -52,26 +50,16 @@ export default function LoginPage() {
             name="email"
             type="email"
             autoComplete="email"
-            placeholder="nome@azienda.it"
+            placeholder="utente@esempio.it"
             required
-            className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-[hsl(215_15%_40%)] transition-all duration-200"
+            className="w-full px-4 py-3 rounded-xl text-xs text-white placeholder-[hsl(240_5%_35%)] transition-all duration-200 focus:outline-none focus:border-blue-500 border"
             style={{
-              background: "hsl(220 26% 14%)",
-              border: `1px solid ${state?.errors?.email ? "hsl(0 84% 60% / 0.5)" : "hsl(220 20% 22%)"}`,
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = "hsl(220 90% 56% / 0.7)";
-              e.currentTarget.style.boxShadow = "0 0 0 3px hsl(220 90% 56% / 0.12)";
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = state?.errors?.email
-                ? "hsl(0 84% 60% / 0.5)"
-                : "hsl(220 20% 22%)";
-              e.currentTarget.style.boxShadow = "none";
+              background: "hsl(240 10% 10% / 0.8)",
+              borderColor: state?.errors?.email ? "rgba(220, 38, 38, 0.3)" : "hsl(240 5% 18%)",
             }}
           />
           {state?.errors?.email && (
-            <p className="text-xs" style={{ color: "hsl(0 84% 70%)" }}>
+            <p className="text-[10px] font-bold" style={{ color: "hsl(0 84% 70%)" }}>
               {state.errors.email[0]}
             </p>
           )}
@@ -82,18 +70,10 @@ export default function LoginPage() {
           <div className="flex items-center justify-between">
             <label
               htmlFor="password"
-              className="block text-sm font-medium"
-              style={{ color: "hsl(215 20% 75%)" }}
+              className="block text-[10px] font-bold uppercase text-slate-400"
             >
               Password
             </label>
-            <Link
-              href="#"
-              className="text-xs transition-colors hover:text-white"
-              style={{ color: "hsl(220 90% 65%)" }}
-            >
-              Password dimenticata?
-            </Link>
           </div>
           <input
             id="password"
@@ -102,24 +82,14 @@ export default function LoginPage() {
             autoComplete="current-password"
             placeholder="••••••••"
             required
-            className="w-full px-4 py-3 rounded-xl text-sm text-white placeholder-[hsl(215_15%_40%)] transition-all duration-200"
+            className="w-full px-4 py-3 rounded-xl text-xs text-white placeholder-[hsl(240_5%_35%)] transition-all duration-200 focus:outline-none focus:border-blue-500 border"
             style={{
-              background: "hsl(220 26% 14%)",
-              border: `1px solid ${state?.errors?.password ? "hsl(0 84% 60% / 0.5)" : "hsl(220 20% 22%)"}`,
-            }}
-            onFocus={(e) => {
-              e.currentTarget.style.borderColor = "hsl(220 90% 56% / 0.7)";
-              e.currentTarget.style.boxShadow = "0 0 0 3px hsl(220 90% 56% / 0.12)";
-            }}
-            onBlur={(e) => {
-              e.currentTarget.style.borderColor = state?.errors?.password
-                ? "hsl(0 84% 60% / 0.5)"
-                : "hsl(220 20% 22%)";
-              e.currentTarget.style.boxShadow = "none";
+              background: "hsl(240 10% 10% / 0.8)",
+              borderColor: state?.errors?.password ? "rgba(220, 38, 38, 0.3)" : "hsl(240 5% 18%)",
             }}
           />
           {state?.errors?.password && (
-            <p className="text-xs" style={{ color: "hsl(0 84% 70%)" }}>
+            <p className="text-[10px] font-bold" style={{ color: "hsl(0 84% 70%)" }}>
               {state.errors.password[0]}
             </p>
           )}
@@ -130,18 +100,17 @@ export default function LoginPage() {
           type="submit"
           id="btn-login"
           disabled={pending}
-          className="w-full py-3 px-4 rounded-xl font-semibold text-sm text-white transition-all duration-200 relative overflow-hidden"
+          className="w-full py-3 px-4 rounded-xl font-bold text-xs text-white transition-all duration-200 relative overflow-hidden active:scale-98"
           style={{
             background: pending
               ? "hsl(220 90% 45%)"
               : "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-            boxShadow: pending ? "none" : "0 4px 20px hsl(220 90% 56% / 0.35)",
             cursor: pending ? "not-allowed" : "pointer",
           }}
         >
           {pending ? (
             <span className="flex items-center justify-center gap-2">
-              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <svg className="animate-spin h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
               </svg>
