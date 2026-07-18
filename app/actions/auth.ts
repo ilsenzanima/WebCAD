@@ -76,48 +76,20 @@ export async function login(
     };
   }
 
-  redirect("/projects");
+  redirect("/dashboard");
 }
 
 // ============================================
-// Server Action: register
+// Server Action: register (Disabilitata)
 // ============================================
 
 export async function register(
   _state: AuthFormState,
-  formData: FormData
+  _formData: FormData
 ): Promise<AuthFormState> {
-  const parsed = RegisterSchema.safeParse({
-    full_name: formData.get("full_name"),
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
-
-  if (!parsed.success) {
-    return { errors: parsed.error.flatten().fieldErrors };
-  }
-
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signUp({
-    email: parsed.data.email,
-    password: parsed.data.password,
-    options: {
-      data: {
-        full_name: parsed.data.full_name,
-      },
-    },
-  });
-
-  if (error) {
-    return {
-      message:
-        error.message === "User already registered"
-          ? "Esiste già un account con questa email."
-          : "Errore durante la registrazione. Riprova più tardi.",
-    };
-  }
-
-  redirect("/projects");
+  return {
+    message: "La registrazione autonoma è disabilitata per questo gestionale privato.",
+  };
 }
 
 // ============================================

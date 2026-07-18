@@ -24,7 +24,7 @@ export default function SidebarNav({ items }: SidebarNavProps) {
         Menu
       </p>
       {items.map((item) => {
-        const active = pathname === item.href || (item.href !== "/projects" && pathname?.startsWith(item.href + "/"));
+        const active = pathname === item.href || (item.href !== "/dashboard" && pathname?.startsWith(item.href + "/"));
         return (
           <Link
             key={item.href}

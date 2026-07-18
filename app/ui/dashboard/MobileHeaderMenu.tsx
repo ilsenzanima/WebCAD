@@ -1,15 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
-import CalcolatriceWidget from "./CalcolatriceWidget";
-import LivellaBolla from "../projects/LivellaBolla";
-import RalScannerWidget from "../projects/RalScannerWidget";
-import OfflineModeToggle from "./OfflineModeToggle";
-import { APP_VERSION } from "@/lib/version";
-import NotificationBell from "./NotificationBell";
 
 interface MobileHeaderMenuProps {
   initials: string;
@@ -19,39 +13,13 @@ interface MobileHeaderMenuProps {
 
 export default function MobileHeaderMenu({ initials, userName, userEmail }: MobileHeaderMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [showCalc, setShowCalc] = useState(false);
-  const [showBolla, setShowBolla] = useState(false);
-  const [showRal, setShowRal] = useState(false);
   const pathname = usePathname();
-  const [localVersion, setLocalVersion] = useState(APP_VERSION);
-
-  useEffect(() => {
-    const getVersion = async () => {
-      if (typeof window !== "undefined" && (window as any).Capacitor?.isNativePlatform()) {
-        try {
-          const { App } = await import("@capacitor/app");
-          const info = await App.getInfo();
-          if (info && info.version) {
-            setLocalVersion(info.version);
-          }
-        } catch (err) {
-          console.warn("Impossibile recuperare versione nativa in menu:", err);
-        }
-      }
-    };
-    getVersion();
-  }, []);
 
   const navItems = [
-    { href: "/projects", icon: "📐", label: "Progetti" },
-    { href: "/projects/istruzioni", icon: "📖", label: "Istruzioni Montaggio" },
-    { href: "/settings", icon: "⚙️", label: "Impostazioni" },
-  ];
-
-  const tools = [
-    { icon: "🧮", label: "Calcolatrice", action: () => { setIsOpen(false); setShowCalc(true); } },
-    { icon: "🟢", label: "Livella Bolla", action: () => { setIsOpen(false); setShowBolla(true); } },
-    { icon: "🎨", label: "Rilevatore RAL", action: () => { setIsOpen(false); setShowRal(true); } },
+    { href: "/dashboard", icon: "📊", label: "Panoramica" },
+    { href: "/dashboard/expenses", icon: "💸", label: "Spese" },
+    { href: "/dashboard/schedules", icon: "📅", label: "Pagamenti" },
+    { href: "/dashboard/settings", icon: "⚙️", label: "Impostazioni" },
   ];
 
   return (
@@ -88,245 +56,102 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
 
         {/* Logo centrato */}
         <div className="flex items-center gap-2 select-none">
-          <img src="/logo.svg" alt="WebCAD" className="w-6 h-6 object-contain" />
-          <span className="text-white font-extrabold text-sm tracking-wide">WebCAD</span>
+          <span className="text-xl leading-none">💰</span>
+          <span className="text-white font-extrabold text-sm tracking-wide">Finanza Privata</span>
         </div>
 
-        {/* Sezione destra (Campana Notifiche + Profilo) */}
-        <div className="flex items-center gap-3">
-          <NotificationBell mode="mobile" />
-          <div
-            className="w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-extrabold text-white flex-shrink-0"
-            style={{ background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" }}
-          >
-            {initials}
-          </div>
+        {/* Profilo */}
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+          style={{ background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" }}
+        >
+          {initials}
         </div>
       </header>
 
-      {/* ── Sidebar Slide-in ── */}
+      {/* ── Menu Drawer Mobile ── */}
       {isOpen && (
-        <div className="fixed inset-0 z-[2000] md:hidden flex">
-          {/* Backdrop */}
+        <div className="fixed inset-0 z-50 flex md:hidden animate-fade-in">
+          {/* Overlay di sfondo */}
           <div
-            className="absolute inset-0"
-            style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(5px)" }}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
             onClick={() => setIsOpen(false)}
           />
 
-          {/* Pannello sidebar */}
-          <aside
-            className="relative flex flex-col animate-slide-in-left"
+          {/* Pannello menu */}
+          <div
+            className="relative flex flex-col w-4/5 max-w-sm h-full p-6 shadow-2xl animate-slide-left"
             style={{
-              width: 272,
-              height: "100%",
               background: "hsl(220 32% 10%)",
-              borderRight: "1px solid hsl(220 20% 22%)",
-              boxShadow: "8px 0 48px rgba(0,0,0,0.6)",
+              borderRight: "1px solid hsl(220 20% 16%)",
             }}
           >
-            {/* Safe area spacer */}
-            <div style={{ height: "env(safe-area-inset-top, 44px)", flexShrink: 0 }} />
-
-            {/* Profilo */}
-            <div
-              style={{
-                padding: "18px 20px 20px",
-                borderBottom: "1px solid hsl(220 20% 22%)",
-                flexShrink: 0,
-              }}
-            >
-              <div
-                style={{
-                  width: 54,
-                  height: 54,
-                  borderRadius: 16,
-                  background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 18,
-                  fontWeight: 800,
-                  color: "#fff",
-                  marginBottom: 12,
-                }}
+            {/* Header Drawer */}
+            <div className="flex justify-between items-center pb-5 mb-5 border-b" style={{ borderColor: "hsl(220 20% 16%)" }}>
+              <div className="flex items-center gap-2">
+                <span className="text-xl leading-none">💰</span>
+                <span className="text-white font-bold text-base">Finanza Privata</span>
+              </div>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white/70 hover:text-white transition-colors"
+                style={{ background: "hsl(220 20% 16%)" }}
               >
-                {initials}
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "hsl(210 40% 96%)" }}>
-                {userName || "Utente"}
-              </div>
-              <div style={{ fontSize: 12, color: "hsl(215 20% 65%)", marginTop: 2 }}>
-                {userEmail || ""}
-              </div>
+                ✕
+              </button>
             </div>
 
-            {/* Nav */}
-            <nav
-              style={{
-                flex: 1,
-                padding: 12,
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-                overflowY: "auto",
-              }}
-            >
-              <p
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: "hsl(220 15% 35%)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  padding: "4px 10px 8px",
-                }}
-              >
-                Menu
-              </p>
+            {/* Navigazione */}
+            <nav className="flex-1 space-y-1">
               {navItems.map((item) => {
-                const active = pathname === item.href || pathname?.startsWith(item.href + "/");
+                const active = pathname === item.href;
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     onClick={() => setIsOpen(false)}
+                    className="flex items-center gap-3 px-3 py-3 rounded-xl font-medium transition-all duration-150 text-sm"
                     style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      padding: "13px 14px",
-                      borderRadius: 14,
-                      textDecoration: "none",
-                      background: active ? "hsla(220,90%,56%,0.12)" : "transparent",
+                      background: active ? "hsla(220, 90%, 56%, 0.12)" : "transparent",
                       color: active ? "hsl(220 90% 56%)" : "hsl(215 20% 65%)",
                     }}
                   >
-                    <span style={{ fontSize: 18, width: 22, textAlign: "center" }}>{item.icon}</span>
-                    <span style={{ fontSize: 15, fontWeight: active ? 700 : 500 }}>{item.label}</span>
+                    <span className="text-base w-5 text-center">{item.icon}</span>
+                    <span>{item.label}</span>
                   </Link>
                 );
               })}
-
-              <p
-                style={{
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: "hsl(220 15% 35%)",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                  padding: "12px 10px 8px",
-                }}
-              >
-                Strumenti
-              </p>
-              {tools.map((t) => (
-                <button
-                  key={t.label}
-                  onClick={t.action}
-                  className="transition-colors hover:bg-white/5 active:bg-white/10 text-left"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                    padding: "13px 14px",
-                    borderRadius: 14,
-                    border: "none",
-                    background: "transparent",
-                    color: "hsl(215 20% 65%)",
-                    cursor: "pointer",
-                    width: "100%",
-                  }}
-                >
-                  <span style={{ fontSize: 18, width: 22, textAlign: "center" }}>{t.icon}</span>
-                  <span style={{ fontSize: 15, fontWeight: 500 }}>{t.label}</span>
-                </button>
-              ))}
-              <Link
-                href="/sync"
-                onClick={() => setIsOpen(false)}
-                className="transition-colors hover:bg-white/5 active:bg-white/10"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "13px 14px",
-                  borderRadius: 14,
-                  textDecoration: "none",
-                  color: pathname === "/sync" ? "hsl(220 90% 56%)" : "hsl(215 20% 65%)",
-                  background: pathname === "/sync" ? "hsla(220,90%,56%,0.12)" : "transparent",
-                }}
-              >
-                <span style={{ fontSize: 18, width: 22, textAlign: "center", fontWeight: "bold" }}>⇅</span>
-                <span style={{ fontSize: 15, fontWeight: pathname === "/sync" ? 700 : 500 }}>Sincronizzazione</span>
-              </Link>
             </nav>
 
-            {/* Switch offline manuale */}
-            <div className="border-t border-[hsl(220,20%,22%)] pt-2 flex-shrink-0">
-              <OfflineModeToggle />
-            </div>
-
-            {/* Footer */}
-            <div
-              style={{
-                padding: "14px 20px 20px",
-                borderTop: "1px solid hsl(220 20% 22%)",
-                flexShrink: 0,
-              }}
-            >
-              <LogoutButton
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  padding: "8px 0",
-                  border: "none",
-                  background: "transparent",
-                  color: "hsl(0 84% 60%)",
-                  cursor: "pointer",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  width: "100%",
-                }}
-              >
-                Disconnetti
-              </LogoutButton>
-              <div
-                style={{
-                  fontSize: 10,
-                  color: "hsl(220 15% 35%)",
-                  marginTop: 8,
-                  fontFamily: "monospace",
-                }}
-              >
-                WebCAD v{localVersion}
+            {/* Profilo & Logout a fondo pagina */}
+            <div className="pt-4 border-t space-y-4" style={{ borderColor: "hsl(220 20% 16%)" }}>
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" }}
+                >
+                  {initials}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-white text-xs font-semibold truncate">{userName || "Utente"}</div>
+                  <div className="text-[10px] truncate" style={{ color: "hsl(215 15% 45%)" }}>{userEmail || ""}</div>
+                </div>
               </div>
+              
+              <LogoutButton
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-medium transition-colors hover:text-white"
+                style={{
+                  background: "hsl(220 26% 14%)",
+                  color: "hsl(0 80% 65%)",
+                  border: "1px solid hsl(220 20% 20%)",
+                }}
+              >
+                Esci dall'account
+              </LogoutButton>
             </div>
-          </aside>
+          </div>
         </div>
       )}
-
-      {/* Livella Bolla Globale */}
-      {showBolla && (
-        <LivellaBolla 
-          onCapture={() => {}} 
-          onClose={() => setShowBolla(false)} 
-        />
-      )}
-
-      {/* Rilevatore RAL Globale */}
-      <RalScannerWidget
-        isOpen={showRal}
-        onClose={() => setShowRal(false)}
-      />
-
-      {/* Calcolatrice Globale */}
-      <CalcolatriceWidget
-        isOpen={showCalc}
-        onClose={() => setShowCalc(false)}
-        showImportButton={false}
-      />
     </>
   );
 }

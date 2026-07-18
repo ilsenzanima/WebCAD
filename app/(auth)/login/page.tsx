@@ -16,7 +16,7 @@ export default function LoginPage() {
       <div className="space-y-2">
         <h1 className="text-2xl font-bold text-white">Bentornato</h1>
         <p style={{ color: "hsl(215 20% 65%)" }} className="text-sm">
-          Accedi al tuo account WebCAD
+          Accedi al tuo gestionale privato
         </p>
       </div>
 
@@ -152,36 +152,6 @@ export default function LoginPage() {
           )}
         </button>
       </form>
-
-      {/* Divider */}
-      <div className="flex items-center gap-4">
-        <div className="flex-1 h-px" style={{ background: "hsl(220 20% 22%)" }} />
-        <span className="text-xs" style={{ color: "hsl(215 15% 45%)" }}>
-          Nuovo su WebCAD?
-        </span>
-        <div className="flex-1 h-px" style={{ background: "hsl(220 20% 22%)" }} />
-      </div>
-
-      {/* Link registrazione */}
-      <Link
-        href="/register"
-        id="link-register"
-        className="flex items-center justify-center w-full py-3 px-4 rounded-xl text-sm font-medium transition-all duration-200 hover:text-white"
-        style={{
-          border: "1px solid hsl(220 20% 22%)",
-          color: "hsl(215 20% 65%)",
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.borderColor = "hsl(220 20% 32%)";
-          (e.currentTarget as HTMLElement).style.background = "hsl(220 26% 14%)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.borderColor = "hsl(220 20% 22%)";
-          (e.currentTarget as HTMLElement).style.background = "transparent";
-        }}
-      >
-        Crea un nuovo account →
-      </Link>
     </div>
   );
 }

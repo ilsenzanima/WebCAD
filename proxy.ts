@@ -40,10 +40,17 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Route pubbliche (non richiedono autenticazione)
-  const publicRoutes = ["/login", "/register", "/auth/callback"];
+  const publicRoutes = ["/login", "/auth/callback"];
   const isPublicRoute = publicRoutes.some((route) =>
     pathname.startsWith(route)
   );
+
+  // Se l'utente cerca di accedere a /register, lo mandiamo a /login
+  if (pathname.startsWith("/register")) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    return NextResponse.redirect(loginUrl);
+  }
 
   // Se l'utente non è autenticato e accede a una route protetta → login
   if (!user && !isPublicRoute) {
@@ -52,8 +59,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Se l'utente è autenticato e accede a route di ingresso (/, /login, /register) → dashboard
-  if (user && (pathname === "/" || pathname === "/login" || pathname === "/register")) {
+  // Se l'utente è autenticato e accede a route di ingresso (/, /login) → dashboard
+  if (user && (pathname === "/" || pathname === "/login")) {
     const dashboardUrl = request.nextUrl.clone();
     dashboardUrl.pathname = "/dashboard";
     return NextResponse.redirect(dashboardUrl);

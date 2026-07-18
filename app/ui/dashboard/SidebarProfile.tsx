@@ -1,7 +1,6 @@
 "use client";
 
 import LogoutButton from "./LogoutButton";
-import NotificationBell from "./NotificationBell";
 
 interface SidebarProfileProps {
   userName: string;
@@ -32,8 +31,17 @@ export default function SidebarProfile({ userName, email, initials }: SidebarPro
           </div>
         </div>
 
-        {/* Nuova Campana Notifiche Integrata */}
-        <NotificationBell mode="desktop" />
+        {/* Pulsante Logout integrato */}
+        <LogoutButton
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-sm font-semibold transition-colors text-white/70 hover:text-red-400 hover:bg-red-500/10 flex-shrink-0"
+          style={{
+            background: "hsl(220 26% 14%)",
+            border: "1px solid hsl(220 20% 18%)",
+          }}
+          aria-label="Esci"
+        >
+          ↩
+        </LogoutButton>
       </div>
     </div>
   );

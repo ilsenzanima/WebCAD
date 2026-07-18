@@ -1,12 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/lib/types/database";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Client Supabase per componenti server-side (Server Components, Route Handlers, Server Actions).
- * Gestisce automaticamente i cookie per l'autenticazione.
+ * Gestisce automaticamente i cookie per l'autenticazione ed esporta esplicitamente il tipo Database.
  */
-export async function createClient() {
+export async function createClient(): Promise<SupabaseClient<Database>> {
   const cookieStore = await cookies();
 
   return createServerClient<Database>(
@@ -24,7 +25,6 @@ export async function createClient() {
             );
           } catch {
             // Il metodo setAll è stato chiamato da un Server Component.
-            // Può essere ignorato se si ha un middleware che refresha le sessioni.
           }
         },
       },
