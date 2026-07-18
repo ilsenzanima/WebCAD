@@ -4,14 +4,15 @@ import { createClient } from "@/lib/supabase/server";
 import MobileHeaderMenu from "@/app/ui/dashboard/MobileHeaderMenu";
 import SidebarProfile from "@/app/ui/dashboard/SidebarProfile";
 import SidebarNav from "@/app/ui/dashboard/SidebarNav";
-import { OverviewIcon, ExpensesIcon, SchedulesIcon, SettingsIcon } from "@/app/ui/dashboard/icons";
+import { OverviewIcon, ExpensesIcon, SchedulesIcon, SettingsIcon, CalendarIcon } from "@/app/ui/dashboard/icons";
 import type { ReactNode } from "react";
 
-// Configurazione voci menu con le nuove icone SVG
+// Navigazione principale comprensiva di Calendario dedicato e Scadenze ridenominate
 const navItems = [
   { href: "/dashboard", icon: <OverviewIcon size={15} />, label: "Panoramica" },
   { href: "/dashboard/expenses", icon: <ExpensesIcon size={15} />, label: "Spese" },
-  { href: "/dashboard/schedules", icon: <SchedulesIcon size={15} />, label: "Pagamenti" },
+  { href: "/dashboard/schedules", icon: <SchedulesIcon size={15} />, label: "Scadenze" },
+  { href: "/dashboard/calendar", icon: <CalendarIcon size={15} />, label: "Calendario" },
 ];
 
 const bottomNavItems = [
@@ -49,7 +50,7 @@ export default async function DashboardLayout({
           zIndex: 40,
         }}
       >
-        {/* Cerchio di luce d'accento zinc */}
+        {/* Cerchio di luce d'accento */}
         <div className="absolute top-[-10%] left-[-20%] w-40 h-40 rounded-full bg-zinc-400/5 blur-[50px] pointer-events-none" />
 
         {/* Logo */}
