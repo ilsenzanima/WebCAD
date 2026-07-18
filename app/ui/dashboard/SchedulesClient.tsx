@@ -3,9 +3,8 @@
 import { useState, useTransition, useMemo } from "react";
 import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createSchedule, deleteSchedule, paySchedule } from "@/app/actions/schedules";
-import { DeleteIcon, ArrowLeftIcon, ArrowRightIcon, CheckIcon } from "./icons";
+import { DeleteIcon, ArrowLeftIcon, ArrowRightIcon, CheckIcon, SchedulesIcon } from "./icons";
 
-// Estendiamo il tipo per includere le relazioni restituite dal join Supabase
 interface ScheduleWithRelations extends Omit<PaymentSchedule, "amount"> {
   amount: number;
   expense_categories?: {
@@ -45,7 +44,6 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [schedules, setSchedules] = useState<ScheduleWithRelations[]>(initialSchedules);
   const [isPending, startTransition] = useTransition();
 
-  // Stati del form
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
   const [supplierId, setSupplierId] = useState("");
@@ -53,15 +51,12 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [dueDate, setDueDate] = useState(new Date().toISOString().split("T")[0]);
   const [recurrence, setRecurrence] = useState<"one-time" | "weekly" | "monthly" | "yearly">("one-time");
 
-  // Stati della vista
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
   const [filterPaid, setFilterPaid] = useState<"all" | "pending" | "paid">("pending");
 
-  // Stato data selezionata sul calendario
   const [selectedDate, setSelectedDate] = useState<string | null>(new Date().toISOString().split("T")[0]);
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // Calcoli per la griglia del calendario
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
@@ -85,7 +80,6 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const calendarCells = useMemo(() => {
     const cells: { dateStr: string; dayNum: number; isCurrentMonth: boolean }[] = [];
     
-    // Giorni del mese precedente
     const daysInPrevMonth = getDaysInMonth(year, month - 1);
     for (let i = firstDayIndex - 1; i >= 0; i--) {
       const prevDay = daysInPrevMonth - i;
@@ -97,7 +91,6 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
       });
     }
 
-    // Giorni del mese corrente
     for (let i = 1; i <= daysInMonth; i++) {
       const currentMonthDate = new Date(year, month, i);
       cells.push({
@@ -107,7 +100,6 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
       });
     }
 
-    // Giorni del mese successivo per completare la griglia da 42 celle (6 righe)
     const remainingCells = 42 - cells.length;
     for (let i = 1; i <= remainingCells; i++) {
       const nextMonthDate = new Date(year, month + 1, i);
@@ -161,7 +153,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           amount: Number(amount),
           category_id: categoryId,
           supplier_id: supplierId || null,
-          category_name: selectedCat.name, // fallback
+          category_name: selectedCat.name,
           description,
           due_date: dueDate,
           recurrence,
@@ -232,7 +224,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
         await deleteSchedule(id);
         setSchedules(prev => prev.filter(item => item.id !== id));
       } catch (err: any) {
-        alert(err.message || "Errore durante l'eliminazione");
+        alert(err.message || "Errore durante l'elimazione");
       }
     });
   };
@@ -242,7 +234,6 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     setDueDate(dateStr);
   };
 
-  // Filtro scadenze per la vista Lista
   const filteredSchedules = schedules.filter(sched => {
     if (filterPaid === "pending") return !sched.is_paid;
     if (filterPaid === "paid") return sched.is_paid;
@@ -274,7 +265,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
             className="px-4 py-2 rounded-lg transition-all duration-200"
             style={{
               background: viewMode === "calendar" ? "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" : "transparent",
-              color: viewMode === "calendar" ? "white" : "hsl(215 20% 65%)",
+              color: viewMode === "calendar" ? "white" : "hsl(240 5% 65%)",
             }}
           >
             📅 Calendario
@@ -284,7 +275,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
             className="px-4 py-2 rounded-lg transition-all duration-200"
             style={{
               background: viewMode === "list" ? "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" : "transparent",
-              color: viewMode === "list" ? "white" : "hsl(215 20% 65%)",
+              color: viewMode === "list" ? "white" : "hsl(240 5% 65%)",
             }}
           >
             📋 Lista
@@ -294,22 +285,25 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Form di pianificazione (1 colonna) */}
+        {/* Form di pianificazione (Design Premium Neon Amber) */}
         <div
-          className="rounded-2xl p-6 border h-fit shadow-xl backdrop-blur-md"
+          className="rounded-2xl p-6 border h-fit shadow-[0_0_30px_rgba(245,158,11,0.02)] relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
-            background: "hsl(240 10% 10% / 0.8)",
-            borderColor: "hsl(240 5% 18% / 0.7)",
+            background: "linear-gradient(135deg, hsla(38, 60%, 12%, 0.08), hsla(240, 10%, 10%, 0.7))",
+            borderColor: "hsla(38, 60%, 50%, 0.15)",
           }}
         >
-          <h2 className="text-base font-bold text-white mb-5 tracking-tight flex items-center gap-2">
-            <span>📝</span> Pianifica Pagamento
+          {/* Luce interna */}
+          <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-amber-500/5 blur-[50px] pointer-events-none" />
+
+          <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2">
+            <span className="text-amber-400"><SchedulesIcon size={16} /></span> Pianifica Pagamento
           </h2>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
             {/* Importo */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Importo (€)</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Importo (€)</label>
               <input
                 type="number"
                 step="0.01"
@@ -318,26 +312,36 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
                 required
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all duration-200"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "hsl(38 90% 50%)";
+                  e.target.style.boxShadow = "0 0 15px rgba(245,158,11,0.15)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "hsl(240 5% 18%)";
+                  e.target.style.boxShadow = "none";
                 }}
               />
             </div>
 
             {/* Categoria */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Categoria</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Categoria</label>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
                 }}
+                onFocus={(e) => e.target.style.borderColor = "hsl(38 90% 50%)"}
+                onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 18%)"}
               >
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id} style={{ background: "hsl(240 10% 10%)" }}>
@@ -349,15 +353,17 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
             {/* Fornitore */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fornitore / Servizio</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Fornitore / Servizio</label>
               <select
                 value={supplierId}
                 onChange={(e) => setSupplierId(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
                 }}
+                onFocus={(e) => e.target.style.borderColor = "hsl(38 90% 50%)"}
+                onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 18%)"}
               >
                 <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun Fornitore</option>
                 {suppliers.map((sup) => (
@@ -370,31 +376,35 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
             {/* Scadenza */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Data di Scadenza</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Data di Scadenza</label>
               <input
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border text-left"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border text-left transition-all"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
                 }}
+                onFocus={(e) => e.target.style.borderColor = "hsl(38 90% 50%)"}
+                onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 18%)"}
               />
             </div>
 
             {/* Ricorrenza */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ricorrenza</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Ricorrenza</label>
               <select
                 value={recurrence}
                 onChange={(e) => setRecurrence(e.target.value as any)}
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
                 }}
+                onFocus={(e) => e.target.style.borderColor = "hsl(38 90% 50%)"}
+                onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 18%)"}
               >
                 {RECURRENCES.map((rec) => (
                   <option key={rec.value} value={rec.value} style={{ background: "hsl(240 10% 10%)" }}>
@@ -406,16 +416,24 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
             {/* Descrizione */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Note</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Note</label>
               <input
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Note aggiuntive..."
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "hsl(38 90% 50%)";
+                  e.target.style.boxShadow = "0 0 15px rgba(245,158,11,0.15)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "hsl(240 5% 18%)";
+                  e.target.style.boxShadow = "none";
                 }}
               />
             </div>
@@ -423,9 +441,9 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
             <button
               type="submit"
               disabled={isPending}
-              className="w-full py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-md active:scale-98 mt-2"
+              className="w-full py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-[0_0_20px_rgba(245,158,11,0.15)] hover:shadow-[0_0_30px_rgba(245,158,11,0.3)] active:scale-98 mt-2"
               style={{
-                background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+                background: "linear-gradient(135deg, hsl(38 90% 50%), hsl(30 80% 45%))",
                 cursor: isPending ? "not-allowed" : "pointer",
               }}
             >
@@ -434,18 +452,20 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           </form>
         </div>
 
-        {/* ─── VISTA CALENDARIO ─── */}
+        {/* ─── VISTA CALENDARIO (Design Premium Neon Indigo/Amber) ─── */}
         {viewMode === "calendar" && (
           <div className="lg:col-span-2 flex flex-col gap-6 animate-fade-in">
             {/* Struttura Calendario */}
             <div
-              className="rounded-2xl p-6 border shadow-xl backdrop-blur-md"
+              className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl"
               style={{
-                background: "hsl(240 10% 10% / 0.8)",
-                borderColor: "hsl(240 5% 18% / 0.7)",
+                background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+                borderColor: "hsla(240, 5%, 18%, 0.7)",
               }}
             >
-              <div className="flex justify-between items-center mb-6">
+              <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-indigo-500/5 blur-[80px] pointer-events-none" />
+
+              <div className="flex justify-between items-center mb-6 relative z-10">
                 <h3 className="text-base font-extrabold text-white tracking-wide">
                   {monthNames[month]} {year}
                 </h3>
@@ -467,7 +487,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                 </div>
               </div>
 
-              <div className="grid grid-cols-7 gap-1 text-center font-bold text-slate-500 text-[10px] uppercase tracking-wider mb-2">
+              <div className="grid grid-cols-7 gap-1 text-center font-bold text-slate-500 text-[10px] uppercase tracking-wider mb-2 relative z-10">
                 <span>Lun</span>
                 <span>Mar</span>
                 <span>Mer</span>
@@ -477,7 +497,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                 <span>Dom</span>
               </div>
 
-              <div className="grid grid-cols-7 gap-1 bg-zinc-950/20 p-1.5 rounded-xl border border-white/5">
+              <div className="grid grid-cols-7 gap-1 bg-zinc-950/20 p-1.5 rounded-xl border border-white/5 relative z-10">
                 {calendarCells.map((cell, idx) => {
                   const isSelected = selectedDate === cell.dateStr;
                   const daySchedules = getSchedulesForDate(cell.dateStr);
@@ -526,20 +546,20 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
             {/* Dettaglio Scadenze Giorno Selezionato */}
             <div
-              className="rounded-2xl p-6 border shadow-xl backdrop-blur-md animate-fade-in"
+              className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
               style={{
-                background: "hsl(240 10% 10% / 0.8)",
-                borderColor: "hsl(240 5% 18% / 0.7)",
+                background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+                borderColor: "hsla(240, 5%, 18%, 0.7)",
               }}
             >
-              <h3 className="text-sm font-bold text-white mb-4">
+              <h3 className="text-sm font-bold text-white mb-4 relative z-10">
                 📅 Dettaglio Scadenze: {selectedDate ? new Date(selectedDate).toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" }) : "-"}
               </h3>
 
               {selectedDateSchedules.length === 0 ? (
-                <p className="text-xs text-slate-500 py-4 text-center">Nessuna scadenza pianificata per questo giorno.</p>
+                <p className="text-xs text-slate-500 py-4 text-center relative z-10">Nessuna scadenza pianificata per questo giorno.</p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-3 relative z-10">
                   {selectedDateSchedules.map((sched) => {
                     const catName = sched.expense_categories?.name || sched.category;
                     const catColor = sched.expense_categories?.color || "slate";
@@ -611,14 +631,16 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
         {/* ─── VISTA LISTA ─── */}
         {viewMode === "list" && (
           <div
-            className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-5 shadow-xl backdrop-blur-md animate-fade-in"
+            className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-5 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
             style={{
-              background: "hsl(240 10% 10% / 0.8)",
-              borderColor: "hsl(240 5% 18% / 0.7)",
+              background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+              borderColor: "hsla(240, 5% ,18%, 0.7)",
             }}
           >
+            <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
+
             {/* Filtro dello Stato */}
-            <div className="flex gap-2.5">
+            <div className="flex gap-2.5 relative z-10">
               <button
                 onClick={() => setFilterPaid("pending")}
                 className="px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200"
@@ -655,7 +677,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
             </div>
 
             {/* Tabella Scadenze */}
-            <div className="flex-1 overflow-x-auto pr-1">
+            <div className="flex-1 overflow-x-auto pr-1 relative z-10">
               {filteredSchedules.length === 0 ? (
                 <div className="text-center py-16 text-slate-500 flex flex-col items-center justify-center">
                   <span className="text-3xl mb-2">📅</span>
@@ -704,14 +726,14 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                               {sched.suppliers?.name || "Nessun Fornitore"}
                             </div>
                             {sched.description && (
-                              <div className="text-[10px] text-slate-400 mt-0.5 max-w-[200px] truncate">
+                              <div className="text-[10px] text-slate-400 mt-0.5 max-w-[200px] truncate font-medium">
                                 {sched.description}
                               </div>
                             )}
                           </td>
                           <td className="py-4">
                             <span
-                              className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border"
+                              className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border transition-transform duration-300 group-hover:scale-102"
                               style={{
                                 backgroundColor: badge.bg,
                                 color: badge.text,
@@ -741,7 +763,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                               )}
                               <button
                                 onClick={() => handleDelete(sched.id)}
-                                className="w-7 h-7 rounded-lg text-xs hover:bg-rose-500/10 hover:text-rose-400 border border-transparent hover:border-rose-500/20 flex items-center justify-center transition-all opacity-60 group-hover:opacity-100"
+                                className="w-7 h-7 rounded-lg text-xs hover:bg-rose-500/10 hover:text-rose-400 border border-transparent hover:border-rose-500/20 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
                                 title="Elimina"
                               >
                                 <DeleteIcon size={12} />

@@ -3,9 +3,8 @@
 import { useState, useTransition } from "react";
 import { type Expense, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createExpense, updateExpense, deleteExpense } from "@/app/actions/expenses";
-import { EditIcon, DeleteIcon } from "./icons";
+import { EditIcon, DeleteIcon, ExpensesIcon } from "./icons";
 
-// Estendiamo il tipo per includere le relazioni restituite dal join Supabase
 interface ExpenseWithRelations extends Omit<Expense, "amount"> {
   amount: number;
   expense_categories?: {
@@ -18,7 +17,7 @@ interface ExpenseWithRelations extends Omit<Expense, "amount"> {
 }
 
 interface ExpensesClientProps {
-  initialExpenses: any[]; // Accettiamo il tipo con relazioni
+  initialExpenses: any[];
   categories: ExpenseCategory[];
   suppliers: Supplier[];
 }
@@ -38,17 +37,14 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
   const [expenses, setExpenses] = useState<ExpenseWithRelations[]>(initialExpenses);
   const [isPending, startTransition] = useTransition();
 
-  // Stati del form
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
   const [supplierId, setSupplierId] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
-  // Stato per la modifica
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Filtri
   const [filterCategoryId, setFilterCategoryId] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -80,7 +76,7 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
           amount: Number(amount),
           category_id: categoryId,
           supplier_id: supplierId || null,
-          category_name: selectedCat.name, // fallback
+          category_name: selectedCat.name,
           description,
           date,
         };
@@ -147,7 +143,6 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
     });
   };
 
-  // Filtra localmente le spese
   const filteredExpenses = expenses.filter(exp => {
     const matchesCategory = filterCategoryId === "all" || exp.category_id === filterCategoryId;
     const matchesSearch = exp.description?.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -172,22 +167,26 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Form di inserimento (1 colonna) */}
+        {/* Form di inserimento (Design Premium Neon Rose) */}
         <div
-          className="rounded-2xl p-6 border h-fit shadow-xl backdrop-blur-md"
+          className="rounded-2xl p-6 border relative overflow-hidden group shadow-[0_0_30px_rgba(244,63,94,0.02)] backdrop-blur-xl animate-fade-in"
           style={{
-            background: "hsl(240 10% 10% / 0.8)",
-            borderColor: "hsl(240 5% 18% / 0.7)",
+            background: "linear-gradient(135deg, hsla(350, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
+            borderColor: "hsla(350, 60%, 50%, 0.15)",
           }}
         >
-          <h2 className="text-base font-bold text-white mb-5 tracking-tight">
-            {editingId ? "📝 Modifica Spesa" : "💰 Nuova Spesa"}
+          {/* Luce d'accento interna */}
+          <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-rose-500/5 blur-[50px] pointer-events-none" />
+
+          <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2">
+            <span className="text-rose-400"><ExpensesIcon size={16} /></span>
+            {editingId ? "Modifica Spesa" : "Nuova Spesa"}
           </h2>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
             {/* Importo */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Importo (€)</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Importo (€)</label>
               <input
                 type="number"
                 step="0.01"
@@ -201,20 +200,34 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
                 }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "hsl(350 85% 55%)";
+                  e.target.style.boxShadow = "0 0 15px rgba(244,63,94,0.15)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "hsl(240 5% 18%)";
+                  e.target.style.boxShadow = "none";
+                }}
               />
             </div>
 
-            {/* Categoria (Dinamica dal database) */}
+            {/* Categoria */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Categoria</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Categoria</label>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "hsl(350 85% 55%)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "hsl(240 5% 18%)";
                 }}
               >
                 {categories.length === 0 ? (
@@ -229,16 +242,22 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
               </select>
             </div>
 
-            {/* Fornitore (Dinamico dal database) */}
+            {/* Fornitore */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fornitore / Servizio</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Fornitore / Servizio</label>
               <select
                 value={supplierId}
                 onChange={(e) => setSupplierId(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "hsl(350 85% 55%)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "hsl(240 5% 18%)";
                 }}
               >
                 <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun Fornitore</option>
@@ -252,23 +271,29 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
 
             {/* Data */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Data transazione</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Data transazione</label>
               <input
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border text-left"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border text-left transition-all"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "hsl(350 85% 55%)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "hsl(240 5% 18%)";
                 }}
               />
             </div>
 
             {/* Descrizione */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Note / Dettaglio spesa</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Note / Dettaglio spesa</label>
               <input
                 type="text"
                 value={description}
@@ -278,6 +303,14 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
+                }}
+                onFocus={(e) => {
+                  e.target.style.borderColor = "hsl(350 85% 55%)";
+                  e.target.style.boxShadow = "0 0 15px rgba(244,63,94,0.15)";
+                }}
+                onBlur={(e) => {
+                  e.target.style.borderColor = "hsl(240 5% 18%)";
+                  e.target.style.boxShadow = "none";
                 }}
               />
             </div>
@@ -299,9 +332,9 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
               <button
                 type="submit"
                 disabled={isPending}
-                className="flex-1 py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-md active:scale-98"
+                className="flex-1 py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-[0_0_20px_rgba(244,63,94,0.15)] hover:shadow-[0_0_30px_rgba(244,63,94,0.3)] active:scale-98"
                 style={{
-                  background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))",
+                  background: "linear-gradient(135deg, hsl(350 85% 55%), hsl(340 75% 45%))",
                   cursor: isPending ? "not-allowed" : "pointer",
                 }}
               >
@@ -311,34 +344,39 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
           </form>
         </div>
 
-        {/* Lista e Tabella Spese (2 colonne) */}
+        {/* Tabella Spese (Design Premium Neon Slate/Indigo) */}
         <div
-          className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-5 shadow-xl backdrop-blur-md"
+          className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-5 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
-            background: "hsl(240 10% 10% / 0.8)",
-            borderColor: "hsl(240 5% 18% / 0.7)",
+            background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+            borderColor: "hsla(240, 5%, 18%, 0.7)",
           }}
         >
+          {/* Luce d'accento interna */}
+          <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
+
           {/* Barra Filtri */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 relative z-10">
             <div className="flex-1 relative">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Cerca spesa o fornitore..."
-                className="w-full pl-4 pr-10 py-3 rounded-xl text-xs text-white focus:outline-none border"
+                className="w-full pl-4 pr-10 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
                 style={{
                   background: "hsl(240 10% 4% / 0.6)",
                   borderColor: "hsl(240 5% 15% / 0.8)",
                 }}
+                onFocus={(e) => e.target.style.borderColor = "hsl(240 5% 35%)"}
+                onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 15% / 0.8)"}
               />
             </div>
 
             <select
               value={filterCategoryId}
               onChange={(e) => setFilterCategoryId(e.target.value)}
-              className="px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
+              className="px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom"
               style={{
                 background: "hsl(240 10% 4% / 0.6)",
                 borderColor: "hsl(240 5% 15% / 0.8)",
@@ -354,11 +392,11 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
           </div>
 
           {/* Elenco Spese */}
-          <div className="flex-1 overflow-x-auto pr-1">
+          <div className="flex-1 overflow-x-auto pr-1 relative z-10">
             {filteredExpenses.length === 0 ? (
               <div className="text-center py-16 text-slate-500 flex flex-col items-center justify-center">
                 <span className="text-3xl mb-2">💸</span>
-                <p className="text-sm">Nessuna spesa registrata.</p>
+                <p className="text-xs">Nessuna spesa registrata.</p>
               </div>
             ) : (
               <table className="w-full text-left text-xs border-collapse">
@@ -387,14 +425,14 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
                             {exp.suppliers?.name || "Nessun Fornitore"}
                           </div>
                           {exp.description && (
-                            <div className="text-[10px] text-slate-400 mt-0.5 max-w-[220px] truncate">
+                            <div className="text-[10px] text-slate-400 mt-0.5 max-w-[220px] truncate font-medium">
                               {exp.description}
                             </div>
                           )}
                         </td>
                         <td className="py-4">
                           <span
-                            className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border"
+                            className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border transition-transform duration-300 group-hover:scale-102"
                             style={{
                               backgroundColor: badge.bg,
                               color: badge.text,
@@ -408,7 +446,7 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
                           -{formatCurrency(exp.amount)}
                         </td>
                         <td className="py-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                             <button
                               onClick={() => handleEdit(exp)}
                               className="w-7 h-7 rounded-lg text-xs hover:bg-blue-500/10 hover:text-blue-400 border border-transparent hover:border-blue-500/20 flex items-center justify-center transition-all"
