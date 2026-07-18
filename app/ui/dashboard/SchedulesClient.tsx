@@ -108,26 +108,40 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           alert(res.error || "Errore durante il pagamento");
           return;
         }
-        
-        setSchedules(prev => 
-          prev.map(sched => {
-            if (sched.id !== id) return sched;
-            
-            if (sched.recurrence === "one-time") {
-              return { ...sched, is_paid: true };
-            } else {
-              const current = new Date(sched.due_date);
-              if (sched.recurrence === "weekly") {
-                current.setDate(current.getDate() + 7);
-              } else if (sched.recurrence === "monthly") {
-                current.setMonth(current.getMonth() + 1);
-              } else if (sched.recurrence === "yearly") {
-                current.setFullYear(current.getFullYear() + 1);
-              }
-              return { ...sched, due_date: current.toISOString().split("T")[0] };
-            }
-          })
-        );
+
+        const target = schedules.find(s => s.id === id);
+        if (!target) return;
+
+        if (target.recurrence === "one-time") {
+          // Segna semplicemente come pagata
+          setSchedules(prev =>
+            prev.map(sched => sched.id === id ? { ...sched, is_paid: true } : sched)
+          );
+        } else {
+          // Ricorrente: segna la corrente come pagata, e crea quella futura
+          const nextDueDate = new Date(target.due_date);
+          if (target.recurrence === "weekly") {
+            nextDueDate.setDate(nextDueDate.getDate() + 7);
+          } else if (target.recurrence === "monthly") {
+            nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+          } else if (target.recurrence === "yearly") {
+            nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
+          }
+          const nextDueDateStr = nextDueDate.toISOString().split("T")[0];
+
+          const nextSched: ScheduleWithRelations = {
+            ...target,
+            id: Math.random().toString(),
+            due_date: nextDueDateStr,
+            is_paid: false,
+          };
+
+          setSchedules(prev =>
+            prev.map(sched => sched.id === id ? { ...sched, is_paid: true } : sched)
+                .concat(nextSched)
+                .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+          );
+        }
       } catch (err: any) {
         alert(err.message || "Errore durante la registrazione del pagamento");
       }
@@ -303,7 +317,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
             {/* Descrizione */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Note</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Note / Dettaglio</label>
               <input
                 type="text"
                 value={description}
@@ -461,7 +475,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                         </td>
                         <td className="py-4 text-center">
                           <div className="flex items-center justify-center gap-2">
-                            {!sched.is_paid && (
+                            {!sched.is_paid ? (
                               <button
                                 onClick={() => handlePay(sched.id)}
                                 disabled={isPending}
@@ -470,6 +484,10 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                               >
                                 <CheckIcon size={10} /> Pagato
                               </button>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold text-[9px] select-none">
+                                Saldata
+                              </span>
                             )}
                             <button
                               onClick={() => handleDelete(sched.id)}

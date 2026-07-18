@@ -132,46 +132,56 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
           alert(res.error || "Errore durante la registrazione del pagamento");
           return;
         }
-        
-        setSchedules(prev => 
-          prev.map(sched => {
-            if (sched.id !== id) return sched;
-            
-            if (sched.recurrence === "one-time") {
-              return { ...sched, is_paid: true };
-            } else {
-              const current = new Date(sched.due_date);
-              if (sched.recurrence === "weekly") {
-                current.setDate(current.getDate() + 7);
-              } else if (sched.recurrence === "monthly") {
-                current.setMonth(current.getMonth() + 1);
-              } else if (sched.recurrence === "yearly") {
-                current.setFullYear(current.getFullYear() + 1);
-              }
-              return { ...sched, due_date: current.toISOString().split("T")[0] };
-            }
-          })
-        );
 
         const target = schedules.find(s => s.id === id);
-        if (target) {
-          const todayStr = new Date().toISOString().split("T")[0];
-          const newExp: ExpenseWithRelations = {
+        if (!target) return;
+
+        if (target.recurrence === "one-time") {
+          setSchedules(prev => 
+            prev.map(sched => sched.id === id ? { ...sched, is_paid: true } : sched)
+          );
+        } else {
+          // Ricorrente: segna la corrente come pagata, e crea quella futura
+          const nextDueDate = new Date(target.due_date);
+          if (target.recurrence === "weekly") {
+            nextDueDate.setDate(nextDueDate.getDate() + 7);
+          } else if (target.recurrence === "monthly") {
+            nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+          } else if (target.recurrence === "yearly") {
+            nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
+          }
+          const nextDueDateStr = nextDueDate.toISOString().split("T")[0];
+
+          const nextSched: ScheduleWithRelations = {
+            ...target,
             id: Math.random().toString(),
-            user_id: "",
-            amount: target.amount,
-            category: target.category,
-            category_id: target.category_id,
-            supplier_id: target.supplier_id,
-            description: `Pagamento programmato: ${target.description || "Nessuna descrizione"}`,
-            date: todayStr,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-            expense_categories: target.expense_categories,
-            suppliers: target.suppliers
+            due_date: nextDueDateStr,
+            is_paid: false,
           };
-          setExpenses(prev => [newExp, ...prev]);
+
+          setSchedules(prev => 
+            prev.map(sched => sched.id === id ? { ...sched, is_paid: true } : sched)
+                .concat(nextSched)
+          );
         }
+
+        // Inoltre, inseriamo la spesa di oggi
+        const todayStr = new Date().toISOString().split("T")[0];
+        const newExp: ExpenseWithRelations = {
+          id: Math.random().toString(),
+          user_id: "",
+          amount: target.amount,
+          category: target.category,
+          category_id: target.category_id,
+          supplier_id: target.supplier_id,
+          description: `Pagamento programmato: ${target.description || "Nessuna descrizione"}`,
+          date: todayStr,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          expense_categories: target.expense_categories,
+          suppliers: target.suppliers
+        };
+        setExpenses(prev => [newExp, ...prev]);
       } catch (err: any) {
         alert(err.message || "Errore durante la registrazione");
       }

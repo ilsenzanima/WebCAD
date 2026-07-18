@@ -52,6 +52,7 @@ export async function createSchedule(formData: {
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/schedules");
+    revalidatePath("/dashboard/calendar");
     return { success: true, data };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -74,6 +75,7 @@ export async function deleteSchedule(id: string) {
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/schedules");
+    revalidatePath("/dashboard/calendar");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -112,36 +114,45 @@ export async function paySchedule(id: string) {
 
     if (expenseError) throw new Error(expenseError.message);
 
-    // 3. Aggiorna o sposta la scadenza
-    if (schedule.recurrence === "one-time") {
-      const { error: updateError } = await supabase
-        .from("payment_schedules")
-        .update({ is_paid: true })
-        .eq("id", id);
-      if (updateError) throw new Error(updateError.message);
-    } else {
-      // Sposta la data in avanti
-      const currentDueDate = new Date(schedule.due_date);
+    // 3. Segna SEMPRE il record corrente come pagato (is_paid = true)
+    const { error: updateError } = await supabase
+      .from("payment_schedules")
+      .update({ is_paid: true })
+      .eq("id", id);
+    if (updateError) throw new Error(updateError.message);
+
+    // 4. Se è ricorrente, crea una nuova scadenza per il ciclo successivo con is_paid = false
+    if (schedule.recurrence !== "one-time") {
+      const nextDueDate = new Date(schedule.due_date);
       if (schedule.recurrence === "weekly") {
-        currentDueDate.setDate(currentDueDate.getDate() + 7);
+        nextDueDate.setDate(nextDueDate.getDate() + 7);
       } else if (schedule.recurrence === "monthly") {
-        currentDueDate.setMonth(currentDueDate.getMonth() + 1);
+        nextDueDate.setMonth(nextDueDate.getMonth() + 1);
       } else if (schedule.recurrence === "yearly") {
-        currentDueDate.setFullYear(currentDueDate.getFullYear() + 1);
+        nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
       }
 
-      const nextDueDateStr = currentDueDate.toISOString().split("T")[0];
+      const nextDueDateStr = nextDueDate.toISOString().split("T")[0];
 
-      const { error: updateError } = await supabase
-        .from("payment_schedules")
-        .update({ due_date: nextDueDateStr })
-        .eq("id", id);
-      if (updateError) throw new Error(updateError.message);
+      const { error: insertNextError } = await supabase.from("payment_schedules").insert({
+        user_id: user.id,
+        amount: schedule.amount,
+        category: schedule.category,
+        category_id: schedule.category_id,
+        supplier_id: schedule.supplier_id,
+        description: schedule.description,
+        due_date: nextDueDateStr,
+        recurrence: schedule.recurrence,
+        is_paid: false,
+      });
+
+      if (insertNextError) throw new Error(insertNextError.message);
     }
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/schedules");
+    revalidatePath("/dashboard/calendar");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
