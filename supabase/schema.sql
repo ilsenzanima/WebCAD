@@ -48,6 +48,7 @@ CREATE TABLE public.expenses (
   date DATE NOT NULL DEFAULT CURRENT_DATE,
   category_id UUID REFERENCES public.expense_categories(id) ON DELETE SET NULL,
   supplier_id UUID REFERENCES public.suppliers(id) ON DELETE SET NULL,
+  is_income BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -137,7 +138,7 @@ CREATE TABLE public.budgets (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   category_id UUID REFERENCES public.expense_categories(id) ON DELETE SET NULL,
-  type VARCHAR(20) NOT NULL CHECK (type IN ('income', 'fixed', 'variable')),
+  type VARCHAR(20) NOT NULL CHECK (type IN ('income', 'need', 'want', 'emergency')),
   amount NUMERIC(12, 2) NOT NULL,
   label VARCHAR(100) NOT NULL,
   periodicity VARCHAR(20) DEFAULT 'monthly' NOT NULL,
@@ -146,7 +147,7 @@ CREATE TABLE public.budgets (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE budgets IS 'Pianificazione mensile di entrate e uscite (fisse/variabili).';
+COMMENT ON TABLE budgets IS 'Pianificazione mensile di entrate e uscite (need, want, emergency).';
 
 CREATE INDEX idx_budgets_user ON public.budgets(user_id);
 

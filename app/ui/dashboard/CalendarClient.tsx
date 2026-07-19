@@ -176,6 +176,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
           supplier_id: target.supplier_id,
           description: `Pagamento programmato: ${target.description || "Nessuna descrizione"}`,
           date: todayStr,
+          is_income: false,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           expense_categories: target.expense_categories,

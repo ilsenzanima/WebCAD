@@ -46,7 +46,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
   // Stati del form
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
-  const [type, setType] = useState<"income" | "fixed" | "variable">("fixed");
+  const [type, setType] = useState<"income" | "need" | "want" | "emergency">("need");
   const [label, setLabel] = useState("");
   const [periodicity, setPeriodicity] = useState<"weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual">("monthly");
   const [isEstimated, setIsEstimated] = useState(false);
@@ -59,7 +59,6 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
     setIsEstimated(false);
   };
 
-  // Riconduzione a importo mensile equivalente per budget fisse e ipotetiche
   const getMonthlyEquivalent = (amt: number, period: string) => {
     switch (period) {
       case "weekly": return amt * 4.33;
@@ -80,7 +79,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
       return;
     }
     if (!label.trim()) {
-      alert("Inserisci una descrizione o etichetta");
+      alert("Inserisci una descrizione");
       return;
     }
 
@@ -94,7 +93,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           type,
           label: label.trim(),
           periodicity: type === "income" ? "monthly" : periodicity,
-          is_estimated: type === "income" ? false : isEstimated,
+          is_estimated: isEstimated, // Abilitato anche per le entrate
         };
 
         const res = await createBudget(payload);
@@ -128,8 +127,8 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
     });
   };
 
-  // 1. Spese del mese in corso
-  const currentMonthExpenses = useMemo(() => {
+  // Spese ed Entrate reali del mese in corso
+  const currentMonthTransactions = useMemo(() => {
     const now = new Date();
     const curYear = now.getFullYear();
     const curMonth = now.getMonth();
@@ -140,51 +139,64 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
     });
   }, [expenses]);
 
-  // 2. Spese raggruppate per categoria del mese corrente
+  // Raggruppa uscite reali per categoria
   const realExpensesByCategory = useMemo(() => {
     const map: Record<string, number> = {};
-    currentMonthExpenses.forEach(e => {
-      const catId = e.category_id || "unassigned";
-      map[catId] = (map[catId] || 0) + Number(e.amount);
-    });
+    currentMonthTransactions
+      .filter(t => !t.is_income)
+      .forEach(e => {
+        const catId = e.category_id || "unassigned";
+        map[catId] = (map[catId] || 0) + Number(e.amount);
+      });
     return map;
-  }, [currentMonthExpenses]);
+  }, [currentMonthTransactions]);
 
-  // 3. Calcoli Totali Budget (Mensilizzati)
+  // Entrate reali del mese corrente
+  const realIncomeTotal = useMemo(() => {
+    return currentMonthTransactions
+      .filter(t => t.is_income)
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+  }, [currentMonthTransactions]);
+
+  // Calcoli Totali Budget (Mensilizzati)
   const totals = useMemo(() => {
     let income = 0;
-    let fixed = 0;
-    let variable = 0;
+    let need = 0;
+    let want = 0;
+    let emergency = 0;
 
     budgets.forEach(b => {
       const monthlyAmt = getMonthlyEquivalent(b.amount, b.periodicity);
       if (b.type === "income") income += monthlyAmt;
-      else if (b.type === "fixed") fixed += monthlyAmt;
-      else if (b.type === "variable") variable += monthlyAmt;
+      else if (b.type === "need") need += monthlyAmt;
+      else if (b.type === "want") want += monthlyAmt;
+      else if (b.type === "emergency") emergency += monthlyAmt;
     });
 
-    const totalOutgoings = fixed + variable;
-    const powerOfSpending = income - fixed;
+    const totalOutgoings = need + want + emergency;
+    const powerOfSpending = income - need; // Entrate - Bisogni
     const remainingBudget = income - totalOutgoings;
 
-    return { income, fixed, variable, totalOutgoings, powerOfSpending, remainingBudget };
+    return { income, need, want, emergency, totalOutgoings, powerOfSpending, remainingBudget };
   }, [budgets]);
 
-  // 4. Analisi Regola 50/30/20
+  // Analisi Regola 50/30/20 (Bisogni, Desideri, Risparmio/Imprevisti)
   const ruleAnalysis = useMemo(() => {
     if (totals.income === 0) return null;
-    const fixedPercent = (totals.fixed / totals.income) * 100;
-    const variablePercent = (totals.variable / totals.income) * 100;
-    const savingsPercent = ((totals.income - totals.fixed - totals.variable) / totals.income) * 100;
+    const needPercent = (totals.need / totals.income) * 100;
+    const wantPercent = (totals.want / totals.income) * 100;
+    
+    // Il risparmio include la quota per gli imprevisti (emergency) + il risparmio residuo
+    const savingsPercent = ((totals.income - totals.need - totals.want) / totals.income) * 100;
 
     return {
-      fixedPercent: Math.round(fixedPercent),
-      variablePercent: Math.round(variablePercent),
+      needPercent: Math.round(needPercent),
+      wantPercent: Math.round(wantPercent),
       savingsPercent: Math.round(savingsPercent),
     };
   }, [totals]);
 
-  // 5. Consolidamento budget di spesa mensilizzato per categoria per il confronto
+  // Consolidamento budget per categoria
   const categoryBudgetComparison = useMemo(() => {
     const map: Record<string, { categoryName: string; color: string; budgetAmt: number; realAmt: number }> = {};
 
@@ -221,6 +233,9 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
     return Object.values(map);
   }, [budgets, realExpensesByCategory, categories]);
 
+  // Percentuale realizzazione entrate
+  const incomePercent = totals.income > 0 ? (realIncomeTotal / totals.income) * 100 : 0;
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(val);
   };
@@ -232,7 +247,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
           Budget & Previsioni
         </h1>
-        <p className="text-sm text-slate-400">Pianifica le tue finanze mensili (includendo la mensilizzazione automatica delle quote non mensili).</p>
+        <p className="text-sm text-slate-400">Classifica entrate e uscite (Bisogni, Desideri, Imprevisti) e confronta lo stimato con il reale.</p>
       </div>
 
       {/* KPI Cards (Design Premium Neon) */}
@@ -247,12 +262,12 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           }}
         >
           <div className="absolute top-[-30%] right-[-20%] w-32 h-32 rounded-full bg-emerald-500/5 blur-[40px]" />
-          <h4 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Entrate Mensili</h4>
+          <h4 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Entrate Preventivate</h4>
           <p className="text-2xl font-black text-white mt-2">{formatCurrency(totals.income)}</p>
-          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Budget pianificato</div>
+          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Mensilizzate (Certe + Stimate)</div>
         </div>
 
-        {/* Spese Fisse Previste */}
+        {/* Bisogni Previsti */}
         <div
           className="rounded-2xl p-5 border relative overflow-hidden group shadow-[0_0_20px_rgba(244,63,94,0.02)]"
           style={{
@@ -261,9 +276,9 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           }}
         >
           <div className="absolute top-[-30%] right-[-20%] w-32 h-32 rounded-full bg-rose-500/5 blur-[40px]" />
-          <h4 className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Uscite Fisse (Equiv.)</h4>
-          <p className="text-2xl font-black text-white mt-2">{formatCurrency(totals.fixed)}</p>
-          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Mensilizzate (Certe + Stimate)</div>
+          <h4 className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Bisogni (Essenziali)</h4>
+          <p className="text-2xl font-black text-white mt-2">{formatCurrency(totals.need)}</p>
+          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Spese fisse e variabili obbligatorie</div>
         </div>
 
         {/* Potere di Spesa Residuo */}
@@ -277,10 +292,10 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           <div className="absolute top-[-30%] right-[-20%] w-32 h-32 rounded-full bg-sky-500/5 blur-[40px]" />
           <h4 className="text-[10px] font-bold text-sky-400 uppercase tracking-widest">Potere di Spesa</h4>
           <p className="text-2xl font-black text-white mt-2">{formatCurrency(totals.powerOfSpending)}</p>
-          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Entrate - Spese Fisse (Mensilizzate)</div>
+          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Entrate - Spese Essenziali (Bisogni)</div>
         </div>
 
-        {/* Risparmio Ipotizzato */}
+        {/* Risparmio & Imprevisti */}
         <div
           className="rounded-2xl p-5 border relative overflow-hidden group shadow-[0_0_20px_rgba(168,85,247,0.02)]"
           style={{
@@ -289,13 +304,56 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           }}
         >
           <div className="absolute top-[-30%] right-[-20%] w-32 h-32 rounded-full bg-purple-500/5 blur-[40px]" />
-          <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">Risparmio Stimato</h4>
+          <h4 className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">Fondo Risparmio</h4>
           <p className={`text-2xl font-black mt-2 ${totals.remainingBudget >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
             {formatCurrency(totals.remainingBudget)}
           </p>
-          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Margine residuo mensile</div>
+          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Inclusi accantonamenti imprevisti ({formatCurrency(totals.emergency)})</div>
         </div>
 
+      </div>
+
+      {/* Riquadro di Confronto delle Entrate Reali vs Stimate */}
+      <div
+        className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
+        style={{
+          background: "linear-gradient(135deg, hsla(150, 60%, 12%, 0.05), hsla(240, 10%, 10%, 0.8))",
+          borderColor: "hsla(150, 60%, 50%, 0.15)",
+        }}
+      >
+        <div className="absolute top-[-30%] right-[-20%] w-60 h-60 rounded-full bg-emerald-500/5 blur-[80px] pointer-events-none" />
+
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 relative z-10">
+          <div>
+            <h3 className="text-sm font-extrabold text-white tracking-wide">
+              💰 Entrate Mensili Realizzate contro Previsione
+            </h3>
+            <p className="text-[10px] text-zinc-500 mt-1">Confronta le tue entrate stimate a budget con quelle reali registrate questo mese.</p>
+          </div>
+          <div className="text-right">
+            <span className="text-xs font-semibold text-zinc-400">Reale: </span>
+            <span className="text-sm font-black text-emerald-400">{formatCurrency(realIncomeTotal)}</span>
+            <span className="text-[10px] text-zinc-600"> / Previsto: {formatCurrency(totals.income)}</span>
+          </div>
+        </div>
+
+        <div className="mt-4 relative z-10 space-y-2">
+          <div className="relative h-2.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+            <div
+              className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(incomePercent, 100)}%` }}
+            />
+          </div>
+          <div className="flex justify-between items-center text-[9px] font-bold text-zinc-500">
+            <span>{Math.round(incomePercent)}% del traguardo entrate raggiunto</span>
+            <span className={realIncomeTotal >= totals.income ? "text-emerald-400" : "text-amber-500"}>
+              {realIncomeTotal >= totals.income 
+                ? `Eccedenza di +${formatCurrency(realIncomeTotal - totals.income)}` 
+                : `Mancano ${formatCurrency(totals.income - realIncomeTotal)}`
+              }
+            </span>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -325,7 +383,6 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                   if (e.target.value === "income") {
                     setCategoryId("");
                     setPeriodicity("monthly");
-                    setIsEstimated(false);
                   }
                 }}
                 className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
@@ -336,42 +393,41 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                 onFocus={(e) => e.target.style.borderColor = "hsl(245 85% 55%)"}
                 onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 18%)"}
               >
-                <option value="fixed" style={{ background: "hsl(240 10% 10%)" }}>Spesa Fissa</option>
-                <option value="variable" style={{ background: "hsl(240 10% 10%)" }}>Spesa Ipotetica / Variabile</option>
-                <option value="income" style={{ background: "hsl(240 10% 10%)" }}>Entrata Corrente</option>
+                <option value="need" style={{ background: "hsl(240 10% 10%)" }}>Bisogno (Spesa Essenziale)</option>
+                <option value="want" style={{ background: "hsl(240 10% 10%)" }}>Desiderio (Spesa Voluttuaria)</option>
+                <option value="emergency" style={{ background: "hsl(240 10% 10%)" }}>Fondo Imprevisti / Emergenze</option>
+                <option value="income" style={{ background: "hsl(240 10% 10%)" }}>Entrata Mensile</option>
               </select>
             </div>
 
-            {/* Stima Importo (Certo o Stimato) - Mostrato solo per uscite */}
-            {type !== "income" && (
-              <div className="space-y-1.5 animate-fade-in">
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Stima Importo</label>
-                <div className="flex gap-2 p-1 bg-zinc-950/60 border border-white/5 rounded-xl text-[10px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setIsEstimated(false)}
-                    className="flex-1 py-2 rounded-lg transition-all"
-                    style={{
-                      background: !isEstimated ? "hsl(240 10% 15%)" : "transparent",
-                      color: !isEstimated ? "white" : "hsl(240 5% 55%)",
-                    }}
-                  >
-                    Importo Certo (es. Mutuo)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsEstimated(true)}
-                    className="flex-1 py-2 rounded-lg transition-all"
-                    style={{
-                      background: isEstimated ? "hsla(38, 90%, 50%, 0.12)" : "transparent",
-                      color: isEstimated ? "hsl(38 90% 60%)" : "hsl(240 5% 55%)",
-                    }}
-                  >
-                    Importo Stimato (es. Bolletta)
-                  </button>
-                </div>
+            {/* Stima Importo (Certezza) */}
+            <div className="space-y-1.5 animate-fade-in">
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Stima Importo</label>
+              <div className="flex gap-2 p-1 bg-zinc-950/60 border border-white/5 rounded-xl text-[10px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setIsEstimated(false)}
+                  className="flex-1 py-2 rounded-lg transition-all"
+                  style={{
+                    background: !isEstimated ? "hsl(240 10% 15%)" : "transparent",
+                    color: !isEstimated ? "white" : "hsl(240 5% 55%)",
+                  }}
+                >
+                  Importo Certo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEstimated(true)}
+                  className="flex-1 py-2 rounded-lg transition-all"
+                  style={{
+                    background: isEstimated ? "hsla(38, 90%, 50%, 0.12)" : "transparent",
+                    color: isEstimated ? "hsl(38 90% 60%)" : "hsl(240 5% 55%)",
+                  }}
+                >
+                  Importo Stimato
+                </button>
               </div>
-            )}
+            </div>
 
             {/* Frequenza di pagamento - Mostrato solo per uscite */}
             {type !== "income" && (
@@ -429,7 +485,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                 type="text"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder={type === "income" ? "es. Stipendio, Rendita" : "es. Mutuo, Gas, TARI, Assicurazione Auto"}
+                placeholder={type === "income" ? "es. Stipendio, Rendita" : "es. Mutuo, Gas, Spesa Alimentare, Fondo Imprevisti"}
                 required
                 className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all duration-200"
                 style={{
@@ -502,16 +558,16 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
 
           <div>
             <h3 className="text-sm font-extrabold text-white tracking-wide">
-              📊 Confronto Mensile (Budget vs Spese Reali)
+              📊 Confronto Uscite per Categoria
             </h3>
-            <p className="text-[10px] text-zinc-500 mt-1">Confronto in tempo reale delle categorie preventivate (mensilizzate) contro le transazioni effettuate nel mese corrente.</p>
+            <p className="text-[10px] text-zinc-500 mt-1">Confronto del budget mensilizzato contro le uscite reali registrate questo mese.</p>
           </div>
 
           <div className="flex-1 overflow-x-auto pr-1 relative z-10 space-y-4">
             {categoryBudgetComparison.length === 0 ? (
               <div className="text-center py-16 text-slate-500 flex flex-col items-center justify-center">
                 <span className="text-3xl mb-2">📈</span>
-                <p className="text-xs">Pianifica le uscite fisse o ipotetiche per attivare il confronto.</p>
+                <p className="text-xs">Pianifica le uscite per attivare il confronto.</p>
               </div>
             ) : (
               <div className="space-y-5">
@@ -592,38 +648,38 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           <div className="absolute top-[-30%] left-[-20%] w-40 h-40 rounded-full bg-purple-500/5 blur-[50px] pointer-events-none" />
 
           <h3 className="text-sm font-extrabold text-white tracking-wide mb-4">
-            💡 Ripartizione Consigliata (Regola 50/30/20)
+            💡 Ripartizione 50/30/20 (Normalizzata)
           </h3>
 
           {ruleAnalysis ? (
             <div className="space-y-4 text-xs z-10 relative">
               <p className="text-[10px] text-slate-400 leading-relaxed">
-                La regola ripartisce le entrate mensili (normalizzate) tra Bisogni fisse, Desideri variabili ed Accantonamento risparmio:
+                Ripartizione calcolata classificando le spese in base all'effettiva utilità reale (Bisogni, Desideri, Fondi Risparmio ed Emergenza):
               </p>
               
               <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-bold">
-                  <span className="text-rose-400">Bisogni (Spese Fisse) - 50% max</span>
-                  <span className="text-white">{ruleAnalysis.fixedPercent}%</span>
+                  <span className="text-rose-400">Bisogni (Essenziali) - 50% max</span>
+                  <span className="text-white">{ruleAnalysis.needPercent}%</span>
                 </div>
                 <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
-                  <div className="h-full bg-rose-500 rounded-full" style={{ width: `${Math.min(ruleAnalysis.fixedPercent, 100)}%` }} />
+                  <div className="h-full bg-rose-500 rounded-full" style={{ width: `${Math.min(ruleAnalysis.needPercent, 100)}%` }} />
                 </div>
               </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-bold">
-                  <span className="text-sky-400">Desideri (Spese Variabili) - 30% max</span>
-                  <span className="text-white">{ruleAnalysis.variablePercent}%</span>
+                  <span className="text-sky-400">Desideri (Voluttuarie) - 30% max</span>
+                  <span className="text-white">{ruleAnalysis.wantPercent}%</span>
                 </div>
                 <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
-                  <div className="h-full bg-sky-500 rounded-full" style={{ width: `${Math.min(ruleAnalysis.variablePercent, 100)}%` }} />
+                  <div className="h-full bg-sky-500 rounded-full" style={{ width: `${Math.min(ruleAnalysis.wantPercent, 100)}%` }} />
                 </div>
               </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-bold">
-                  <span className="text-emerald-400">Risparmio / Investimento - 20% min</span>
+                  <span className="text-emerald-400">Risparmio & Imprevisti - 20% min</span>
                   <span className="text-white">{ruleAnalysis.savingsPercent}%</span>
                 </div>
                 <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
@@ -632,12 +688,12 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
               </div>
 
               <div className="pt-3 border-t border-zinc-800 text-[10px] text-slate-400 leading-relaxed">
-                {ruleAnalysis.fixedPercent > 50 ? (
-                  <span className="text-rose-400 font-semibold">⚠️ Le tue spese fisse superano il 50% consigliato. Cerca di ottimizzare contratti o ridurre abbonamenti per liberare potere di spesa.</span>
+                {ruleAnalysis.needPercent > 50 ? (
+                  <span className="text-rose-400 font-semibold">⚠️ I tuoi bisogni essenziali superano il 50%. Valuta se ottimizzare spese fisse (bollette, affitti) o ridurre uscite variabili essenziali.</span>
                 ) : ruleAnalysis.savingsPercent < 20 ? (
-                  <span className="text-amber-400 font-semibold">⚠️ Stai risparmiando meno del 20% consigliato. Prova a stringere leggermente sulle spese ipotetiche e variabili.</span>
+                  <span className="text-amber-400 font-semibold">⚠️ Stai accantonando meno del 20% raccomandato. Prova a tagliare leggermente le spese voluttuarie (Desideri).</span>
                 ) : (
-                  <span className="text-emerald-400 font-semibold">✨ Ottima allocazione! La tua struttura di budget è sana ed equilibrata.</span>
+                  <span className="text-emerald-400 font-semibold">✨ Allocazione ottimale! Il tuo bilancio preventivo rispetta appieno i parametri di stabilità finanziaria.</span>
                 )}
               </div>
             </div>
@@ -704,15 +760,19 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                         <td className="py-3">
                           <div className="flex flex-col gap-0.5">
                             <span className={`text-[9px] font-bold ${
-                              b.type === "income" ? "text-emerald-400" : b.type === "fixed" ? "text-rose-400" : "text-sky-400"
+                              b.type === "income" 
+                                ? "text-emerald-400" 
+                                : b.type === "need" 
+                                  ? "text-rose-400" 
+                                  : b.type === "want" 
+                                    ? "text-sky-400" 
+                                    : "text-purple-400"
                             }`}>
-                              {b.type === "income" ? "Entrata" : b.type === "fixed" ? "Fissa" : "Variabile"}
+                              {b.type === "income" ? "Entrata" : b.type === "need" ? "Bisogno" : b.type === "want" ? "Desiderio" : "Imprevisto"}
                             </span>
-                            {b.type !== "income" && (
-                              <span className={`text-[7px] uppercase font-extrabold tracking-widest ${b.is_estimated ? "text-amber-500" : "text-zinc-500"}`}>
-                                {b.is_estimated ? "Stimato" : "Certo"}
-                              </span>
-                            )}
+                            <span className={`text-[7px] uppercase font-extrabold tracking-widest ${b.is_estimated ? "text-amber-500" : "text-zinc-500"}`}>
+                              {b.is_estimated ? "Stimato" : "Certo"}
+                            </span>
                           </div>
                         </td>
                         <td className="py-3 text-slate-400 font-semibold uppercase tracking-wider text-[8px]">

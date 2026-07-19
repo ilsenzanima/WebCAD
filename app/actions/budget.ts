@@ -25,7 +25,7 @@ export async function getBudgets() {
 export async function createBudget(formData: {
   amount: number;
   category_id: string | null;
-  type: "income" | "fixed" | "variable";
+  type: "income" | "need" | "want" | "emergency";
   label: string;
   periodicity?: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
   is_estimated?: boolean;

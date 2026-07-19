@@ -29,6 +29,7 @@ export async function createExpense(formData: {
   category_name: string;
   description: string;
   date: string;
+  is_income?: boolean;
 }) {
   try {
     const supabase = (await createClient()) as any;
@@ -43,12 +44,14 @@ export async function createExpense(formData: {
       supplier_id: formData.supplier_id || null,
       description: formData.description || null,
       date: formData.date,
+      is_income: formData.is_income ?? false,
     }).select("*, expense_categories(name, color), suppliers(name)").single();
 
     if (error) throw new Error(error.message);
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/expenses");
+    revalidatePath("/dashboard/budget");
     return { success: true, data };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -64,6 +67,7 @@ export async function updateExpense(
     category_name: string;
     description: string;
     date: string;
+    is_income?: boolean;
   }
 ) {
   try {
@@ -80,6 +84,7 @@ export async function updateExpense(
         supplier_id: formData.supplier_id || null,
         description: formData.description || null,
         date: formData.date,
+        is_income: formData.is_income ?? false,
       })
       .eq("id", id)
       .eq("user_id", user.id);
@@ -88,6 +93,7 @@ export async function updateExpense(
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/expenses");
+    revalidatePath("/dashboard/budget");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -110,6 +116,7 @@ export async function deleteExpense(id: string) {
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/expenses");
+    revalidatePath("/dashboard/budget");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };

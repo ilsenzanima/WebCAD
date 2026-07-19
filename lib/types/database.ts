@@ -30,6 +30,7 @@ export interface Expense {
   date: string;
   category_id: string | null; // FK -> expense_categories.id
   supplier_id: string | null; // FK -> suppliers.id
+  is_income: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -53,7 +54,7 @@ export interface Budget {
   id: string;
   user_id: string;
   category_id: string | null;
-  type: "income" | "fixed" | "variable";
+  type: "income" | "need" | "want" | "emergency";
   amount: number;
   label: string;
   periodicity: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
@@ -114,6 +115,7 @@ export interface Database {
           date?: string;
           category_id?: string | null;
           supplier_id?: string | null;
+          is_income?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -126,6 +128,7 @@ export interface Database {
           date?: string;
           category_id?: string | null;
           supplier_id?: string | null;
+          is_income?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -199,7 +202,7 @@ export interface Database {
           id?: string;
           user_id?: string;
           category_id?: string | null;
-          type: "income" | "fixed" | "variable";
+          type: "income" | "need" | "want" | "emergency";
           amount: number;
           label: string;
           periodicity?: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
@@ -211,7 +214,7 @@ export interface Database {
           id?: string;
           user_id?: string;
           category_id?: string | null;
-          type?: "income" | "fixed" | "variable";
+          type?: "income" | "need" | "want" | "emergency";
           amount?: number;
           label?: string;
           periodicity?: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
