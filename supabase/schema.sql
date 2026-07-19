@@ -140,6 +140,8 @@ CREATE TABLE public.budgets (
   type VARCHAR(20) NOT NULL CHECK (type IN ('income', 'fixed', 'variable')),
   amount NUMERIC(12, 2) NOT NULL,
   label VARCHAR(100) NOT NULL,
+  periodicity VARCHAR(20) DEFAULT 'monthly' NOT NULL,
+  is_estimated BOOLEAN DEFAULT FALSE NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

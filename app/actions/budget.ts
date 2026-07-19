@@ -27,6 +27,8 @@ export async function createBudget(formData: {
   category_id: string | null;
   type: "income" | "fixed" | "variable";
   label: string;
+  periodicity?: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
+  is_estimated?: boolean;
 }) {
   try {
     const supabase = (await createClient()) as any;
@@ -39,6 +41,8 @@ export async function createBudget(formData: {
       category_id: formData.category_id || null,
       type: formData.type,
       label: formData.label,
+      periodicity: formData.periodicity || "monthly",
+      is_estimated: formData.is_estimated ?? false,
     }).select("*, expense_categories(name, color)").single();
 
     if (error) throw new Error(error.message);

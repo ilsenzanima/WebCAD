@@ -56,6 +56,8 @@ export interface Budget {
   type: "income" | "fixed" | "variable";
   amount: number;
   label: string;
+  periodicity: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
+  is_estimated: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -200,6 +202,8 @@ export interface Database {
           type: "income" | "fixed" | "variable";
           amount: number;
           label: string;
+          periodicity?: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
+          is_estimated?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -210,6 +214,8 @@ export interface Database {
           type?: "income" | "fixed" | "variable";
           amount?: number;
           label?: string;
+          periodicity?: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
+          is_estimated?: boolean;
           created_at?: string;
           updated_at?: string;
         };

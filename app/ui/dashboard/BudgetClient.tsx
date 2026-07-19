@@ -30,6 +30,15 @@ const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = 
   slate: { bg: "rgba(107,114,128,0.15)", text: "hsl(215 15% 75%)", border: "rgba(107,114,128,0.25)" },
 };
 
+const PERIODS = [
+  { value: "weekly", label: "Settimanale" },
+  { value: "monthly", label: "Mensile" },
+  { value: "bimonthly", label: "Bimestrale" },
+  { value: "quarterly", label: "Trimestrale" },
+  { value: "semiannual", label: "Semestrale" },
+  { value: "annual", label: "Annuale" },
+];
+
 export default function BudgetClient({ initialBudgets, categories, expenses }: BudgetClientProps) {
   const [budgets, setBudgets] = useState<BudgetWithRelations[]>(initialBudgets);
   const [isPending, startTransition] = useTransition();
@@ -39,11 +48,29 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
   const [categoryId, setCategoryId] = useState("");
   const [type, setType] = useState<"income" | "fixed" | "variable">("fixed");
   const [label, setLabel] = useState("");
+  const [periodicity, setPeriodicity] = useState<"weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual">("monthly");
+  const [isEstimated, setIsEstimated] = useState(false);
 
   const resetForm = () => {
     setAmount("");
     setCategoryId("");
     setLabel("");
+    setPeriodicity("monthly");
+    setIsEstimated(false);
+  };
+
+  // Riconduzione a importo mensile equivalente per budget fisse e ipotetiche
+  const getMonthlyEquivalent = (amt: number, period: string) => {
+    switch (period) {
+      case "weekly": return amt * 4.33;
+      case "bimonthly": return amt / 2;
+      case "quarterly": return amt / 3;
+      case "semiannual": return amt / 6;
+      case "annual": return amt / 12;
+      case "monthly":
+      default:
+        return amt;
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -66,6 +93,8 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           category_id: type === "income" ? null : (categoryId || null),
           type,
           label: label.trim(),
+          periodicity: type === "income" ? "monthly" : periodicity,
+          is_estimated: type === "income" ? false : isEstimated,
         };
 
         const res = await createBudget(payload);
@@ -103,7 +132,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
   const currentMonthExpenses = useMemo(() => {
     const now = new Date();
     const curYear = now.getFullYear();
-    const curMonth = now.getMonth(); // 0-indexed
+    const curMonth = now.getMonth();
 
     return expenses.filter(e => {
       const eDate = new Date(e.date);
@@ -121,20 +150,21 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
     return map;
   }, [currentMonthExpenses]);
 
-  // 3. Calcoli Totali Budget
+  // 3. Calcoli Totali Budget (Mensilizzati)
   const totals = useMemo(() => {
     let income = 0;
     let fixed = 0;
     let variable = 0;
 
     budgets.forEach(b => {
-      if (b.type === "income") income += b.amount;
-      else if (b.type === "fixed") fixed += b.amount;
-      else if (b.type === "variable") variable += b.amount;
+      const monthlyAmt = getMonthlyEquivalent(b.amount, b.periodicity);
+      if (b.type === "income") income += monthlyAmt;
+      else if (b.type === "fixed") fixed += monthlyAmt;
+      else if (b.type === "variable") variable += monthlyAmt;
     });
 
     const totalOutgoings = fixed + variable;
-    const powerOfSpending = income - fixed; // Entrate - Spese Fisse
+    const powerOfSpending = income - fixed;
     const remainingBudget = income - totalOutgoings;
 
     return { income, fixed, variable, totalOutgoings, powerOfSpending, remainingBudget };
@@ -154,7 +184,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
     };
   }, [totals]);
 
-  // 5. Consolidamento budget di spesa per categoria per il confronto (fisse + variabili)
+  // 5. Consolidamento budget di spesa mensilizzato per categoria per il confronto
   const categoryBudgetComparison = useMemo(() => {
     const map: Record<string, { categoryName: string; color: string; budgetAmt: number; realAmt: number }> = {};
 
@@ -163,6 +193,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
       const catId = b.category_id || "unassigned";
       const catName = b.expense_categories?.name || "Generica / Altro";
       const catColor = b.expense_categories?.color || "slate";
+      const monthlyAmt = getMonthlyEquivalent(b.amount, b.periodicity);
 
       if (!map[catId]) {
         map[catId] = {
@@ -172,10 +203,9 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           realAmt: realExpensesByCategory[catId] || 0,
         };
       }
-      map[catId].budgetAmt += b.amount;
+      map[catId].budgetAmt += monthlyAmt;
     });
 
-    // Aggiungi anche le categorie in cui l'utente ha speso soldi reali ma non ha pianificato un budget
     Object.keys(realExpensesByCategory).forEach(catId => {
       if (!map[catId]) {
         const catObj = categories.find(c => c.id === catId);
@@ -202,7 +232,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
           Budget & Previsioni
         </h1>
-        <p className="text-sm text-slate-400">Pianifica le tue finanze e confronta il budget preventivato con le spese reali.</p>
+        <p className="text-sm text-slate-400">Pianifica le tue finanze mensili (includendo la mensilizzazione automatica delle quote non mensili).</p>
       </div>
 
       {/* KPI Cards (Design Premium Neon) */}
@@ -212,7 +242,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
         <div
           className="rounded-2xl p-5 border relative overflow-hidden group shadow-[0_0_20px_rgba(16,185,129,0.02)]"
           style={{
-            background: "linear-gradient(135deg, hsla(150, 60%, 15%, 0.05), hsla(240, 10% ,10%, 0.6))",
+            background: "linear-gradient(135deg, hsla(150, 60%, 15%, 0.05), hsla(240, 10%, 10%, 0.6))",
             borderColor: "hsla(150, 60%, 50%, 0.12)",
           }}
         >
@@ -231,9 +261,9 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           }}
         >
           <div className="absolute top-[-30%] right-[-20%] w-32 h-32 rounded-full bg-rose-500/5 blur-[40px]" />
-          <h4 className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Uscite Fisse</h4>
+          <h4 className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Uscite Fisse (Equiv.)</h4>
           <p className="text-2xl font-black text-white mt-2">{formatCurrency(totals.fixed)}</p>
-          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Obbligazioni fisse</div>
+          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Mensilizzate (Certe + Stimate)</div>
         </div>
 
         {/* Potere di Spesa Residuo */}
@@ -247,7 +277,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           <div className="absolute top-[-30%] right-[-20%] w-32 h-32 rounded-full bg-sky-500/5 blur-[40px]" />
           <h4 className="text-[10px] font-bold text-sky-400 uppercase tracking-widest">Potere di Spesa</h4>
           <p className="text-2xl font-black text-white mt-2">{formatCurrency(totals.powerOfSpending)}</p>
-          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Entrate - Spese Fisse</div>
+          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Entrate - Spese Fisse (Mensilizzate)</div>
         </div>
 
         {/* Risparmio Ipotizzato */}
@@ -292,7 +322,11 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                 value={type}
                 onChange={(e) => {
                   setType(e.target.value as any);
-                  if (e.target.value === "income") setCategoryId("");
+                  if (e.target.value === "income") {
+                    setCategoryId("");
+                    setPeriodicity("monthly");
+                    setIsEstimated(false);
+                  }
                 }}
                 className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
                 style={{
@@ -302,13 +336,68 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                 onFocus={(e) => e.target.style.borderColor = "hsl(245 85% 55%)"}
                 onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 18%)"}
               >
-                <option value="fixed" style={{ background: "hsl(240 10% 10%)" }}>Spesa Fissa (Bisogni)</option>
-                <option value="variable" style={{ background: "hsl(240 10% 10%)" }}>Spesa Ipotetica (Desideri)</option>
+                <option value="fixed" style={{ background: "hsl(240 10% 10%)" }}>Spesa Fissa</option>
+                <option value="variable" style={{ background: "hsl(240 10% 10%)" }}>Spesa Ipotetica / Variabile</option>
                 <option value="income" style={{ background: "hsl(240 10% 10%)" }}>Entrata Corrente</option>
               </select>
             </div>
 
-            {/* Categoria (Nascondi se Entrata) */}
+            {/* Stima Importo (Certo o Stimato) - Mostrato solo per uscite */}
+            {type !== "income" && (
+              <div className="space-y-1.5 animate-fade-in">
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Stima Importo</label>
+                <div className="flex gap-2 p-1 bg-zinc-950/60 border border-white/5 rounded-xl text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setIsEstimated(false)}
+                    className="flex-1 py-2 rounded-lg transition-all"
+                    style={{
+                      background: !isEstimated ? "hsl(240 10% 15%)" : "transparent",
+                      color: !isEstimated ? "white" : "hsl(240 5% 55%)",
+                    }}
+                  >
+                    Importo Certo (es. Mutuo)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEstimated(true)}
+                    className="flex-1 py-2 rounded-lg transition-all"
+                    style={{
+                      background: isEstimated ? "hsla(38, 90%, 50%, 0.12)" : "transparent",
+                      color: isEstimated ? "hsl(38 90% 60%)" : "hsl(240 5% 55%)",
+                    }}
+                  >
+                    Importo Stimato (es. Bolletta)
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Frequenza di pagamento - Mostrato solo per uscite */}
+            {type !== "income" && (
+              <div className="space-y-1.5 animate-fade-in">
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Frequenza Pagamento</label>
+                <select
+                  value={periodicity}
+                  onChange={(e) => setPeriodicity(e.target.value as any)}
+                  className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
+                  style={{
+                    background: "hsl(240 10% 4% / 0.8)",
+                    borderColor: "hsl(240 5% 18%)",
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = "hsl(245 85% 55%)"}
+                  onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 18%)"}
+                >
+                  {PERIODS.map((p) => (
+                    <option key={p.value} value={p.value} style={{ background: "hsl(240 10% 10%)" }}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Categoria */}
             {type !== "income" && (
               <div className="space-y-1.5 animate-fade-in">
                 <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Categoria</label>
@@ -340,7 +429,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                 type="text"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder={type === "income" ? "es. Stipendio, Affitti" : "es. Affitto, Bolletta, Ristorante"}
+                placeholder={type === "income" ? "es. Stipendio, Rendita" : "es. Mutuo, Gas, TARI, Assicurazione Auto"}
                 required
                 className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all duration-200"
                 style={{
@@ -360,7 +449,9 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
 
             {/* Importo */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Importo Mensile (€)</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                Importo {type !== "income" && PERIODS.find(p => p.value === periodicity)?.label.toLowerCase()} (€)
+              </label>
               <input
                 type="number"
                 step="0.01"
@@ -399,7 +490,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           </form>
         </div>
 
-        {/* Confronto Budget vs Spese Reali (2 Colonne, Neon Slate/Indigo) */}
+        {/* Confronto Budget vs Spese Reali (2 Colonne) */}
         <div
           className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-6 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
@@ -411,9 +502,9 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
 
           <div>
             <h3 className="text-sm font-extrabold text-white tracking-wide">
-              📊 Confronto Mese Corrente (Budget vs Spese Reali)
+              📊 Confronto Mensile (Budget vs Spese Reali)
             </h3>
-            <p className="text-[10px] text-zinc-500 mt-1">Confronto in tempo reale delle categorie preventivate contro le transazioni effettuate nel mese.</p>
+            <p className="text-[10px] text-zinc-500 mt-1">Confronto in tempo reale delle categorie preventivate (mensilizzate) contro le transazioni effettuate nel mese corrente.</p>
           </div>
 
           <div className="flex-1 overflow-x-auto pr-1 relative z-10 space-y-4">
@@ -428,7 +519,6 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                   const percent = item.budgetAmt > 0 ? (item.realAmt / item.budgetAmt) * 100 : 0;
                   const isOver = percent > 100;
                   
-                  // Scelta del colore barra neon
                   let barColor = "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]";
                   if (percent > 80 && percent <= 100) {
                     barColor = "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]";
@@ -440,7 +530,6 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
 
                   return (
                     <div key={idx} className="space-y-2 border-b border-zinc-800/40 pb-4">
-                      {/* Categoria, Budget e Spesa Reale */}
                       <div className="flex justify-between items-center text-xs">
                         <div className="flex items-center gap-2">
                           <span
@@ -455,11 +544,10 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                           </span>
                         </div>
                         <div className="text-[10px] font-medium text-slate-400">
-                          Reale: <span className="text-white font-black">{formatCurrency(item.realAmt)}</span> / Budget: <span className="text-zinc-500">{formatCurrency(item.budgetAmt)}</span>
+                          Reale: <span className="text-white font-black">{formatCurrency(item.realAmt)}</span> / Budget Mensilizzato: <span className="text-zinc-500">{formatCurrency(item.budgetAmt)}</span>
                         </div>
                       </div>
 
-                      {/* Barra di Progresso */}
                       <div className="relative h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${barColor}`}
@@ -467,7 +555,6 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                         />
                       </div>
 
-                      {/* Differenza o Sforamento */}
                       <div className="flex justify-between items-center text-[9px]">
                         <span className="text-zinc-500 font-bold">
                           {percent > 0 ? `${Math.round(percent)}% utilizzato` : "Nessun budget definito per categoria"}
@@ -491,10 +578,10 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
 
       </div>
 
-      {/* Ripartizione Consigliata 50/30/20 & Elenco Voci Budget */}
+      {/* Ripartizione Consigliata & Elenco Voci */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Pannello Suggerimento Potere di Spesa 50/30/20 (Neon Purple) */}
+        {/* Regola 50/30/20 */}
         <div
           className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
@@ -511,10 +598,9 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           {ruleAnalysis ? (
             <div className="space-y-4 text-xs z-10 relative">
               <p className="text-[10px] text-slate-400 leading-relaxed">
-                La regola suggerisce di dividere le entrate mensili nette in questo modo:
+                La regola ripartisce le entrate mensili (normalizzate) tra Bisogni fisse, Desideri variabili ed Accantonamento risparmio:
               </p>
               
-              {/* Bisogni (Spese Fisse) */}
               <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-bold">
                   <span className="text-rose-400">Bisogni (Spese Fisse) - 50% max</span>
@@ -525,7 +611,6 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                 </div>
               </div>
 
-              {/* Desideri (Spese Variabili) */}
               <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-bold">
                   <span className="text-sky-400">Desideri (Spese Variabili) - 30% max</span>
@@ -536,7 +621,6 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                 </div>
               </div>
 
-              {/* Risparmio */}
               <div className="space-y-1">
                 <div className="flex justify-between text-[10px] font-bold">
                   <span className="text-emerald-400">Risparmio / Investimento - 20% min</span>
@@ -562,7 +646,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           )}
         </div>
 
-        {/* Elenco Voci Pianificate (2 Colonne, Neon Slate/Zinc) */}
+        {/* Elenco Voci Pianificate */}
         <div
           className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-4 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
@@ -584,9 +668,10 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                 <thead>
                   <tr className="border-b" style={{ borderColor: "hsl(240 5% 18% / 0.7)" }}>
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Descrizione</th>
-                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Tipo</th>
-                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Categoria</th>
-                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Importo Mensile</th>
+                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Tipo & Stima</th>
+                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Frequenza</th>
+                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Importo Singolo</th>
+                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Equiv. Mensile</th>
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-center">Azioni</th>
                   </tr>
                 </thead>
@@ -595,35 +680,49 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                     const catName = b.expense_categories?.name || "Generica / Altro";
                     const catColor = b.expense_categories?.color || "slate";
                     const badge = COLOR_MAP[catColor] || COLOR_MAP.slate;
+                    const monthlyEquivalent = getMonthlyEquivalent(b.amount, b.periodicity);
 
                     return (
-                      <tr key={b.id} className="hover:bg-white/2 transition-colors duration-150 group">
-                        <td className="py-3 font-bold text-white whitespace-nowrap">{b.label}</td>
-                        <td className="py-3">
-                          <span className={`text-[10px] font-bold ${
-                            b.type === "income" ? "text-emerald-400" : b.type === "fixed" ? "text-rose-400" : "text-sky-400"
-                          }`}>
-                            {b.type === "income" ? "Entrata" : b.type === "fixed" ? "Spesa Fissa" : "Spesa Variabile"}
-                          </span>
+                      <tr key={b.id} className="hover:bg-white/2 transition-colors duration-150 group animate-fade-in">
+                        <td className="py-3 pr-2">
+                          <div className="font-bold text-white truncate max-w-[120px]">{b.label}</div>
+                          {b.type !== "income" && (
+                            <div className="mt-0.5">
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border"
+                                style={{
+                                  backgroundColor: badge.bg,
+                                  color: badge.text,
+                                  borderColor: badge.border,
+                                }}
+                              >
+                                {catName}
+                              </span>
+                            </div>
+                          )}
                         </td>
                         <td className="py-3">
-                          {b.type !== "income" ? (
-                            <span
-                              className="inline-flex items-center px-2 py-0.5 rounded text-[8px] font-bold border"
-                              style={{
-                                backgroundColor: badge.bg,
-                                color: badge.text,
-                                borderColor: badge.border,
-                              }}
-                            >
-                              {catName}
+                          <div className="flex flex-col gap-0.5">
+                            <span className={`text-[9px] font-bold ${
+                              b.type === "income" ? "text-emerald-400" : b.type === "fixed" ? "text-rose-400" : "text-sky-400"
+                            }`}>
+                              {b.type === "income" ? "Entrata" : b.type === "fixed" ? "Fissa" : "Variabile"}
                             </span>
-                          ) : (
-                            <span className="text-[10px] text-zinc-600">-</span>
-                          )}
+                            {b.type !== "income" && (
+                              <span className={`text-[7px] uppercase font-extrabold tracking-widest ${b.is_estimated ? "text-amber-500" : "text-zinc-500"}`}>
+                                {b.is_estimated ? "Stimato" : "Certo"}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 text-slate-400 font-semibold uppercase tracking-wider text-[8px]">
+                          {b.type === "income" ? "Mensile" : PERIODS.find(p => p.value === b.periodicity)?.label}
                         </td>
                         <td className={`py-3 text-right font-black text-xs ${b.type === "income" ? "text-emerald-400" : "text-white"}`}>
                           {b.type === "income" ? "+" : "-"}{formatCurrency(b.amount)}
+                        </td>
+                        <td className={`py-3 text-right font-black text-xs ${b.type === "income" ? "text-emerald-400" : "text-zinc-300"}`}>
+                          {b.type === "income" ? "+" : "-"}{formatCurrency(monthlyEquivalent)}
                         </td>
                         <td className="py-3 text-center">
                           <button
