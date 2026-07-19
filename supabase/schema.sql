@@ -128,3 +128,33 @@ CREATE TRIGGER update_schedules_updated_at
   BEFORE UPDATE ON public.payment_schedules
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- TABELLA: budgets (pianificazioni budget)
+-- ============================================
+
+CREATE TABLE public.budgets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  category_id UUID REFERENCES public.expense_categories(id) ON DELETE SET NULL,
+  type VARCHAR(20) NOT NULL CHECK (type IN ('income', 'fixed', 'variable')),
+  amount NUMERIC(12, 2) NOT NULL,
+  label VARCHAR(100) NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE budgets IS 'Pianificazione mensile di entrate e uscite (fisse/variabili).';
+
+CREATE INDEX idx_budgets_user ON public.budgets(user_id);
+
+ALTER TABLE public.budgets ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Gli utenti gestiscono i propri budget" ON public.budgets
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE TRIGGER update_budgets_updated_at
+  BEFORE UPDATE ON public.budgets
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+

@@ -49,6 +49,17 @@ export interface PaymentSchedule {
   updated_at: string;
 }
 
+export interface Budget {
+  id: string;
+  user_id: string;
+  category_id: string | null;
+  type: "income" | "fixed" | "variable";
+  amount: number;
+  label: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // ----- Database Schema (per Supabase Client tipizzato) -----
 
 export interface Database {
@@ -176,6 +187,38 @@ export interface Database {
             columns: ["supplier_id"];
             isOneToOne: false;
             referencedRelation: "suppliers";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      budgets: {
+        Row: Budget;
+        Insert: {
+          id?: string;
+          user_id?: string;
+          category_id?: string | null;
+          type: "income" | "fixed" | "variable";
+          amount: number;
+          label: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          category_id?: string | null;
+          type?: "income" | "fixed" | "variable";
+          amount?: number;
+          label?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "budgets_category_id_fkey";
+            columns: ["category_id"];
+            isOneToOne: false;
+            referencedRelation: "expense_categories";
             referencedColumns: ["id"];
           }
         ];
