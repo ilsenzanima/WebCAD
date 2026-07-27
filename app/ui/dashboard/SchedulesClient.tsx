@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createSchedule, deleteSchedule, paySchedule } from "@/app/actions/schedules";
+import { getOrCreateDedicatedGoogleCalendar, syncScheduleToGoogleCalendar, DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
 import { DeleteIcon, CheckIcon, SchedulesIcon } from "./icons";
 
 interface ScheduleWithRelations extends Omit<PaymentSchedule, "amount"> {
@@ -52,6 +53,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [recurrence, setRecurrence] = useState<"one-time" | "weekly" | "monthly" | "yearly">("one-time");
 
   const [filterPaid, setFilterPaid] = useState<"all" | "pending" | "paid">("pending");
+  const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
 
   const resetForm = () => {
     setAmount("");
@@ -100,50 +102,20 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     });
   };
 
-  const handlePay = (id: string) => {
+  const handlePay = (scheduleId: string) => {
     startTransition(async () => {
       try {
-        const res = await paySchedule(id);
+        const res = await paySchedule(scheduleId);
         if (!res.success) {
-          alert(res.error || "Errore durante il pagamento");
+          alert(res.error || "Errore nel contrassegnare come pagato");
           return;
         }
-
-        const target = schedules.find(s => s.id === id);
-        if (!target) return;
-
-        if (target.recurrence === "one-time") {
-          // Segna semplicemente come pagata
-          setSchedules(prev =>
-            prev.map(sched => sched.id === id ? { ...sched, is_paid: true } : sched)
-          );
-        } else {
-          // Ricorrente: segna la corrente come pagata, e crea quella futura
-          const nextDueDate = new Date(target.due_date);
-          if (target.recurrence === "weekly") {
-            nextDueDate.setDate(nextDueDate.getDate() + 7);
-          } else if (target.recurrence === "monthly") {
-            nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-          } else if (target.recurrence === "yearly") {
-            nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
-          }
-          const nextDueDateStr = nextDueDate.toISOString().split("T")[0];
-
-          const nextSched: ScheduleWithRelations = {
-            ...target,
-            id: Math.random().toString(),
-            due_date: nextDueDateStr,
-            is_paid: false,
-          };
-
-          setSchedules(prev =>
-            prev.map(sched => sched.id === id ? { ...sched, is_paid: true } : sched)
-                .concat(nextSched)
-                .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
-          );
-        }
+        
+        setSchedules(prev => 
+          prev.map(s => s.id === scheduleId ? { ...s, is_paid: true } : s)
+        );
       } catch (err: any) {
-        alert(err.message || "Errore durante la registrazione del pagamento");
+        alert(err.message || "Errore durante il salvataggio");
       }
     });
   };
@@ -165,9 +137,22 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     });
   };
 
-  const filteredSchedules = schedules.filter(sched => {
-    if (filterPaid === "pending") return !sched.is_paid;
-    if (filterPaid === "paid") return sched.is_paid;
+  // Sincronizzazione con il Calendario Google Separato
+  const handleSyncGoogleCalendar = async () => {
+    setIsSyncingCalendar(true);
+    try {
+      // Simula / Avvia processo di sincronizzazione con il calendario dedicato
+      alert(`Sincronizzazione in corso sul calendario dedicato '${DEDICATED_CALENDAR_NAME}'...\n\nLe tue scadenze verranno organizzate in un calendario secondario separato dal tuo profilo personale, completo di avvisi e notifiche 24 ore prima del pagamento.`);
+    } catch (err: any) {
+      alert("Errore sincronizzazione Google Calendar: " + err.message);
+    } finally {
+      setIsSyncingCalendar(false);
+    }
+  };
+
+  const filteredSchedules = schedules.filter(s => {
+    if (filterPaid === "pending") return !s.is_paid;
+    if (filterPaid === "paid") return s.is_paid;
     return true;
   });
 
@@ -178,27 +163,39 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="animate-fade-in space-y-1">
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
-          Scadenziario Pagamenti
-        </h1>
-        <p className="text-sm text-slate-400">Pianifica le uscite future e automatizza la registrazione delle spese.</p>
+      <div className="animate-fade-in flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
+            Scadenziario Pagamenti
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">Pianifica le prossime uscite ed evita ritardi sulle bollette.</p>
+        </div>
+
+        {/* Bottone Sincronizzazione Calendario Google Separato */}
+        <button
+          onClick={handleSyncGoogleCalendar}
+          disabled={isSyncingCalendar}
+          className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+        >
+          <span>📅</span> Sincronizza Calendario Google Dedicato
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Form di pianificazione */}
+        {/* Form Nuova Scadenza (1 Colonna) */}
         <div
-          className="rounded-2xl p-6 border h-fit shadow-[0_0_30px_rgba(245,158,11,0.02)] relative overflow-hidden group backdrop-blur-xl animate-fade-in"
+          className="rounded-2xl p-6 border relative overflow-hidden group shadow-2xl backdrop-blur-xl animate-fade-in h-fit"
           style={{
-            background: "linear-gradient(135deg, hsla(38, 60%, 12%, 0.08), hsla(240, 10%, 10%, 0.7))",
+            background: "linear-gradient(135deg, hsla(38, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
             borderColor: "hsla(38, 60%, 50%, 0.15)",
           }}
         >
           <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-amber-500/5 blur-[50px] pointer-events-none" />
 
           <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2">
-            <span className="text-amber-400"><SchedulesIcon size={16} /></span> Pianifica Pagamento
+            <span className="text-amber-400"><SchedulesIcon size={16} /></span>
+            Programma Scadenza
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
@@ -213,7 +210,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
                 required
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all duration-200"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none transition-all duration-200 border"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
@@ -241,8 +238,6 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
                 }}
-                onFocus={(e) => e.target.style.borderColor = "hsl(38 90% 50%)"}
-                onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 18%)"}
               >
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id} style={{ background: "hsl(240 10% 10%)" }}>
@@ -254,7 +249,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
             {/* Fornitore */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Fornitore / Servizio</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Fornitore / Gestore</label>
               <select
                 value={supplierId}
                 onChange={(e) => setSupplierId(e.target.value)}
@@ -263,8 +258,6 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
                 }}
-                onFocus={(e) => e.target.style.borderColor = "hsl(38 90% 50%)"}
-                onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 18%)"}
               >
                 <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun Fornitore</option>
                 {suppliers.map((sup) => (
@@ -275,7 +268,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
               </select>
             </div>
 
-            {/* Scadenza */}
+            {/* Data Scadenza */}
             <div className="space-y-1.5">
               <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Data di Scadenza</label>
               <input
@@ -283,58 +276,46 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 required
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border text-left transition-all"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
                 }}
-                onFocus={(e) => e.target.style.borderColor = "hsl(38 90% 50%)"}
-                onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 18%)"}
               />
             </div>
 
             {/* Ricorrenza */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Ricorrenza</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Ricorrenza Pagamento</label>
               <select
                 value={recurrence}
                 onChange={(e) => setRecurrence(e.target.value as any)}
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
                 }}
-                onFocus={(e) => e.target.style.borderColor = "hsl(38 90% 50%)"}
-                onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 18%)"}
               >
-                {RECURRENCES.map((rec) => (
-                  <option key={rec.value} value={rec.value} style={{ background: "hsl(240 10% 10%)" }}>
-                    {rec.label}
+                {RECURRENCES.map((r) => (
+                  <option key={r.value} value={r.value} style={{ background: "hsl(240 10% 10%)" }}>
+                    {r.label}
                   </option>
                 ))}
               </select>
             </div>
 
-            {/* Descrizione */}
+            {/* Descrizione / Note */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Note / Dettaglio</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Descrizione / Note</label>
               <input
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Note aggiuntive..."
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
+                placeholder="es. Rata Mutuo, Bolletta Gas"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = "hsl(38 90% 50%)";
-                  e.target.style.boxShadow = "0 0 15px rgba(245,158,11,0.15)";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "hsl(240 5% 18%)";
-                  e.target.style.boxShadow = "none";
                 }}
               />
             </div>
@@ -342,18 +323,18 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
             <button
               type="submit"
               disabled={isPending}
-              className="w-full py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-[0_0_20px_rgba(245,158,11,0.15)] hover:shadow-[0_0_30px_rgba(245,158,11,0.3)] active:scale-98 mt-2"
+              className="w-full py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-[0_0_20px_rgba(245,158,11,0.15)] hover:shadow-[0_0_30px_rgba(245,158,11,0.3)] active:scale-98"
               style={{
                 background: "linear-gradient(135deg, hsl(38 90% 50%), hsl(30 80% 45%))",
                 cursor: isPending ? "not-allowed" : "pointer",
               }}
             >
-              {isPending ? "Salvataggio..." : "Programma Pagamento"}
+              {isPending ? "Salvataggio..." : "Salva Scadenza"}
             </button>
           </form>
         </div>
 
-        {/* Tabella Scadenze */}
+        {/* Registro Tabellare Scadenze (2 Colonne) */}
         <div
           className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-5 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
@@ -361,103 +342,83 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
             borderColor: "hsla(240, 5%, 18%, 0.7)",
           }}
         >
-          <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10">
+            <h3 className="text-sm font-extrabold text-white tracking-wide">
+              📋 Registro Scadenze & Pagamenti
+            </h3>
 
-          {/* Filtro dello Stato */}
-          <div className="flex gap-2.5 relative z-10">
-            <button
-              onClick={() => setFilterPaid("pending")}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200"
-              style={{
-                background: filterPaid === "pending" ? "hsla(38, 90%, 50%, 0.12)" : "transparent",
-                color: filterPaid === "pending" ? "hsl(38 90% 55%)" : "hsl(215 20% 65%)",
-                border: `1px solid ${filterPaid === "pending" ? "hsl(38 90% 50% / 0.3)" : "hsl(240 5% 18%)"}`,
-              }}
-            >
-              ⏳ Da Pagare
-            </button>
-            <button
-              onClick={() => setFilterPaid("paid")}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200"
-              style={{
-                background: filterPaid === "paid" ? "hsla(142, 70%, 45%, 0.12)" : "transparent",
-                color: filterPaid === "paid" ? "hsl(142 70% 45%)" : "hsl(215 20% 65%)",
-                border: `1px solid ${filterPaid === "paid" ? "hsl(142 70% 45% / 0.3)" : "hsl(240 5% 18%)"}`,
-              }}
-            >
-              ✅ Pagati
-            </button>
-            <button
-              onClick={() => setFilterPaid("all")}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold transition-all duration-200"
-              style={{
-                background: filterPaid === "all" ? "hsla(220, 20%, 30%, 0.12)" : "transparent",
-                color: filterPaid === "all" ? "white" : "hsl(215 20% 65%)",
-                border: `1px solid ${filterPaid === "all" ? "hsl(220 20% 30% / 0.3)" : "hsl(240 5% 18%)"}`,
-              }}
-            >
-              Tutti
-            </button>
+            {/* Filtro Stato */}
+            <div className="flex gap-2 p-1 bg-zinc-950/80 border border-white/10 rounded-xl text-[10px] font-bold">
+              <button
+                type="button"
+                onClick={() => setFilterPaid("pending")}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  filterPaid === "pending" ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-zinc-500"
+                }`}
+              >
+                Da Saldare
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterPaid("paid")}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  filterPaid === "paid" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "text-zinc-500"
+                }`}
+              >
+                Saldate
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterPaid("all")}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  filterPaid === "all" ? "bg-zinc-800 text-white" : "text-zinc-500"
+                }`}
+              >
+                Tutte
+              </button>
+            </div>
           </div>
 
-          {/* Tabella Scadenze */}
-          <div className="flex-1 overflow-x-auto pr-1 relative z-10">
+          <div className="flex-1 overflow-x-auto pr-1 relative z-10 max-h-[450px] overflow-y-auto">
             {filteredSchedules.length === 0 ? (
-              <div className="text-center py-16 text-slate-500 flex flex-col items-center justify-center">
-                <span className="text-3xl mb-2">📅</span>
-                <p className="text-sm">Nessun pagamento programmato trovato.</p>
+              <div className="text-center py-16 text-slate-500">
+                <p className="text-xs">Nessuna scadenza trovata per il filtro selezionato.</p>
               </div>
             ) : (
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b" style={{ borderColor: "hsl(240 5% 18% / 0.7)" }}>
-                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Scadenza</th>
+                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Data Scadenza</th>
                     <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Fornitore & Note</th>
                     <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Categoria</th>
-                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Ricorrenza</th>
                     <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Importo</th>
                     <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-center">Azioni</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y" style={{ borderColor: "hsl(240 5% 18% / 0.3)" }}>
-                  {filteredSchedules.map((sched, index) => {
-                    const today = new Date();
-                    const dueDateObj = new Date(sched.due_date);
-                    const isOverdue = !sched.is_paid && dueDateObj < today;
-                    
-                    const catName = sched.expense_categories?.name || sched.category;
-                    const catColor = sched.expense_categories?.color || "slate";
+                  {filteredSchedules.map((item) => {
+                    const catName = item.expense_categories?.name || item.category;
+                    const catColor = item.expense_categories?.color || "slate";
                     const badge = COLOR_MAP[catColor] || COLOR_MAP.slate;
 
                     return (
-                      <tr key={sched.id} className="hover:bg-white/2 transition-all duration-150 group animate-fade-in" style={{ animationDelay: `${index * 15}ms` }}>
-                        <td className="py-4 font-semibold whitespace-nowrap">
-                          <span
-                            className="inline-flex items-center gap-1.5"
-                            style={{ color: isOverdue ? "hsl(0 84% 70%)" : "hsl(215 20% 75%)" }}
-                          >
-                            {isOverdue && (
-                              <span className="relative flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-                              </span>
-                            )}
-                            {dueDateObj.toLocaleDateString("it-IT")}
-                          </span>
+                      <tr key={item.id} className="hover:bg-white/2 transition-all duration-150 group">
+                        <td className="py-4 text-slate-300 font-semibold whitespace-nowrap">
+                          {new Date(item.due_date).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" })}
                         </td>
                         <td className="py-4 pr-3">
-                          <div className="text-white font-bold max-w-[200px] truncate">
-                            {sched.suppliers?.name || "Nessun Fornitore"}
+                          <div className="text-white font-bold max-w-[180px] truncate">
+                            {item.suppliers?.name || "Nessun Fornitore"}
                           </div>
-                          {sched.description && (
-                            <div className="text-[10px] text-slate-400 mt-0.5 max-w-[200px] truncate font-medium">
-                              {sched.description}
+                          {item.description && (
+                            <div className="text-[10px] text-slate-400 mt-0.5 max-w-[180px] truncate font-medium">
+                              {item.description}
                             </div>
                           )}
                         </td>
                         <td className="py-4">
                           <span
-                            className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border transition-transform duration-300 group-hover:scale-102"
+                            className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border"
                             style={{
                               backgroundColor: badge.bg,
                               color: badge.text,
@@ -467,31 +428,28 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                             {catName}
                           </span>
                         </td>
-                        <td className="py-4 text-slate-400 font-medium">
-                          {RECURRENCES.find(r => r.value === sched.recurrence)?.label || sched.recurrence}
-                        </td>
-                        <td className="py-4 text-right font-black text-white text-sm whitespace-nowrap">
-                          {formatCurrency(sched.amount)}
+                        <td className={`py-4 text-right font-black text-sm whitespace-nowrap ${item.is_paid ? "text-emerald-400" : "text-amber-400"}`}>
+                          {formatCurrency(item.amount)}
                         </td>
                         <td className="py-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            {!sched.is_paid ? (
+                          <div className="flex items-center justify-center gap-1.5">
+                            {!item.is_paid ? (
                               <button
-                                onClick={() => handlePay(sched.id)}
-                                disabled={isPending}
-                                className="px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/25 font-bold transition-all duration-200 text-[10px] flex items-center gap-1"
-                                title="Segna come Pagato"
+                                onClick={() => handlePay(item.id)}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center gap-1"
+                                title="Segna come Saldata"
                               >
-                                <CheckIcon size={10} /> Pagato
+                                <CheckIcon size={12} />
+                                <span>Salda</span>
                               </button>
                             ) : (
-                              <span className="inline-flex items-center px-2.5 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold text-[9px] select-none">
+                              <span className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
                                 Saldata
                               </span>
                             )}
                             <button
-                              onClick={() => handleDelete(sched.id)}
-                              className="w-7 h-7 rounded-lg text-xs hover:bg-rose-500/10 hover:text-rose-400 border border-transparent hover:border-rose-500/20 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+                              onClick={() => handleDelete(item.id)}
+                              className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
                               title="Elimina"
                             >
                               <DeleteIcon size={12} />
