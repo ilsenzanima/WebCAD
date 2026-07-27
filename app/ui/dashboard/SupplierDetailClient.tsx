@@ -333,9 +333,20 @@ export default function SupplierDetailClient({
         >
           <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-sky-500/5 blur-[50px] pointer-events-none" />
 
-          <h3 className="text-sm font-extrabold text-white tracking-wide flex items-center gap-2">
-            <span>📄</span> Carica Documento / Bolletta PDF
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-extrabold text-white tracking-wide flex items-center gap-2">
+              <span>📄</span> Carica Documento / Bolletta PDF
+            </h3>
+            <a
+              href="https://drive.google.com/drive/folders/1fgA-JTpfzPRIlJ8xJeQ95Grxi6hVUnB9"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[9px] font-extrabold text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1 bg-sky-500/10 border border-sky-500/20 px-2 py-1 rounded-lg"
+              title="Apri cartella radice Google Drive"
+            >
+              <span>📁 Cartella Google Drive</span>
+            </a>
+          </div>
 
           {/* Form Caricamento Diretto File */}
           <form onSubmit={handleAddDocument} className="space-y-3 relative z-10 border-b border-zinc-800 pb-4">
