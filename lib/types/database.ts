@@ -17,7 +17,8 @@ export interface Supplier {
   id: string;
   user_id: string;
   name: string;
-  description: string | null;
+  notes?: string | null;
+  description?: string | null;
   created_at: string;
 }
 
@@ -63,6 +64,19 @@ export interface Budget {
   updated_at: string;
 }
 
+export interface SupplierDocument {
+  id: string;
+  user_id: string;
+  supplier_id: string;
+  expense_id: string | null;
+  schedule_id: string | null;
+  title: string;
+  file_url: string;
+  provider: "local" | "gdrive" | "onedrive";
+  file_size: number | null;
+  created_at: string;
+}
+
 // ----- Database Schema (per Supabase Client tipizzato) -----
 
 export interface Database {
@@ -92,6 +106,7 @@ export interface Database {
           id?: string;
           user_id?: string;
           name: string;
+          notes?: string | null;
           description?: string | null;
           created_at?: string;
         };
@@ -99,6 +114,7 @@ export interface Database {
           id?: string;
           user_id?: string;
           name?: string;
+          notes?: string | null;
           description?: string | null;
           created_at?: string;
         };
@@ -231,6 +247,34 @@ export interface Database {
             referencedColumns: ["id"];
           }
         ];
+      };
+      supplier_documents: {
+        Row: SupplierDocument;
+        Insert: {
+          id?: string;
+          user_id?: string;
+          supplier_id: string;
+          expense_id?: string | null;
+          schedule_id?: string | null;
+          title: string;
+          file_url: string;
+          provider?: "local" | "gdrive" | "onedrive";
+          file_size?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          supplier_id?: string;
+          expense_id?: string | null;
+          schedule_id?: string | null;
+          title?: string;
+          file_url?: string;
+          provider?: "local" | "gdrive" | "onedrive";
+          file_size?: number | null;
+          created_at?: string;
+        };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;

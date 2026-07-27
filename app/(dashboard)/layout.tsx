@@ -4,16 +4,17 @@ import { createClient } from "@/lib/supabase/server";
 import MobileHeaderMenu from "@/app/ui/dashboard/MobileHeaderMenu";
 import SidebarProfile from "@/app/ui/dashboard/SidebarProfile";
 import SidebarNav from "@/app/ui/dashboard/SidebarNav";
-import { OverviewIcon, ExpensesIcon, SchedulesIcon, SettingsIcon, CalendarIcon, TagIcon } from "@/app/ui/dashboard/icons";
+import { OverviewIcon, ExpensesIcon, SchedulesIcon, SettingsIcon, CalendarIcon, TagIcon, SupplierIcon } from "@/app/ui/dashboard/icons";
 import type { ReactNode } from "react";
 
-// Navigazione principale comprensiva di Calendario dedicato e Scadenze ridenominate
+// Navigazione principale comprensiva di Calendario e Fornitori dedicati
 const navItems = [
   { href: "/dashboard", icon: <OverviewIcon size={15} />, label: "Panoramica" },
-  { href: "/dashboard/expenses", icon: <ExpensesIcon size={15} />, label: "Spese" },
+  { href: "/dashboard/expenses", icon: <ExpensesIcon size={15} />, label: "Spese & Entrate" },
   { href: "/dashboard/schedules", icon: <SchedulesIcon size={15} />, label: "Scadenze" },
   { href: "/dashboard/calendar", icon: <CalendarIcon size={15} />, label: "Calendario" },
   { href: "/dashboard/budget", icon: <TagIcon size={15} />, label: "Budget" },
+  { href: "/dashboard/suppliers", icon: <SupplierIcon size={15} />, label: "Fornitori" },
 ];
 
 const bottomNavItems = [

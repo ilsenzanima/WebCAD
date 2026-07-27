@@ -156,6 +156,29 @@ ALTER TABLE public.budgets ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Gli utenti gestiscono i propri budget" ON public.budgets
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
+-- TABELLA DOCUMENTI E BOLLETTE FORNITORI
+CREATE TABLE public.supplier_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  supplier_id UUID NOT NULL REFERENCES public.suppliers(id) ON DELETE CASCADE,
+  expense_id UUID REFERENCES public.expenses(id) ON DELETE SET NULL,
+  schedule_id UUID REFERENCES public.payment_schedules(id) ON DELETE SET NULL,
+  title VARCHAR(150) NOT NULL,
+  file_url TEXT NOT NULL,
+  provider VARCHAR(50) DEFAULT 'local',
+  file_size INT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE supplier_documents IS 'Documenti e bollette collegate ai fornitori (local, gdrive, onedrive).';
+
+CREATE INDEX idx_supplier_docs_supplier ON public.supplier_documents(supplier_id);
+
+ALTER TABLE public.supplier_documents ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Gli utenti gestiscono i propri documenti" ON public.supplier_documents
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
 CREATE TRIGGER update_budgets_updated_at
   BEFORE UPDATE ON public.budgets
   FOR EACH ROW

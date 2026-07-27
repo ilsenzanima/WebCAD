@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { type Expense, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createExpense, updateExpense, deleteExpense } from "@/app/actions/expenses";
 import { EditIcon, DeleteIcon, ExpensesIcon } from "./icons";
@@ -27,7 +27,7 @@ const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = 
   rose: { bg: "rgba(239,68,68,0.12)", text: "hsl(0 80% 75%)", border: "rgba(239,68,68,0.2)" },
   emerald: { bg: "rgba(16,185,129,0.12)", text: "hsl(150 70% 70%)", border: "rgba(16,185,129,0.2)" },
   amber: { bg: "rgba(245,158,11,0.12)", text: "hsl(38 90% 70%)", border: "rgba(245,158,11,0.2)" },
-  sky: { bg: "rgba(14,165,233,0.12)", text: "hsl(200 85% 70%)", border: "rgba(14,165,233,0.2)" },
+  sky: { bg: "rgba(14,165,233,0.12)", text: "hsl(200 85% 70%)", border: "rgba(200 85% 70% / 0.2)" },
   pink: { bg: "rgba(236,72,153,0.12)", text: "hsl(330 80% 75%)", border: "rgba(236,72,153,0.2)" },
   purple: { bg: "rgba(168,85,247,0.12)", text: "hsl(270 80% 75%)", border: "rgba(168,85,247,0.2)" },
   slate: { bg: "rgba(107,114,128,0.15)", text: "hsl(215 15% 75%)", border: "rgba(107,114,128,0.25)" },
@@ -37,17 +37,20 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
   const [expenses, setExpenses] = useState<ExpenseWithRelations[]>(initialExpenses);
   const [isPending, startTransition] = useTransition();
 
+  // Tab Principale: "expenses" (Uscite) o "incomes" (Entrate)
+  const [activeTab, setActiveTab] = useState<"expenses" | "incomes">("expenses");
+
+  // Form states
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
   const [supplierId, setSupplierId] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [isIncome, setIsIncome] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Filtri ricerca
   const [filterCategoryId, setFilterCategoryId] = useState("all");
-  const [filterType, setFilterType] = useState<"all" | "expenses" | "incomes">("all");
   const [searchQuery, setSearchQuery] = useState("");
 
   const resetForm = () => {
@@ -56,9 +59,10 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
     setSupplierId("");
     setDescription("");
     setDate(new Date().toISOString().split("T")[0]);
-    setIsIncome(false);
     setEditingId(null);
   };
+
+  const isIncomeMode = activeTab === "incomes";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,7 +72,7 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
     }
 
     const selectedCat = categories.find(c => c.id === categoryId);
-    if (!isIncome && !selectedCat) {
+    if (!isIncomeMode && !selectedCat) {
       alert("Seleziona una categoria valida");
       return;
     }
@@ -77,12 +81,12 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
       try {
         const payload = {
           amount: Number(amount),
-          category_id: isIncome ? null : categoryId,
-          supplier_id: isIncome ? null : (supplierId || null),
-          category_name: isIncome ? "Entrata" : (selectedCat?.name || "Generica"),
+          category_id: isIncomeMode ? null : categoryId,
+          supplier_id: isIncomeMode ? null : (supplierId || null),
+          category_name: isIncomeMode ? "Entrata" : (selectedCat?.name || "Generica"),
           description,
           date,
-          is_income: isIncome,
+          is_income: isIncomeMode,
         };
 
         if (editingId) {
@@ -98,8 +102,8 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
               return {
                 ...item,
                 ...payload,
-                expense_categories: isIncome ? null : (selectedCat ? { name: selectedCat.name, color: selectedCat.color } : null),
-                suppliers: isIncome ? null : (matchingSupplier ? { name: matchingSupplier.name } : null)
+                expense_categories: isIncomeMode ? null : (selectedCat ? { name: selectedCat.name, color: selectedCat.color } : null),
+                suppliers: isIncomeMode ? null : (matchingSupplier ? { name: matchingSupplier.name } : null)
               };
             })
           );
@@ -119,17 +123,17 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
   };
 
   const handleEdit = (exp: ExpenseWithRelations) => {
+    setActiveTab(exp.is_income ? "incomes" : "expenses");
     setEditingId(exp.id);
     setAmount(exp.amount.toString());
     setCategoryId(exp.category_id || categories[0]?.id || "");
     setSupplierId(exp.supplier_id || "");
     setDescription(exp.description || "");
     setDate(exp.date);
-    setIsIncome(exp.is_income || false);
   };
 
   const handleDelete = (id: string) => {
-    if (!confirm("Sei sicuro di voler eliminare questa transazione?")) return;
+    if (!confirm("Sei sicuro di voler eliminare questa registrazione?")) return;
 
     startTransition(async () => {
       try {
@@ -145,18 +149,32 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
     });
   };
 
-  const filteredExpenses = expenses.filter(exp => {
-    const matchesCategory = filterCategoryId === "all" || exp.category_id === filterCategoryId;
-    
-    let matchesType = true;
-    if (filterType === "expenses") matchesType = !exp.is_income;
-    else if (filterType === "incomes") matchesType = !!exp.is_income;
+  // Calcolo Totali del mese per il tab attivo
+  const monthlyTotal = useMemo(() => {
+    const now = new Date();
+    const curYear = now.getFullYear();
+    const curMonth = now.getMonth();
 
-    const matchesSearch = exp.description?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    return expenses
+      .filter(exp => {
+        const eDate = new Date(exp.date);
+        const isCurMonth = eDate.getFullYear() === curYear && eDate.getMonth() === curMonth;
+        return isCurMonth && (isIncomeMode ? exp.is_income : !exp.is_income);
+      })
+      .reduce((sum, exp) => sum + Number(exp.amount), 0);
+  }, [expenses, isIncomeMode]);
+
+  // Lista filtrata separata per il tab attivo
+  const filteredList = useMemo(() => {
+    return expenses.filter(exp => {
+      const matchType = isIncomeMode ? exp.is_income : !exp.is_income;
+      const matchCategory = filterCategoryId === "all" || exp.category_id === filterCategoryId;
+      const matchSearch = exp.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           exp.expense_categories?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           exp.suppliers?.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesType && matchesSearch;
-  });
+      return matchType && matchCategory && matchSearch;
+    });
+  }, [expenses, isIncomeMode, filterCategoryId, searchQuery]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(val);
@@ -165,23 +183,78 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="animate-fade-in space-y-1">
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
-          Transazioni Reali
-        </h1>
-        <p className="text-sm text-slate-400">Registra e monitora le tue entrate e spese effettive.</p>
+      <div className="animate-fade-in flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
+            Transazioni Reali
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">Registra le tue spese ed entrate mantenendole nettamente separate.</p>
+        </div>
+
+        {/* Tab Switcher con Neon Glow */}
+        <div className="flex gap-2 p-1.5 bg-zinc-950/80 border border-white/10 rounded-2xl w-fit shadow-xl">
+          <button
+            type="button"
+            onClick={() => { setActiveTab("expenses"); resetForm(); }}
+            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 ${
+              !isIncomeMode
+                ? "bg-rose-500/20 text-rose-400 border border-rose-500/30 shadow-[0_0_20px_rgba(244,63,94,0.25)]"
+                : "text-zinc-400 hover:text-white hover:bg-white/5"
+            }`}
+          >
+            <span>💸</span> Spese / Uscite
+          </button>
+          <button
+            type="button"
+            onClick={() => { setActiveTab("incomes"); resetForm(); }}
+            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 ${
+              isIncomeMode
+                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.25)]"
+                : "text-zinc-400 hover:text-white hover:bg-white/5"
+            }`}
+          >
+            <span>💰</span> Entrate
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Card Risorse per il tab attivo */}
+      <div
+        className="rounded-2xl p-5 border relative overflow-hidden group backdrop-blur-xl animate-fade-in"
+        style={{
+          background: isIncomeMode
+            ? "linear-gradient(135deg, hsla(150, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))"
+            : "linear-gradient(135deg, hsla(350, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
+          borderColor: isIncomeMode
+            ? "hsla(150, 60%, 50%, 0.15)"
+            : "hsla(350, 60%, 50%, 0.15)",
+        }}
+      >
+        <div className="flex justify-between items-center relative z-10">
+          <div>
+            <h4 className={`text-[10px] font-bold uppercase tracking-widest ${isIncomeMode ? "text-emerald-400" : "text-rose-400"}`}>
+              {isIncomeMode ? "Totale Entrate Questo Mese" : "Totale Uscite Questo Mese"}
+            </h4>
+            <p className="text-3xl font-black text-white mt-1">{formatCurrency(monthlyTotal)}</p>
+          </div>
+          <div className={`p-3.5 rounded-2xl text-xl font-bold ${
+            isIncomeMode ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+          }`}>
+            {isIncomeMode ? "📈" : "📉"}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Form di inserimento */}
+        {/* Form di Inserimento */}
         <div
-          className="rounded-2xl p-6 border relative overflow-hidden group shadow-[0_0_30px_rgba(244,63,94,0.02)] backdrop-blur-xl animate-fade-in"
+          className="rounded-2xl p-6 border relative overflow-hidden group shadow-2xl backdrop-blur-xl animate-fade-in h-fit"
           style={{
-            background: isIncome 
+            background: isIncomeMode
               ? "linear-gradient(135deg, hsla(150, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))"
               : "linear-gradient(135deg, hsla(350, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
-            borderColor: isIncome
+            borderColor: isIncomeMode
               ? "hsla(150, 60%, 50%, 0.15)"
               : "hsla(350, 60%, 50%, 0.15)",
           }}
@@ -189,40 +262,12 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
           <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-rose-500/5 blur-[50px] pointer-events-none" />
 
           <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2">
-            <span className={isIncome ? "text-emerald-400" : "text-rose-400"}><ExpensesIcon size={16} /></span>
-            {editingId ? "Modifica Voce" : "Nuova Voce"}
+            <span className={isIncomeMode ? "text-emerald-400" : "text-rose-400"}><ExpensesIcon size={16} /></span>
+            {editingId ? (isIncomeMode ? "Modifica Entrata" : "Modifica Spesa") : (isIncomeMode ? "Nuova Entrata" : "Nuova Spesa")}
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
-            {/* Tipo Transazione */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Tipo Transazione</label>
-              <div className="flex gap-2 p-1 bg-zinc-950/60 border border-white/5 rounded-xl text-[10px] font-bold">
-                <button
-                  type="button"
-                  onClick={() => setIsIncome(false)}
-                  className="flex-1 py-2 rounded-lg transition-all"
-                  style={{
-                    background: !isIncome ? "hsl(240 10% 15%)" : "transparent",
-                    color: !isIncome ? "white" : "hsl(240 5% 55%)",
-                  }}
-                >
-                  Spesa (Uscita)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsIncome(true)}
-                  className="flex-1 py-2 rounded-lg transition-all"
-                  style={{
-                    background: isIncome ? "hsla(142, 70%, 45%, 0.12)" : "transparent",
-                    color: isIncome ? "hsl(142 70% 50%)" : "hsl(240 5% 55%)",
-                  }}
-                >
-                  Entrata (Ingresso)
-                </button>
-              </div>
-            </div>
-
+            
             {/* Importo */}
             <div className="space-y-1.5">
               <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Importo (€)</label>
@@ -240,8 +285,8 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
                   borderColor: "hsl(240 5% 18%)",
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = isIncome ? "hsl(142 70% 45%)" : "hsl(350 85% 55%)";
-                  e.target.style.boxShadow = isIncome ? "0 0 15px rgba(16,185,129,0.15)" : "0 0 15px rgba(244,63,94,0.15)";
+                  e.target.style.borderColor = isIncomeMode ? "hsl(142 70% 45%)" : "hsl(350 85% 55%)";
+                  e.target.style.boxShadow = isIncomeMode ? "0 0 15px rgba(16,185,129,0.15)" : "0 0 15px rgba(244,63,94,0.15)";
                 }}
                 onBlur={(e) => {
                   e.target.style.borderColor = "hsl(240 5% 18%)";
@@ -250,10 +295,10 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
               />
             </div>
 
-            {/* Categoria (Solo se Spesa) */}
-            {!isIncome && (
+            {/* Categoria (Solo se Uscita) */}
+            {!isIncomeMode && (
               <div className="space-y-1.5 animate-fade-in">
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Categoria</label>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Categoria Spesa</label>
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value)}
@@ -283,8 +328,8 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
               </div>
             )}
 
-            {/* Fornitore (Solo se Spesa) */}
-            {!isIncome && (
+            {/* Fornitore (Solo se Uscita) */}
+            {!isIncomeMode && (
               <div className="space-y-1.5 animate-fade-in">
                 <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Fornitore / Servizio</label>
                 <select
@@ -314,7 +359,7 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
 
             {/* Data */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Data transazione</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Data registrata</label>
               <input
                 type="date"
                 value={date}
@@ -326,7 +371,7 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
                   borderColor: "hsl(240 5% 18%)",
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = isIncome ? "hsl(142 70% 45%)" : "hsl(350 85% 55%)";
+                  e.target.style.borderColor = isIncomeMode ? "hsl(142 70% 45%)" : "hsl(350 85% 55%)";
                 }}
                 onBlur={(e) => {
                   e.target.style.borderColor = "hsl(240 5% 18%)";
@@ -334,22 +379,24 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
               />
             </div>
 
-            {/* Descrizione */}
+            {/* Descrizione / Note */}
             <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Note / Dettaglio</label>
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                {isIncomeMode ? "Origine / Descrizione (es. Stipendio, Rimborso)" : "Note / Causale Spesa"}
+              </label>
               <input
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder={isIncome ? "es. Stipendio mese, Rimborso" : "Note aggiuntive..."}
+                placeholder={isIncomeMode ? "es. Stipendio mese corrente, Rendita" : "es. Spesa alimentari, Rifornimento carburante"}
                 className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none transition-all duration-200 border"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
                 }}
                 onFocus={(e) => {
-                  e.target.style.borderColor = isIncome ? "hsl(142 70% 45%)" : "hsl(350 85% 55%)";
-                  e.target.style.boxShadow = isIncome ? "0 0 15px rgba(16,185,129,0.15)" : "0 0 15px rgba(244,63,94,0.15)";
+                  e.target.style.borderColor = isIncomeMode ? "hsl(142 70% 45%)" : "hsl(350 85% 55%)";
+                  e.target.style.boxShadow = isIncomeMode ? "0 0 15px rgba(16,185,129,0.15)" : "0 0 15px rgba(244,63,94,0.15)";
                 }}
                 onBlur={(e) => {
                   e.target.style.borderColor = "hsl(240 5% 18%)";
@@ -377,19 +424,19 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
                 disabled={isPending}
                 className="flex-1 py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-[0_0_20px_rgba(244,63,94,0.15)] hover:shadow-[0_0_30px_rgba(244,63,94,0.3)] active:scale-98"
                 style={{
-                  background: isIncome
+                  background: isIncomeMode
                     ? "linear-gradient(135deg, hsl(142 70% 45%), hsl(150 60% 35%))"
                     : "linear-gradient(135deg, hsl(350 85% 55%), hsl(340 75% 45%))",
                   cursor: isPending ? "not-allowed" : "pointer",
                 }}
               >
-                {isPending ? "Salvataggio..." : editingId ? "Salva" : "Aggiungi"}
+                {isPending ? "Salvataggio..." : editingId ? "Salva Modifiche" : (isIncomeMode ? "Registra Entrata" : "Registra Spesa")}
               </button>
             </div>
           </form>
         </div>
 
-        {/* Tabella Spese & Entrate (2 Colonne) */}
+        {/* Tabella Registro (2 Colonne) */}
         <div
           className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-5 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
@@ -399,14 +446,14 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
         >
           <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
 
-          {/* Barra Filtri */}
+          {/* Filtri */}
           <div className="flex flex-col sm:flex-row gap-3 relative z-10">
             <div className="flex-1 relative">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Cerca per descrizione o fornitore..."
+                placeholder={isIncomeMode ? "Cerca entrate..." : "Cerca per note o fornitore..."}
                 className="w-full pl-4 pr-10 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
                 style={{
                   background: "hsl(240 10% 4% / 0.6)",
@@ -417,62 +464,52 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
               />
             </div>
 
-            {/* Filtro Tipo */}
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value as any)}
-              className="px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
-              style={{
-                background: "hsl(240 10% 4% / 0.6)",
-                borderColor: "hsl(240 5% 15% / 0.8)",
-              }}
-            >
-              <option value="all">Tutte le Transazioni</option>
-              <option value="expenses">Solo Spese</option>
-              <option value="incomes">Solo Entrate</option>
-            </select>
-
-            {/* Filtro Categoria */}
-            <select
-              value={filterCategoryId}
-              onChange={(e) => setFilterCategoryId(e.target.value)}
-              className="px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
-              style={{
-                background: "hsl(240 10% 4% / 0.6)",
-                borderColor: "hsl(240 5% 15% / 0.8)",
-              }}
-            >
-              <option value="all">Tutte le Categorie</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id} style={{ background: "hsl(240 10% 10%)" }}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
+            {!isIncomeMode && (
+              <select
+                value={filterCategoryId}
+                onChange={(e) => setFilterCategoryId(e.target.value)}
+                className="px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
+                style={{
+                  background: "hsl(240 10% 4% / 0.6)",
+                  borderColor: "hsl(240 5% 15% / 0.8)",
+                }}
+              >
+                <option value="all">Tutte le Categorie</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id} style={{ background: "hsl(240 10% 10%)" }}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
-          {/* Elenco Transazioni */}
+          {/* Elenco Tabella */}
           <div className="flex-1 overflow-x-auto pr-1 relative z-10">
-            {filteredExpenses.length === 0 ? (
+            {filteredList.length === 0 ? (
               <div className="text-center py-16 text-slate-500 flex flex-col items-center justify-center">
-                <span className="text-3xl mb-2">💸</span>
-                <p className="text-xs">Nessuna transazione trovata.</p>
+                <span className="text-3xl mb-2">{isIncomeMode ? "💰" : "💸"}</span>
+                <p className="text-xs">{isIncomeMode ? "Nessuna entrata registrata." : "Nessuna spesa trovata."}</p>
               </div>
             ) : (
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b" style={{ borderColor: "hsl(240 5% 18% / 0.7)" }}>
                     <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Data</th>
-                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Fornitore & Note</th>
-                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Categoria</th>
+                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">
+                      {isIncomeMode ? "Descrizione Entrata" : "Fornitore & Note"}
+                    </th>
+                    {!isIncomeMode && (
+                      <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Categoria</th>
+                    )}
                     <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Importo</th>
                     <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-center">Azioni</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y" style={{ borderColor: "hsl(240 5% 18% / 0.3)" }}>
-                  {filteredExpenses.map((exp, index) => {
-                    const catName = exp.is_income ? "Entrata" : (exp.expense_categories?.name || exp.category);
-                    const catColor = exp.is_income ? "emerald" : (exp.expense_categories?.color || "slate");
+                  {filteredList.map((exp, index) => {
+                    const catName = exp.expense_categories?.name || exp.category;
+                    const catColor = exp.expense_categories?.color || "slate";
                     const badge = COLOR_MAP[catColor] || COLOR_MAP.slate;
 
                     return (
@@ -481,29 +518,37 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
                           {new Date(exp.date).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" })}
                         </td>
                         <td className="py-4 pr-3">
-                          <div className="text-white font-bold max-w-[220px] truncate">
-                            {exp.is_income ? (exp.description || "Stipendio / Rendita") : (exp.suppliers?.name || "Nessun Fornitore")}
-                          </div>
-                          {!exp.is_income && exp.description && (
-                            <div className="text-[10px] text-slate-400 mt-0.5 max-w-[220px] truncate font-medium">
-                              {exp.description}
-                            </div>
+                          {isIncomeMode ? (
+                            <div className="text-white font-bold">{exp.description || "Entrata Senza Descrizione"}</div>
+                          ) : (
+                            <>
+                              <div className="text-white font-bold max-w-[200px] truncate">
+                                {exp.suppliers?.name || "Nessun Fornitore"}
+                              </div>
+                              {exp.description && (
+                                <div className="text-[10px] text-slate-400 mt-0.5 max-w-[200px] truncate font-medium">
+                                  {exp.description}
+                                </div>
+                              )}
+                            </>
                           )}
                         </td>
-                        <td className="py-4">
-                          <span
-                            className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border transition-transform duration-300 group-hover:scale-102"
-                            style={{
-                              backgroundColor: badge.bg,
-                              color: badge.text,
-                              borderColor: badge.border,
-                            }}
-                          >
-                            {catName}
-                          </span>
-                        </td>
-                        <td className={`py-4 text-right font-black text-sm whitespace-nowrap ${exp.is_income ? "text-emerald-400" : "text-rose-400"}`}>
-                          {exp.is_income ? "+" : "-"}{formatCurrency(exp.amount)}
+                        {!isIncomeMode && (
+                          <td className="py-4">
+                            <span
+                              className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border transition-transform duration-300 group-hover:scale-102"
+                              style={{
+                                backgroundColor: badge.bg,
+                                color: badge.text,
+                                borderColor: badge.border,
+                              }}
+                            >
+                              {catName}
+                            </span>
+                          </td>
+                        )}
+                        <td className={`py-4 text-right font-black text-sm whitespace-nowrap ${isIncomeMode ? "text-emerald-400" : "text-rose-400"}`}>
+                          {isIncomeMode ? "+" : "-"}{formatCurrency(exp.amount)}
                         </td>
                         <td className="py-4 text-center">
                           <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">

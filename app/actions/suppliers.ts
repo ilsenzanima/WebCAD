@@ -4,80 +4,138 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export async function getSuppliers() {
-  const supabase = (await createClient()) as any;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Non autenticato");
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
 
-  const { data, error } = await supabase
-    .from("suppliers")
-    .select("*")
-    .order("name", { ascending: true });
+    const { data, error } = await supabase
+      .from("suppliers")
+      .select("*")
+      .order("name", { ascending: true });
 
-  if (error) throw new Error(error.message);
-  return data || [];
-}
-
-export async function createSupplier(formData: { name: string; description: string }) {
-  const supabase = (await createClient()) as any;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Non autenticato");
-
-  const { error } = await supabase.from("suppliers").insert({
-    user_id: user.id,
-    name: formData.name.trim(),
-    description: formData.description || null
-  });
-
-  if (error) {
-    if (error.message.includes("duplicate key")) {
-      throw new Error("Un fornitore con questo nome esiste già.");
-    }
-    throw new Error(error.message);
+    if (error) throw new Error(error.message);
+    return data || [];
+  } catch (err: any) {
+    console.error("Errore getSuppliers:", err.message);
+    return [];
   }
-
-  revalidatePath("/dashboard/settings");
-  revalidatePath("/dashboard/expenses");
-  revalidatePath("/dashboard/schedules");
-  return { success: true };
 }
 
-export async function updateSupplier(id: string, formData: { name: string; description: string }) {
-  const supabase = (await createClient()) as any;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Non autenticato");
+export async function getSupplierDetail(supplierId: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
 
-  const { error } = await supabase
-    .from("suppliers")
-    .update({
-      name: formData.name.trim(),
-      description: formData.description || null
-    })
-    .eq("id", id)
-    .eq("user_id", user.id);
+    // Preleva info fornitore
+    const { data: supplier, error: sErr } = await supabase
+      .from("suppliers")
+      .select("*")
+      .eq("id", supplierId)
+      .eq("user_id", user.id)
+      .single();
 
-  if (error) throw new Error(error.message);
+    if (sErr || !supplier) throw new Error(sErr?.message || "Fornitore non trovato");
 
-  revalidatePath("/dashboard/settings");
-  revalidatePath("/dashboard/expenses");
-  revalidatePath("/dashboard/schedules");
-  return { success: true };
+    // Preleva spese collegate
+    const { data: expenses } = await supabase
+      .from("expenses")
+      .select("*, expense_categories(name, color)")
+      .eq("supplier_id", supplierId)
+      .order("date", { ascending: false });
+
+    // Preleva scadenze collegate
+    const { data: schedules } = await supabase
+      .from("payment_schedules")
+      .select("*, expense_categories(name, color)")
+      .eq("supplier_id", supplierId)
+      .order("due_date", { ascending: false });
+
+    // Preleva documenti collegati
+    const { data: documents } = await supabase
+      .from("supplier_documents")
+      .select("*")
+      .eq("supplier_id", supplierId)
+      .order("created_at", { ascending: false });
+
+    return {
+      supplier,
+      expenses: expenses || [],
+      schedules: schedules || [],
+      documents: documents || [],
+    };
+  } catch (err: any) {
+    console.error("Errore getSupplierDetail:", err.message);
+    return null;
+  }
+}
+
+export async function createSupplier(formData: { name: string; notes?: string }) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase.from("suppliers").insert({
+      user_id: user.id,
+      name: formData.name,
+      notes: formData.notes || null,
+    }).select().single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard/suppliers");
+    revalidatePath("/dashboard/settings");
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function updateSupplier(id: string, formData: { name: string; notes?: string }) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { error } = await supabase
+      .from("suppliers")
+      .update({
+        name: formData.name,
+        notes: formData.notes || null,
+      })
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard/suppliers");
+    revalidatePath("/dashboard/settings");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }
 
 export async function deleteSupplier(id: string) {
-  const supabase = (await createClient()) as any;
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Non autenticato");
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
 
-  const { error } = await supabase
-    .from("suppliers")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
+    const { error } = await supabase
+      .from("suppliers")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
 
-  if (error) throw new Error(error.message);
+    if (error) throw new Error(error.message);
 
-  revalidatePath("/dashboard/settings");
-  revalidatePath("/dashboard/expenses");
-  revalidatePath("/dashboard/schedules");
-  return { success: true };
+    revalidatePath("/dashboard/suppliers");
+    revalidatePath("/dashboard/settings");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
 }
