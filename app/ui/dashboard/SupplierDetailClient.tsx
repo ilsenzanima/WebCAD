@@ -22,21 +22,47 @@ export default function SupplierDetailClient({
   const [documents, setDocuments] = useState<SupplierDocument[]>(initialDocuments);
   const [isPending, startTransition] = useTransition();
 
-  // Form nuovo documento
+  // Form nuovo documento (Upload File Diretto)
   const [docTitle, setDocTitle] = useState("");
-  const [docUrl, setDocUrl] = useState("");
-  const [docProvider, setDocProvider] = useState<"local" | "gdrive" | "onedrive">("local");
+  const [fileDataUrl, setFileDataUrl] = useState<string>("");
+  const [fileName, setFileName] = useState<string>("");
+  const [fileSize, setFileSize] = useState<number | null>(null);
 
   const resetDocForm = () => {
     setDocTitle("");
-    setDocUrl("");
-    setDocProvider("local");
+    setFileDataUrl("");
+    setFileName("");
+    setFileSize(null);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Il file supera la dimensione massima consigliata di 10MB");
+      return;
+    }
+
+    setFileName(file.name);
+    setFileSize(file.size);
+    if (!docTitle) {
+      setDocTitle(file.name.replace(/\.[^/.]+$/, ""));
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setFileDataUrl(event.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleAddDocument = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!docTitle.trim() || !docUrl.trim()) {
-      alert("Inserisci titolo e link/URL del documento");
+    if (!docTitle.trim() || !fileDataUrl) {
+      alert("Seleziona un file (PDF o immagine) da caricare");
       return;
     }
 
@@ -45,19 +71,20 @@ export default function SupplierDetailClient({
         const res = await createSupplierDocument({
           supplier_id: supplier.id,
           title: docTitle.trim(),
-          file_url: docUrl.trim(),
-          provider: docProvider,
+          file_url: fileDataUrl,
+          provider: "local",
+          file_size: fileSize,
         });
 
         if (!res.success || !res.data) {
-          alert(res.error || "Errore nel salvataggio del documento");
+          alert(res.error || "Errore nel caricamento del documento");
           return;
         }
 
         setDocuments(prev => [res.data, ...prev]);
         resetDocForm();
       } catch (err: any) {
-        alert(err.message || "Errore durante il salvataggio");
+        alert(err.message || "Errore durante il caricamento");
       }
     });
   };
@@ -122,6 +149,13 @@ export default function SupplierDetailClient({
     return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(val);
   };
 
+  const formatFileSize = (bytes?: number | null) => {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
       
@@ -138,8 +172,8 @@ export default function SupplierDetailClient({
             <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
               {supplier.name}
             </h1>
-            {supplier.notes && (
-              <p className="text-sm text-slate-400 mt-1">{supplier.notes}</p>
+            {(supplier.notes || supplier.description) && (
+              <p className="text-sm text-slate-400 mt-1">{supplier.notes || supplier.description}</p>
             )}
           </div>
         </div>
@@ -289,7 +323,7 @@ export default function SupplierDetailClient({
           </div>
         </div>
 
-        {/* Gestione Allegati & Bollette PDF (1 Colonna) */}
+        {/* Gestione Allegati & Upload File Diretto Bolletta PDF (1 Colonna) */}
         <div
           className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in flex flex-col space-y-5"
           style={{
@@ -300,13 +334,27 @@ export default function SupplierDetailClient({
           <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-sky-500/5 blur-[50px] pointer-events-none" />
 
           <h3 className="text-sm font-extrabold text-white tracking-wide flex items-center gap-2">
-            <span>📎</span> Bollette & Documenti PDF
+            <span>📄</span> Carica Documento / Bolletta PDF
           </h3>
 
-          {/* Form Aggiungi Documento / Link Drive */}
+          {/* Form Caricamento Diretto File */}
           <form onSubmit={handleAddDocument} className="space-y-3 relative z-10 border-b border-zinc-800 pb-4">
+            
+            {/* Input Seleziona File */}
             <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Titolo Bolletta / Documento</label>
+              <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Seleziona File dal Dispositivo</label>
+              <input
+                type="file"
+                accept="application/pdf,image/*"
+                onChange={handleFileChange}
+                required
+                className="w-full px-3 py-2 rounded-xl text-xs text-slate-300 focus:outline-none border border-zinc-800 bg-zinc-950/80 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-sky-500/20 file:text-sky-300 hover:file:bg-sky-500/30 cursor-pointer"
+              />
+            </div>
+
+            {/* Nome/Titolo Bolletta */}
+            <div className="space-y-1">
+              <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Titolo / Descrizione Documento</label>
               <input
                 type="text"
                 value={docTitle}
@@ -317,44 +365,26 @@ export default function SupplierDetailClient({
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Link File / URL (Drive / OneDrive)</label>
-              <input
-                type="url"
-                value={docUrl}
-                onChange={(e) => setDocUrl(e.target.value)}
-                placeholder="https://drive.google.com/... o https://1drv.ms/..."
-                required
-                className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Piattaforma Cloud</label>
-              <select
-                value={docProvider}
-                onChange={(e) => setDocProvider(e.target.value as any)}
-                className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
-              >
-                <option value="local">Link Diretto / Web</option>
-                <option value="gdrive">Google Drive</option>
-                <option value="onedrive">Microsoft OneDrive</option>
-              </select>
-            </div>
+            {fileName && (
+              <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-[10px] text-sky-300 flex items-center justify-between font-semibold">
+                <span className="truncate max-w-[180px]">📎 {fileName}</span>
+                <span>{formatFileSize(fileSize)}</span>
+              </div>
+            )}
 
             <button
               type="submit"
-              disabled={isPending}
-              className="w-full py-2.5 rounded-xl text-xs font-extrabold text-white bg-sky-600 hover:bg-sky-500 transition-all shadow-[0_0_15px_rgba(14,165,233,0.2)] mt-1"
+              disabled={isPending || !fileDataUrl}
+              className="w-full py-2.5 rounded-xl text-xs font-extrabold text-white bg-sky-600 hover:bg-sky-500 transition-all shadow-[0_0_15px_rgba(14,165,233,0.2)] mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isPending ? "Salvataggio..." : "Collega Bolletta / PDF"}
+              {isPending ? "Caricamento in corso..." : "Carica ed Salva Bolletta"}
             </button>
           </form>
 
-          {/* Elenco Documenti Allegati */}
-          <div className="flex-1 space-y-2 overflow-y-auto max-h-[220px]">
+          {/* Elenco Documenti Caricati */}
+          <div className="flex-1 space-y-2 overflow-y-auto max-h-[240px]">
             {documents.length === 0 ? (
-              <p className="text-[11px] text-slate-500 text-center py-6">Nessuna bolletta allegata a questo fornitore.</p>
+              <p className="text-[11px] text-slate-500 text-center py-6">Nessuna bolletta o PDF caricato per questo fornitore.</p>
             ) : (
               documents.map((doc) => (
                 <div
@@ -363,8 +393,8 @@ export default function SupplierDetailClient({
                 >
                   <div className="truncate flex-1">
                     <span className="text-[11px] font-bold text-white block truncate">{doc.title}</span>
-                    <span className="text-[8px] font-semibold text-sky-400 uppercase tracking-wider">
-                      {doc.provider === "gdrive" ? "Google Drive" : doc.provider === "onedrive" ? "OneDrive" : "Link Web"}
+                    <span className="text-[8px] font-semibold text-slate-400">
+                      {formatFileSize(doc.file_size)} • {new Date(doc.created_at).toLocaleDateString("it-IT")}
                     </span>
                   </div>
 
@@ -372,10 +402,11 @@ export default function SupplierDetailClient({
                     <a
                       href={doc.file_url}
                       target="_blank"
+                      download={doc.title}
                       rel="noopener noreferrer"
-                      className="px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-sky-300 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-all"
+                      className="px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-sky-300 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-all flex items-center gap-1"
                     >
-                      Apri
+                      <span>👁️ Apri / Scarica</span>
                     </a>
                     <button
                       onClick={() => handleDeleteDocument(doc.id)}
