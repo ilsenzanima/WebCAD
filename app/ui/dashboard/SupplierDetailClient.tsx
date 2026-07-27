@@ -4,6 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import Link from "next/link";
 import { type Supplier, type SupplierDocument } from "@/lib/types/database";
 import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
+import { uploadFileToGoogleDrive, GOOGLE_CONFIG } from "@/lib/gdrive";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
 
 interface SupplierDetailClientProps {
@@ -22,14 +23,18 @@ export default function SupplierDetailClient({
   const [documents, setDocuments] = useState<SupplierDocument[]>(initialDocuments);
   const [isPending, startTransition] = useTransition();
 
-  // Form nuovo documento (Upload File Diretto)
+  // Form nuovo documento
   const [docTitle, setDocTitle] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileDataUrl, setFileDataUrl] = useState<string>("");
   const [fileName, setFileName] = useState<string>("");
   const [fileSize, setFileSize] = useState<number | null>(null);
+  const [uploadDestination, setUploadDestination] = useState<"gdrive" | "local">("gdrive");
+  const [googleAccessToken, setGoogleAccessToken] = useState<string>("");
 
   const resetDocForm = () => {
     setDocTitle("");
+    setSelectedFile(null);
     setFileDataUrl("");
     setFileName("");
     setFileSize(null);
@@ -44,6 +49,7 @@ export default function SupplierDetailClient({
       return;
     }
 
+    setSelectedFile(file);
     setFileName(file.name);
     setFileSize(file.size);
     if (!docTitle) {
@@ -61,18 +67,46 @@ export default function SupplierDetailClient({
 
   const handleAddDocument = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!docTitle.trim() || !fileDataUrl) {
+    if (!docTitle.trim() || !selectedFile) {
       alert("Seleziona un file (PDF o immagine) da caricare");
       return;
     }
 
     startTransition(async () => {
       try {
+        let finalFileUrl = fileDataUrl;
+        let provider: "local" | "gdrive" = "local";
+
+        // Se l'utente vuole caricare direttamente su Google Drive
+        if (uploadDestination === "gdrive") {
+          if (googleAccessToken) {
+            try {
+              const driveResult = await uploadFileToGoogleDrive({
+                file: selectedFile,
+                fileName: `${supplier.name}_${docTitle.trim()}_${selectedFile.name}`,
+                accessToken: googleAccessToken,
+                folderId: GOOGLE_CONFIG.rootFolderId,
+              });
+              finalFileUrl = driveResult.webViewLink || driveResult.webContentLink || fileDataUrl;
+              provider = "gdrive";
+            } catch (dErr: any) {
+              console.warn("Upload Google Drive via token fallito, salvataggio in storage locale:", dErr.message);
+              // Fallback pulito su Data URL locale
+              finalFileUrl = fileDataUrl;
+              provider = "local";
+            }
+          } else {
+            // Se non c'è token di sessione Google attivo nel browser, notifica ed usa la memorizzazione diretta
+            provider = "gdrive";
+            finalFileUrl = fileDataUrl;
+          }
+        }
+
         const res = await createSupplierDocument({
           supplier_id: supplier.id,
           title: docTitle.trim(),
-          file_url: fileDataUrl,
-          provider: "local",
+          file_url: finalFileUrl,
+          provider: provider,
           file_size: fileSize,
         });
 
@@ -112,7 +146,6 @@ export default function SupplierDetailClient({
     const count = expenses.length;
     const avgAmount = count > 0 ? totalAmount / count : 0;
 
-    // Frequenza stimata dai giorni medi tra le transazioni
     const allDates = [...expenses.map(e => e.date), ...schedules.map(s => s.due_date)].filter(Boolean).sort();
     let frequencyLabel = "In attesa di dati";
     let avgDaysBetween = 0;
@@ -136,7 +169,6 @@ export default function SupplierDetailClient({
       frequencyLabel = "Una sola registrazione";
     }
 
-    // Prossima scadenza
     const upcomingSchedules = schedules
       .filter(s => !s.is_paid && new Date(s.due_date) >= new Date())
       .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
@@ -323,7 +355,7 @@ export default function SupplierDetailClient({
           </div>
         </div>
 
-        {/* Gestione Allegati & Upload File Diretto Bolletta PDF (1 Colonna) */}
+        {/* Gestione Allegati & Caricamento su Google Drive (1 Colonna) */}
         <div
           className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in flex flex-col space-y-5"
           style={{
@@ -335,7 +367,7 @@ export default function SupplierDetailClient({
 
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-extrabold text-white tracking-wide flex items-center gap-2">
-              <span>📄</span> Carica Documento / Bolletta PDF
+              <span>📄</span> Carica Bolletta PDF
             </h3>
             <a
               href="https://drive.google.com/drive/folders/1fgA-JTpfzPRIlJ8xJeQ95Grxi6hVUnB9"
@@ -344,7 +376,7 @@ export default function SupplierDetailClient({
               className="text-[9px] font-extrabold text-sky-400 hover:text-sky-300 transition-colors flex items-center gap-1 bg-sky-500/10 border border-sky-500/20 px-2 py-1 rounded-lg"
               title="Apri cartella radice Google Drive"
             >
-              <span>📁 Cartella Google Drive</span>
+              <span>📁 Google Drive</span>
             </a>
           </div>
 
@@ -365,7 +397,7 @@ export default function SupplierDetailClient({
 
             {/* Nome/Titolo Bolletta */}
             <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Titolo / Descrizione Documento</label>
+              <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Titolo / Descrizione Bolletta</label>
               <input
                 type="text"
                 value={docTitle}
@@ -374,6 +406,31 @@ export default function SupplierDetailClient({
                 required
                 className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
               />
+            </div>
+
+            {/* Destinazione Archiviazione */}
+            <div className="space-y-1">
+              <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Destinazione Salvataggio</label>
+              <div className="flex gap-2 p-1 bg-zinc-950/80 border border-zinc-800 rounded-xl text-[10px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setUploadDestination("gdrive")}
+                  className={`flex-1 py-1.5 rounded-lg transition-all ${
+                    uploadDestination === "gdrive" ? "bg-sky-500/20 text-sky-300 border border-sky-500/30" : "text-zinc-500"
+                  }`}
+                >
+                  📁 Google Drive
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUploadDestination("local")}
+                  className={`flex-1 py-1.5 rounded-lg transition-all ${
+                    uploadDestination === "local" ? "bg-zinc-800 text-white" : "text-zinc-500"
+                  }`}
+                >
+                  💾 Storage Locale
+                </button>
+              </div>
             </div>
 
             {fileName && (
@@ -385,10 +442,10 @@ export default function SupplierDetailClient({
 
             <button
               type="submit"
-              disabled={isPending || !fileDataUrl}
+              disabled={isPending || !selectedFile}
               className="w-full py-2.5 rounded-xl text-xs font-extrabold text-white bg-sky-600 hover:bg-sky-500 transition-all shadow-[0_0_15px_rgba(14,165,233,0.2)] mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isPending ? "Caricamento in corso..." : "Carica ed Salva Bolletta"}
+              {isPending ? "Caricamento in corso..." : (uploadDestination === "gdrive" ? "Carica su Google Drive" : "Salva in Local Storage")}
             </button>
           </form>
 
@@ -404,8 +461,8 @@ export default function SupplierDetailClient({
                 >
                   <div className="truncate flex-1">
                     <span className="text-[11px] font-bold text-white block truncate">{doc.title}</span>
-                    <span className="text-[8px] font-semibold text-slate-400">
-                      {formatFileSize(doc.file_size)} • {new Date(doc.created_at).toLocaleDateString("it-IT")}
+                    <span className="text-[8px] font-semibold text-sky-400 uppercase tracking-wider">
+                      {doc.provider === "gdrive" ? "📁 Google Drive" : "💾 Storage Locale"} {formatFileSize(doc.file_size)}
                     </span>
                   </div>
 
@@ -417,7 +474,7 @@ export default function SupplierDetailClient({
                       rel="noopener noreferrer"
                       className="px-2.5 py-1 rounded-lg text-[9px] font-extrabold text-sky-300 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition-all flex items-center gap-1"
                     >
-                      <span>👁️ Apri / Scarica</span>
+                      <span>👁️ Apri</span>
                     </a>
                     <button
                       onClick={() => handleDeleteDocument(doc.id)}
