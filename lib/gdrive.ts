@@ -76,3 +76,31 @@ export function getGoogleDriveFolderUrl(folderId?: string) {
   const targetId = folderId || GOOGLE_CONFIG.rootFolderId;
   return `https://drive.google.com/drive/folders/${targetId}`;
 }
+
+/**
+ * Scambia un refresh token Google con un nuovo access token.
+ * Usare solo lato server: richiede il client secret.
+ */
+export async function refreshGoogleAccessToken(refreshToken: string) {
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: GOOGLE_CONFIG.clientId,
+      client_secret: GOOGLE_CONFIG.clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Impossibile rinnovare il token Google: ${errText}`);
+  }
+
+  const result = await response.json();
+  return {
+    accessToken: result.access_token as string,
+    expiresIn: (result.expires_in as number) ?? 3600,
+  };
+}

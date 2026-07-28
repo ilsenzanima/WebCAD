@@ -4,7 +4,8 @@ import { useState, useTransition, useMemo } from "react";
 import Link from "next/link";
 import { type Supplier, type SupplierDocument } from "@/lib/types/database";
 import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
-import { uploadFileToGoogleDrive, GOOGLE_CONFIG } from "@/lib/gdrive";
+import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
+import { createClient } from "@/lib/supabase/client";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
 
 interface SupplierDetailClientProps {
@@ -12,6 +13,7 @@ interface SupplierDetailClientProps {
   expenses: any[];
   schedules: any[];
   documents: SupplierDocument[];
+  googleConnected: boolean;
 }
 
 export default function SupplierDetailClient({
@@ -19,23 +21,21 @@ export default function SupplierDetailClient({
   expenses,
   schedules,
   documents: initialDocuments,
+  googleConnected,
 }: SupplierDetailClientProps) {
   const [documents, setDocuments] = useState<SupplierDocument[]>(initialDocuments);
   const [isPending, startTransition] = useTransition();
+  const [isConnecting, setIsConnecting] = useState(false);
 
   // Form nuovo documento
   const [docTitle, setDocTitle] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileDataUrl, setFileDataUrl] = useState<string>("");
   const [fileName, setFileName] = useState<string>("");
   const [fileSize, setFileSize] = useState<number | null>(null);
-  const [uploadDestination, setUploadDestination] = useState<"gdrive" | "local">("gdrive");
-  const [googleAccessToken, setGoogleAccessToken] = useState<string>("");
 
   const resetDocForm = () => {
     setDocTitle("");
     setSelectedFile(null);
-    setFileDataUrl("");
     setFileName("");
     setFileSize(null);
   };
@@ -55,14 +55,29 @@ export default function SupplierDetailClient({
     if (!docTitle) {
       setDocTitle(file.name.replace(/\.[^/.]+$/, ""));
     }
+  };
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setFileDataUrl(event.target.result as string);
+  const handleConnectGoogleDrive = async () => {
+    setIsConnecting(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.linkIdentity({
+        provider: "google",
+        options: {
+          scopes: "https://www.googleapis.com/auth/drive.file",
+          queryParams: { access_type: "offline", prompt: "consent" },
+          redirectTo: `${window.location.origin}/auth/callback?next=/dashboard/suppliers/${supplier.id}`,
+        },
+      });
+      if (error) {
+        alert(error.message || "Errore durante il collegamento a Google Drive");
+        setIsConnecting(false);
       }
-    };
-    reader.readAsDataURL(file);
+      // Al successo il browser viene reindirizzato a Google, quindi non serve altro qui.
+    } catch (err: any) {
+      alert(err.message || "Errore durante il collegamento a Google Drive");
+      setIsConnecting(false);
+    }
   };
 
   const handleAddDocument = (e: React.FormEvent) => {
@@ -71,42 +86,30 @@ export default function SupplierDetailClient({
       alert("Seleziona un file (PDF o immagine) da caricare");
       return;
     }
+    if (!googleConnected) {
+      alert("Collega prima il tuo account Google Drive per poter caricare la bolletta.");
+      return;
+    }
 
     startTransition(async () => {
       try {
-        let finalFileUrl = fileDataUrl;
-        let provider: "local" | "gdrive" = "local";
+        const uploadFormData = new FormData();
+        uploadFormData.append("file", selectedFile);
+        uploadFormData.append("fileName", `${supplier.name}_${docTitle.trim()}_${selectedFile.name}`);
 
-        // Se l'utente vuole caricare direttamente su Google Drive
-        if (uploadDestination === "gdrive") {
-          if (googleAccessToken) {
-            try {
-              const driveResult = await uploadFileToGoogleDrive({
-                file: selectedFile,
-                fileName: `${supplier.name}_${docTitle.trim()}_${selectedFile.name}`,
-                accessToken: googleAccessToken,
-                folderId: GOOGLE_CONFIG.rootFolderId,
-              });
-              finalFileUrl = driveResult.webViewLink || driveResult.webContentLink || fileDataUrl;
-              provider = "gdrive";
-            } catch (dErr: any) {
-              console.warn("Upload Google Drive via token fallito, salvataggio in storage locale:", dErr.message);
-              // Fallback pulito su Data URL locale
-              finalFileUrl = fileDataUrl;
-              provider = "local";
-            }
-          } else {
-            // Se non c'è token di sessione Google attivo nel browser, notifica ed usa la memorizzazione diretta
-            provider = "gdrive";
-            finalFileUrl = fileDataUrl;
-          }
+        const driveRes = await uploadSupplierDocumentToDrive(uploadFormData);
+        if (!driveRes.success || !driveRes.data) {
+          alert(driveRes.error || "Errore durante il caricamento su Google Drive");
+          return;
         }
+
+        const finalFileUrl = driveRes.data.webViewLink || driveRes.data.webContentLink || `https://drive.google.com/file/d/${driveRes.data.id}/view`;
 
         const res = await createSupplierDocument({
           supplier_id: supplier.id,
           title: docTitle.trim(),
           file_url: finalFileUrl,
-          provider: provider,
+          provider: "gdrive",
           file_size: fileSize,
         });
 
@@ -380,9 +383,24 @@ export default function SupplierDetailClient({
             </a>
           </div>
 
+          {/* Avviso collegamento Google Drive mancante */}
+          {!googleConnected && (
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-300 space-y-2 relative z-10">
+              <p className="font-semibold">Collega il tuo account Google per caricare le bollette su Drive.</p>
+              <button
+                type="button"
+                onClick={handleConnectGoogleDrive}
+                disabled={isConnecting}
+                className="w-full py-2 rounded-lg text-[10px] font-extrabold text-white bg-amber-600 hover:bg-amber-500 transition-all disabled:opacity-50"
+              >
+                {isConnecting ? "Reindirizzamento a Google..." : "🔗 Collega Google Drive"}
+              </button>
+            </div>
+          )}
+
           {/* Form Caricamento Diretto File */}
           <form onSubmit={handleAddDocument} className="space-y-3 relative z-10 border-b border-zinc-800 pb-4">
-            
+
             {/* Input Seleziona File */}
             <div className="space-y-1">
               <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Seleziona File dal Dispositivo</label>
@@ -408,31 +426,6 @@ export default function SupplierDetailClient({
               />
             </div>
 
-            {/* Destinazione Archiviazione */}
-            <div className="space-y-1">
-              <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Destinazione Salvataggio</label>
-              <div className="flex gap-2 p-1 bg-zinc-950/80 border border-zinc-800 rounded-xl text-[10px] font-bold">
-                <button
-                  type="button"
-                  onClick={() => setUploadDestination("gdrive")}
-                  className={`flex-1 py-1.5 rounded-lg transition-all ${
-                    uploadDestination === "gdrive" ? "bg-sky-500/20 text-sky-300 border border-sky-500/30" : "text-zinc-500"
-                  }`}
-                >
-                  📁 Google Drive
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setUploadDestination("local")}
-                  className={`flex-1 py-1.5 rounded-lg transition-all ${
-                    uploadDestination === "local" ? "bg-zinc-800 text-white" : "text-zinc-500"
-                  }`}
-                >
-                  💾 Storage Locale
-                </button>
-              </div>
-            </div>
-
             {fileName && (
               <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-[10px] text-sky-300 flex items-center justify-between font-semibold">
                 <span className="truncate max-w-[180px]">📎 {fileName}</span>
@@ -442,10 +435,10 @@ export default function SupplierDetailClient({
 
             <button
               type="submit"
-              disabled={isPending || !selectedFile}
+              disabled={isPending || !selectedFile || !googleConnected}
               className="w-full py-2.5 rounded-xl text-xs font-extrabold text-white bg-sky-600 hover:bg-sky-500 transition-all shadow-[0_0_15px_rgba(14,165,233,0.2)] mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isPending ? "Caricamento in corso..." : (uploadDestination === "gdrive" ? "Carica su Google Drive" : "Salva in Local Storage")}
+              {isPending ? "Caricamento in corso..." : "Carica su Google Drive"}
             </button>
           </form>
 

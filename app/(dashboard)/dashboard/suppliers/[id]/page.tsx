@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSupplierDetail } from "@/app/actions/suppliers";
+import { getGoogleConnectionStatus } from "@/app/actions/google";
 import SupplierDetailClient from "@/app/ui/dashboard/SupplierDetailClient";
 
 interface SupplierDetailPageProps {
@@ -27,12 +28,15 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
   const data = await getSupplierDetail(id);
   if (!data || !data.supplier) return notFound();
 
+  const { connected: googleConnected } = await getGoogleConnectionStatus();
+
   return (
     <SupplierDetailClient
       supplier={data.supplier}
       expenses={data.expenses}
       schedules={data.schedules}
       documents={data.documents}
+      googleConnected={googleConnected}
     />
   );
 }
