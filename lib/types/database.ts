@@ -17,7 +17,6 @@ export interface Supplier {
   id: string;
   user_id: string;
   name: string;
-  notes?: string | null;
   description?: string | null;
   is_utility: boolean; // fornitore di un'utenza (luce, gas, acqua...) con consumi tracciabili
   consumption_unit: string | null; // es. "kWh", "m3", "L"
@@ -128,7 +127,6 @@ export interface Database {
           id?: string;
           user_id?: string;
           name: string;
-          notes?: string | null;
           description?: string | null;
           is_utility?: boolean;
           consumption_unit?: string | null;
@@ -140,7 +138,6 @@ export interface Database {
           id?: string;
           user_id?: string;
           name?: string;
-          notes?: string | null;
           description?: string | null;
           is_utility?: boolean;
           consumption_unit?: string | null;

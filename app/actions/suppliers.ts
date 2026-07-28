@@ -85,7 +85,7 @@ export async function createSupplier(formData: {
     const { data, error } = await supabase.from("suppliers").insert({
       user_id: user.id,
       name: formData.name,
-      notes: formData.notes || null,
+      description: formData.notes || null,
       is_utility: formData.is_utility ?? false,
       consumption_unit: formData.is_utility ? (formData.consumption_unit || null) : null,
     }).select().single();
@@ -117,7 +117,7 @@ export async function updateSupplier(id: string, formData: {
       .from("suppliers")
       .update({
         name: formData.name,
-        notes: formData.notes || null,
+        description: formData.notes || null,
         is_utility: formData.is_utility ?? false,
         consumption_unit: formData.is_utility ? (formData.consumption_unit || null) : null,
         is_active: formData.is_active ?? true,

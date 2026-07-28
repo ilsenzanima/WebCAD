@@ -38,7 +38,7 @@ export default function SupplierDetailClient({
       try {
         const res = await updateSupplier(supplierState.id, {
           name: supplierState.name,
-          notes: supplierState.notes || "",
+          notes: supplierState.description || "",
           is_utility: supplierState.is_utility,
           consumption_unit: supplierState.consumption_unit,
           is_active: nextActive,
@@ -238,8 +238,8 @@ export default function SupplierDetailClient({
             <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
               {supplier.name}
             </h1>
-            {(supplier.notes || supplier.description) && (
-              <p className="text-sm text-slate-400 mt-1">{supplier.notes || supplier.description}</p>
+            {supplier.description && (
+              <p className="text-sm text-slate-400 mt-1">{supplier.description}</p>
             )}
             <div className="flex flex-wrap gap-2 mt-2">
               {supplierState.is_utility && (

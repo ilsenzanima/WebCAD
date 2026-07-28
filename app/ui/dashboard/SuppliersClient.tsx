@@ -60,7 +60,7 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
             prev.map(s => (s.id === editingId ? {
               ...s,
               name: name.trim(),
-              notes: notes.trim() || null,
+              description: notes.trim() || null,
               is_utility: isUtility,
               consumption_unit: isUtility ? consumptionUnit : null,
               is_active: isActive,
@@ -91,7 +91,7 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
     e.stopPropagation();
     setEditingId(sup.id);
     setName(sup.name);
-    setNotes(sup.notes || "");
+    setNotes(sup.description || "");
     setIsUtility(sup.is_utility);
     setConsumptionUnit(sup.consumption_unit || "kWh");
     setIsActive(sup.is_active);
@@ -107,7 +107,7 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
       try {
         const res = await updateSupplier(sup.id, {
           name: sup.name,
-          notes: sup.notes || "",
+          notes: sup.description || "",
           is_utility: sup.is_utility,
           consumption_unit: sup.consumption_unit,
           is_active: nextActive,
@@ -185,7 +185,7 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
 
   const filteredSuppliers = suppliers.filter(s =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (s.notes && s.notes.toLowerCase().includes(searchQuery.toLowerCase()))
+    (s.description && s.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const formatCurrency = (val: number) => {
@@ -405,8 +405,8 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
                           <h3 className="text-sm font-extrabold text-white group-hover:text-sky-300 transition-colors">
                             {sup.name}
                           </h3>
-                          {sup.notes && (
-                            <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{sup.notes}</p>
+                          {sup.description && (
+                            <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{sup.description}</p>
                           )}
                           <div className="flex flex-wrap gap-1 mt-1.5">
                             {sup.is_utility && (
