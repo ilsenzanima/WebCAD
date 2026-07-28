@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { type Expense, type ExpenseCategory, type Supplier, type SupplierDocument } from "@/lib/types/database";
 import { createExpense, updateExpense, deleteExpense } from "@/app/actions/expenses";
 import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
+import { createSupplier } from "@/app/actions/suppliers";
 import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
 import SchedulesClient from "./SchedulesClient";
 import { EditIcon, DeleteIcon, ExpensesIcon } from "./icons";
@@ -55,6 +56,7 @@ export default function ExpensesClient({
 
   const [expenses, setExpenses] = useState<ExpenseWithRelations[]>(initialExpenses);
   const [documents, setDocuments] = useState<SupplierDocument[]>(initialDocuments);
+  const [suppliersList, setSuppliersList] = useState<Supplier[]>(suppliers);
   const [isPending, startTransition] = useTransition();
 
   // Tab principale: "uscite" | "entrate" | "scadenze"
@@ -84,6 +86,14 @@ export default function ExpensesClient({
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Documento allegato al momento della registrazione (spesa/entrata)
+  const [newDocFile, setNewDocFile] = useState<File | null>(null);
+
+  // Aggiunta rapida di un nuovo fornitore dal form
+  const [isAddingSupplier, setIsAddingSupplier] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState("");
+  const [isCreatingSupplier, setIsCreatingSupplier] = useState(false);
+
   // Filtri ricerca
   const [filterCategoryId, setFilterCategoryId] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -110,6 +120,83 @@ export default function ExpensesClient({
     setDescription("");
     setDate(new Date().toISOString().split("T")[0]);
     setEditingId(null);
+    setNewDocFile(null);
+    setIsAddingSupplier(false);
+    setNewSupplierName("");
+  };
+
+  // Carica su Google Drive e collega il documento a una spesa/entrata (ed eventualmente al fornitore)
+  const uploadAndLinkDocument = async (file: File, expenseId: string, supplierIdForDoc: string | null, title: string) => {
+    if (!googleConnected) {
+      alert("Spesa salvata, ma per allegare documenti devi prima collegare il tuo account Google Drive.");
+      return;
+    }
+    try {
+      const uploadFormData = new FormData();
+      uploadFormData.append("file", file);
+      uploadFormData.append("fileName", `${title}_${file.name}`);
+
+      const driveRes = await uploadSupplierDocumentToDrive(uploadFormData);
+      if (!driveRes.success || !driveRes.data) {
+        alert(driveRes.error || "La registrazione è stata salvata ma il caricamento dell'allegato su Google Drive è fallito.");
+        return;
+      }
+
+      const fileUrl = driveRes.data.webViewLink || driveRes.data.webContentLink || `https://drive.google.com/file/d/${driveRes.data.id}/view`;
+
+      const res = await createSupplierDocument({
+        expense_id: expenseId,
+        supplier_id: supplierIdForDoc,
+        title,
+        file_url: fileUrl,
+        provider: "gdrive",
+        file_size: file.size,
+      });
+
+      if (!res.success || !res.data) {
+        alert(res.error || "La registrazione è stata salvata ma il salvataggio dell'allegato è fallito.");
+        return;
+      }
+
+      setDocuments(prev => [res.data, ...prev]);
+    } catch (err: any) {
+      alert(err.message || "Errore durante il caricamento dell'allegato");
+    }
+  };
+
+  const handleNewDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Il file supera la dimensione massima consigliata di 10MB");
+      return;
+    }
+    setNewDocFile(file);
+  };
+
+  const handleCreateSupplierInline = () => {
+    if (!newSupplierName.trim()) {
+      alert("Inserisci il nome del fornitore");
+      return;
+    }
+    setIsCreatingSupplier(true);
+    startTransition(async () => {
+      try {
+        const res = await createSupplier({ name: newSupplierName.trim() });
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore durante la creazione del fornitore");
+          return;
+        }
+        setSuppliersList(prev => [...prev, res.data].sort((a, b) => a.name.localeCompare(b.name)));
+        setSupplierId(res.data.id);
+        setIsAddingSupplier(false);
+        setNewSupplierName("");
+      } catch (err: any) {
+        alert(err.message || "Errore durante la creazione del fornitore");
+      } finally {
+        setIsCreatingSupplier(false);
+      }
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -137,16 +224,19 @@ export default function ExpensesClient({
           is_income: isIncomeMode,
         };
 
+        let targetExpenseId: string | null = null;
+
         if (editingId) {
           const res = await updateExpense(editingId, payload);
           if (!res.success) {
             alert(res.error || "Errore durante la modifica");
             return;
           }
+          targetExpenseId = editingId;
           setExpenses(prev =>
             prev.map(item => {
               if (item.id !== editingId) return item;
-              const matchingSupplier = suppliers.find(s => s.id === supplierId);
+              const matchingSupplier = suppliersList.find(s => s.id === supplierId);
               return {
                 ...item,
                 ...payload,
@@ -161,8 +251,15 @@ export default function ExpensesClient({
             alert(res.error || "Errore durante il salvataggio");
             return;
           }
+          targetExpenseId = res.data.id;
           setExpenses(prev => [res.data, ...prev]);
         }
+
+        if (newDocFile && targetExpenseId) {
+          const title = description.trim() || (isIncomeMode ? "Entrata" : "Spesa");
+          await uploadAndLinkDocument(newDocFile, targetExpenseId, payload.supplier_id, title);
+        }
+
         resetForm();
       } catch (err: any) {
         alert(err.message || "Si è verificato un errore");
@@ -178,6 +275,7 @@ export default function ExpensesClient({
     setSupplierId(exp.supplier_id || "");
     setDescription(exp.description || "");
     setDate(exp.date);
+    setNewDocFile(null);
   };
 
   const handleDelete = (id: string) => {
@@ -218,7 +316,7 @@ export default function ExpensesClient({
     setAttachFile(file);
   };
 
-  const handleUploadAttachment = (expenseId: string) => {
+  const handleUploadAttachment = (expenseId: string, supplierIdForDoc: string | null) => {
     if (!attachFile || !attachTitle.trim()) {
       alert("Seleziona un file e inserisci un titolo");
       return;
@@ -231,36 +329,9 @@ export default function ExpensesClient({
     setIsUploadingDoc(true);
     startTransition(async () => {
       try {
-        const uploadFormData = new FormData();
-        uploadFormData.append("file", attachFile);
-        uploadFormData.append("fileName", `${attachTitle.trim()}_${attachFile.name}`);
-
-        const driveRes = await uploadSupplierDocumentToDrive(uploadFormData);
-        if (!driveRes.success || !driveRes.data) {
-          alert(driveRes.error || "Errore durante il caricamento su Google Drive");
-          return;
-        }
-
-        const fileUrl = driveRes.data.webViewLink || driveRes.data.webContentLink || `https://drive.google.com/file/d/${driveRes.data.id}/view`;
-
-        const res = await createSupplierDocument({
-          expense_id: expenseId,
-          title: attachTitle.trim(),
-          file_url: fileUrl,
-          provider: "gdrive",
-          file_size: attachFile.size,
-        });
-
-        if (!res.success || !res.data) {
-          alert(res.error || "Errore nel salvataggio dell'allegato");
-          return;
-        }
-
-        setDocuments(prev => [res.data, ...prev]);
+        await uploadAndLinkDocument(attachFile, expenseId, supplierIdForDoc, attachTitle.trim());
         setAttachFile(null);
         setAttachTitle("");
-      } catch (err: any) {
-        alert(err.message || "Errore durante il caricamento");
       } finally {
         setIsUploadingDoc(false);
       }
@@ -374,7 +445,7 @@ export default function ExpensesClient({
         <SchedulesClient
           initialSchedules={initialSchedules}
           categories={categories}
-          suppliers={suppliers}
+          suppliers={suppliersList}
           googleConnected={googleConnected}
         />
       ) : (
@@ -493,28 +564,65 @@ export default function ExpensesClient({
                 {!isIncomeMode && (
                   <div className="space-y-1.5 animate-fade-in">
                     <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Fornitore / Servizio</label>
-                    <select
-                      value={supplierId}
-                      onChange={(e) => setSupplierId(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
-                      style={{
-                        background: "hsl(240 10% 4% / 0.8)",
-                        borderColor: "hsl(240 5% 18%)",
-                      }}
-                      onFocus={(e) => {
-                        e.target.style.borderColor = "hsl(350 85% 55%)";
-                      }}
-                      onBlur={(e) => {
-                        e.target.style.borderColor = "hsl(240 5% 18%)";
-                      }}
-                    >
-                      <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun Fornitore</option>
-                      {suppliers.map((sup) => (
-                        <option key={sup.id} value={sup.id} style={{ background: "hsl(240 10% 10%)" }}>
-                          {sup.name}
-                        </option>
-                      ))}
-                    </select>
+                    {!isAddingSupplier ? (
+                      <select
+                        value={supplierId}
+                        onChange={(e) => {
+                          if (e.target.value === "__new__") {
+                            setIsAddingSupplier(true);
+                            return;
+                          }
+                          setSupplierId(e.target.value);
+                        }}
+                        className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
+                        style={{
+                          background: "hsl(240 10% 4% / 0.8)",
+                          borderColor: "hsl(240 5% 18%)",
+                        }}
+                        onFocus={(e) => {
+                          e.target.style.borderColor = "hsl(350 85% 55%)";
+                        }}
+                        onBlur={(e) => {
+                          e.target.style.borderColor = "hsl(240 5% 18%)";
+                        }}
+                      >
+                        <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun Fornitore</option>
+                        {suppliersList.map((sup) => (
+                          <option key={sup.id} value={sup.id} style={{ background: "hsl(240 10% 10%)" }}>
+                            {sup.name}
+                          </option>
+                        ))}
+                        <option value="__new__" style={{ background: "hsl(240 10% 10%)" }}>+ Aggiungi nuovo fornitore...</option>
+                      </select>
+                    ) : (
+                      <div className="flex gap-2 animate-fade-in">
+                        <input
+                          type="text"
+                          autoFocus
+                          value={newSupplierName}
+                          onChange={(e) => setNewSupplierName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreateSupplierInline(); } }}
+                          placeholder="Nome nuovo fornitore"
+                          className="flex-1 px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
+                          style={{ background: "hsl(240 10% 4% / 0.8)", borderColor: "hsl(350 85% 55%)" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCreateSupplierInline}
+                          disabled={isCreatingSupplier}
+                          className="px-3 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-500 transition-all disabled:opacity-50"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setIsAddingSupplier(false); setNewSupplierName(""); }}
+                          className="px-3 rounded-xl text-xs font-bold text-zinc-400 hover:text-white border border-zinc-800"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -564,6 +672,27 @@ export default function ExpensesClient({
                       e.target.style.boxShadow = "none";
                     }}
                   />
+                </div>
+
+                {/* Allega documento (bolletta/ricevuta/busta paga) */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    📎 Allega documento su Drive (facoltativo)
+                  </label>
+                  <input
+                    type="file"
+                    accept="application/pdf,image/*"
+                    onChange={handleNewDocFileChange}
+                    className="w-full px-3 py-2 rounded-xl text-xs text-slate-300 focus:outline-none border border-zinc-800 bg-zinc-950/80 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-sky-500/20 file:text-sky-300 hover:file:bg-sky-500/30 cursor-pointer"
+                  />
+                  {newDocFile && (
+                    <p className="text-[9px] text-sky-400 font-semibold truncate">📄 {newDocFile.name}</p>
+                  )}
+                  {newDocFile && !googleConnected && (
+                    <p className="text-[9px] text-amber-400 font-semibold">
+                      Collega prima <a href="/api/google/connect?next=/dashboard/expenses" className="underline">Google Drive</a> per poterlo caricare.
+                    </p>
+                  )}
                 </div>
 
                 {/* Pulsanti */}
@@ -801,7 +930,7 @@ export default function ExpensesClient({
                                           className="px-3 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
                                         />
                                         <button
-                                          onClick={() => handleUploadAttachment(exp.id)}
+                                          onClick={() => handleUploadAttachment(exp.id, exp.supplier_id)}
                                           disabled={isUploadingDoc || !attachFile}
                                           className="px-3 py-1.5 rounded-lg text-[10px] font-extrabold text-white bg-sky-600 hover:bg-sky-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                                         >
