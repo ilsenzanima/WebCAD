@@ -29,6 +29,8 @@ export async function createBudget(formData: {
   label: string;
   periodicity?: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
   is_estimated?: boolean;
+  end_month?: number | null;
+  end_year?: number | null;
 }) {
   try {
     const supabase = (await createClient()) as any;
@@ -43,6 +45,8 @@ export async function createBudget(formData: {
       label: formData.label,
       periodicity: formData.periodicity || "monthly",
       is_estimated: formData.is_estimated ?? false,
+      end_month: formData.end_month || null,
+      end_year: formData.end_year || null,
     }).select("*, expense_categories(name, color)").single();
 
     if (error) throw new Error(error.message);
@@ -62,6 +66,8 @@ export async function updateBudget(id: string, formData: {
   label: string;
   periodicity?: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
   is_estimated?: boolean;
+  end_month?: number | null;
+  end_year?: number | null;
 }) {
   try {
     const supabase = (await createClient()) as any;
@@ -77,6 +83,8 @@ export async function updateBudget(id: string, formData: {
         label: formData.label,
         periodicity: formData.periodicity || "monthly",
         is_estimated: formData.is_estimated ?? false,
+        end_month: formData.end_month || null,
+        end_year: formData.end_year || null,
       })
       .eq("id", id)
       .eq("user_id", user.id)

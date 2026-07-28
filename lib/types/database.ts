@@ -61,6 +61,8 @@ export interface Budget {
   label: string;
   periodicity: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
   is_estimated: boolean;
+  end_month: number | null; // 1-12, ultimo mese in cui la voce e' attiva (es. fine mutuo/finanziamento)
+  end_year: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -238,6 +240,8 @@ export interface Database {
           label: string;
           periodicity?: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
           is_estimated?: boolean;
+          end_month?: number | null;
+          end_year?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -250,6 +254,8 @@ export interface Database {
           label?: string;
           periodicity?: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
           is_estimated?: boolean;
+          end_month?: number | null;
+          end_year?: number | null;
           created_at?: string;
           updated_at?: string;
         };

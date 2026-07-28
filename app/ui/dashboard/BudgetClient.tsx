@@ -74,6 +74,8 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
   const [label, setLabel] = useState("");
   const [periodicity, setPeriodicity] = useState<"weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual">("monthly");
   const [isEstimated, setIsEstimated] = useState(false);
+  const [hasDuration, setHasDuration] = useState(false);
+  const [monthsRemaining, setMonthsRemaining] = useState("");
 
   // Editing inline dell'importo effettivo (override mensile)
   const [editingOverrideBudgetId, setEditingOverrideBudgetId] = useState<string | null>(null);
@@ -86,6 +88,8 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
     setLabel("");
     setPeriodicity("monthly");
     setIsEstimated(false);
+    setHasDuration(false);
+    setMonthsRemaining("");
   };
 
   const startEditBudget = (b: BudgetWithRelations) => {
@@ -96,6 +100,14 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
     setLabel(b.label);
     setPeriodicity(b.periodicity);
     setIsEstimated(b.is_estimated);
+    if (b.end_year && b.end_month) {
+      const remaining = (b.end_year - now.getFullYear()) * 12 + (b.end_month - (now.getMonth() + 1));
+      setHasDuration(true);
+      setMonthsRemaining(String(Math.max(remaining, 0)));
+    } else {
+      setHasDuration(false);
+      setMonthsRemaining("");
+    }
   };
 
   const getMonthlyEquivalent = (amt: number, period: string) => {
@@ -115,10 +127,19 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
   const findOverride = (budgetId: string, year: number, month: number) =>
     overrides.find(o => o.budget_id === budgetId && o.year === year && o.month === month);
 
-  // Importo effettivo previsto per una voce in un mese specifico: usa l'override se presente, altrimenti la stima di base
+  // Una voce con scadenza (es. mutuo/finanziamento) e' conclusa se il mese richiesto e' oltre end_year/end_month
+  const isBudgetEnded = (b: BudgetWithRelations, year: number, month: number) => {
+    if (!b.end_year || !b.end_month) return false;
+    return year > b.end_year || (year === b.end_year && month > b.end_month);
+  };
+
+  // Importo effettivo previsto per una voce in un mese specifico: usa l'override se presente,
+  // altrimenti la stima di base (0 se la voce ha gia' una scadenza superata quel mese)
   const getEffectiveAmount = (b: BudgetWithRelations, year: number, month: number) => {
     const ov = findOverride(b.id, year, month);
-    return ov ? Number(ov.amount) : getMonthlyEquivalent(b.amount, b.periodicity);
+    if (ov) return Number(ov.amount);
+    if (isBudgetEnded(b, year, month)) return 0;
+    return getMonthlyEquivalent(b.amount, b.periodicity);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -132,6 +153,19 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
       return;
     }
 
+    let endMonth: number | null = null;
+    let endYear: number | null = null;
+    if (hasDuration) {
+      const n = parseInt(monthsRemaining, 10);
+      if (!n || n <= 0) {
+        alert("Inserisci un numero di mesi rimanenti valido");
+        return;
+      }
+      const endDateObj = new Date(now.getFullYear(), now.getMonth() + n, 1);
+      endYear = endDateObj.getFullYear();
+      endMonth = endDateObj.getMonth() + 1;
+    }
+
     startTransition(async () => {
       try {
         const payload = {
@@ -141,6 +175,8 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
           label: label.trim(),
           periodicity: type === "income" ? "monthly" : periodicity,
           is_estimated: isEstimated, // Abilitato anche per le entrate
+          end_month: endMonth,
+          end_year: endYear,
         };
 
         if (editingId) {
@@ -628,6 +664,39 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
               </div>
             )}
 
+            {/* Durata Limitata (es. mutuo o finanziamento gia' in corso) */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hasDuration}
+                  onChange={(e) => setHasDuration(e.target.checked)}
+                  className="accent-indigo-500"
+                />
+                Ha una scadenza (mutuo, finanziamento...)
+              </label>
+              {hasDuration && (
+                <div className="animate-fade-in">
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={monthsRemaining}
+                    onChange={(e) => setMonthsRemaining(e.target.value)}
+                    placeholder="Mesi rimanenti da oggi"
+                    className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all duration-200"
+                    style={{
+                      background: "hsl(240 10% 4% / 0.8)",
+                      borderColor: "hsl(240 5% 18%)",
+                    }}
+                  />
+                  <p className="text-[9px] text-zinc-500 mt-1">
+                    Es. per un mutuo iniziato tempo fa, indica quante rate/mesi mancano da oggi. La voce smette di contare nelle previsioni dopo quella data.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Descrizione */}
             <div className="space-y-1.5">
               <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Descrizione / Nome</label>
@@ -893,15 +962,16 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
                     const badge = COLOR_MAP[catColor] || COLOR_MAP.slate;
                     const monthlyEquivalent = getMonthlyEquivalent(b.amount, b.periodicity);
                     const override = findOverride(b.id, selectedYear, selectedMonth);
-                    const effectiveAmount = override ? Number(override.amount) : monthlyEquivalent;
+                    const ended = isBudgetEnded(b, selectedYear, selectedMonth);
+                    const effectiveAmount = getEffectiveAmount(b, selectedYear, selectedMonth);
                     const isEditingOverride = editingOverrideBudgetId === b.id;
 
                     return (
                       <tr key={b.id} className="hover:bg-white/2 transition-colors duration-150 group animate-fade-in">
                         <td className="py-3 pr-2">
                           <div className="font-bold text-white truncate max-w-[120px]">{b.label}</div>
-                          {b.type !== "income" && (
-                            <div className="mt-0.5">
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            {b.type !== "income" && (
                               <span
                                 className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border"
                                 style={{
@@ -912,8 +982,20 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
                               >
                                 {catName}
                               </span>
-                            </div>
-                          )}
+                            )}
+                            {b.end_year && b.end_month && (
+                              <span
+                                className={`inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border ${
+                                  ended
+                                    ? "bg-zinc-800 text-zinc-500 border-zinc-700"
+                                    : "bg-indigo-500/10 text-indigo-300 border-indigo-500/20"
+                                }`}
+                                title="Ultimo mese in cui questa voce e' attiva"
+                              >
+                                🏁 {ended ? "Concluso" : `fino a ${MONTH_LABELS[b.end_month - 1].slice(0, 3)} ${b.end_year}`}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3">
                           <div className="flex flex-col gap-0.5">
@@ -960,14 +1042,20 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
                               className="group/ov inline-flex flex-col items-end"
                               title="Modifica l'importo previsto per questo mese"
                             >
-                              <span className={`font-black text-xs group-hover/ov:underline ${b.type === "income" ? "text-emerald-400" : "text-zinc-300"}`}>
-                                {b.type === "income" ? "+" : "-"}{formatCurrency(effectiveAmount)}
+                              <span className={`font-black text-xs group-hover/ov:underline ${
+                                ended && !override ? "text-zinc-600" : b.type === "income" ? "text-emerald-400" : "text-zinc-300"
+                              }`}>
+                                {ended && !override ? "—" : `${b.type === "income" ? "+" : "-"}${formatCurrency(effectiveAmount)}`}
                               </span>
-                              {override && (
+                              {override ? (
                                 <span className="text-[7px] uppercase font-extrabold tracking-widest text-amber-500">
                                   Modificato
                                 </span>
-                              )}
+                              ) : ended ? (
+                                <span className="text-[7px] uppercase font-extrabold tracking-widest text-zinc-600">
+                                  Concluso
+                                </span>
+                              ) : null}
                             </button>
                           )}
                         </td>
