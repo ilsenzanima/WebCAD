@@ -30,6 +30,7 @@ export async function createExpense(formData: {
   description: string;
   date: string;
   is_income?: boolean;
+  consumption_value?: number | null;
 }) {
   try {
     const supabase = (await createClient()) as any;
@@ -45,6 +46,7 @@ export async function createExpense(formData: {
       description: formData.description || null,
       date: formData.date,
       is_income: formData.is_income ?? false,
+      consumption_value: formData.consumption_value ?? null,
     }).select("*, expense_categories(name, color), suppliers(name)").single();
 
     if (error) throw new Error(error.message);
@@ -68,6 +70,7 @@ export async function updateExpense(
     description: string;
     date: string;
     is_income?: boolean;
+    consumption_value?: number | null;
   }
 ) {
   try {
@@ -85,6 +88,7 @@ export async function updateExpense(
         description: formData.description || null,
         date: formData.date,
         is_income: formData.is_income ?? false,
+        consumption_value: formData.consumption_value ?? null,
       })
       .eq("id", id)
       .eq("user_id", user.id);

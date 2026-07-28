@@ -19,6 +19,10 @@ export interface Supplier {
   name: string;
   notes?: string | null;
   description?: string | null;
+  is_utility: boolean; // fornitore di un'utenza (luce, gas, acqua...) con consumi tracciabili
+  consumption_unit: string | null; // es. "kWh", "m3", "L"
+  is_active: boolean; // contratto in corso (false = chiuso/disdetto)
+  contract_closed_at: string | null;
   created_at: string;
 }
 
@@ -32,6 +36,7 @@ export interface Expense {
   category_id: string | null; // FK -> expense_categories.id
   supplier_id: string | null; // FK -> suppliers.id
   schedule_id: string | null; // FK -> payment_schedules.id (se generata pagando una scadenza)
+  consumption_value: number | null; // consumo del periodo (unita' definita da suppliers.consumption_unit)
   is_income: boolean;
   created_at: string;
   updated_at: string;
@@ -90,6 +95,7 @@ export interface SupplierDocument {
   file_url: string;
   provider: "local" | "gdrive" | "onedrive";
   file_size: number | null;
+  doc_type: "contratto" | "bolletta" | "altro";
   created_at: string;
 }
 
@@ -124,6 +130,10 @@ export interface Database {
           name: string;
           notes?: string | null;
           description?: string | null;
+          is_utility?: boolean;
+          consumption_unit?: string | null;
+          is_active?: boolean;
+          contract_closed_at?: string | null;
           created_at?: string;
         };
         Update: {
@@ -132,6 +142,10 @@ export interface Database {
           name?: string;
           notes?: string | null;
           description?: string | null;
+          is_utility?: boolean;
+          consumption_unit?: string | null;
+          is_active?: boolean;
+          contract_closed_at?: string | null;
           created_at?: string;
         };
         Relationships: [];
@@ -148,6 +162,7 @@ export interface Database {
           category_id?: string | null;
           supplier_id?: string | null;
           schedule_id?: string | null;
+          consumption_value?: number | null;
           is_income?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -162,6 +177,7 @@ export interface Database {
           category_id?: string | null;
           supplier_id?: string | null;
           schedule_id?: string | null;
+          consumption_value?: number | null;
           is_income?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -325,6 +341,7 @@ export interface Database {
           file_url: string;
           provider?: "local" | "gdrive" | "onedrive";
           file_size?: number | null;
+          doc_type?: "contratto" | "bolletta" | "altro";
           created_at?: string;
         };
         Update: {
@@ -337,6 +354,7 @@ export interface Database {
           file_url?: string;
           provider?: "local" | "gdrive" | "onedrive";
           file_size?: number | null;
+          doc_type?: "contratto" | "bolletta" | "altro";
           created_at?: string;
         };
         Relationships: [];

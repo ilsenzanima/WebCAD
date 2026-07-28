@@ -71,7 +71,12 @@ export async function getSupplierDetail(supplierId: string) {
   }
 }
 
-export async function createSupplier(formData: { name: string; notes?: string }) {
+export async function createSupplier(formData: {
+  name: string;
+  notes?: string;
+  is_utility?: boolean;
+  consumption_unit?: string | null;
+}) {
   try {
     const supabase = (await createClient()) as any;
     const { data: { user } } = await supabase.auth.getUser();
@@ -81,6 +86,8 @@ export async function createSupplier(formData: { name: string; notes?: string })
       user_id: user.id,
       name: formData.name,
       notes: formData.notes || null,
+      is_utility: formData.is_utility ?? false,
+      consumption_unit: formData.is_utility ? (formData.consumption_unit || null) : null,
     }).select().single();
 
     if (error) throw new Error(error.message);
@@ -93,7 +100,14 @@ export async function createSupplier(formData: { name: string; notes?: string })
   }
 }
 
-export async function updateSupplier(id: string, formData: { name: string; notes?: string }) {
+export async function updateSupplier(id: string, formData: {
+  name: string;
+  notes?: string;
+  is_utility?: boolean;
+  consumption_unit?: string | null;
+  is_active?: boolean;
+  contract_closed_at?: string | null;
+}) {
   try {
     const supabase = (await createClient()) as any;
     const { data: { user } } = await supabase.auth.getUser();
@@ -104,6 +118,10 @@ export async function updateSupplier(id: string, formData: { name: string; notes
       .update({
         name: formData.name,
         notes: formData.notes || null,
+        is_utility: formData.is_utility ?? false,
+        consumption_unit: formData.is_utility ? (formData.consumption_unit || null) : null,
+        is_active: formData.is_active ?? true,
+        contract_closed_at: formData.is_active === false ? (formData.contract_closed_at || null) : null,
       })
       .eq("id", id)
       .eq("user_id", user.id);

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type Supplier, type SupplierDocument } from "@/lib/types/database";
 import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
+import { updateSupplier } from "@/app/actions/suppliers";
 import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
 
@@ -24,9 +25,35 @@ export default function SupplierDetailClient({
   googleConnected,
 }: SupplierDetailClientProps) {
   const [documents, setDocuments] = useState<SupplierDocument[]>(initialDocuments);
+  const [supplierState, setSupplierState] = useState<Supplier>(supplier);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const handleToggleContract = () => {
+    const nextActive = !supplierState.is_active;
+    const closedAt = nextActive ? null : new Date().toISOString().split("T")[0];
+
+    startTransition(async () => {
+      try {
+        const res = await updateSupplier(supplierState.id, {
+          name: supplierState.name,
+          notes: supplierState.notes || "",
+          is_utility: supplierState.is_utility,
+          consumption_unit: supplierState.consumption_unit,
+          is_active: nextActive,
+          contract_closed_at: closedAt,
+        });
+        if (!res.success) {
+          alert(res.error || "Errore durante l'aggiornamento del contratto");
+          return;
+        }
+        setSupplierState(prev => ({ ...prev, is_active: nextActive, contract_closed_at: closedAt }));
+      } catch (err: any) {
+        alert(err.message || "Errore durante l'aggiornamento del contratto");
+      }
+    });
+  };
 
   useEffect(() => {
     const googleError = searchParams.get("google_error");
@@ -39,12 +66,14 @@ export default function SupplierDetailClient({
 
   // Form nuovo documento
   const [docTitle, setDocTitle] = useState("");
+  const [docType, setDocType] = useState<"contratto" | "bolletta" | "altro">("bolletta");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [fileSize, setFileSize] = useState<number | null>(null);
 
   const resetDocForm = () => {
     setDocTitle("");
+    setDocType("bolletta");
     setSelectedFile(null);
     setFileName("");
     setFileSize(null);
@@ -98,6 +127,7 @@ export default function SupplierDetailClient({
           file_url: finalFileUrl,
           provider: "gdrive",
           file_size: fileSize,
+          doc_type: docType,
         });
 
         if (!res.success || !res.data) {
@@ -164,7 +194,21 @@ export default function SupplierDetailClient({
       .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
     const nextSchedule = upcomingSchedules[0] || null;
 
-    return { totalAmount, count, avgAmount, frequencyLabel, nextSchedule };
+    // Consumi (solo se il fornitore e' un'utenza): media/ultimo consumo e costo per unita'
+    const consumptionEntries = expenses
+      .filter(e => e.consumption_value != null && Number(e.consumption_value) > 0)
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const totalConsumption = consumptionEntries.reduce((sum, e) => sum + Number(e.consumption_value), 0);
+    const totalAmountWithConsumption = consumptionEntries.reduce((sum, e) => sum + Number(e.amount), 0);
+    const avgCostPerUnit = totalConsumption > 0 ? totalAmountWithConsumption / totalConsumption : 0;
+    const lastConsumption = consumptionEntries.length > 0 ? consumptionEntries[consumptionEntries.length - 1] : null;
+    const avgConsumption = consumptionEntries.length > 0 ? totalConsumption / consumptionEntries.length : 0;
+
+    return {
+      totalAmount, count, avgAmount, frequencyLabel, nextSchedule,
+      consumptionEntries, avgCostPerUnit, lastConsumption, avgConsumption,
+    };
   }, [expenses, schedules]);
 
   const formatCurrency = (val: number) => {
@@ -197,6 +241,25 @@ export default function SupplierDetailClient({
             {(supplier.notes || supplier.description) && (
               <p className="text-sm text-slate-400 mt-1">{supplier.notes || supplier.description}</p>
             )}
+            <div className="flex flex-wrap gap-2 mt-2">
+              {supplierState.is_utility && (
+                <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                  ⚡ Utenza {supplierState.consumption_unit ? `(${supplierState.consumption_unit})` : ""}
+                </span>
+              )}
+              <button
+                onClick={handleToggleContract}
+                disabled={isPending}
+                className={`px-2 py-0.5 rounded text-[9px] font-bold border transition-all ${
+                  supplierState.is_active
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                    : "bg-zinc-800 text-zinc-500 border-zinc-700 hover:bg-zinc-700"
+                }`}
+                title="Clicca per cambiare stato contratto"
+              >
+                {supplierState.is_active ? "✅ Contratto Attivo" : `⛔ Contratto Chiuso${supplierState.contract_closed_at ? ` (${new Date(supplierState.contract_closed_at).toLocaleDateString("it-IT")})` : ""}`}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -267,6 +330,28 @@ export default function SupplierDetailClient({
           </div>
         </div>
 
+        {/* Consumi (solo per fornitori di utenze) */}
+        {supplierState.is_utility && (
+          <div
+            className="rounded-2xl p-5 border relative overflow-hidden group shadow-[0_0_20px_rgba(14,165,233,0.02)]"
+            style={{
+              background: "linear-gradient(135deg, hsla(200, 60%, 15%, 0.05), hsla(240, 10%, 10%, 0.6))",
+              borderColor: "hsla(200, 60%, 50%, 0.12)",
+            }}
+          >
+            <div className="absolute top-[-30%] right-[-20%] w-32 h-32 rounded-full bg-sky-500/5 blur-[40px]" />
+            <h4 className="text-[10px] font-bold text-sky-400 uppercase tracking-widest">Costo per {supplierState.consumption_unit || "unità"}</h4>
+            <p className="text-2xl font-black text-white mt-2">
+              {stats.avgCostPerUnit > 0 ? `${stats.avgCostPerUnit.toFixed(3)} €` : "N/D"}
+            </p>
+            <div className="text-[9px] text-slate-500 mt-1 font-semibold">
+              {stats.lastConsumption
+                ? `Ultimo consumo: ${stats.lastConsumption.consumption_value} ${supplierState.consumption_unit || ""} (media ${stats.avgConsumption.toFixed(0)})`
+                : "Nessun consumo registrato ancora"}
+            </div>
+          </div>
+        )}
+
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -295,6 +380,9 @@ export default function SupplierDetailClient({
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Data / Scadenza</th>
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Tipo & Categoria</th>
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Note / Dettaglio</th>
+                    {supplierState.is_utility && (
+                      <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Consumo</th>
+                    )}
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Importo</th>
                   </tr>
                 </thead>
@@ -312,6 +400,11 @@ export default function SupplierDetailClient({
                       <td className="py-3 text-white font-medium max-w-[180px] truncate">
                         {e.description || "Nessuna nota"}
                       </td>
+                      {supplierState.is_utility && (
+                        <td className="py-3 text-right text-slate-400 font-semibold whitespace-nowrap">
+                          {e.consumption_value != null ? `${e.consumption_value} ${supplierState.consumption_unit || ""}` : "—"}
+                        </td>
+                      )}
                       <td className="py-3 text-right font-black text-rose-400">
                         -{formatCurrency(e.amount)}
                       </td>
@@ -334,6 +427,7 @@ export default function SupplierDetailClient({
                       <td className="py-3 text-white font-medium max-w-[180px] truncate">
                         {s.description || "Pagamento programmato"}
                       </td>
+                      {supplierState.is_utility && <td className="py-3 text-right text-slate-600">—</td>}
                       <td className="py-3 text-right font-black text-amber-400">
                         {formatCurrency(s.amount)}
                       </td>
@@ -411,6 +505,20 @@ export default function SupplierDetailClient({
               />
             </div>
 
+            {/* Tipo Documento */}
+            <div className="space-y-1">
+              <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Tipo Documento</label>
+              <select
+                value={docType}
+                onChange={(e) => setDocType(e.target.value as any)}
+                className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
+              >
+                <option value="bolletta">📄 Bolletta / Ricevuta</option>
+                <option value="contratto">📑 Contratto</option>
+                <option value="altro">📎 Altro</option>
+              </select>
+            </div>
+
             {fileName && (
               <div className="p-2 rounded-lg bg-sky-500/10 border border-sky-500/20 text-[10px] text-sky-300 flex items-center justify-between font-semibold">
                 <span className="truncate max-w-[180px]">📎 {fileName}</span>
@@ -438,7 +546,9 @@ export default function SupplierDetailClient({
                   className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-950/60 flex items-center justify-between gap-2 hover:border-sky-500/30 transition-all"
                 >
                   <div className="truncate flex-1">
-                    <span className="text-[11px] font-bold text-white block truncate">{doc.title}</span>
+                    <span className="text-[11px] font-bold text-white block truncate">
+                      {doc.doc_type === "contratto" ? "📑" : doc.doc_type === "bolletta" ? "📄" : "📎"} {doc.title}
+                    </span>
                     <span className="text-[8px] font-semibold text-sky-400 uppercase tracking-wider">
                       {doc.provider === "gdrive" ? "📁 Google Drive" : "💾 Storage Locale"} {formatFileSize(doc.file_size)}
                     </span>

@@ -17,12 +17,20 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
 
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
+  const [isUtility, setIsUtility] = useState(false);
+  const [consumptionUnit, setConsumptionUnit] = useState("kWh");
+  const [isActive, setIsActive] = useState(true);
+  const [contractClosedAt, setContractClosedAt] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   const resetForm = () => {
     setName("");
     setNotes("");
+    setIsUtility(false);
+    setConsumptionUnit("kWh");
+    setIsActive(true);
+    setContractClosedAt("");
     setEditingId(null);
   };
 
@@ -36,16 +44,36 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
     startTransition(async () => {
       try {
         if (editingId) {
-          const res = await updateSupplier(editingId, { name: name.trim(), notes: notes.trim() });
+          const res = await updateSupplier(editingId, {
+            name: name.trim(),
+            notes: notes.trim(),
+            is_utility: isUtility,
+            consumption_unit: consumptionUnit,
+            is_active: isActive,
+            contract_closed_at: contractClosedAt || null,
+          });
           if (!res.success) {
             alert(res.error || "Errore durante la modifica");
             return;
           }
           setSuppliers(prev =>
-            prev.map(s => (s.id === editingId ? { ...s, name: name.trim(), notes: notes.trim() || null } : s))
+            prev.map(s => (s.id === editingId ? {
+              ...s,
+              name: name.trim(),
+              notes: notes.trim() || null,
+              is_utility: isUtility,
+              consumption_unit: isUtility ? consumptionUnit : null,
+              is_active: isActive,
+              contract_closed_at: isActive ? null : (contractClosedAt || null),
+            } : s))
           );
         } else {
-          const res = await createSupplier({ name: name.trim(), notes: notes.trim() });
+          const res = await createSupplier({
+            name: name.trim(),
+            notes: notes.trim(),
+            is_utility: isUtility,
+            consumption_unit: consumptionUnit,
+          });
           if (!res.success || !res.data) {
             alert(res.error || "Errore durante la creazione");
             return;
@@ -64,6 +92,36 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
     setEditingId(sup.id);
     setName(sup.name);
     setNotes(sup.notes || "");
+    setIsUtility(sup.is_utility);
+    setConsumptionUnit(sup.consumption_unit || "kWh");
+    setIsActive(sup.is_active);
+    setContractClosedAt(sup.contract_closed_at || "");
+  };
+
+  const handleToggleActive = (sup: Supplier, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextActive = !sup.is_active;
+    const closedAt = nextActive ? null : new Date().toISOString().split("T")[0];
+
+    startTransition(async () => {
+      try {
+        const res = await updateSupplier(sup.id, {
+          name: sup.name,
+          notes: sup.notes || "",
+          is_utility: sup.is_utility,
+          consumption_unit: sup.consumption_unit,
+          is_active: nextActive,
+          contract_closed_at: closedAt,
+        });
+        if (!res.success) {
+          alert(res.error || "Errore durante l'aggiornamento");
+          return;
+        }
+        setSuppliers(prev => prev.map(s => s.id === sup.id ? { ...s, is_active: nextActive, contract_closed_at: closedAt } : s));
+      } catch (err: any) {
+        alert(err.message || "Errore durante l'aggiornamento");
+      }
+    });
   };
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
@@ -210,6 +268,70 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
               />
             </div>
 
+            {/* Utenza / consumi */}
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isUtility}
+                  onChange={(e) => setIsUtility(e.target.checked)}
+                  className="accent-sky-500"
+                />
+                È un'utenza (luce, gas, acqua...)
+              </label>
+              {isUtility && (
+                <select
+                  value={consumptionUnit}
+                  onChange={(e) => setConsumptionUnit(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none animate-fade-in"
+                >
+                  <option value="kWh">kWh (luce)</option>
+                  <option value="m³">m³ (gas/acqua)</option>
+                  <option value="L">Litri</option>
+                  <option value="GB">GB (dati)</option>
+                </select>
+              )}
+            </div>
+
+            {/* Stato contratto (solo in modifica) */}
+            {editingId && (
+              <div className="space-y-1.5 animate-fade-in">
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Stato Contratto</label>
+                <div className="flex gap-2 p-1 bg-zinc-950/60 border border-white/5 rounded-xl text-[10px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => { setIsActive(true); setContractClosedAt(""); }}
+                    className="flex-1 py-2 rounded-lg transition-all"
+                    style={{
+                      background: isActive ? "hsla(150, 70%, 45%, 0.15)" : "transparent",
+                      color: isActive ? "hsl(150 70% 60%)" : "hsl(240 5% 55%)",
+                    }}
+                  >
+                    ✅ Attivo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setIsActive(false); if (!contractClosedAt) setContractClosedAt(new Date().toISOString().split("T")[0]); }}
+                    className="flex-1 py-2 rounded-lg transition-all"
+                    style={{
+                      background: !isActive ? "hsla(0, 70%, 55%, 0.12)" : "transparent",
+                      color: !isActive ? "hsl(0 70% 65%)" : "hsl(240 5% 55%)",
+                    }}
+                  >
+                    ⛔ Chiuso
+                  </button>
+                </div>
+                {!isActive && (
+                  <input
+                    type="date"
+                    value={contractClosedAt}
+                    onChange={(e) => setContractClosedAt(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none animate-fade-in"
+                  />
+                )}
+              </div>
+            )}
+
             <div className="flex gap-3 pt-2">
               {editingId && (
                 <button
@@ -286,6 +408,24 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
                           {sup.notes && (
                             <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{sup.notes}</p>
                           )}
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {sup.is_utility && (
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                                ⚡ Utenza {sup.consumption_unit ? `(${sup.consumption_unit})` : ""}
+                              </span>
+                            )}
+                            <button
+                              onClick={(e) => handleToggleActive(sup, e)}
+                              className={`px-1.5 py-0.5 rounded text-[8px] font-bold border transition-all ${
+                                sup.is_active
+                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                                  : "bg-zinc-800 text-zinc-500 border-zinc-700 hover:bg-zinc-700"
+                              }`}
+                              title="Clicca per cambiare stato contratto"
+                            >
+                              {sup.is_active ? "✅ Attivo" : `⛔ Chiuso${sup.contract_closed_at ? ` (${new Date(sup.contract_closed_at).toLocaleDateString("it-IT")})` : ""}`}
+                            </button>
+                          </div>
                         </div>
 
                         {/* Azioni rapide Modifica/Elimina */}

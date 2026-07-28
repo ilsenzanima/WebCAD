@@ -83,16 +83,22 @@ export default function ExpensesClient({
   const [supplierId, setSupplierId] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [consumptionValue, setConsumptionValue] = useState("");
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Documento allegato al momento della registrazione (spesa/entrata)
   const [newDocFile, setNewDocFile] = useState<File | null>(null);
+  const [newDocType, setNewDocType] = useState<"contratto" | "bolletta" | "altro">("bolletta");
 
   // Aggiunta rapida di un nuovo fornitore dal form
   const [isAddingSupplier, setIsAddingSupplier] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState("");
+  const [newSupplierIsUtility, setNewSupplierIsUtility] = useState(false);
+  const [newSupplierUnit, setNewSupplierUnit] = useState("kWh");
   const [isCreatingSupplier, setIsCreatingSupplier] = useState(false);
+
+  const selectedSupplier = suppliersList.find(s => s.id === supplierId) || null;
 
   // Filtri ricerca
   const [filterCategoryId, setFilterCategoryId] = useState("all");
@@ -102,6 +108,7 @@ export default function ExpensesClient({
   const [expandedExpenseId, setExpandedExpenseId] = useState<string | null>(null);
   const [attachTitle, setAttachTitle] = useState("");
   const [attachFile, setAttachFile] = useState<File | null>(null);
+  const [attachDocType, setAttachDocType] = useState<"contratto" | "bolletta" | "altro">("bolletta");
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
 
   const docsByExpense = useMemo(() => {
@@ -119,14 +126,24 @@ export default function ExpensesClient({
     setSupplierId("");
     setDescription("");
     setDate(new Date().toISOString().split("T")[0]);
+    setConsumptionValue("");
     setEditingId(null);
     setNewDocFile(null);
+    setNewDocType("bolletta");
     setIsAddingSupplier(false);
     setNewSupplierName("");
+    setNewSupplierIsUtility(false);
+    setNewSupplierUnit("kWh");
   };
 
   // Carica su Google Drive e collega il documento a una spesa/entrata (ed eventualmente al fornitore)
-  const uploadAndLinkDocument = async (file: File, expenseId: string, supplierIdForDoc: string | null, title: string) => {
+  const uploadAndLinkDocument = async (
+    file: File,
+    expenseId: string,
+    supplierIdForDoc: string | null,
+    title: string,
+    docType: "contratto" | "bolletta" | "altro" = "bolletta"
+  ) => {
     if (!googleConnected) {
       alert("Spesa salvata, ma per allegare documenti devi prima collegare il tuo account Google Drive.");
       return;
@@ -151,6 +168,7 @@ export default function ExpensesClient({
         file_url: fileUrl,
         provider: "gdrive",
         file_size: file.size,
+        doc_type: docType,
       });
 
       if (!res.success || !res.data) {
@@ -182,7 +200,11 @@ export default function ExpensesClient({
     setIsCreatingSupplier(true);
     startTransition(async () => {
       try {
-        const res = await createSupplier({ name: newSupplierName.trim() });
+        const res = await createSupplier({
+          name: newSupplierName.trim(),
+          is_utility: newSupplierIsUtility,
+          consumption_unit: newSupplierIsUtility ? newSupplierUnit : null,
+        });
         if (!res.success || !res.data) {
           alert(res.error || "Errore durante la creazione del fornitore");
           return;
@@ -191,6 +213,8 @@ export default function ExpensesClient({
         setSupplierId(res.data.id);
         setIsAddingSupplier(false);
         setNewSupplierName("");
+        setNewSupplierIsUtility(false);
+        setNewSupplierUnit("kWh");
       } catch (err: any) {
         alert(err.message || "Errore durante la creazione del fornitore");
       } finally {
@@ -222,6 +246,9 @@ export default function ExpensesClient({
           description,
           date,
           is_income: isIncomeMode,
+          consumption_value: (!isIncomeMode && selectedSupplier?.is_utility && consumptionValue)
+            ? Number(consumptionValue)
+            : null,
         };
 
         let targetExpenseId: string | null = null;
@@ -257,7 +284,7 @@ export default function ExpensesClient({
 
         if (newDocFile && targetExpenseId) {
           const title = description.trim() || (isIncomeMode ? "Entrata" : "Spesa");
-          await uploadAndLinkDocument(newDocFile, targetExpenseId, payload.supplier_id, title);
+          await uploadAndLinkDocument(newDocFile, targetExpenseId, payload.supplier_id, title, newDocType);
         }
 
         resetForm();
@@ -275,6 +302,7 @@ export default function ExpensesClient({
     setSupplierId(exp.supplier_id || "");
     setDescription(exp.description || "");
     setDate(exp.date);
+    setConsumptionValue(exp.consumption_value != null ? String(exp.consumption_value) : "");
     setNewDocFile(null);
   };
 
@@ -329,9 +357,10 @@ export default function ExpensesClient({
     setIsUploadingDoc(true);
     startTransition(async () => {
       try {
-        await uploadAndLinkDocument(attachFile, expenseId, supplierIdForDoc, attachTitle.trim());
+        await uploadAndLinkDocument(attachFile, expenseId, supplierIdForDoc, attachTitle.trim(), attachDocType);
         setAttachFile(null);
         setAttachTitle("");
+        setAttachDocType("bolletta");
       } finally {
         setIsUploadingDoc(false);
       }
@@ -595,34 +624,79 @@ export default function ExpensesClient({
                         <option value="__new__" style={{ background: "hsl(240 10% 10%)" }}>+ Aggiungi nuovo fornitore...</option>
                       </select>
                     ) : (
-                      <div className="flex gap-2 animate-fade-in">
-                        <input
-                          type="text"
-                          autoFocus
-                          value={newSupplierName}
-                          onChange={(e) => setNewSupplierName(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreateSupplierInline(); } }}
-                          placeholder="Nome nuovo fornitore"
-                          className="flex-1 px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
-                          style={{ background: "hsl(240 10% 4% / 0.8)", borderColor: "hsl(350 85% 55%)" }}
-                        />
-                        <button
-                          type="button"
-                          onClick={handleCreateSupplierInline}
-                          disabled={isCreatingSupplier}
-                          className="px-3 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-500 transition-all disabled:opacity-50"
-                        >
-                          ✓
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setIsAddingSupplier(false); setNewSupplierName(""); }}
-                          className="px-3 rounded-xl text-xs font-bold text-zinc-400 hover:text-white border border-zinc-800"
-                        >
-                          ✕
-                        </button>
+                      <div className="space-y-2 animate-fade-in">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            autoFocus
+                            value={newSupplierName}
+                            onChange={(e) => setNewSupplierName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreateSupplierInline(); } }}
+                            placeholder="Nome nuovo fornitore"
+                            className="flex-1 px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
+                            style={{ background: "hsl(240 10% 4% / 0.8)", borderColor: "hsl(350 85% 55%)" }}
+                          />
+                          <button
+                            type="button"
+                            onClick={handleCreateSupplierInline}
+                            disabled={isCreatingSupplier}
+                            className="px-3 rounded-xl text-xs font-extrabold text-white bg-rose-600 hover:bg-rose-500 transition-all disabled:opacity-50"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setIsAddingSupplier(false); setNewSupplierName(""); }}
+                            className="px-3 rounded-xl text-xs font-bold text-zinc-400 hover:text-white border border-zinc-800"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <label className="flex items-center gap-2 text-[9px] font-bold text-zinc-500 uppercase tracking-wider cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newSupplierIsUtility}
+                            onChange={(e) => setNewSupplierIsUtility(e.target.checked)}
+                            className="accent-rose-500"
+                          />
+                          È un'utenza (luce, gas, acqua...)
+                        </label>
+                        {newSupplierIsUtility && (
+                          <select
+                            value={newSupplierUnit}
+                            onChange={(e) => setNewSupplierUnit(e.target.value)}
+                            className="w-full px-3 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                          >
+                            <option value="kWh">kWh (luce)</option>
+                            <option value="m³">m³ (gas/acqua)</option>
+                            <option value="L">Litri</option>
+                            <option value="GB">GB (dati)</option>
+                          </select>
+                        )}
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* Consumo (solo se il fornitore selezionato e' un'utenza) */}
+                {!isIncomeMode && selectedSupplier?.is_utility && (
+                  <div className="space-y-1.5 animate-fade-in">
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                      Consumo del periodo ({selectedSupplier.consumption_unit || "unità"})
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={consumptionValue}
+                      onChange={(e) => setConsumptionValue(e.target.value)}
+                      placeholder={`es. 320 ${selectedSupplier.consumption_unit || ""}`}
+                      className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
+                      style={{
+                        background: "hsl(240 10% 4% / 0.8)",
+                        borderColor: "hsl(240 5% 18%)",
+                      }}
+                    />
                   </div>
                 )}
 
@@ -686,7 +760,18 @@ export default function ExpensesClient({
                     className="w-full px-3 py-2 rounded-xl text-xs text-slate-300 focus:outline-none border border-zinc-800 bg-zinc-950/80 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-[10px] file:font-bold file:bg-sky-500/20 file:text-sky-300 hover:file:bg-sky-500/30 cursor-pointer"
                   />
                   {newDocFile && (
-                    <p className="text-[9px] text-sky-400 font-semibold truncate">📄 {newDocFile.name}</p>
+                    <>
+                      <p className="text-[9px] text-sky-400 font-semibold truncate">📄 {newDocFile.name}</p>
+                      <select
+                        value={newDocType}
+                        onChange={(e) => setNewDocType(e.target.value as any)}
+                        className="w-full px-3 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                      >
+                        <option value="bolletta">📄 Bolletta / Ricevuta</option>
+                        <option value="contratto">📑 Contratto</option>
+                        <option value="altro">📎 Altro</option>
+                      </select>
+                    </>
                   )}
                   {newDocFile && !googleConnected && (
                     <p className="text-[9px] text-amber-400 font-semibold">
@@ -890,7 +975,7 @@ export default function ExpensesClient({
                                         {attachments.map((doc) => (
                                           <div key={doc.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60">
                                             <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-sky-300 hover:text-sky-200 truncate flex-1">
-                                              📄 {doc.title} <span className="text-zinc-500 font-medium">{formatFileSize(doc.file_size)}</span>
+                                              {doc.doc_type === "contratto" ? "📑" : "📄"} {doc.title} <span className="text-zinc-500 font-medium">{formatFileSize(doc.file_size)}</span>
                                             </a>
                                             <button
                                               onClick={() => handleDeleteAttachment(doc.id)}
@@ -929,6 +1014,15 @@ export default function ExpensesClient({
                                           placeholder="Titolo allegato"
                                           className="px-3 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
                                         />
+                                        <select
+                                          value={attachDocType}
+                                          onChange={(e) => setAttachDocType(e.target.value as any)}
+                                          className="px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                                        >
+                                          <option value="bolletta">📄 Bolletta</option>
+                                          <option value="contratto">📑 Contratto</option>
+                                          <option value="altro">📎 Altro</option>
+                                        </select>
                                         <button
                                           onClick={() => handleUploadAttachment(exp.id, exp.supplier_id)}
                                           disabled={isUploadingDoc || !attachFile}
