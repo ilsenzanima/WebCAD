@@ -59,6 +59,7 @@ export async function syncScheduleToGoogleCalendar({
   schedule,
   accessToken,
   calendarId,
+  eventId,
 }: {
   schedule: {
     id: string;
@@ -71,6 +72,7 @@ export async function syncScheduleToGoogleCalendar({
   };
   accessToken: string;
   calendarId: string;
+  eventId?: string | null;
 }) {
   if (!accessToken || !calendarId) return null;
 
@@ -101,8 +103,14 @@ export async function syncScheduleToGoogleCalendar({
     colorId: schedule.is_paid ? "10" : "5", // Colore su Google Calendar (Verde se saldata, Giallo/Ambra se in scadenza)
   };
 
-  const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`, {
-    method: "POST",
+  // Se esiste già un evento collegato a questa scadenza lo aggiorna (PATCH),
+  // altrimenti ne crea uno nuovo (POST), per evitare duplicati ad ogni sincronizzazione.
+  const url = eventId
+    ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`
+    : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+
+  const response = await fetch(url, {
+    method: eventId ? "PATCH" : "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
@@ -112,7 +120,7 @@ export async function syncScheduleToGoogleCalendar({
 
   if (!response.ok) {
     const err = await response.text();
-    console.warn("Errore creazione evento Google Calendar:", err);
+    console.warn("Errore sincronizzazione evento Google Calendar:", err);
     return null;
   }
 

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createSchedule, deleteSchedule, paySchedule } from "@/app/actions/schedules";
-import { getOrCreateDedicatedGoogleCalendar, syncScheduleToGoogleCalendar, DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
+import { syncSchedulesToCalendar } from "@/app/actions/google";
+import { DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
 import { DeleteIcon, CheckIcon, SchedulesIcon } from "./icons";
 
 interface ScheduleWithRelations extends Omit<PaymentSchedule, "amount"> {
@@ -21,6 +23,7 @@ interface SchedulesClientProps {
   initialSchedules: any[];
   categories: ExpenseCategory[];
   suppliers: Supplier[];
+  googleConnected: boolean;
 }
 
 const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = {
@@ -41,9 +44,20 @@ const RECURRENCES = [
   { value: "yearly", label: "Annuale" },
 ];
 
-export default function SchedulesClient({ initialSchedules, categories, suppliers }: SchedulesClientProps) {
+export default function SchedulesClient({ initialSchedules, categories, suppliers, googleConnected }: SchedulesClientProps) {
   const [schedules, setSchedules] = useState<ScheduleWithRelations[]>(initialSchedules);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const googleError = searchParams.get("google_error");
+    if (googleError) {
+      alert(`Errore durante il collegamento a Google: ${googleError}`);
+      router.replace("/dashboard/schedules");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
@@ -139,10 +153,42 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
   // Sincronizzazione con il Calendario Google Separato
   const handleSyncGoogleCalendar = async () => {
+    if (!googleConnected) {
+      alert("Collega prima il tuo account Google per poter sincronizzare le scadenze su Calendar.");
+      return;
+    }
+    if (schedules.length === 0) {
+      alert("Nessuna scadenza da sincronizzare.");
+      return;
+    }
+
     setIsSyncingCalendar(true);
     try {
-      // Simula / Avvia processo di sincronizzazione con il calendario dedicato
-      alert(`Sincronizzazione in corso sul calendario dedicato '${DEDICATED_CALENDAR_NAME}'...\n\nLe tue scadenze verranno organizzate in un calendario secondario separato dal tuo profilo personale, completo di avvisi e notifiche 24 ore prima del pagamento.`);
+      const payload = schedules.map((s) => ({
+        id: s.id,
+        amount: s.amount,
+        description: s.description,
+        due_date: s.due_date,
+        category: s.expense_categories?.name || s.category,
+        supplier_name: s.suppliers?.name,
+        is_paid: s.is_paid,
+        google_event_id: (s as any).google_event_id ?? null,
+      }));
+
+      const res = await syncSchedulesToCalendar(payload);
+      if (!res.success) {
+        alert(res.error || "Errore sincronizzazione Google Calendar");
+        return;
+      }
+
+      if (res.updates?.length) {
+        setSchedules(prev => prev.map(s => {
+          const match = res.updates!.find(u => u.id === s.id);
+          return match ? { ...s, google_event_id: match.google_event_id } as any : s;
+        }));
+      }
+
+      alert(`Sincronizzate ${res.synced} scadenze sul calendario dedicato '${DEDICATED_CALENDAR_NAME}'.`);
     } catch (err: any) {
       alert("Errore sincronizzazione Google Calendar: " + err.message);
     } finally {
@@ -171,14 +217,23 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           <p className="text-sm text-slate-400 mt-1">Pianifica le prossime uscite ed evita ritardi sulle bollette.</p>
         </div>
 
-        {/* Bottone Sincronizzazione Calendario Google Separato */}
-        <button
-          onClick={handleSyncGoogleCalendar}
-          disabled={isSyncingCalendar}
-          className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
-        >
-          <span>📅</span> Sincronizza Calendario Google Dedicato
-        </button>
+        {/* Bottone Sincronizzazione Calendario Google Separato / Collegamento */}
+        {googleConnected ? (
+          <button
+            onClick={handleSyncGoogleCalendar}
+            disabled={isSyncingCalendar}
+            className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.15)] disabled:opacity-50"
+          >
+            <span>📅</span> {isSyncingCalendar ? "Sincronizzazione in corso..." : "Sincronizza Calendario Google Dedicato"}
+          </button>
+        ) : (
+          <a
+            href="/api/google/connect?next=/dashboard/schedules"
+            className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-all flex items-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.15)]"
+          >
+            <span>🔗</span> Collega Google per sincronizzare il Calendario
+          </a>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

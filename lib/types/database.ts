@@ -47,6 +47,7 @@ export interface PaymentSchedule {
   recurrence: "one-time" | "weekly" | "monthly" | "yearly";
   category_id: string | null; // FK -> expense_categories.id
   supplier_id: string | null; // FK -> suppliers.id
+  google_event_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -178,6 +179,7 @@ export interface Database {
           recurrence?: "one-time" | "weekly" | "monthly" | "yearly";
           category_id?: string | null;
           supplier_id?: string | null;
+          google_event_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -192,6 +194,7 @@ export interface Database {
           recurrence?: "one-time" | "weekly" | "monthly" | "yearly";
           category_id?: string | null;
           supplier_id?: string | null;
+          google_event_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };

@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type Supplier, type SupplierDocument } from "@/lib/types/database";
 import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
 import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
-import { createClient } from "@/lib/supabase/client";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
 
 interface SupplierDetailClientProps {
@@ -25,7 +25,17 @@ export default function SupplierDetailClient({
 }: SupplierDetailClientProps) {
   const [documents, setDocuments] = useState<SupplierDocument[]>(initialDocuments);
   const [isPending, startTransition] = useTransition();
-  const [isConnecting, setIsConnecting] = useState(false);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const googleError = searchParams.get("google_error");
+    if (googleError) {
+      alert(`Errore durante il collegamento a Google: ${googleError}`);
+      router.replace(`/dashboard/suppliers/${supplier.id}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Form nuovo documento
   const [docTitle, setDocTitle] = useState("");
@@ -54,29 +64,6 @@ export default function SupplierDetailClient({
     setFileSize(file.size);
     if (!docTitle) {
       setDocTitle(file.name.replace(/\.[^/.]+$/, ""));
-    }
-  };
-
-  const handleConnectGoogleDrive = async () => {
-    setIsConnecting(true);
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.linkIdentity({
-        provider: "google",
-        options: {
-          scopes: "https://www.googleapis.com/auth/drive.file",
-          queryParams: { access_type: "offline", prompt: "consent" },
-          redirectTo: `${window.location.origin}/auth/callback?next=/dashboard/suppliers/${supplier.id}`,
-        },
-      });
-      if (error) {
-        alert(error.message || "Errore durante il collegamento a Google Drive");
-        setIsConnecting(false);
-      }
-      // Al successo il browser viene reindirizzato a Google, quindi non serve altro qui.
-    } catch (err: any) {
-      alert(err.message || "Errore durante il collegamento a Google Drive");
-      setIsConnecting(false);
     }
   };
 
@@ -383,18 +370,16 @@ export default function SupplierDetailClient({
             </a>
           </div>
 
-          {/* Avviso collegamento Google Drive mancante */}
+          {/* Avviso collegamento Google mancante */}
           {!googleConnected && (
             <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-300 space-y-2 relative z-10">
-              <p className="font-semibold">Collega il tuo account Google per caricare le bollette su Drive.</p>
-              <button
-                type="button"
-                onClick={handleConnectGoogleDrive}
-                disabled={isConnecting}
-                className="w-full py-2 rounded-lg text-[10px] font-extrabold text-white bg-amber-600 hover:bg-amber-500 transition-all disabled:opacity-50"
+              <p className="font-semibold">Collega il tuo account Google per caricare le bollette su Drive e sincronizzare le scadenze su Calendar.</p>
+              <a
+                href={`/api/google/connect?next=/dashboard/suppliers/${supplier.id}`}
+                className="block text-center w-full py-2 rounded-lg text-[10px] font-extrabold text-white bg-amber-600 hover:bg-amber-500 transition-all"
               >
-                {isConnecting ? "Reindirizzamento a Google..." : "🔗 Collega Google Drive"}
-              </button>
+                🔗 Collega account Google
+              </a>
             </div>
           )}
 

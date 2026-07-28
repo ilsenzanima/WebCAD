@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { uploadFileToGoogleDrive, refreshGoogleAccessToken, GOOGLE_CONFIG } from "@/lib/gdrive";
+import { getOrCreateDedicatedGoogleCalendar, syncScheduleToGoogleCalendar } from "@/lib/gcalendar";
 
 const EXPIRY_SAFETY_BUFFER_MS = 60 * 1000;
 
@@ -19,7 +20,7 @@ async function getValidAccessToken(supabase: any, userId: string): Promise<strin
 
   if (error) throw new Error(error.message);
   if (!tokenRow) {
-    throw new Error("Google Drive non collegato. Collega il tuo account Google prima di caricare un file.");
+    throw new Error("Account Google non collegato. Collega il tuo account Google prima di continuare.");
   }
 
   const expiresAt = new Date(tokenRow.expires_at).getTime();
@@ -90,5 +91,50 @@ export async function uploadSupplierDocumentToDrive(formData: FormData) {
     return { success: true, data: result };
   } catch (err: any) {
     return { success: false, error: err.message || "Errore durante il caricamento su Google Drive" };
+  }
+}
+
+export async function syncSchedulesToCalendar(schedules: {
+  id: string;
+  amount: number;
+  description?: string | null;
+  due_date: string;
+  category?: string;
+  supplier_name?: string;
+  is_paid?: boolean;
+  google_event_id?: string | null;
+}[]) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const accessToken = await getValidAccessToken(supabase, user.id);
+    const calendarId = await getOrCreateDedicatedGoogleCalendar(accessToken);
+
+    const updates: { id: string; google_event_id: string }[] = [];
+
+    for (const schedule of schedules) {
+      const event = await syncScheduleToGoogleCalendar({
+        schedule,
+        accessToken,
+        calendarId,
+        eventId: schedule.google_event_id,
+      });
+
+      if (event?.id && event.id !== schedule.google_event_id) {
+        await supabase
+          .from("payment_schedules")
+          .update({ google_event_id: event.id })
+          .eq("id", schedule.id)
+          .eq("user_id", user.id);
+        updates.push({ id: schedule.id, google_event_id: event.id });
+      }
+    }
+
+    revalidatePath("/dashboard/schedules");
+    return { success: true, synced: schedules.length, updates };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Errore durante la sincronizzazione con Google Calendar" };
   }
 }
