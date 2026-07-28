@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import { type Budget, type ExpenseCategory } from "@/lib/types/database";
-import { createBudget, deleteBudget } from "@/app/actions/budget";
+import { type Budget, type BudgetOverride, type ExpenseCategory } from "@/lib/types/database";
+import { createBudget, updateBudget, deleteBudget, upsertBudgetOverride, deleteBudgetOverride } from "@/app/actions/budget";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
 
 interface BudgetWithRelations extends Omit<Budget, "amount"> {
@@ -17,7 +17,13 @@ interface BudgetClientProps {
   initialBudgets: any[];
   categories: ExpenseCategory[];
   expenses: any[];
+  initialOverrides: BudgetOverride[];
 }
+
+const MONTH_LABELS = [
+  "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
+  "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
+];
 
 const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = {
   indigo: { bg: "rgba(99,102,241,0.12)", text: "hsl(245 85% 75%)", border: "rgba(99,102,241,0.2)" },
@@ -39,11 +45,29 @@ const PERIODS = [
   { value: "annual", label: "Annuale" },
 ];
 
-export default function BudgetClient({ initialBudgets, categories, expenses }: BudgetClientProps) {
+export default function BudgetClient({ initialBudgets, categories, expenses, initialOverrides }: BudgetClientProps) {
   const [budgets, setBudgets] = useState<BudgetWithRelations[]>(initialBudgets);
+  const [overrides, setOverrides] = useState<BudgetOverride[]>(initialOverrides);
   const [isPending, startTransition] = useTransition();
 
-  // Stati del form
+  // Mese selezionato per l'analisi previsto/reale (default: mese corrente)
+  const now = new Date();
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1); // 1-12
+
+  const goToMonth = (delta: number) => {
+    let m = selectedMonth + delta;
+    let y = selectedYear;
+    if (m < 1) { m = 12; y -= 1; }
+    if (m > 12) { m = 1; y += 1; }
+    setSelectedMonth(m);
+    setSelectedYear(y);
+  };
+
+  const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth() + 1;
+
+  // Stati del form (creazione/modifica voce di budget)
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [type, setType] = useState<"income" | "need" | "want" | "emergency">("need");
@@ -51,12 +75,27 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
   const [periodicity, setPeriodicity] = useState<"weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual">("monthly");
   const [isEstimated, setIsEstimated] = useState(false);
 
+  // Editing inline dell'importo effettivo (override mensile)
+  const [editingOverrideBudgetId, setEditingOverrideBudgetId] = useState<string | null>(null);
+  const [overrideDraft, setOverrideDraft] = useState("");
+
   const resetForm = () => {
+    setEditingId(null);
     setAmount("");
     setCategoryId("");
     setLabel("");
     setPeriodicity("monthly");
     setIsEstimated(false);
+  };
+
+  const startEditBudget = (b: BudgetWithRelations) => {
+    setEditingId(b.id);
+    setAmount(String(b.amount));
+    setCategoryId(b.category_id || "");
+    setType(b.type);
+    setLabel(b.label);
+    setPeriodicity(b.periodicity);
+    setIsEstimated(b.is_estimated);
   };
 
   const getMonthlyEquivalent = (amt: number, period: string) => {
@@ -72,6 +111,16 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
     }
   };
 
+  // Trova l'eventuale override per una voce di budget in un mese/anno specifico
+  const findOverride = (budgetId: string, year: number, month: number) =>
+    overrides.find(o => o.budget_id === budgetId && o.year === year && o.month === month);
+
+  // Importo effettivo previsto per una voce in un mese specifico: usa l'override se presente, altrimenti la stima di base
+  const getEffectiveAmount = (b: BudgetWithRelations, year: number, month: number) => {
+    const ov = findOverride(b.id, year, month);
+    return ov ? Number(ov.amount) : getMonthlyEquivalent(b.amount, b.periodicity);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
@@ -82,8 +131,6 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
       alert("Inserisci una descrizione");
       return;
     }
-
-    const selectedCat = categories.find(c => c.id === categoryId);
 
     startTransition(async () => {
       try {
@@ -96,16 +143,79 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           is_estimated: isEstimated, // Abilitato anche per le entrate
         };
 
-        const res = await createBudget(payload);
-        if (!res.success || !res.data) {
-          alert(res.error || "Errore durante il salvataggio");
-          return;
+        if (editingId) {
+          const res = await updateBudget(editingId, payload);
+          if (!res.success || !res.data) {
+            alert(res.error || "Errore durante il salvataggio");
+            return;
+          }
+          setBudgets(prev => prev.map(b => b.id === editingId ? res.data : b));
+        } else {
+          const res = await createBudget(payload);
+          if (!res.success || !res.data) {
+            alert(res.error || "Errore durante il salvataggio");
+            return;
+          }
+          setBudgets(prev => [res.data, ...prev]);
         }
 
-        setBudgets(prev => [res.data, ...prev]);
         resetForm();
       } catch (err: any) {
         alert(err.message || "Si è verificato un errore");
+      }
+    });
+  };
+
+  const startEditOverride = (b: BudgetWithRelations) => {
+    setEditingOverrideBudgetId(b.id);
+    setOverrideDraft(String(getEffectiveAmount(b, selectedYear, selectedMonth)));
+  };
+
+  const saveOverride = (b: BudgetWithRelations) => {
+    const value = Number(overrideDraft);
+    if (isNaN(value) || value < 0) {
+      alert("Inserisci un importo valido");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await upsertBudgetOverride({
+          budget_id: b.id,
+          year: selectedYear,
+          month: selectedMonth,
+          amount: value,
+        });
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore durante il salvataggio della correzione mensile");
+          return;
+        }
+        setOverrides(prev => {
+          const withoutOld = prev.filter(o => !(o.budget_id === b.id && o.year === selectedYear && o.month === selectedMonth));
+          return [...withoutOld, res.data];
+        });
+        setEditingOverrideBudgetId(null);
+      } catch (err: any) {
+        alert(err.message || "Errore durante il salvataggio della correzione mensile");
+      }
+    });
+  };
+
+  const resetOverride = (b: BudgetWithRelations) => {
+    const ov = findOverride(b.id, selectedYear, selectedMonth);
+    if (!ov) return;
+    if (!confirm(`Ripristinare la stima di base per "${b.label}" in questo mese?`)) return;
+
+    startTransition(async () => {
+      try {
+        const res = await deleteBudgetOverride(ov.id);
+        if (!res.success) {
+          alert(res.error || "Errore durante il ripristino");
+          return;
+        }
+        setOverrides(prev => prev.filter(o => o.id !== ov.id));
+      } catch (err: any) {
+        alert(err.message || "Errore durante il ripristino");
       }
     });
   };
@@ -121,23 +231,20 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           return;
         }
         setBudgets(prev => prev.filter(b => b.id !== id));
+        if (editingId === id) resetForm();
       } catch (err: any) {
         alert(err.message || "Errore durante l'eliminazione");
       }
     });
   };
 
-  // Spese ed Entrate reali del mese in corso
+  // Spese ed Entrate reali del mese selezionato
   const currentMonthTransactions = useMemo(() => {
-    const now = new Date();
-    const curYear = now.getFullYear();
-    const curMonth = now.getMonth();
-
     return expenses.filter(e => {
       const eDate = new Date(e.date);
-      return eDate.getFullYear() === curYear && eDate.getMonth() === curMonth;
+      return eDate.getFullYear() === selectedYear && eDate.getMonth() + 1 === selectedMonth;
     });
-  }, [expenses]);
+  }, [expenses, selectedYear, selectedMonth]);
 
   // Raggruppa uscite reali per categoria
   const realExpensesByCategory = useMemo(() => {
@@ -151,14 +258,14 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
     return map;
   }, [currentMonthTransactions]);
 
-  // Entrate reali del mese corrente
+  // Entrate reali del mese selezionato
   const realIncomeTotal = useMemo(() => {
     return currentMonthTransactions
       .filter(t => t.is_income)
       .reduce((sum, t) => sum + Number(t.amount), 0);
   }, [currentMonthTransactions]);
 
-  // Calcoli Totali Budget (Mensilizzati)
+  // Calcoli Totali Budget per il mese selezionato (stima di base, corretta dagli eventuali override)
   const totals = useMemo(() => {
     let income = 0;
     let need = 0;
@@ -166,7 +273,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
     let emergency = 0;
 
     budgets.forEach(b => {
-      const monthlyAmt = getMonthlyEquivalent(b.amount, b.periodicity);
+      const monthlyAmt = getEffectiveAmount(b, selectedYear, selectedMonth);
       if (b.type === "income") income += monthlyAmt;
       else if (b.type === "need") need += monthlyAmt;
       else if (b.type === "want") want += monthlyAmt;
@@ -178,7 +285,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
     const remainingBudget = income - totalOutgoings;
 
     return { income, need, want, emergency, totalOutgoings, powerOfSpending, remainingBudget };
-  }, [budgets]);
+  }, [budgets, overrides, selectedYear, selectedMonth]);
 
   // Analisi Regola 50/30/20 (Bisogni, Desideri, Risparmio/Imprevisti)
   const ruleAnalysis = useMemo(() => {
@@ -205,7 +312,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
       const catId = b.category_id || "unassigned";
       const catName = b.expense_categories?.name || "Generica / Altro";
       const catColor = b.expense_categories?.color || "slate";
-      const monthlyAmt = getMonthlyEquivalent(b.amount, b.periodicity);
+      const monthlyAmt = getEffectiveAmount(b, selectedYear, selectedMonth);
 
       if (!map[catId]) {
         map[catId] = {
@@ -231,7 +338,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
     });
 
     return Object.values(map);
-  }, [budgets, realExpensesByCategory, categories]);
+  }, [budgets, overrides, realExpensesByCategory, categories, selectedYear, selectedMonth]);
 
   // Percentuale realizzazione entrate
   const incomePercent = totals.income > 0 ? (realIncomeTotal / totals.income) * 100 : 0;
@@ -243,11 +350,45 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="animate-fade-in space-y-1">
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
-          Budget & Previsioni
-        </h1>
-        <p className="text-sm text-slate-400">Classifica entrate e uscite (Bisogni, Desideri, Imprevisti) e confronta lo stimato con il reale.</p>
+      <div className="animate-fade-in flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
+            Budget & Previsioni
+          </h1>
+          <p className="text-sm text-slate-400">Classifica entrate e uscite (Bisogni, Desideri, Imprevisti) e confronta lo stimato con il reale.</p>
+        </div>
+
+        {/* Navigatore Mese */}
+        <div className="flex items-center gap-2 p-1.5 bg-zinc-950/80 border border-zinc-800 rounded-xl">
+          <button
+            type="button"
+            onClick={() => goToMonth(-1)}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white transition-all text-xs font-bold"
+            title="Mese precedente"
+          >
+            ←
+          </button>
+          <span className={`text-xs font-extrabold px-2 min-w-[130px] text-center ${isCurrentMonth ? "text-indigo-300" : "text-white"}`}>
+            {MONTH_LABELS[selectedMonth - 1]} {selectedYear}
+          </span>
+          <button
+            type="button"
+            onClick={() => goToMonth(1)}
+            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-white transition-all text-xs font-bold"
+            title="Mese successivo"
+          >
+            →
+          </button>
+          {!isCurrentMonth && (
+            <button
+              type="button"
+              onClick={() => { setSelectedYear(now.getFullYear()); setSelectedMonth(now.getMonth() + 1); }}
+              className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300 px-1.5"
+            >
+              Oggi
+            </button>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards (Design Premium Neon) */}
@@ -264,7 +405,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
           <div className="absolute top-[-30%] right-[-20%] w-32 h-32 rounded-full bg-emerald-500/5 blur-[40px]" />
           <h4 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Entrate Preventivate</h4>
           <p className="text-2xl font-black text-white mt-2">{formatCurrency(totals.income)}</p>
-          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Mensilizzate (Certe + Stimate)</div>
+          <div className="text-[9px] text-slate-500 mt-1 font-semibold">{MONTH_LABELS[selectedMonth - 1]} {selectedYear} (Certe + Stimate)</div>
         </div>
 
         {/* Bisogni Previsti */}
@@ -328,7 +469,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
             <h3 className="text-sm font-extrabold text-white tracking-wide">
               💰 Entrate Mensili Realizzate contro Previsione
             </h3>
-            <p className="text-[10px] text-zinc-500 mt-1">Confronta le tue entrate stimate a budget con quelle reali registrate questo mese.</p>
+            <p className="text-[10px] text-zinc-500 mt-1">Confronta le entrate previste a budget con quelle reali registrate nel mese selezionato.</p>
           </div>
           <div className="text-right">
             <span className="text-xs font-semibold text-zinc-400">Reale: </span>
@@ -368,8 +509,17 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
         >
           <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-indigo-500/5 blur-[50px] pointer-events-none" />
 
-          <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2">
-            <span>📊</span> Aggiungi Previsione
+          <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2 justify-between">
+            <span className="flex items-center gap-2"><span>📊</span> {editingId ? "Modifica Voce" : "Aggiungi Previsione"}</span>
+            {editingId && (
+              <button
+                type="button"
+                onClick={resetForm}
+                className="text-[9px] font-bold text-zinc-500 hover:text-white normal-case tracking-normal"
+              >
+                Annulla
+              </button>
+            )}
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
@@ -541,7 +691,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                 cursor: isPending ? "not-allowed" : "pointer",
               }}
             >
-              {isPending ? "Aggiunta..." : "Aggiungi al Budget"}
+              {isPending ? "Salvataggio..." : editingId ? "Salva Modifiche" : "Aggiungi al Budget"}
             </button>
           </form>
         </div>
@@ -560,7 +710,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
             <h3 className="text-sm font-extrabold text-white tracking-wide">
               📊 Confronto Uscite per Categoria
             </h3>
-            <p className="text-[10px] text-zinc-500 mt-1">Confronto del budget mensilizzato contro le uscite reali registrate questo mese.</p>
+            <p className="text-[10px] text-zinc-500 mt-1">Confronto del budget previsto contro le uscite reali registrate nel mese selezionato.</p>
           </div>
 
           <div className="flex-1 overflow-x-auto pr-1 relative z-10 space-y-4">
@@ -712,11 +862,16 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
         >
           <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
 
-          <h3 className="text-sm font-extrabold text-white tracking-wide">
-            📋 Voci di Budget Pianificate
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-extrabold text-white tracking-wide">
+              📋 Voci di Budget Pianificate
+            </h3>
+            <span className="text-[9px] font-bold text-zinc-500">
+              Previsto per {MONTH_LABELS[selectedMonth - 1]} {selectedYear}
+            </span>
+          </div>
 
-          <div className="flex-1 overflow-x-auto pr-1 relative z-10 max-h-[300px] overflow-y-auto">
+          <div className="flex-1 overflow-x-auto pr-1 relative z-10 max-h-[340px] overflow-y-auto">
             {budgets.length === 0 ? (
               <p className="text-xs text-slate-500 py-12 text-center">Nessuna voce programmata nel budget.</p>
             ) : (
@@ -726,8 +881,8 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Descrizione</th>
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Tipo & Stima</th>
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Frequenza</th>
-                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Importo Singolo</th>
-                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Equiv. Mensile</th>
+                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Stima Base</th>
+                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Previsto Mese</th>
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-center">Azioni</th>
                   </tr>
                 </thead>
@@ -737,6 +892,9 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                     const catColor = b.expense_categories?.color || "slate";
                     const badge = COLOR_MAP[catColor] || COLOR_MAP.slate;
                     const monthlyEquivalent = getMonthlyEquivalent(b.amount, b.periodicity);
+                    const override = findOverride(b.id, selectedYear, selectedMonth);
+                    const effectiveAmount = override ? Number(override.amount) : monthlyEquivalent;
+                    const isEditingOverride = editingOverrideBudgetId === b.id;
 
                     return (
                       <tr key={b.id} className="hover:bg-white/2 transition-colors duration-150 group animate-fade-in">
@@ -760,12 +918,12 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                         <td className="py-3">
                           <div className="flex flex-col gap-0.5">
                             <span className={`text-[9px] font-bold ${
-                              b.type === "income" 
-                                ? "text-emerald-400" 
-                                : b.type === "need" 
-                                  ? "text-rose-400" 
-                                  : b.type === "want" 
-                                    ? "text-sky-400" 
+                              b.type === "income"
+                                ? "text-emerald-400"
+                                : b.type === "need"
+                                  ? "text-rose-400"
+                                  : b.type === "want"
+                                    ? "text-sky-400"
                                     : "text-purple-400"
                             }`}>
                               {b.type === "income" ? "Entrata" : b.type === "need" ? "Bisogno" : b.type === "want" ? "Desiderio" : "Imprevisto"}
@@ -781,17 +939,64 @@ export default function BudgetClient({ initialBudgets, categories, expenses }: B
                         <td className={`py-3 text-right font-black text-xs ${b.type === "income" ? "text-emerald-400" : "text-white"}`}>
                           {b.type === "income" ? "+" : "-"}{formatCurrency(b.amount)}
                         </td>
-                        <td className={`py-3 text-right font-black text-xs ${b.type === "income" ? "text-emerald-400" : "text-zinc-300"}`}>
-                          {b.type === "income" ? "+" : "-"}{formatCurrency(monthlyEquivalent)}
+                        <td className="py-3 text-right">
+                          {isEditingOverride ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                autoFocus
+                                value={overrideDraft}
+                                onChange={(e) => setOverrideDraft(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") saveOverride(b); if (e.key === "Escape") setEditingOverrideBudgetId(null); }}
+                                className="w-20 px-1.5 py-1 rounded text-right text-xs text-white bg-zinc-950 border border-indigo-500/50 focus:outline-none"
+                              />
+                              <button onClick={() => saveOverride(b)} className="text-emerald-400 hover:text-emerald-300 text-[10px] font-bold px-1" title="Salva">✓</button>
+                              <button onClick={() => setEditingOverrideBudgetId(null)} className="text-zinc-500 hover:text-white text-[10px] font-bold px-1" title="Annulla">✕</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => startEditOverride(b)}
+                              className="group/ov inline-flex flex-col items-end"
+                              title="Modifica l'importo previsto per questo mese"
+                            >
+                              <span className={`font-black text-xs group-hover/ov:underline ${b.type === "income" ? "text-emerald-400" : "text-zinc-300"}`}>
+                                {b.type === "income" ? "+" : "-"}{formatCurrency(effectiveAmount)}
+                              </span>
+                              {override && (
+                                <span className="text-[7px] uppercase font-extrabold tracking-widest text-amber-500">
+                                  Modificato
+                                </span>
+                              )}
+                            </button>
+                          )}
                         </td>
                         <td className="py-3 text-center">
-                          <button
-                            onClick={() => handleDelete(b.id)}
-                            className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
-                            title="Elimina"
-                          >
-                            <DeleteIcon size={12} />
-                          </button>
+                          <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                            {override && !isEditingOverride && (
+                              <button
+                                onClick={() => resetOverride(b)}
+                                className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all text-[10px]"
+                                title="Ripristina stima di base per questo mese"
+                              >
+                                ↺
+                              </button>
+                            )}
+                            <button
+                              onClick={() => startEditBudget(b)}
+                              className="p-1 rounded text-slate-500 hover:text-sky-400 hover:bg-sky-500/10 transition-all text-[10px]"
+                              title="Modifica voce"
+                            >
+                              ✎
+                            </button>
+                            <button
+                              onClick={() => handleDelete(b.id)}
+                              className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                              title="Elimina"
+                            >
+                              <DeleteIcon size={12} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

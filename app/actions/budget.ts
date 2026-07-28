@@ -55,6 +55,44 @@ export async function createBudget(formData: {
   }
 }
 
+export async function updateBudget(id: string, formData: {
+  amount: number;
+  category_id: string | null;
+  type: "income" | "need" | "want" | "emergency";
+  label: string;
+  periodicity?: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
+  is_estimated?: boolean;
+}) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase
+      .from("budgets")
+      .update({
+        amount: formData.amount,
+        category_id: formData.category_id || null,
+        type: formData.type,
+        label: formData.label,
+        periodicity: formData.periodicity || "monthly",
+        is_estimated: formData.is_estimated ?? false,
+      })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select("*, expense_categories(name, color)")
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/budget");
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function deleteBudget(id: string) {
   try {
     const supabase = (await createClient()) as any;
@@ -63,6 +101,82 @@ export async function deleteBudget(id: string) {
 
     const { error } = await supabase
       .from("budgets")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/budget");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function getBudgetOverrides() {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase
+      .from("budget_overrides")
+      .select("*");
+
+    if (error) throw new Error(error.message);
+    return data || [];
+  } catch (err: any) {
+    console.error("Errore getBudgetOverrides:", err.message);
+    return [];
+  }
+}
+
+export async function upsertBudgetOverride(formData: {
+  budget_id: string;
+  year: number;
+  month: number;
+  amount: number;
+  note?: string | null;
+}) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase
+      .from("budget_overrides")
+      .upsert({
+        user_id: user.id,
+        budget_id: formData.budget_id,
+        year: formData.year,
+        month: formData.month,
+        amount: formData.amount,
+        note: formData.note || null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "budget_id,year,month" })
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/budget");
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteBudgetOverride(id: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { error } = await supabase
+      .from("budget_overrides")
       .delete()
       .eq("id", id)
       .eq("user_id", user.id);

@@ -65,6 +65,18 @@ export interface Budget {
   updated_at: string;
 }
 
+export interface BudgetOverride {
+  id: string;
+  user_id: string;
+  budget_id: string;
+  year: number;
+  month: number; // 1-12
+  amount: number;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SupplierDocument {
   id: string;
   user_id: string;
@@ -247,6 +259,40 @@ export interface Database {
             columns: ["category_id"];
             isOneToOne: false;
             referencedRelation: "expense_categories";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      budget_overrides: {
+        Row: BudgetOverride;
+        Insert: {
+          id?: string;
+          user_id?: string;
+          budget_id: string;
+          year: number;
+          month: number;
+          amount: number;
+          note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          budget_id?: string;
+          year?: number;
+          month?: number;
+          amount?: number;
+          note?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "budget_overrides_budget_id_fkey";
+            columns: ["budget_id"];
+            isOneToOne: false;
+            referencedRelation: "budgets";
             referencedColumns: ["id"];
           }
         ];
