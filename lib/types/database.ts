@@ -31,6 +31,7 @@ export interface Expense {
   date: string;
   category_id: string | null; // FK -> expense_categories.id
   supplier_id: string | null; // FK -> suppliers.id
+  schedule_id: string | null; // FK -> payment_schedules.id (se generata pagando una scadenza)
   is_income: boolean;
   created_at: string;
   updated_at: string;
@@ -82,7 +83,7 @@ export interface BudgetOverride {
 export interface SupplierDocument {
   id: string;
   user_id: string;
-  supplier_id: string;
+  supplier_id: string | null;
   expense_id: string | null;
   schedule_id: string | null;
   title: string;
@@ -146,6 +147,7 @@ export interface Database {
           date?: string;
           category_id?: string | null;
           supplier_id?: string | null;
+          schedule_id?: string | null;
           is_income?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -159,6 +161,7 @@ export interface Database {
           date?: string;
           category_id?: string | null;
           supplier_id?: string | null;
+          schedule_id?: string | null;
           is_income?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -176,6 +179,13 @@ export interface Database {
             columns: ["supplier_id"];
             isOneToOne: false;
             referencedRelation: "suppliers";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "expenses_schedule_id_fkey";
+            columns: ["schedule_id"];
+            isOneToOne: false;
+            referencedRelation: "payment_schedules";
             referencedColumns: ["id"];
           }
         ];
@@ -308,7 +318,7 @@ export interface Database {
         Insert: {
           id?: string;
           user_id?: string;
-          supplier_id: string;
+          supplier_id?: string | null;
           expense_id?: string | null;
           schedule_id?: string | null;
           title: string;
@@ -320,7 +330,7 @@ export interface Database {
         Update: {
           id?: string;
           user_id?: string;
-          supplier_id?: string;
+          supplier_id?: string | null;
           expense_id?: string | null;
           schedule_id?: string | null;
           title?: string;

@@ -325,7 +325,7 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
                 Prossime Scadenze
               </h2>
               <Link
-                href="/dashboard/schedules"
+                href="/dashboard/expenses?tab=scadenze"
                 className="text-xs font-bold text-amber-400 hover:text-amber-300 transition-colors"
               >
                 Vedi tutte →

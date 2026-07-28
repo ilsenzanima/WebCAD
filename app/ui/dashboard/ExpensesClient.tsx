@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
-import { type Expense, type ExpenseCategory, type Supplier } from "@/lib/types/database";
+import { useState, useTransition, useMemo, useEffect, Fragment } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { type Expense, type ExpenseCategory, type Supplier, type SupplierDocument } from "@/lib/types/database";
 import { createExpense, updateExpense, deleteExpense } from "@/app/actions/expenses";
+import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
+import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
+import SchedulesClient from "./SchedulesClient";
 import { EditIcon, DeleteIcon, ExpensesIcon } from "./icons";
 
 interface ExpenseWithRelations extends Omit<Expense, "amount"> {
@@ -20,7 +24,12 @@ interface ExpensesClientProps {
   initialExpenses: any[];
   categories: ExpenseCategory[];
   suppliers: Supplier[];
+  initialSchedules: any[];
+  initialDocuments: SupplierDocument[];
+  googleConnected: boolean;
 }
+
+type MainTab = "uscite" | "entrate" | "scadenze";
 
 const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = {
   indigo: { bg: "rgba(99,102,241,0.12)", text: "hsl(245 85% 75%)", border: "rgba(99,102,241,0.2)" },
@@ -33,12 +42,38 @@ const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = 
   slate: { bg: "rgba(107,114,128,0.15)", text: "hsl(215 15% 75%)", border: "rgba(107,114,128,0.25)" },
 };
 
-export default function ExpensesClient({ initialExpenses, categories, suppliers }: ExpensesClientProps) {
+export default function ExpensesClient({
+  initialExpenses,
+  categories,
+  suppliers,
+  initialSchedules,
+  initialDocuments,
+  googleConnected,
+}: ExpensesClientProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [expenses, setExpenses] = useState<ExpenseWithRelations[]>(initialExpenses);
+  const [documents, setDocuments] = useState<SupplierDocument[]>(initialDocuments);
   const [isPending, startTransition] = useTransition();
 
-  // Tab Principale: "expenses" (Uscite) o "incomes" (Entrate)
-  const [activeTab, setActiveTab] = useState<"expenses" | "incomes">("expenses");
+  // Tab principale: "uscite" | "entrate" | "scadenze"
+  const tabParam = searchParams.get("tab");
+  const [mainTab, setMainTabState] = useState<MainTab>(
+    tabParam === "scadenze" || tabParam === "entrate" ? tabParam : "uscite"
+  );
+
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t === "scadenze" || t === "entrate" || t === "uscite") setMainTabState(t);
+  }, [searchParams]);
+
+  const setMainTab = (t: MainTab) => {
+    setMainTabState(t);
+    router.replace(`/dashboard/expenses?tab=${t}`);
+  };
+
+  const isIncomeMode = mainTab === "entrate";
 
   // Form states
   const [amount, setAmount] = useState("");
@@ -53,6 +88,21 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
   const [filterCategoryId, setFilterCategoryId] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Allegati: pannello espanso per una singola registrazione alla volta
+  const [expandedExpenseId, setExpandedExpenseId] = useState<string | null>(null);
+  const [attachTitle, setAttachTitle] = useState("");
+  const [attachFile, setAttachFile] = useState<File | null>(null);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+
+  const docsByExpense = useMemo(() => {
+    const map: Record<string, SupplierDocument[]> = {};
+    documents.forEach((d) => {
+      if (!d.expense_id) return;
+      (map[d.expense_id] ||= []).push(d);
+    });
+    return map;
+  }, [documents]);
+
   const resetForm = () => {
     setAmount("");
     setCategoryId(categories[0]?.id || "");
@@ -61,8 +111,6 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
     setDate(new Date().toISOString().split("T")[0]);
     setEditingId(null);
   };
-
-  const isIncomeMode = activeTab === "incomes";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,7 +171,7 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
   };
 
   const handleEdit = (exp: ExpenseWithRelations) => {
-    setActiveTab(exp.is_income ? "incomes" : "expenses");
+    setMainTab(exp.is_income ? "entrate" : "uscite");
     setEditingId(exp.id);
     setAmount(exp.amount.toString());
     setCategoryId(exp.category_id || categories[0]?.id || "");
@@ -143,8 +191,94 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
           return;
         }
         setExpenses(prev => prev.filter(item => item.id !== id));
+        if (editingId === id) resetForm();
       } catch (err: any) {
         alert(err.message || "Errore durante l'eliminazione");
+      }
+    });
+  };
+
+  const toggleAttachPanel = (exp: ExpenseWithRelations) => {
+    if (expandedExpenseId === exp.id) {
+      setExpandedExpenseId(null);
+      return;
+    }
+    setExpandedExpenseId(exp.id);
+    setAttachTitle(exp.description || (exp.is_income ? "Entrata" : "Spesa"));
+    setAttachFile(null);
+  };
+
+  const handleAttachFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Il file supera la dimensione massima consigliata di 10MB");
+      return;
+    }
+    setAttachFile(file);
+  };
+
+  const handleUploadAttachment = (expenseId: string) => {
+    if (!attachFile || !attachTitle.trim()) {
+      alert("Seleziona un file e inserisci un titolo");
+      return;
+    }
+    if (!googleConnected) {
+      alert("Collega prima il tuo account Google Drive per poter allegare un file.");
+      return;
+    }
+
+    setIsUploadingDoc(true);
+    startTransition(async () => {
+      try {
+        const uploadFormData = new FormData();
+        uploadFormData.append("file", attachFile);
+        uploadFormData.append("fileName", `${attachTitle.trim()}_${attachFile.name}`);
+
+        const driveRes = await uploadSupplierDocumentToDrive(uploadFormData);
+        if (!driveRes.success || !driveRes.data) {
+          alert(driveRes.error || "Errore durante il caricamento su Google Drive");
+          return;
+        }
+
+        const fileUrl = driveRes.data.webViewLink || driveRes.data.webContentLink || `https://drive.google.com/file/d/${driveRes.data.id}/view`;
+
+        const res = await createSupplierDocument({
+          expense_id: expenseId,
+          title: attachTitle.trim(),
+          file_url: fileUrl,
+          provider: "gdrive",
+          file_size: attachFile.size,
+        });
+
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore nel salvataggio dell'allegato");
+          return;
+        }
+
+        setDocuments(prev => [res.data, ...prev]);
+        setAttachFile(null);
+        setAttachTitle("");
+      } catch (err: any) {
+        alert(err.message || "Errore durante il caricamento");
+      } finally {
+        setIsUploadingDoc(false);
+      }
+    });
+  };
+
+  const handleDeleteAttachment = (docId: string) => {
+    if (!confirm("Eliminare questo allegato?")) return;
+    startTransition(async () => {
+      try {
+        const res = await deleteSupplierDocument(docId);
+        if (!res.success) {
+          alert(res.error || "Errore durante l'eliminazione dell'allegato");
+          return;
+        }
+        setDocuments(prev => prev.filter(d => d.id !== docId));
+      } catch (err: any) {
+        alert(err.message || "Errore durante l'eliminazione dell'allegato");
       }
     });
   };
@@ -180,404 +314,517 @@ export default function ExpensesClient({ initialExpenses, categories, suppliers 
     return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(val);
   };
 
+  const formatFileSize = (bytes?: number | null) => {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
-      {/* Header */}
+      {/* Header con i 3 tab principali */}
       <div className="animate-fade-in flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
-            Transazioni Reali
+            Spese, Entrate e Scadenze
           </h1>
-          <p className="text-sm text-slate-400 mt-1">Registra le tue spese ed entrate mantenendole nettamente separate.</p>
+          <p className="text-sm text-slate-400 mt-1">Registra i movimenti reali, allega le bollette e tieni traccia delle scadenze.</p>
         </div>
 
         {/* Tab Switcher con Neon Glow */}
         <div className="flex gap-2 p-1.5 bg-zinc-950/80 border border-white/10 rounded-2xl w-fit shadow-xl">
           <button
             type="button"
-            onClick={() => { setActiveTab("expenses"); resetForm(); }}
-            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 ${
-              !isIncomeMode
+            onClick={() => setMainTab("uscite")}
+            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 ${
+              mainTab === "uscite"
                 ? "bg-rose-500/20 text-rose-400 border border-rose-500/30 shadow-[0_0_20px_rgba(244,63,94,0.25)]"
                 : "text-zinc-400 hover:text-white hover:bg-white/5"
             }`}
           >
-            <span>💸</span> Spese / Uscite
+            <span>💸</span> Uscite
           </button>
           <button
             type="button"
-            onClick={() => { setActiveTab("incomes"); resetForm(); }}
-            className={`px-5 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 ${
-              isIncomeMode
+            onClick={() => setMainTab("entrate")}
+            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 ${
+              mainTab === "entrate"
                 ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.25)]"
                 : "text-zinc-400 hover:text-white hover:bg-white/5"
             }`}
           >
             <span>💰</span> Entrate
           </button>
+          <button
+            type="button"
+            onClick={() => setMainTab("scadenze")}
+            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 ${
+              mainTab === "scadenze"
+                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.25)]"
+                : "text-zinc-400 hover:text-white hover:bg-white/5"
+            }`}
+          >
+            <span>📅</span> Scadenze
+          </button>
         </div>
       </div>
 
-      {/* KPI Card Risorse per il tab attivo */}
-      <div
-        className="rounded-2xl p-5 border relative overflow-hidden group backdrop-blur-xl animate-fade-in"
-        style={{
-          background: isIncomeMode
-            ? "linear-gradient(135deg, hsla(150, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))"
-            : "linear-gradient(135deg, hsla(350, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
-          borderColor: isIncomeMode
-            ? "hsla(150, 60%, 50%, 0.15)"
-            : "hsla(350, 60%, 50%, 0.15)",
-        }}
-      >
-        <div className="flex justify-between items-center relative z-10">
-          <div>
-            <h4 className={`text-[10px] font-bold uppercase tracking-widest ${isIncomeMode ? "text-emerald-400" : "text-rose-400"}`}>
-              {isIncomeMode ? "Totale Entrate Questo Mese" : "Totale Uscite Questo Mese"}
-            </h4>
-            <p className="text-3xl font-black text-white mt-1">{formatCurrency(monthlyTotal)}</p>
+      {mainTab === "scadenze" ? (
+        <SchedulesClient
+          initialSchedules={initialSchedules}
+          categories={categories}
+          suppliers={suppliers}
+          googleConnected={googleConnected}
+        />
+      ) : (
+        <>
+          {/* KPI Card Risorse per il tab attivo */}
+          <div
+            className="rounded-2xl p-5 border relative overflow-hidden group backdrop-blur-xl animate-fade-in"
+            style={{
+              background: isIncomeMode
+                ? "linear-gradient(135deg, hsla(150, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))"
+                : "linear-gradient(135deg, hsla(350, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
+              borderColor: isIncomeMode
+                ? "hsla(150, 60%, 50%, 0.15)"
+                : "hsla(350, 60%, 50%, 0.15)",
+            }}
+          >
+            <div className="flex justify-between items-center relative z-10">
+              <div>
+                <h4 className={`text-[10px] font-bold uppercase tracking-widest ${isIncomeMode ? "text-emerald-400" : "text-rose-400"}`}>
+                  {isIncomeMode ? "Totale Entrate Questo Mese" : "Totale Uscite Questo Mese"}
+                </h4>
+                <p className="text-3xl font-black text-white mt-1">{formatCurrency(monthlyTotal)}</p>
+              </div>
+              <div className={`p-3.5 rounded-2xl text-xl font-bold ${
+                isIncomeMode ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+              }`}>
+                {isIncomeMode ? "📈" : "📉"}
+              </div>
+            </div>
           </div>
-          <div className={`p-3.5 rounded-2xl text-xl font-bold ${
-            isIncomeMode ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-          }`}>
-            {isIncomeMode ? "📈" : "📉"}
-          </div>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Form di Inserimento */}
-        <div
-          className="rounded-2xl p-6 border relative overflow-hidden group shadow-2xl backdrop-blur-xl animate-fade-in h-fit"
-          style={{
-            background: isIncomeMode
-              ? "linear-gradient(135deg, hsla(150, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))"
-              : "linear-gradient(135deg, hsla(350, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
-            borderColor: isIncomeMode
-              ? "hsla(150, 60%, 50%, 0.15)"
-              : "hsla(350, 60%, 50%, 0.15)",
-          }}
-        >
-          <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-rose-500/5 blur-[50px] pointer-events-none" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-          <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2">
-            <span className={isIncomeMode ? "text-emerald-400" : "text-rose-400"}><ExpensesIcon size={16} /></span>
-            {editingId ? (isIncomeMode ? "Modifica Entrata" : "Modifica Spesa") : (isIncomeMode ? "Nuova Entrata" : "Nuova Spesa")}
-          </h2>
+            {/* Form di Inserimento */}
+            <div
+              className="rounded-2xl p-6 border relative overflow-hidden group shadow-2xl backdrop-blur-xl animate-fade-in h-fit"
+              style={{
+                background: isIncomeMode
+                  ? "linear-gradient(135deg, hsla(150, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))"
+                  : "linear-gradient(135deg, hsla(350, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
+                borderColor: isIncomeMode
+                  ? "hsla(150, 60%, 50%, 0.15)"
+                  : "hsla(350, 60%, 50%, 0.15)",
+              }}
+            >
+              <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-rose-500/5 blur-[50px] pointer-events-none" />
 
-          <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
-            
-            {/* Importo */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Importo (€)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.01"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0.00"
-                required
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none transition-all duration-200 border"
-                style={{
-                  background: "hsl(240 10% 4% / 0.8)",
-                  borderColor: "hsl(240 5% 18%)",
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = isIncomeMode ? "hsl(142 70% 45%)" : "hsl(350 85% 55%)";
-                  e.target.style.boxShadow = isIncomeMode ? "0 0 15px rgba(16,185,129,0.15)" : "0 0 15px rgba(244,63,94,0.15)";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "hsl(240 5% 18%)";
-                  e.target.style.boxShadow = "none";
-                }}
-              />
+              <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2">
+                <span className={isIncomeMode ? "text-emerald-400" : "text-rose-400"}><ExpensesIcon size={16} /></span>
+                {editingId ? (isIncomeMode ? "Modifica Entrata" : "Modifica Spesa") : (isIncomeMode ? "Nuova Entrata" : "Nuova Spesa")}
+              </h2>
+
+              <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
+
+                {/* Importo */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Importo (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0.00"
+                    required
+                    className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none transition-all duration-200 border"
+                    style={{
+                      background: "hsl(240 10% 4% / 0.8)",
+                      borderColor: "hsl(240 5% 18%)",
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = isIncomeMode ? "hsl(142 70% 45%)" : "hsl(350 85% 55%)";
+                      e.target.style.boxShadow = isIncomeMode ? "0 0 15px rgba(16,185,129,0.15)" : "0 0 15px rgba(244,63,94,0.15)";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = "hsl(240 5% 18%)";
+                      e.target.style.boxShadow = "none";
+                    }}
+                  />
+                </div>
+
+                {/* Categoria (Solo se Uscita) */}
+                {!isIncomeMode && (
+                  <div className="space-y-1.5 animate-fade-in">
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Categoria Spesa</label>
+                    <select
+                      value={categoryId}
+                      onChange={(e) => setCategoryId(e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
+                      style={{
+                        background: "hsl(240 10% 4% / 0.8)",
+                        borderColor: "hsl(240 5% 18%)",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = "hsl(350 85% 55%)";
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = "hsl(240 5% 18%)";
+                      }}
+                    >
+                      {categories.length === 0 ? (
+                        <option value="">Nessuna categoria configurata</option>
+                      ) : (
+                        categories.map((cat) => (
+                          <option key={cat.id} value={cat.id} style={{ background: "hsl(240 10% 10%)" }}>
+                            {cat.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                )}
+
+                {/* Fornitore (Solo se Uscita) */}
+                {!isIncomeMode && (
+                  <div className="space-y-1.5 animate-fade-in">
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Fornitore / Servizio</label>
+                    <select
+                      value={supplierId}
+                      onChange={(e) => setSupplierId(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
+                      style={{
+                        background: "hsl(240 10% 4% / 0.8)",
+                        borderColor: "hsl(240 5% 18%)",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = "hsl(350 85% 55%)";
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = "hsl(240 5% 18%)";
+                      }}
+                    >
+                      <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun Fornitore</option>
+                      {suppliers.map((sup) => (
+                        <option key={sup.id} value={sup.id} style={{ background: "hsl(240 10% 10%)" }}>
+                          {sup.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Data */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Data registrata</label>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border text-left transition-all"
+                    style={{
+                      background: "hsl(240 10% 4% / 0.8)",
+                      borderColor: "hsl(240 5% 18%)",
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = isIncomeMode ? "hsl(142 70% 45%)" : "hsl(350 85% 55%)";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = "hsl(240 5% 18%)";
+                    }}
+                  />
+                </div>
+
+                {/* Descrizione / Note */}
+                <div className="space-y-1.5">
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                    {isIncomeMode ? "Origine / Descrizione (es. Stipendio, Rimborso)" : "Note / Causale Spesa"}
+                  </label>
+                  <input
+                    type="text"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder={isIncomeMode ? "es. Stipendio mese corrente, Rendita" : "es. Spesa alimentari, Rifornimento carburante"}
+                    className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none transition-all duration-200 border"
+                    style={{
+                      background: "hsl(240 10% 4% / 0.8)",
+                      borderColor: "hsl(240 5% 18%)",
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = isIncomeMode ? "hsl(142 70% 45%)" : "hsl(350 85% 55%)";
+                      e.target.style.boxShadow = isIncomeMode ? "0 0 15px rgba(16,185,129,0.15)" : "0 0 15px rgba(244,63,94,0.15)";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = "hsl(240 5% 18%)";
+                      e.target.style.boxShadow = "none";
+                    }}
+                  />
+                </div>
+
+                {/* Pulsanti */}
+                <div className="flex gap-3 pt-2">
+                  {editingId && (
+                    <button
+                      type="button"
+                      onClick={resetForm}
+                      className="flex-1 py-3 rounded-xl text-xs font-bold text-slate-300 hover:text-white transition-all border border-zinc-800"
+                      style={{
+                        background: "hsl(240 10% 15%)",
+                      }}
+                    >
+                      Annulla
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="flex-1 py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-[0_0_20px_rgba(244,63,94,0.15)] hover:shadow-[0_0_30px_rgba(244,63,94,0.3)] active:scale-98"
+                    style={{
+                      background: isIncomeMode
+                        ? "linear-gradient(135deg, hsl(142 70% 45%), hsl(150 60% 35%))"
+                        : "linear-gradient(135deg, hsl(350 85% 55%), hsl(340 75% 45%))",
+                      cursor: isPending ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {isPending ? "Salvataggio..." : editingId ? "Salva Modifiche" : (isIncomeMode ? "Registra Entrata" : "Registra Spesa")}
+                  </button>
+                </div>
+              </form>
             </div>
 
-            {/* Categoria (Solo se Uscita) */}
-            {!isIncomeMode && (
-              <div className="space-y-1.5 animate-fade-in">
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Categoria Spesa</label>
-                <select
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  required
-                  className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
-                  style={{
-                    background: "hsl(240 10% 4% / 0.8)",
-                    borderColor: "hsl(240 5% 18%)",
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = "hsl(350 85% 55%)";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "hsl(240 5% 18%)";
-                  }}
-                >
-                  {categories.length === 0 ? (
-                    <option value="">Nessuna categoria configurata</option>
-                  ) : (
-                    categories.map((cat) => (
+            {/* Tabella Registro (2 Colonne) */}
+            <div
+              className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-5 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
+              style={{
+                background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+                borderColor: "hsla(240, 5%, 18%, 0.7)",
+              }}
+            >
+              <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
+
+              {/* Filtri */}
+              <div className="flex flex-col sm:flex-row gap-3 relative z-10">
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={isIncomeMode ? "Cerca entrate..." : "Cerca per note o fornitore..."}
+                    className="w-full pl-4 pr-10 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
+                    style={{
+                      background: "hsl(240 10% 4% / 0.6)",
+                      borderColor: "hsl(240 5% 15% / 0.8)",
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = "hsl(240 5% 35%)"}
+                    onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 15% / 0.8)"}
+                  />
+                </div>
+
+                {!isIncomeMode && (
+                  <select
+                    value={filterCategoryId}
+                    onChange={(e) => setFilterCategoryId(e.target.value)}
+                    className="px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
+                    style={{
+                      background: "hsl(240 10% 4% / 0.6)",
+                      borderColor: "hsl(240 5% 15% / 0.8)",
+                    }}
+                  >
+                    <option value="all">Tutte le Categorie</option>
+                    {categories.map((cat) => (
                       <option key={cat.id} value={cat.id} style={{ background: "hsl(240 10% 10%)" }}>
                         {cat.name}
                       </option>
-                    ))
-                  )}
-                </select>
+                    ))}
+                  </select>
+                )}
               </div>
-            )}
 
-            {/* Fornitore (Solo se Uscita) */}
-            {!isIncomeMode && (
-              <div className="space-y-1.5 animate-fade-in">
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Fornitore / Servizio</label>
-                <select
-                  value={supplierId}
-                  onChange={(e) => setSupplierId(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
-                  style={{
-                    background: "hsl(240 10% 4% / 0.8)",
-                    borderColor: "hsl(240 5% 18%)",
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = "hsl(350 85% 55%)";
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "hsl(240 5% 18%)";
-                  }}
-                >
-                  <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun Fornitore</option>
-                  {suppliers.map((sup) => (
-                    <option key={sup.id} value={sup.id} style={{ background: "hsl(240 10% 10%)" }}>
-                      {sup.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Data */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Data registrata</label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border text-left transition-all"
-                style={{
-                  background: "hsl(240 10% 4% / 0.8)",
-                  borderColor: "hsl(240 5% 18%)",
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = isIncomeMode ? "hsl(142 70% 45%)" : "hsl(350 85% 55%)";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "hsl(240 5% 18%)";
-                }}
-              />
-            </div>
-
-            {/* Descrizione / Note */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
-                {isIncomeMode ? "Origine / Descrizione (es. Stipendio, Rimborso)" : "Note / Causale Spesa"}
-              </label>
-              <input
-                type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder={isIncomeMode ? "es. Stipendio mese corrente, Rendita" : "es. Spesa alimentari, Rifornimento carburante"}
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none transition-all duration-200 border"
-                style={{
-                  background: "hsl(240 10% 4% / 0.8)",
-                  borderColor: "hsl(240 5% 18%)",
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = isIncomeMode ? "hsl(142 70% 45%)" : "hsl(350 85% 55%)";
-                  e.target.style.boxShadow = isIncomeMode ? "0 0 15px rgba(16,185,129,0.15)" : "0 0 15px rgba(244,63,94,0.15)";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "hsl(240 5% 18%)";
-                  e.target.style.boxShadow = "none";
-                }}
-              />
-            </div>
-
-            {/* Pulsanti */}
-            <div className="flex gap-3 pt-2">
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="flex-1 py-3 rounded-xl text-xs font-bold text-slate-300 hover:text-white transition-all border border-zinc-800"
-                  style={{
-                    background: "hsl(240 10% 15%)",
-                  }}
-                >
-                  Annulla
-                </button>
-              )}
-              <button
-                type="submit"
-                disabled={isPending}
-                className="flex-1 py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-[0_0_20px_rgba(244,63,94,0.15)] hover:shadow-[0_0_30px_rgba(244,63,94,0.3)] active:scale-98"
-                style={{
-                  background: isIncomeMode
-                    ? "linear-gradient(135deg, hsl(142 70% 45%), hsl(150 60% 35%))"
-                    : "linear-gradient(135deg, hsl(350 85% 55%), hsl(340 75% 45%))",
-                  cursor: isPending ? "not-allowed" : "pointer",
-                }}
-              >
-                {isPending ? "Salvataggio..." : editingId ? "Salva Modifiche" : (isIncomeMode ? "Registra Entrata" : "Registra Spesa")}
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {/* Tabella Registro (2 Colonne) */}
-        <div
-          className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-5 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
-          style={{
-            background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
-            borderColor: "hsla(240, 5%, 18%, 0.7)",
-          }}
-        >
-          <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
-
-          {/* Filtri */}
-          <div className="flex flex-col sm:flex-row gap-3 relative z-10">
-            <div className="flex-1 relative">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={isIncomeMode ? "Cerca entrate..." : "Cerca per note o fornitore..."}
-                className="w-full pl-4 pr-10 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
-                style={{
-                  background: "hsl(240 10% 4% / 0.6)",
-                  borderColor: "hsl(240 5% 15% / 0.8)",
-                }}
-                onFocus={(e) => e.target.style.borderColor = "hsl(240 5% 35%)"}
-                onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 15% / 0.8)"}
-              />
-            </div>
-
-            {!isIncomeMode && (
-              <select
-                value={filterCategoryId}
-                onChange={(e) => setFilterCategoryId(e.target.value)}
-                className="px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
-                style={{
-                  background: "hsl(240 10% 4% / 0.6)",
-                  borderColor: "hsl(240 5% 15% / 0.8)",
-                }}
-              >
-                <option value="all">Tutte le Categorie</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id} style={{ background: "hsl(240 10% 10%)" }}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Elenco Tabella */}
-          <div className="flex-1 overflow-x-auto pr-1 relative z-10">
-            {filteredList.length === 0 ? (
-              <div className="text-center py-16 text-slate-500 flex flex-col items-center justify-center">
-                <span className="text-3xl mb-2">{isIncomeMode ? "💰" : "💸"}</span>
-                <p className="text-xs">{isIncomeMode ? "Nessuna entrata registrata." : "Nessuna spesa trovata."}</p>
-              </div>
-            ) : (
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b" style={{ borderColor: "hsl(240 5% 18% / 0.7)" }}>
-                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Data</th>
-                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">
-                      {isIncomeMode ? "Descrizione Entrata" : "Fornitore & Note"}
-                    </th>
-                    {!isIncomeMode && (
-                      <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Categoria</th>
-                    )}
-                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Importo</th>
-                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-center">Azioni</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y" style={{ borderColor: "hsl(240 5% 18% / 0.3)" }}>
-                  {filteredList.map((exp, index) => {
-                    const catName = exp.expense_categories?.name || exp.category;
-                    const catColor = exp.expense_categories?.color || "slate";
-                    const badge = COLOR_MAP[catColor] || COLOR_MAP.slate;
-
-                    return (
-                      <tr key={exp.id} className="hover:bg-white/2 transition-all duration-150 group animate-fade-in" style={{ animationDelay: `${index * 15}ms` }}>
-                        <td className="py-4 text-slate-300 font-semibold whitespace-nowrap">
-                          {new Date(exp.date).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" })}
-                        </td>
-                        <td className="py-4 pr-3">
-                          {isIncomeMode ? (
-                            <div className="text-white font-bold">{exp.description || "Entrata Senza Descrizione"}</div>
-                          ) : (
-                            <>
-                              <div className="text-white font-bold max-w-[200px] truncate">
-                                {exp.suppliers?.name || "Nessun Fornitore"}
-                              </div>
-                              {exp.description && (
-                                <div className="text-[10px] text-slate-400 mt-0.5 max-w-[200px] truncate font-medium">
-                                  {exp.description}
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </td>
+              {/* Elenco Tabella */}
+              <div className="flex-1 overflow-x-auto pr-1 relative z-10">
+                {filteredList.length === 0 ? (
+                  <div className="text-center py-16 text-slate-500 flex flex-col items-center justify-center">
+                    <span className="text-3xl mb-2">{isIncomeMode ? "💰" : "💸"}</span>
+                    <p className="text-xs">{isIncomeMode ? "Nessuna entrata registrata." : "Nessuna spesa trovata."}</p>
+                  </div>
+                ) : (
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b" style={{ borderColor: "hsl(240 5% 18% / 0.7)" }}>
+                        <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Data</th>
+                        <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">
+                          {isIncomeMode ? "Descrizione Entrata" : "Fornitore & Note"}
+                        </th>
                         {!isIncomeMode && (
-                          <td className="py-4">
-                            <span
-                              className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border transition-transform duration-300 group-hover:scale-102"
-                              style={{
-                                backgroundColor: badge.bg,
-                                color: badge.text,
-                                borderColor: badge.border,
-                              }}
-                            >
-                              {catName}
-                            </span>
-                          </td>
+                          <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Categoria</th>
                         )}
-                        <td className={`py-4 text-right font-black text-sm whitespace-nowrap ${isIncomeMode ? "text-emerald-400" : "text-rose-400"}`}>
-                          {isIncomeMode ? "+" : "-"}{formatCurrency(exp.amount)}
-                        </td>
-                        <td className="py-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                            <button
-                              onClick={() => handleEdit(exp)}
-                              className="w-7 h-7 rounded-lg text-xs hover:bg-blue-500/10 hover:text-blue-400 border border-transparent hover:border-blue-500/20 flex items-center justify-center transition-all"
-                              title="Modifica"
-                            >
-                              <EditIcon size={12} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(exp.id)}
-                              className="w-7 h-7 rounded-lg text-xs hover:bg-rose-500/10 hover:text-rose-400 border border-transparent hover:border-rose-500/20 flex items-center justify-center transition-all"
-                              title="Elimina"
-                            >
-                              <DeleteIcon size={12} />
-                            </button>
-                          </div>
-                        </td>
+                        <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Importo</th>
+                        <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-center">Azioni</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
+                    </thead>
+                    <tbody className="divide-y" style={{ borderColor: "hsl(240 5% 18% / 0.3)" }}>
+                      {filteredList.map((exp, index) => {
+                        const catName = exp.expense_categories?.name || exp.category;
+                        const catColor = exp.expense_categories?.color || "slate";
+                        const badge = COLOR_MAP[catColor] || COLOR_MAP.slate;
+                        const attachments = docsByExpense[exp.id] || [];
+                        const isExpanded = expandedExpenseId === exp.id;
 
-      </div>
+                        return (
+                          <Fragment key={exp.id}>
+                            <tr className="hover:bg-white/2 transition-all duration-150 group animate-fade-in" style={{ animationDelay: `${index * 15}ms` }}>
+                              <td className="py-4 text-slate-300 font-semibold whitespace-nowrap align-top">
+                                {new Date(exp.date).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                              </td>
+                              <td className="py-4 pr-3 align-top">
+                                {isIncomeMode ? (
+                                  <div className="text-white font-bold">{exp.description || "Entrata Senza Descrizione"}</div>
+                                ) : (
+                                  <>
+                                    <div className="text-white font-bold max-w-[200px] truncate">
+                                      {exp.suppliers?.name || "Nessun Fornitore"}
+                                    </div>
+                                    {exp.description && (
+                                      <div className="text-[10px] text-slate-400 mt-0.5 max-w-[200px] truncate font-medium">
+                                        {exp.description}
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                                {exp.schedule_id && (
+                                  <div className="text-[8px] text-amber-500/80 font-bold uppercase tracking-wider mt-0.5">
+                                    📅 Da scadenza pagata
+                                  </div>
+                                )}
+                              </td>
+                              {!isIncomeMode && (
+                                <td className="py-4 align-top">
+                                  <span
+                                    className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border transition-transform duration-300 group-hover:scale-102"
+                                    style={{
+                                      backgroundColor: badge.bg,
+                                      color: badge.text,
+                                      borderColor: badge.border,
+                                    }}
+                                  >
+                                    {catName}
+                                  </span>
+                                </td>
+                              )}
+                              <td className={`py-4 text-right font-black text-sm whitespace-nowrap align-top ${isIncomeMode ? "text-emerald-400" : "text-rose-400"}`}>
+                                {isIncomeMode ? "+" : "-"}{formatCurrency(exp.amount)}
+                              </td>
+                              <td className="py-4 text-center align-top">
+                                <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                  <button
+                                    onClick={() => toggleAttachPanel(exp)}
+                                    className={`w-7 h-7 rounded-lg text-xs border flex items-center justify-center transition-all relative ${
+                                      isExpanded ? "bg-sky-500/20 text-sky-300 border-sky-500/30" : "border-transparent hover:bg-sky-500/10 hover:text-sky-400 hover:border-sky-500/20"
+                                    }`}
+                                    title="Allegati"
+                                  >
+                                    📎
+                                    {attachments.length > 0 && (
+                                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-sky-500 text-white text-[8px] font-bold flex items-center justify-center">
+                                        {attachments.length}
+                                      </span>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => handleEdit(exp)}
+                                    className="w-7 h-7 rounded-lg text-xs hover:bg-blue-500/10 hover:text-blue-400 border border-transparent hover:border-blue-500/20 flex items-center justify-center transition-all"
+                                    title="Modifica"
+                                  >
+                                    <EditIcon size={12} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(exp.id)}
+                                    className="w-7 h-7 rounded-lg text-xs hover:bg-rose-500/10 hover:text-rose-400 border border-transparent hover:border-rose-500/20 flex items-center justify-center transition-all"
+                                    title="Elimina"
+                                  >
+                                    <DeleteIcon size={12} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr>
+                                <td colSpan={isIncomeMode ? 4 : 5} className="pb-4">
+                                  <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80 space-y-3">
+                                    {attachments.length > 0 && (
+                                      <div className="space-y-1.5">
+                                        {attachments.map((doc) => (
+                                          <div key={doc.id} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/60">
+                                            <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-bold text-sky-300 hover:text-sky-200 truncate flex-1">
+                                              📄 {doc.title} <span className="text-zinc-500 font-medium">{formatFileSize(doc.file_size)}</span>
+                                            </a>
+                                            <button
+                                              onClick={() => handleDeleteAttachment(doc.id)}
+                                              className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                                              title="Elimina allegato"
+                                            >
+                                              <DeleteIcon size={11} />
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {!googleConnected ? (
+                                      <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-300 space-y-2">
+                                        <p className="font-semibold">Collega Google Drive per allegare documenti.</p>
+                                        <a
+                                          href="/api/google/connect?next=/dashboard/expenses"
+                                          className="inline-block px-3 py-1.5 rounded-lg text-[9px] font-extrabold text-white bg-amber-600 hover:bg-amber-500 transition-all"
+                                        >
+                                          🔗 Collega account Google
+                                        </a>
+                                      </div>
+                                    ) : (
+                                      <div className="flex flex-col sm:flex-row gap-2">
+                                        <input
+                                          type="file"
+                                          accept="application/pdf,image/*"
+                                          onChange={handleAttachFileChange}
+                                          className="flex-1 text-[10px] text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[9px] file:font-bold file:bg-sky-500/20 file:text-sky-300 hover:file:bg-sky-500/30 cursor-pointer"
+                                        />
+                                        <input
+                                          type="text"
+                                          value={attachTitle}
+                                          onChange={(e) => setAttachTitle(e.target.value)}
+                                          placeholder="Titolo allegato"
+                                          className="px-3 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                                        />
+                                        <button
+                                          onClick={() => handleUploadAttachment(exp.id)}
+                                          disabled={isUploadingDoc || !attachFile}
+                                          className="px-3 py-1.5 rounded-lg text-[10px] font-extrabold text-white bg-sky-600 hover:bg-sky-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                        >
+                                          {isUploadingDoc ? "Caricamento..." : "Carica"}
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
 export async function createSupplierDocument(formData: {
-  supplier_id: string;
+  supplier_id?: string | null;
   expense_id?: string | null;
   schedule_id?: string | null;
   title: string;
@@ -13,13 +13,17 @@ export async function createSupplierDocument(formData: {
   file_size?: number | null;
 }) {
   try {
+    if (!formData.supplier_id && !formData.expense_id && !formData.schedule_id) {
+      throw new Error("Nessun elemento a cui collegare il documento");
+    }
+
     const supabase = (await createClient()) as any;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Non autenticato");
 
     const { data, error } = await supabase.from("supplier_documents").insert({
       user_id: user.id,
-      supplier_id: formData.supplier_id,
+      supplier_id: formData.supplier_id || null,
       expense_id: formData.expense_id || null,
       schedule_id: formData.schedule_id || null,
       title: formData.title,
@@ -30,14 +34,15 @@ export async function createSupplierDocument(formData: {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath(`/dashboard/suppliers/${formData.supplier_id}`);
+    if (formData.supplier_id) revalidatePath(`/dashboard/suppliers/${formData.supplier_id}`);
+    if (formData.expense_id) revalidatePath("/dashboard/expenses");
     return { success: true, data };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
 }
 
-export async function deleteSupplierDocument(id: string, supplierId: string) {
+export async function deleteSupplierDocument(id: string, supplierId?: string) {
   try {
     const supabase = (await createClient()) as any;
     const { data: { user } } = await supabase.auth.getUser();
@@ -51,9 +56,30 @@ export async function deleteSupplierDocument(id: string, supplierId: string) {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath(`/dashboard/suppliers/${supplierId}`);
+    if (supplierId) revalidatePath(`/dashboard/suppliers/${supplierId}`);
+    revalidatePath("/dashboard/expenses");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
+  }
+}
+
+export async function getExpenseDocuments() {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase
+      .from("supplier_documents")
+      .select("*")
+      .not("expense_id", "is", null)
+      .order("created_at", { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return data || [];
+  } catch (err: any) {
+    console.error("Errore getExpenseDocuments:", err.message);
+    return [];
   }
 }

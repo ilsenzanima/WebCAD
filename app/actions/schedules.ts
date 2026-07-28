@@ -108,6 +108,7 @@ export async function paySchedule(id: string) {
       category: schedule.category,
       category_id: schedule.category_id,
       supplier_id: schedule.supplier_id,
+      schedule_id: schedule.id,
       description: `Pagamento programmato: ${schedule.description || "Nessuna descrizione"}`,
       date: today,
     });
