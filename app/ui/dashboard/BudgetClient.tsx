@@ -340,9 +340,67 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
     };
   }, [totals]);
 
+  // Mese/anno piu' vecchio da cui esistono dati (spese o voci di budget), per calcolare il riporto
+  const earliestPeriod = useMemo(() => {
+    const dates: Date[] = [];
+    expenses.forEach((e: any) => dates.push(new Date(e.date)));
+    budgets.forEach(b => dates.push(new Date(b.created_at)));
+    if (dates.length === 0) return null;
+    const earliest = dates.reduce((min, d) => (d < min ? d : min), dates[0]);
+    return { year: earliest.getFullYear(), month: earliest.getMonth() + 1 };
+  }, [expenses, budgets]);
+
+  // Elenco dei mesi precedenti al mese selezionato, dal piu' vecchio dato disponibile (max 36 mesi)
+  const priorMonths = useMemo(() => {
+    if (!earliestPeriod) return [];
+    const months: { year: number; month: number }[] = [];
+    let y = earliestPeriod.year;
+    let m = earliestPeriod.month;
+    let guard = 0;
+    while ((y < selectedYear || (y === selectedYear && m < selectedMonth)) && guard < 36) {
+      months.push({ year: y, month: m });
+      m += 1;
+      if (m > 12) { m = 1; y += 1; }
+      guard += 1;
+    }
+    return months;
+  }, [earliestPeriod, selectedYear, selectedMonth]);
+
+  // Riporto per categoria: somma di (previsto - reale) di tutti i mesi precedenti,
+  // per sapere quanto e' davvero disponibile questo mese oltre alla stima base.
+  const categoryRollover = useMemo(() => {
+    const map: Record<string, number> = {};
+
+    priorMonths.forEach(({ year, month }) => {
+      const actualByCat: Record<string, number> = {};
+      expenses.forEach((e: any) => {
+        if (e.is_income) return;
+        const eDate = new Date(e.date);
+        if (eDate.getFullYear() !== year || eDate.getMonth() + 1 !== month) return;
+        const catId = e.category_id || "unassigned";
+        actualByCat[catId] = (actualByCat[catId] || 0) + Number(e.amount);
+      });
+
+      const plannedByCat: Record<string, number> = {};
+      budgets.forEach(b => {
+        if (b.type === "income") return;
+        const catId = b.category_id || "unassigned";
+        plannedByCat[catId] = (plannedByCat[catId] || 0) + getEffectiveAmount(b, year, month);
+      });
+
+      const catIds = new Set([...Object.keys(plannedByCat), ...Object.keys(actualByCat)]);
+      catIds.forEach(catId => {
+        const delta = (plannedByCat[catId] || 0) - (actualByCat[catId] || 0);
+        map[catId] = (map[catId] || 0) + delta;
+      });
+    });
+
+    return map;
+  }, [priorMonths, expenses, budgets, overrides]);
+
   // Consolidamento budget per categoria
   const categoryBudgetComparison = useMemo(() => {
-    const map: Record<string, { categoryName: string; color: string; budgetAmt: number; realAmt: number }> = {};
+    const map: Record<string, { categoryName: string; color: string; budgetAmt: number; realAmt: number; rollover: number }> = {};
 
     budgets.forEach(b => {
       if (b.type === "income") return;
@@ -357,6 +415,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
           color: catColor,
           budgetAmt: 0,
           realAmt: realExpensesByCategory[catId] || 0,
+          rollover: categoryRollover[catId] || 0,
         };
       }
       map[catId].budgetAmt += monthlyAmt;
@@ -370,12 +429,13 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
           color: catObj ? catObj.color : "slate",
           budgetAmt: 0,
           realAmt: realExpensesByCategory[catId],
+          rollover: categoryRollover[catId] || 0,
         };
       }
     });
 
     return Object.values(map);
-  }, [budgets, overrides, realExpensesByCategory, categories, selectedYear, selectedMonth]);
+  }, [budgets, overrides, realExpensesByCategory, categories, categoryRollover, selectedYear, selectedMonth]);
 
   // Percentuale realizzazione entrate
   const incomePercent = totals.income > 0 ? (realIncomeTotal / totals.income) * 100 : 0;
@@ -833,13 +893,27 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
                         </span>
                         {item.budgetAmt > 0 && (
                           <span className={`font-black ${isOver ? "text-rose-400" : "text-emerald-400"}`}>
-                            {isOver 
-                              ? `Sforato di ${formatCurrency(item.realAmt - item.budgetAmt)}` 
+                            {isOver
+                              ? `Sforato di ${formatCurrency(item.realAmt - item.budgetAmt)}`
                               : `Rimanenti ${formatCurrency(item.budgetAmt - item.realAmt)}`
                             }
                           </span>
                         )}
                       </div>
+
+                      {item.rollover !== 0 && (
+                        <div className="flex justify-between items-center text-[9px] pt-1 border-t border-zinc-800/30">
+                          <span className="text-zinc-500 font-semibold">
+                            Riporto mesi precedenti:{" "}
+                            <span className={item.rollover >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                              {item.rollover >= 0 ? "+" : ""}{formatCurrency(item.rollover)}
+                            </span>
+                          </span>
+                          <span className={`font-black ${(item.budgetAmt + item.rollover - item.realAmt) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                            Disponibile: {formatCurrency(item.budgetAmt + item.rollover - item.realAmt)}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
