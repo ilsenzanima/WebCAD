@@ -12,6 +12,7 @@ export async function getSchedules() {
     const { data, error } = await supabase
       .from("payment_schedules")
       .select("*, expense_categories(name, color), suppliers(name)")
+      .eq("user_id", user.id)
       .order("due_date", { ascending: true });
 
     if (error) throw new Error(error.message);

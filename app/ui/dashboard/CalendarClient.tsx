@@ -4,6 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import { type Expense, type PaymentSchedule } from "@/lib/types/database";
 import { deleteExpense } from "@/app/actions/expenses";
 import { deleteSchedule, paySchedule } from "@/app/actions/schedules";
+import { formatCurrency } from "@/lib/format";
 import { ArrowLeftIcon, ArrowRightIcon, DeleteIcon, CheckIcon, SchedulesIcon, ExpensesIcon } from "./icons";
 
 interface ExpenseWithRelations extends Omit<Expense, "amount"> {
@@ -227,10 +228,6 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
 
   const selectedDateExpenses = selectedDate ? getExpensesForDate(selectedDate) : [];
   const selectedDateSchedules = selectedDate ? getSchedulesForDate(selectedDate) : [];
-
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(val);
-  };
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">

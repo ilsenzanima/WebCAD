@@ -7,6 +7,7 @@ import { type Supplier, type SupplierDocument } from "@/lib/types/database";
 import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
 import { updateSupplier } from "@/app/actions/suppliers";
 import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
+import { formatCurrency, formatFileSize, formatDate } from "@/lib/format";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
 
 interface SupplierDetailClientProps {
@@ -211,16 +212,6 @@ export default function SupplierDetailClient({
     };
   }, [expenses, schedules]);
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(val);
-  };
-
-  const formatFileSize = (bytes?: number | null) => {
-    if (!bytes) return "";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -321,7 +312,7 @@ export default function SupplierDetailClient({
           <h4 className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Prossima Scadenza</h4>
           <p className="text-lg font-black text-white mt-2">
             {stats.nextSchedule 
-              ? new Date(stats.nextSchedule.due_date).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" })
+              ? formatDate(stats.nextSchedule.due_date)
               : "Nessuna"
             }
           </p>
@@ -390,7 +381,7 @@ export default function SupplierDetailClient({
                   {expenses.map((e) => (
                     <tr key={`exp-${e.id}`} className="hover:bg-white/2 transition-colors duration-150">
                       <td className="py-3 text-slate-300 font-semibold whitespace-nowrap">
-                        {new Date(e.date).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                        {formatDate(e.date)}
                       </td>
                       <td className="py-3">
                         <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
@@ -413,7 +404,7 @@ export default function SupplierDetailClient({
                   {schedules.map((s) => (
                     <tr key={`sch-${s.id}`} className="hover:bg-white/2 transition-colors duration-150">
                       <td className="py-3 text-slate-300 font-semibold whitespace-nowrap">
-                        {new Date(s.due_date).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                        {formatDate(s.due_date)}
                       </td>
                       <td className="py-3">
                         <span className={`px-2 py-0.5 rounded text-[8px] font-bold border ${

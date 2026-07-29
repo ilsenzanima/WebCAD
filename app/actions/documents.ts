@@ -75,6 +75,7 @@ export async function getExpenseDocuments() {
     const { data, error } = await supabase
       .from("supplier_documents")
       .select("*")
+      .eq("user_id", user.id)
       .not("expense_id", "is", null)
       .order("created_at", { ascending: false });
 

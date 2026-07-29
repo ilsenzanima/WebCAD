@@ -6,6 +6,7 @@ import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib
 import { createSchedule, updateSchedule, deleteSchedule, paySchedule } from "@/app/actions/schedules";
 import { syncSchedulesToCalendar } from "@/app/actions/google";
 import { DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { DeleteIcon, EditIcon, CheckIcon, SchedulesIcon } from "./icons";
 
 interface ScheduleWithRelations extends Omit<PaymentSchedule, "amount"> {
@@ -226,10 +227,6 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     if (filterPaid === "paid") return s.is_paid;
     return true;
   });
-
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(val);
-  };
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -495,7 +492,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                     return (
                       <tr key={item.id} className="hover:bg-white/2 transition-all duration-150 group">
                         <td className="py-4 text-slate-300 font-semibold whitespace-nowrap">
-                          {new Date(item.due_date).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                          {formatDate(item.due_date)}
                         </td>
                         <td className="py-4 pr-3">
                           <div className="text-white font-bold max-w-[180px] truncate">

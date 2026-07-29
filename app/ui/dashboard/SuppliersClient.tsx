@@ -4,6 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import Link from "next/link";
 import { type Supplier } from "@/lib/types/database";
 import { createSupplier, updateSupplier, deleteSupplier } from "@/app/actions/suppliers";
+import { formatCurrency } from "@/lib/format";
 import { EditIcon, DeleteIcon, SettingsIcon } from "./icons";
 
 interface SuppliersClientProps {
@@ -187,10 +188,6 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
     s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (s.description && s.description.toLowerCase().includes(searchQuery.toLowerCase()))
   );
-
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(val);
-  };
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">

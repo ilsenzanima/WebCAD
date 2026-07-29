@@ -12,6 +12,7 @@ export async function getExpenses() {
     const { data, error } = await supabase
       .from("expenses")
       .select("*, expense_categories(name, color), suppliers(name)")
+      .eq("user_id", user.id)
       .order("date", { ascending: false });
 
     if (error) throw new Error(error.message);

@@ -12,6 +12,7 @@ export async function getBudgets() {
     const { data, error } = await supabase
       .from("budgets")
       .select("*, expense_categories(name, color)")
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) throw new Error(error.message);
@@ -131,7 +132,8 @@ export async function getBudgetOverrides() {
 
     const { data, error } = await supabase
       .from("budget_overrides")
-      .select("*");
+      .select("*")
+      .eq("user_id", user.id);
 
     if (error) throw new Error(error.message);
     return data || [];

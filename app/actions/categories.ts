@@ -24,6 +24,7 @@ export async function getCategories() {
     const { data, error } = await supabase
       .from("expense_categories")
       .select("*")
+      .eq("user_id", user.id)
       .order("name", { ascending: true });
 
     if (error) throw new Error(error.message);

@@ -7,6 +7,7 @@ import { createExpense, updateExpense, deleteExpense } from "@/app/actions/expen
 import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
 import { createSupplier } from "@/app/actions/suppliers";
 import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
+import { formatCurrency, formatFileSize, formatDate } from "@/lib/format";
 import SchedulesClient from "./SchedulesClient";
 import { EditIcon, DeleteIcon, ExpensesIcon } from "./icons";
 
@@ -410,16 +411,6 @@ export default function ExpensesClient({
     });
   }, [expenses, isIncomeMode, filterCategoryId, searchQuery]);
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(val);
-  };
-
-  const formatFileSize = (bytes?: number | null) => {
-    if (!bytes) return "";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -893,7 +884,7 @@ export default function ExpensesClient({
                           <Fragment key={exp.id}>
                             <tr className="hover:bg-white/2 transition-all duration-150 group animate-fade-in" style={{ animationDelay: `${index * 15}ms` }}>
                               <td className="py-4 text-slate-300 font-semibold whitespace-nowrap align-top">
-                                {new Date(exp.date).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                                {formatDate(exp.date)}
                               </td>
                               <td className="py-4 pr-3 align-top">
                                 {isIncomeMode ? (

@@ -3,6 +3,7 @@
 import { useState, useTransition, useMemo } from "react";
 import { type Budget, type BudgetOverride, type ExpenseCategory } from "@/lib/types/database";
 import { createBudget, updateBudget, deleteBudget, upsertBudgetOverride, deleteBudgetOverride } from "@/app/actions/budget";
+import { formatCurrency } from "@/lib/format";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
 
 interface BudgetWithRelations extends Omit<Budget, "amount"> {
@@ -378,10 +379,6 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
 
   // Percentuale realizzazione entrate
   const incomePercent = totals.income > 0 ? (realIncomeTotal / totals.income) * 100 : 0;
-
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(val);
-  };
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">

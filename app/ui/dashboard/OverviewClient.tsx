@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { type Expense, type PaymentSchedule } from "@/lib/types/database";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { ExpensesIcon, SchedulesIcon, OverviewIcon } from "./icons";
 
 interface ExpenseWithRelations extends Omit<Expense, "amount"> {
@@ -110,10 +111,6 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
       upcomingSchedules,
     };
   }, [expenses, schedules]);
-
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(val);
-  };
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -406,7 +403,7 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
                 {stats.recentExpenses.map((exp: ExpenseWithRelations) => (
                   <tr key={exp.id} className="hover:bg-white/2 transition-colors">
                     <td className="py-3 text-slate-300 font-semibold whitespace-nowrap">
-                      {new Date(exp.date).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" })}
+                      {formatDate(exp.date)}
                     </td>
                     <td className="py-3">
                       <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold border ${

@@ -12,6 +12,7 @@ export async function getSuppliers() {
     const { data, error } = await supabase
       .from("suppliers")
       .select("*")
+      .eq("user_id", user.id)
       .order("name", { ascending: true });
 
     if (error) throw new Error(error.message);
@@ -43,6 +44,7 @@ export async function getSupplierDetail(supplierId: string) {
       .from("expenses")
       .select("*, expense_categories(name, color)")
       .eq("supplier_id", supplierId)
+      .eq("user_id", user.id)
       .order("date", { ascending: false });
 
     // Preleva scadenze collegate
@@ -50,6 +52,7 @@ export async function getSupplierDetail(supplierId: string) {
       .from("payment_schedules")
       .select("*, expense_categories(name, color)")
       .eq("supplier_id", supplierId)
+      .eq("user_id", user.id)
       .order("due_date", { ascending: false });
 
     // Preleva documenti collegati
@@ -57,6 +60,7 @@ export async function getSupplierDetail(supplierId: string) {
       .from("supplier_documents")
       .select("*")
       .eq("supplier_id", supplierId)
+      .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
     return {
