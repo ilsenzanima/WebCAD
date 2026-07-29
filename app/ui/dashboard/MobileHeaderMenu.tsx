@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
-import { OverviewIcon, ExpensesIcon, SettingsIcon, CalendarIcon, TagIcon, SupplierIcon } from "./icons";
+import { OverviewIcon, ExpensesIcon, SettingsIcon, CalendarIcon, TagIcon, SupplierIcon, WalletIcon } from "./icons";
 
 interface MobileHeaderMenuProps {
   initials: string;
@@ -18,6 +18,7 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
 
   const navItems = [
     { href: "/dashboard", icon: <OverviewIcon size={14} />, label: "Panoramica" },
+    { href: "/dashboard/accounts", icon: <WalletIcon size={14} />, label: "Conti" },
     { href: "/dashboard/expenses", icon: <ExpensesIcon size={14} />, label: "Spese, Entrate e Scadenze" },
     { href: "/dashboard/calendar", icon: <CalendarIcon size={14} />, label: "Calendario" },
     { href: "/dashboard/budget", icon: <TagIcon size={14} />, label: "Budget" },

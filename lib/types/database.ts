@@ -25,6 +25,18 @@ export interface Supplier {
   created_at: string;
 }
 
+export interface Account {
+  id: string;
+  user_id: string;
+  name: string;
+  type: "checking" | "savings" | "cash" | "credit_card" | "other";
+  initial_balance: number;
+  color: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Expense {
   id: string;
   user_id: string;
@@ -35,6 +47,7 @@ export interface Expense {
   category_id: string | null; // FK -> expense_categories.id
   supplier_id: string | null; // FK -> suppliers.id
   schedule_id: string | null; // FK -> payment_schedules.id (se generata pagando una scadenza)
+  account_id: string | null; // FK -> accounts.id
   consumption_value: number | null; // consumo del periodo (unita' definita da suppliers.consumption_unit)
   is_income: boolean;
   created_at: string;
@@ -159,6 +172,7 @@ export interface Database {
           category_id?: string | null;
           supplier_id?: string | null;
           schedule_id?: string | null;
+          account_id?: string | null;
           consumption_value?: number | null;
           is_income?: boolean;
           created_at?: string;
@@ -174,6 +188,7 @@ export interface Database {
           category_id?: string | null;
           supplier_id?: string | null;
           schedule_id?: string | null;
+          account_id?: string | null;
           consumption_value?: number | null;
           is_income?: boolean;
           created_at?: string;
@@ -200,8 +215,41 @@ export interface Database {
             isOneToOne: false;
             referencedRelation: "payment_schedules";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "expenses_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "accounts";
+            referencedColumns: ["id"];
           }
         ];
+      };
+      accounts: {
+        Row: Account;
+        Insert: {
+          id?: string;
+          user_id?: string;
+          name: string;
+          type?: "checking" | "savings" | "cash" | "credit_card" | "other";
+          initial_balance?: number;
+          color?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          type?: "checking" | "savings" | "cash" | "credit_card" | "other";
+          initial_balance?: number;
+          color?: string;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
       };
       payment_schedules: {
         Row: PaymentSchedule;

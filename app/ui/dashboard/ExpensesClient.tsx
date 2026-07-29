@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo, useEffect, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type Expense, type ExpenseCategory, type Supplier, type SupplierDocument } from "@/lib/types/database";
+import { type Expense, type ExpenseCategory, type Supplier, type SupplierDocument, type Account } from "@/lib/types/database";
 import { createExpense, updateExpense, deleteExpense } from "@/app/actions/expenses";
 import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
 import { createSupplier } from "@/app/actions/suppliers";
@@ -28,6 +28,7 @@ interface ExpensesClientProps {
   suppliers: Supplier[];
   initialSchedules: any[];
   initialDocuments: SupplierDocument[];
+  initialAccounts: Account[];
   googleConnected: boolean;
 }
 
@@ -50,6 +51,7 @@ export default function ExpensesClient({
   suppliers,
   initialSchedules,
   initialDocuments,
+  initialAccounts,
   googleConnected,
 }: ExpensesClientProps) {
   const router = useRouter();
@@ -85,6 +87,7 @@ export default function ExpensesClient({
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [consumptionValue, setConsumptionValue] = useState("");
+  const [accountId, setAccountId] = useState("");
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -128,6 +131,7 @@ export default function ExpensesClient({
     setDescription("");
     setDate(new Date().toISOString().split("T")[0]);
     setConsumptionValue("");
+    setAccountId("");
     setEditingId(null);
     setNewDocFile(null);
     setNewDocType("bolletta");
@@ -250,6 +254,7 @@ export default function ExpensesClient({
           consumption_value: (!isIncomeMode && selectedSupplier?.is_utility && consumptionValue)
             ? Number(consumptionValue)
             : null,
+          account_id: accountId || null,
         };
 
         let targetExpenseId: string | null = null;
@@ -304,6 +309,7 @@ export default function ExpensesClient({
     setDescription(exp.description || "");
     setDate(exp.date);
     setConsumptionValue(exp.consumption_value != null ? String(exp.consumption_value) : "");
+    setAccountId(exp.account_id || "");
     setNewDocFile(null);
   };
 
@@ -712,6 +718,29 @@ export default function ExpensesClient({
                     }}
                   />
                 </div>
+
+                {/* Conto (facoltativo) */}
+                {initialAccounts.length > 0 && (
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Conto (facoltativo)</label>
+                    <select
+                      value={accountId}
+                      onChange={(e) => setAccountId(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
+                      style={{
+                        background: "hsl(240 10% 4% / 0.8)",
+                        borderColor: "hsl(240 5% 18%)",
+                      }}
+                    >
+                      <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun conto</option>
+                      {initialAccounts.map((acc) => (
+                        <option key={acc.id} value={acc.id} style={{ background: "hsl(240 10% 10%)" }}>
+                          {acc.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {/* Descrizione / Note */}
                 <div className="space-y-1.5">

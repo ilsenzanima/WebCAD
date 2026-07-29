@@ -5,6 +5,7 @@ import { type Expense, type PaymentSchedule } from "@/lib/types/database";
 import { deleteExpense } from "@/app/actions/expenses";
 import { deleteSchedule, paySchedule } from "@/app/actions/schedules";
 import { formatCurrency } from "@/lib/format";
+import { getNextDueDate } from "@/lib/recurrence";
 import { ArrowLeftIcon, ArrowRightIcon, DeleteIcon, CheckIcon, SchedulesIcon, ExpensesIcon } from "./icons";
 
 interface ExpenseWithRelations extends Omit<Expense, "amount"> {
@@ -143,15 +144,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
           );
         } else {
           // Ricorrente: segna la corrente come pagata, e crea quella futura
-          const nextDueDate = new Date(target.due_date);
-          if (target.recurrence === "weekly") {
-            nextDueDate.setDate(nextDueDate.getDate() + 7);
-          } else if (target.recurrence === "monthly") {
-            nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-          } else if (target.recurrence === "yearly") {
-            nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
-          }
-          const nextDueDateStr = nextDueDate.toISOString().split("T")[0];
+          const nextDueDateStr = getNextDueDate(target.due_date, target.recurrence);
 
           const nextSched: ScheduleWithRelations = {
             ...target,
@@ -176,6 +169,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
           category_id: target.category_id,
           supplier_id: target.supplier_id,
           schedule_id: target.id,
+          account_id: null,
           consumption_value: null,
           description: `Pagamento programmato: ${target.description || "Nessuna descrizione"}`,
           date: todayStr,

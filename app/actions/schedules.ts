@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { getNextDueDate } from "@/lib/recurrence";
 
 export async function getSchedules() {
   try {
@@ -167,16 +168,7 @@ export async function paySchedule(id: string) {
 
     // 4. Se è ricorrente, crea una nuova scadenza per il ciclo successivo con is_paid = false
     if (schedule.recurrence !== "one-time") {
-      const nextDueDate = new Date(schedule.due_date);
-      if (schedule.recurrence === "weekly") {
-        nextDueDate.setDate(nextDueDate.getDate() + 7);
-      } else if (schedule.recurrence === "monthly") {
-        nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-      } else if (schedule.recurrence === "yearly") {
-        nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
-      }
-
-      const nextDueDateStr = nextDueDate.toISOString().split("T")[0];
+      const nextDueDateStr = getNextDueDate(schedule.due_date, schedule.recurrence);
 
       const { error: insertNextError } = await supabase.from("payment_schedules").insert({
         user_id: user.id,

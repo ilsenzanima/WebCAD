@@ -2,9 +2,9 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { type Expense, type PaymentSchedule } from "@/lib/types/database";
+import { type Expense, type PaymentSchedule, type Account } from "@/lib/types/database";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { ExpensesIcon, SchedulesIcon, OverviewIcon } from "./icons";
+import { ExpensesIcon, SchedulesIcon, OverviewIcon, WalletIcon } from "./icons";
 
 interface ExpenseWithRelations extends Omit<Expense, "amount"> {
   amount: number;
@@ -31,6 +31,7 @@ interface ScheduleWithRelations extends Omit<PaymentSchedule, "amount"> {
 interface OverviewClientProps {
   expenses: any[];
   schedules: any[];
+  accounts: Account[];
 }
 
 const COLOR_MAP: Record<string, string> = {
@@ -44,7 +45,23 @@ const COLOR_MAP: Record<string, string> = {
   slate: "linear-gradient(90deg, hsl(215 15% 50%), hsl(215 10% 40%))",
 };
 
-export default function OverviewClient({ expenses, schedules }: OverviewClientProps) {
+export default function OverviewClient({ expenses, schedules, accounts }: OverviewClientProps) {
+  const accountBalances = useMemo(() => {
+    return accounts.map(acc => {
+      let balance = Number(acc.initial_balance);
+      expenses.forEach((e: ExpenseWithRelations) => {
+        if (e.account_id !== acc.id) return;
+        balance += e.is_income ? Number(e.amount) : -Number(e.amount);
+      });
+      return { ...acc, balance };
+    });
+  }, [accounts, expenses]);
+
+  const totalBalance = useMemo(
+    () => accountBalances.reduce((sum, a) => sum + a.balance, 0),
+    [accountBalances]
+  );
+
   const stats = useMemo(() => {
     const today = new Date();
     const currentMonth = today.getMonth();
@@ -123,6 +140,42 @@ export default function OverviewClient({ expenses, schedules }: OverviewClientPr
           Monitora le tue entrate, spese e pagamenti imminenti in tempo reale.
         </p>
       </div>
+
+      {/* Saldi Conti */}
+      {accounts.length > 0 && (
+        <div
+          className="rounded-2xl p-6 border relative overflow-hidden animate-fade-in"
+          style={{
+            background: "linear-gradient(135deg, hsla(200, 60%, 15%, 0.1), hsla(240, 10%, 10%, 0.6))",
+            borderColor: "hsla(200, 60%, 50%, 0.15)",
+          }}
+        >
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <h2 className="text-sm font-extrabold text-white tracking-wide flex items-center gap-2">
+              <span className="text-sky-400"><WalletIcon size={16} /></span> Saldi Conti
+            </h2>
+            <Link href="/dashboard/accounts" className="text-xs font-bold text-sky-400 hover:text-sky-300 transition-colors">
+              Gestisci →
+            </Link>
+          </div>
+          <div className="flex flex-wrap gap-4 relative z-10">
+            <div className="min-w-[120px]">
+              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Totale</span>
+              <span className={`text-xl font-black ${totalBalance >= 0 ? "text-white" : "text-rose-400"}`}>
+                {formatCurrency(totalBalance)}
+              </span>
+            </div>
+            {accountBalances.map(acc => (
+              <div key={acc.id} className="min-w-[120px]">
+                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block truncate">{acc.name}</span>
+                <span className={`text-sm font-bold ${acc.balance >= 0 ? "text-slate-200" : "text-rose-400"}`}>
+                  {formatCurrency(acc.balance)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Grid delle schede KPI (Entrate, Uscite, Bilancio Netto, Scadenze) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
