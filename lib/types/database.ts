@@ -47,6 +47,7 @@ export interface Expense {
   category_id: string | null; // FK -> expense_categories.id
   supplier_id: string | null; // FK -> suppliers.id
   schedule_id: string | null; // FK -> payment_schedules.id (se generata pagando una scadenza)
+  budget_id: string | null; // FK -> budgets.id (se generata confermando una voce di budget)
   account_id: string | null; // FK -> accounts.id
   consumption_value: number | null; // consumo del periodo (unita' definita da suppliers.consumption_unit)
   is_income: boolean;
@@ -81,6 +82,7 @@ export interface Budget {
   is_estimated: boolean;
   end_month: number | null; // 1-12, ultimo mese in cui la voce e' attiva (es. fine mutuo/finanziamento)
   end_year: number | null;
+  day_of_month: number | null; // 1-31, giorno del mese in cui la voce ricorrente e' fissata (es. affitto il 5)
   created_at: string;
   updated_at: string;
 }
@@ -172,6 +174,7 @@ export interface Database {
           category_id?: string | null;
           supplier_id?: string | null;
           schedule_id?: string | null;
+          budget_id?: string | null;
           account_id?: string | null;
           consumption_value?: number | null;
           is_income?: boolean;
@@ -188,6 +191,7 @@ export interface Database {
           category_id?: string | null;
           supplier_id?: string | null;
           schedule_id?: string | null;
+          budget_id?: string | null;
           account_id?: string | null;
           consumption_value?: number | null;
           is_income?: boolean;
@@ -214,6 +218,13 @@ export interface Database {
             columns: ["schedule_id"];
             isOneToOne: false;
             referencedRelation: "payment_schedules";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "expenses_budget_id_fkey";
+            columns: ["budget_id"];
+            isOneToOne: false;
+            referencedRelation: "budgets";
             referencedColumns: ["id"];
           },
           {
@@ -313,6 +324,7 @@ export interface Database {
           is_estimated?: boolean;
           end_month?: number | null;
           end_year?: number | null;
+          day_of_month?: number | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -327,6 +339,7 @@ export interface Database {
           is_estimated?: boolean;
           end_month?: number | null;
           end_year?: number | null;
+          day_of_month?: number | null;
           created_at?: string;
           updated_at?: string;
         };

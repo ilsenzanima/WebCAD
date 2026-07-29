@@ -27,7 +27,7 @@ export default async function BudgetPage() {
     <BudgetClient
       initialBudgets={budgets}
       categories={categories}
-      expenses={expenses}
+      initialExpenses={expenses}
       initialOverrides={overrides}
     />
   );

@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { type Budget, type BudgetOverride, type ExpenseCategory } from "@/lib/types/database";
-import { createBudget, updateBudget, deleteBudget, upsertBudgetOverride, deleteBudgetOverride } from "@/app/actions/budget";
+import { createBudget, updateBudget, deleteBudget, upsertBudgetOverride, deleteBudgetOverride, confirmBudgetExpense } from "@/app/actions/budget";
 import { formatCurrency } from "@/lib/format";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
 
@@ -17,7 +17,7 @@ interface BudgetWithRelations extends Omit<Budget, "amount"> {
 interface BudgetClientProps {
   initialBudgets: any[];
   categories: ExpenseCategory[];
-  expenses: any[];
+  initialExpenses: any[];
   initialOverrides: BudgetOverride[];
 }
 
@@ -46,9 +46,10 @@ const PERIODS = [
   { value: "annual", label: "Annuale" },
 ];
 
-export default function BudgetClient({ initialBudgets, categories, expenses, initialOverrides }: BudgetClientProps) {
+export default function BudgetClient({ initialBudgets, categories, initialExpenses, initialOverrides }: BudgetClientProps) {
   const [budgets, setBudgets] = useState<BudgetWithRelations[]>(initialBudgets);
   const [overrides, setOverrides] = useState<BudgetOverride[]>(initialOverrides);
+  const [expenses, setExpenses] = useState<any[]>(initialExpenses);
   const [isPending, startTransition] = useTransition();
 
   // Mese selezionato per l'analisi previsto/reale (default: mese corrente)
@@ -76,11 +77,18 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
   const [periodicity, setPeriodicity] = useState<"weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual">("monthly");
   const [isEstimated, setIsEstimated] = useState(false);
   const [hasDuration, setHasDuration] = useState(false);
-  const [monthsRemaining, setMonthsRemaining] = useState("");
+  const [endMonthInput, setEndMonthInput] = useState(now.getMonth() + 1);
+  const [endYearInput, setEndYearInput] = useState(now.getFullYear());
+  const [dayOfMonth, setDayOfMonth] = useState("");
 
   // Editing inline dell'importo effettivo (override mensile)
   const [editingOverrideBudgetId, setEditingOverrideBudgetId] = useState<string | null>(null);
   const [overrideDraft, setOverrideDraft] = useState("");
+
+  // Conferma di una previsione come spesa/entrata reale del mese selezionato
+  const [confirmingBudgetId, setConfirmingBudgetId] = useState<string | null>(null);
+  const [confirmAmount, setConfirmAmount] = useState("");
+  const [confirmDate, setConfirmDate] = useState("");
 
   const resetForm = () => {
     setEditingId(null);
@@ -90,7 +98,9 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
     setPeriodicity("monthly");
     setIsEstimated(false);
     setHasDuration(false);
-    setMonthsRemaining("");
+    setEndMonthInput(now.getMonth() + 1);
+    setEndYearInput(now.getFullYear());
+    setDayOfMonth("");
   };
 
   const startEditBudget = (b: BudgetWithRelations) => {
@@ -101,13 +111,15 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
     setLabel(b.label);
     setPeriodicity(b.periodicity);
     setIsEstimated(b.is_estimated);
+    setDayOfMonth(b.day_of_month ? String(b.day_of_month) : "");
     if (b.end_year && b.end_month) {
-      const remaining = (b.end_year - now.getFullYear()) * 12 + (b.end_month - (now.getMonth() + 1));
       setHasDuration(true);
-      setMonthsRemaining(String(Math.max(remaining, 0)));
+      setEndMonthInput(b.end_month);
+      setEndYearInput(b.end_year);
     } else {
       setHasDuration(false);
-      setMonthsRemaining("");
+      setEndMonthInput(now.getMonth() + 1);
+      setEndYearInput(now.getFullYear());
     }
   };
 
@@ -157,14 +169,22 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
     let endMonth: number | null = null;
     let endYear: number | null = null;
     if (hasDuration) {
-      const n = parseInt(monthsRemaining, 10);
-      if (!n || n <= 0) {
-        alert("Inserisci un numero di mesi rimanenti valido");
+      if (endYearInput < now.getFullYear() || (endYearInput === now.getFullYear() && endMonthInput < now.getMonth() + 1)) {
+        alert("La data di fine non può essere nel passato");
         return;
       }
-      const endDateObj = new Date(now.getFullYear(), now.getMonth() + n, 1);
-      endYear = endDateObj.getFullYear();
-      endMonth = endDateObj.getMonth() + 1;
+      endMonth = endMonthInput;
+      endYear = endYearInput;
+    }
+
+    let dayOfMonthValue: number | null = null;
+    if (dayOfMonth.trim()) {
+      const d = parseInt(dayOfMonth, 10);
+      if (!d || d < 1 || d > 31) {
+        alert("Inserisci un giorno del mese valido (1-31)");
+        return;
+      }
+      dayOfMonthValue = d;
     }
 
     startTransition(async () => {
@@ -178,6 +198,7 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
           is_estimated: isEstimated, // Abilitato anche per le entrate
           end_month: endMonth,
           end_year: endYear,
+          day_of_month: dayOfMonthValue,
         };
 
         if (editingId) {
@@ -253,6 +274,54 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
         setOverrides(prev => prev.filter(o => o.id !== ov.id));
       } catch (err: any) {
         alert(err.message || "Errore durante il ripristino");
+      }
+    });
+  };
+
+  // Trova l'eventuale spesa/entrata reale gia' collegata a questa voce di budget per il mese indicato
+  const findLinkedExpense = (budgetId: string, year: number, month: number) =>
+    expenses.find((e: any) => {
+      if (e.budget_id !== budgetId) return false;
+      const eDate = new Date(e.date);
+      return eDate.getFullYear() === year && eDate.getMonth() + 1 === month;
+    });
+
+  const startConfirmExpense = (b: BudgetWithRelations) => {
+    setConfirmingBudgetId(b.id);
+    setConfirmAmount(String(getEffectiveAmount(b, selectedYear, selectedMonth)));
+    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+    const day = Math.min(b.day_of_month || Math.min(now.getDate(), daysInMonth), daysInMonth);
+    setConfirmDate(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+  };
+
+  const cancelConfirmExpense = () => {
+    setConfirmingBudgetId(null);
+    setConfirmAmount("");
+    setConfirmDate("");
+  };
+
+  const saveConfirmExpense = (b: BudgetWithRelations) => {
+    const value = Number(confirmAmount);
+    if (isNaN(value) || value <= 0) {
+      alert("Inserisci un importo valido");
+      return;
+    }
+    if (!confirmDate) {
+      alert("Inserisci una data valida");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await confirmBudgetExpense(b.id, { amount: value, date: confirmDate });
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore durante la conferma");
+          return;
+        }
+        setExpenses(prev => [res.data, ...prev]);
+        cancelConfirmExpense();
+      } catch (err: any) {
+        alert(err.message || "Errore durante la conferma");
       }
     });
   };
@@ -733,25 +802,56 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
                 Ha una scadenza (mutuo, finanziamento...)
               </label>
               {hasDuration && (
-                <div className="animate-fade-in">
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={monthsRemaining}
-                    onChange={(e) => setMonthsRemaining(e.target.value)}
-                    placeholder="Mesi rimanenti da oggi"
-                    className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all duration-200"
-                    style={{
-                      background: "hsl(240 10% 4% / 0.8)",
-                      borderColor: "hsl(240 5% 18%)",
-                    }}
-                  />
+                <div className="animate-fade-in space-y-1.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      value={endMonthInput}
+                      onChange={(e) => setEndMonthInput(Number(e.target.value))}
+                      className="w-full px-3 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
+                      style={{ background: "hsl(240 10% 4% / 0.8)", borderColor: "hsl(240 5% 18%)" }}
+                    >
+                      {MONTH_LABELS.map((m, i) => (
+                        <option key={m} value={i + 1} style={{ background: "hsl(240 10% 10%)" }}>{m}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min={now.getFullYear()}
+                      step="1"
+                      value={endYearInput}
+                      onChange={(e) => setEndYearInput(Number(e.target.value))}
+                      placeholder="Anno"
+                      className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all duration-200"
+                      style={{ background: "hsl(240 10% 4% / 0.8)", borderColor: "hsl(240 5% 18%)" }}
+                    />
+                  </div>
                   <p className="text-[9px] text-zinc-500 mt-1">
-                    Es. per un mutuo iniziato tempo fa, indica quante rate/mesi mancano da oggi. La voce smette di contare nelle previsioni dopo quella data.
+                    Indica il mese/anno dell'ultima rata (es. quando finisce il mutuo). La voce smette di contare nelle previsioni dopo quella data.
                   </p>
                 </div>
               )}
+            </div>
+
+            {/* Giorno del mese fisso (es. affitto il 5, stipendio il 27) */}
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Giorno del mese (opzionale)</label>
+              <input
+                type="number"
+                min="1"
+                max="31"
+                step="1"
+                value={dayOfMonth}
+                onChange={(e) => setDayOfMonth(e.target.value)}
+                placeholder="es. 27"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all duration-200"
+                style={{
+                  background: "hsl(240 10% 4% / 0.8)",
+                  borderColor: "hsl(240 5% 18%)",
+                }}
+              />
+              <p className="text-[9px] text-zinc-500 mt-1">
+                Se la voce e' fissata in un giorno preciso del mese, indicalo qui: verra' proposto come data di default quando confermi il pagamento reale.
+              </p>
             </div>
 
             {/* Descrizione */}
@@ -1036,6 +1136,8 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
                     const ended = isBudgetEnded(b, selectedYear, selectedMonth);
                     const effectiveAmount = getEffectiveAmount(b, selectedYear, selectedMonth);
                     const isEditingOverride = editingOverrideBudgetId === b.id;
+                    const linkedExpense = findLinkedExpense(b.id, selectedYear, selectedMonth);
+                    const isConfirming = confirmingBudgetId === b.id;
 
                     return (
                       <tr key={b.id} className="hover:bg-white/2 transition-colors duration-150 group animate-fade-in">
@@ -1064,6 +1166,14 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
                                 title="Ultimo mese in cui questa voce e' attiva"
                               >
                                 🏁 {ended ? "Concluso" : `fino a ${MONTH_LABELS[b.end_month - 1].slice(0, 3)} ${b.end_year}`}
+                              </span>
+                            )}
+                            {b.day_of_month && (
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border bg-zinc-800/50 text-zinc-400 border-zinc-700"
+                                title="Giorno del mese in cui questa voce e' fissata"
+                              >
+                                📅 il {b.day_of_month}
                               </span>
                             )}
                           </div>
@@ -1127,35 +1237,76 @@ export default function BudgetClient({ initialBudgets, categories, expenses, ini
                                   Concluso
                                 </span>
                               ) : null}
+                              {linkedExpense && (
+                                <span
+                                  className="text-[7px] uppercase font-extrabold tracking-widest text-emerald-500"
+                                  title={`Già registrata in Spese & Entrate il ${new Date(linkedExpense.date).toLocaleDateString("it-IT")}`}
+                                >
+                                  🔗 Registrata
+                                </span>
+                              )}
                             </button>
                           )}
                         </td>
                         <td className="py-3 text-center">
-                          <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                            {override && !isEditingOverride && (
+                          {isConfirming ? (
+                            <div className="flex flex-col gap-1 items-end animate-fade-in">
+                              <input
+                                type="number"
+                                step="0.01"
+                                autoFocus
+                                value={confirmAmount}
+                                onChange={(e) => setConfirmAmount(e.target.value)}
+                                placeholder="Importo"
+                                className="w-24 px-1.5 py-1 rounded text-right text-[10px] text-white bg-zinc-950 border border-emerald-500/50 focus:outline-none"
+                              />
+                              <input
+                                type="date"
+                                value={confirmDate}
+                                onChange={(e) => setConfirmDate(e.target.value)}
+                                className="w-32 px-1.5 py-1 rounded text-[10px] text-white bg-zinc-950 border border-emerald-500/50 focus:outline-none"
+                              />
+                              <div className="flex gap-1">
+                                <button onClick={() => saveConfirmExpense(b)} className="text-emerald-400 hover:text-emerald-300 text-[9px] font-bold px-1" title="Registra in Spese & Entrate">✓ Registra</button>
+                                <button onClick={cancelConfirmExpense} className="text-zinc-500 hover:text-white text-[9px] font-bold px-1" title="Annulla">✕</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                              {!linkedExpense && (
+                                <button
+                                  onClick={() => startConfirmExpense(b)}
+                                  className="p-1 rounded text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all text-[10px]"
+                                  title="Conferma come spesa/entrata reale in Spese & Entrate"
+                                >
+                                  ✅
+                                </button>
+                              )}
+                              {override && !isEditingOverride && (
+                                <button
+                                  onClick={() => resetOverride(b)}
+                                  className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all text-[10px]"
+                                  title="Ripristina stima di base per questo mese"
+                                >
+                                  ↺
+                                </button>
+                              )}
                               <button
-                                onClick={() => resetOverride(b)}
-                                className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all text-[10px]"
-                                title="Ripristina stima di base per questo mese"
+                                onClick={() => startEditBudget(b)}
+                                className="p-1 rounded text-slate-500 hover:text-sky-400 hover:bg-sky-500/10 transition-all text-[10px]"
+                                title="Modifica voce"
                               >
-                                ↺
+                                ✎
                               </button>
-                            )}
-                            <button
-                              onClick={() => startEditBudget(b)}
-                              className="p-1 rounded text-slate-500 hover:text-sky-400 hover:bg-sky-500/10 transition-all text-[10px]"
-                              title="Modifica voce"
-                            >
-                              ✎
-                            </button>
-                            <button
-                              onClick={() => handleDelete(b.id)}
-                              className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
-                              title="Elimina"
-                            >
-                              <DeleteIcon size={12} />
-                            </button>
-                          </div>
+                              <button
+                                onClick={() => handleDelete(b.id)}
+                                className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                                title="Elimina"
+                              >
+                                <DeleteIcon size={12} />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
