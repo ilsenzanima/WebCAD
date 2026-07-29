@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import Link from "next/link";
 import { type Supplier } from "@/lib/types/database";
 import { createSupplier, updateSupplier, deleteSupplier } from "@/app/actions/suppliers";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, toLocalDateStr } from "@/lib/format";
 import { EditIcon, DeleteIcon, SettingsIcon } from "./icons";
 
 interface SuppliersClientProps {
@@ -102,7 +102,7 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
   const handleToggleActive = (sup: Supplier, e: React.MouseEvent) => {
     e.stopPropagation();
     const nextActive = !sup.is_active;
-    const closedAt = nextActive ? null : new Date().toISOString().split("T")[0];
+    const closedAt = nextActive ? null : toLocalDateStr();
 
     startTransition(async () => {
       try {
@@ -308,7 +308,7 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setIsActive(false); if (!contractClosedAt) setContractClosedAt(new Date().toISOString().split("T")[0]); }}
+                    onClick={() => { setIsActive(false); if (!contractClosedAt) setContractClosedAt(toLocalDateStr()); }}
                     className="flex-1 py-2 rounded-lg transition-all"
                     style={{
                       background: !isActive ? "hsla(0, 70%, 55%, 0.12)" : "transparent",

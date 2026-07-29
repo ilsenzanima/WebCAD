@@ -6,7 +6,7 @@ import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib
 import { createSchedule, updateSchedule, deleteSchedule, paySchedule } from "@/app/actions/schedules";
 import { syncSchedulesToCalendar } from "@/app/actions/google";
 import { DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, toLocalDateStr } from "@/lib/format";
 import { DeleteIcon, EditIcon, CheckIcon, SchedulesIcon } from "./icons";
 
 interface ScheduleWithRelations extends Omit<PaymentSchedule, "amount"> {
@@ -64,7 +64,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
   const [supplierId, setSupplierId] = useState("");
   const [description, setDescription] = useState("");
-  const [dueDate, setDueDate] = useState(new Date().toISOString().split("T")[0]);
+  const [dueDate, setDueDate] = useState(toLocalDateStr());
   const [recurrence, setRecurrence] = useState<"one-time" | "weekly" | "monthly" | "yearly">("one-time");
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -76,7 +76,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     setCategoryId(categories[0]?.id || "");
     setSupplierId("");
     setDescription("");
-    setDueDate(new Date().toISOString().split("T")[0]);
+    setDueDate(toLocalDateStr());
     setRecurrence("one-time");
     setEditingId(null);
   };

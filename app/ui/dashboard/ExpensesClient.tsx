@@ -7,7 +7,7 @@ import { createExpense, updateExpense, deleteExpense } from "@/app/actions/expen
 import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
 import { createSupplier } from "@/app/actions/suppliers";
 import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
-import { formatCurrency, formatFileSize, formatDate } from "@/lib/format";
+import { formatCurrency, formatFileSize, formatDate, toLocalDateStr } from "@/lib/format";
 import SchedulesClient from "./SchedulesClient";
 import { EditIcon, DeleteIcon, ExpensesIcon } from "./icons";
 
@@ -85,7 +85,7 @@ export default function ExpensesClient({
   const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
   const [supplierId, setSupplierId] = useState("");
   const [description, setDescription] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(toLocalDateStr());
   const [consumptionValue, setConsumptionValue] = useState("");
   const [accountId, setAccountId] = useState("");
 
@@ -129,7 +129,7 @@ export default function ExpensesClient({
     setCategoryId(categories[0]?.id || "");
     setSupplierId("");
     setDescription("");
-    setDate(new Date().toISOString().split("T")[0]);
+    setDate(toLocalDateStr());
     setConsumptionValue("");
     setAccountId("");
     setEditingId(null);

@@ -13,6 +13,21 @@ export function formatDate(date: string | Date): string {
   return d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+/**
+ * Converte una Date nella stringa "aaaa-mm-gg" usando i suoi componenti
+ * *locali* (anno/mese/giorno del fuso orario del browser), a differenza di
+ * `date.toISOString().split("T")[0]` che converte prima in UTC: con un fuso
+ * orario avanti rispetto a UTC (es. Italia) quest'ultima puo' restituire il
+ * giorno sbagliato (es. la mezzanotte locale del 16 diventa le 22:00 UTC del
+ * 15), causando calendari/date di default disallineati di un giorno.
+ */
+export function toLocalDateStr(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export function formatFileSize(bytes?: number | null): string {
   if (!bytes) return "";
   if (bytes < 1024) return `${bytes} B`;

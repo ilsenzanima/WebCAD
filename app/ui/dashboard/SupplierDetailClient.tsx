@@ -7,7 +7,7 @@ import { type Supplier, type SupplierDocument } from "@/lib/types/database";
 import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
 import { updateSupplier } from "@/app/actions/suppliers";
 import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
-import { formatCurrency, formatFileSize, formatDate } from "@/lib/format";
+import { formatCurrency, formatFileSize, formatDate, toLocalDateStr } from "@/lib/format";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
 
 interface SupplierDetailClientProps {
@@ -33,7 +33,7 @@ export default function SupplierDetailClient({
 
   const handleToggleContract = () => {
     const nextActive = !supplierState.is_active;
-    const closedAt = nextActive ? null : new Date().toISOString().split("T")[0];
+    const closedAt = nextActive ? null : toLocalDateStr();
 
     startTransition(async () => {
       try {

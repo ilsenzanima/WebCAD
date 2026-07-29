@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import { type Expense, type PaymentSchedule } from "@/lib/types/database";
 import { deleteExpense } from "@/app/actions/expenses";
 import { deleteSchedule, paySchedule } from "@/app/actions/schedules";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, toLocalDateStr } from "@/lib/format";
 import { getNextDueDate } from "@/lib/recurrence";
 import { ArrowLeftIcon, ArrowRightIcon, DeleteIcon, CheckIcon, SchedulesIcon, ExpensesIcon } from "./icons";
 
@@ -52,7 +52,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
   const [isPending, startTransition] = useTransition();
 
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState<string | null>(new Date().toISOString().split("T")[0]);
+  const [selectedDate, setSelectedDate] = useState<string | null>(toLocalDateStr());
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -82,7 +82,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
       const prevDay = daysInPrevMonth - i;
       const prevMonthDate = new Date(year, month - 1, prevDay);
       cells.push({
-        dateStr: prevMonthDate.toISOString().split("T")[0],
+        dateStr: toLocalDateStr(prevMonthDate),
         dayNum: prevDay,
         isCurrentMonth: false
       });
@@ -91,7 +91,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
     for (let i = 1; i <= daysInMonth; i++) {
       const currentMonthDate = new Date(year, month, i);
       cells.push({
-        dateStr: currentMonthDate.toISOString().split("T")[0],
+        dateStr: toLocalDateStr(currentMonthDate),
         dayNum: i,
         isCurrentMonth: true
       });
@@ -101,7 +101,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
     for (let i = 1; i <= remainingCells; i++) {
       const nextMonthDate = new Date(year, month + 1, i);
       cells.push({
-        dateStr: nextMonthDate.toISOString().split("T")[0],
+        dateStr: toLocalDateStr(nextMonthDate),
         dayNum: i,
         isCurrentMonth: false
       });
@@ -160,7 +160,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
         }
 
         // Inoltre, inseriamo la spesa di oggi
-        const todayStr = new Date().toISOString().split("T")[0];
+        const todayStr = toLocalDateStr();
         const newExp: ExpenseWithRelations = {
           id: Math.random().toString(),
           user_id: "",
@@ -288,7 +288,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
               const totalExpenses = dayExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
               const hasPending = daySchedules.some(s => !s.is_paid);
 
-              const todayStr = new Date().toISOString().split("T")[0];
+              const todayStr = toLocalDateStr();
               const isToday = cell.dateStr === todayStr;
 
               return (
