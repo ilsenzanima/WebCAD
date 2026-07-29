@@ -6,11 +6,14 @@ import { type ExpenseCategory } from "@/lib/types/database";
 import { createCategory, updateCategory, deleteCategory } from "@/app/actions/categories";
 import { changePassword } from "@/app/actions/auth";
 import { disconnectGoogleDrive } from "@/app/actions/google";
+import { setFontPreference } from "@/app/actions/preferences";
+import { FONT_OPTIONS } from "@/lib/fonts";
 import { EditIcon, DeleteIcon } from "./icons";
 
 interface SettingsClientProps {
   categories: ExpenseCategory[];
   googleConnected: boolean;
+  currentFontId: string;
 }
 
 const COLOR_OPTIONS = [
@@ -24,12 +27,33 @@ const COLOR_OPTIONS = [
   { value: "slate", label: "Grigio", bg: "rgba(107,114,128,0.2)", text: "hsl(215 15% 75%)" },
 ];
 
-export default function SettingsClient({ categories: initialCategories, googleConnected: initialGoogleConnected }: SettingsClientProps) {
-  const [activeTab, setActiveTab] = useState<"security" | "categories" | "connections">("categories");
+export default function SettingsClient({ categories: initialCategories, googleConnected: initialGoogleConnected, currentFontId }: SettingsClientProps) {
+  const [activeTab, setActiveTab] = useState<"security" | "categories" | "connections" | "appearance">("categories");
   const [isPending, startTransition] = useTransition();
   const [googleConnected, setGoogleConnected] = useState(initialGoogleConnected);
+  const [selectedFontId, setSelectedFontId] = useState(currentFontId);
+  const [isSavingFont, setIsSavingFont] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const handleSelectFont = (fontId: string) => {
+    setSelectedFontId(fontId);
+    setIsSavingFont(true);
+    startTransition(async () => {
+      try {
+        const res = await setFontPreference(fontId);
+        if (!res.success) {
+          alert(res.error || "Errore durante il salvataggio del font");
+          return;
+        }
+        router.refresh();
+      } catch (err: any) {
+        alert(err.message || "Errore durante il salvataggio del font");
+      } finally {
+        setIsSavingFont(false);
+      }
+    });
+  };
 
   useEffect(() => {
     const googleError = searchParams.get("google_error");
@@ -194,6 +218,15 @@ export default function SettingsClient({ categories: initialCategories, googleCo
             }`}
           >
             🔗 Collegamenti
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("appearance")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "appearance" ? "bg-white/10 text-white shadow-lg" : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            🎨 Aspetto
           </button>
         </div>
       </div>
@@ -402,6 +435,54 @@ export default function SettingsClient({ categories: initialCategories, googleCo
                 </a>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Content Tab Aspetto */}
+      {activeTab === "appearance" && (
+        <div className="max-w-2xl mx-auto animate-fade-in">
+          <div
+            className="rounded-2xl p-6 border shadow-2xl backdrop-blur-xl"
+            style={{
+              background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+              borderColor: "hsla(240, 5%, 18%, 0.7)",
+            }}
+          >
+            <h2 className="text-base font-extrabold text-white mb-1">Font dell'interfaccia</h2>
+            <p className="text-[11px] text-slate-400 mb-5 leading-relaxed">
+              Scegli il font con cui viene scritto tutto il gestionale. Ogni opzione mostra un'anteprima dal vivo.
+            </p>
+
+            <div className="space-y-3">
+              {FONT_OPTIONS.map((font) => (
+                <button
+                  key={font.id}
+                  type="button"
+                  onClick={() => handleSelectFont(font.id)}
+                  disabled={isSavingFont}
+                  className={`w-full text-left p-4 rounded-xl border transition-all ${
+                    selectedFontId === font.id
+                      ? "bg-indigo-500/10 border-indigo-500/40 ring-1 ring-indigo-500/40"
+                      : "bg-zinc-950/60 border-zinc-800 hover:border-zinc-700"
+                  } disabled:opacity-60`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      {font.label}
+                      {selectedFontId === font.id && <span className="text-indigo-400">✓ Attivo</span>}
+                    </span>
+                  </div>
+                  <p
+                    className="text-lg text-white leading-snug"
+                    style={{ fontFamily: `var(${font.cssVar})` }}
+                  >
+                    Fammi sapere quale opzione provi — 0123456789
+                  </p>
+                  <p className="text-[9px] text-slate-500 mt-1.5">{font.description}</p>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
