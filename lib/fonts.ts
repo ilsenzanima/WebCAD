@@ -12,6 +12,9 @@ export interface FontOption {
 
 export const FONT_OPTIONS: FontOption[] = [
   { id: "inter", label: "Inter", cssVar: "--font-inter", description: "Il font attuale: pulito e molto diffuso nelle interfacce moderne." },
+  { id: "opendyslexic", label: "OpenDyslexic", cssVar: "--font-opendyslexic", description: "Pensato apposta per la dislessia: base delle lettere piu' pesante per non confondere forme simili (b/d/p/q) e ancorare la riga." },
+  { id: "atkinson", label: "Atkinson Hyperlegible", cssVar: "--font-atkinson", description: "Disegnato dalla Braille Institute per la massima leggibilita' e distinzione tra caratteri simili." },
+  { id: "lexend", label: "Lexend", cssVar: "--font-lexend", description: "Basato su ricerche di lettura per ridurre lo sforzo visivo e migliorare la velocita' di lettura." },
   { id: "manrope", label: "Manrope", cssVar: "--font-manrope", description: "Geometrico ma morbido, molto usato in dashboard e app finanziarie." },
   { id: "jakarta", label: "Plus Jakarta Sans", cssVar: "--font-jakarta", description: "Simile a Manrope ma con un tocco piu' arrotondato e friendly." },
   { id: "geist", label: "Geist", cssVar: "--font-geist", description: "Il font di Vercel: minimale, ottima leggibilita' su schermo." },
