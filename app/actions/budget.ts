@@ -11,7 +11,7 @@ export async function getBudgets() {
 
     const { data, error } = await supabase
       .from("budgets")
-      .select("*, expense_categories(name, color)")
+      .select("*, expense_categories(name, color), suppliers(name)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -26,6 +26,7 @@ export async function getBudgets() {
 export async function createBudget(formData: {
   amount: number;
   category_id: string | null;
+  supplier_id?: string | null;
   type: "income" | "need" | "want" | "emergency";
   label: string;
   periodicity?: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
@@ -43,6 +44,7 @@ export async function createBudget(formData: {
       user_id: user.id,
       amount: formData.amount,
       category_id: formData.category_id || null,
+      supplier_id: formData.supplier_id || null,
       type: formData.type,
       label: formData.label,
       periodicity: formData.periodicity || "monthly",
@@ -50,7 +52,7 @@ export async function createBudget(formData: {
       end_month: formData.end_month || null,
       end_year: formData.end_year || null,
       day_of_month: formData.day_of_month || null,
-    }).select("*, expense_categories(name, color)").single();
+    }).select("*, expense_categories(name, color), suppliers(name)").single();
 
     if (error) throw new Error(error.message);
 
@@ -65,6 +67,7 @@ export async function createBudget(formData: {
 export async function updateBudget(id: string, formData: {
   amount: number;
   category_id: string | null;
+  supplier_id?: string | null;
   type: "income" | "need" | "want" | "emergency";
   label: string;
   periodicity?: "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual";
@@ -83,6 +86,7 @@ export async function updateBudget(id: string, formData: {
       .update({
         amount: formData.amount,
         category_id: formData.category_id || null,
+        supplier_id: formData.supplier_id || null,
         type: formData.type,
         label: formData.label,
         periodicity: formData.periodicity || "monthly",
@@ -93,7 +97,7 @@ export async function updateBudget(id: string, formData: {
       })
       .eq("id", id)
       .eq("user_id", user.id)
-      .select("*, expense_categories(name, color)")
+      .select("*, expense_categories(name, color), suppliers(name)")
       .single();
 
     if (error) throw new Error(error.message);
@@ -211,7 +215,7 @@ export async function confirmBudgetExpense(budgetId: string, formData: {
       amount: formData.amount,
       category: budget.label,
       category_id: budget.category_id,
-      supplier_id: null,
+      supplier_id: budget.supplier_id,
       budget_id: budget.id,
       description: budget.label,
       date: formData.date,

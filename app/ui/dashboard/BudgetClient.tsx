@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import { type Budget, type BudgetOverride, type ExpenseCategory } from "@/lib/types/database";
+import { type Budget, type BudgetOverride, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createBudget, updateBudget, deleteBudget, upsertBudgetOverride, deleteBudgetOverride, confirmBudgetExpense } from "@/app/actions/budget";
 import { formatCurrency } from "@/lib/format";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
@@ -12,6 +12,9 @@ interface BudgetWithRelations extends Omit<Budget, "amount"> {
     name: string;
     color: string;
   } | null;
+  suppliers?: {
+    name: string;
+  } | null;
 }
 
 interface BudgetClientProps {
@@ -19,6 +22,7 @@ interface BudgetClientProps {
   categories: ExpenseCategory[];
   initialExpenses: any[];
   initialOverrides: BudgetOverride[];
+  suppliers: Supplier[];
 }
 
 const MONTH_LABELS = [
@@ -46,7 +50,7 @@ const PERIODS = [
   { value: "annual", label: "Annuale" },
 ];
 
-export default function BudgetClient({ initialBudgets, categories, initialExpenses, initialOverrides }: BudgetClientProps) {
+export default function BudgetClient({ initialBudgets, categories, initialExpenses, initialOverrides, suppliers }: BudgetClientProps) {
   const [budgets, setBudgets] = useState<BudgetWithRelations[]>(initialBudgets);
   const [overrides, setOverrides] = useState<BudgetOverride[]>(initialOverrides);
   const [expenses, setExpenses] = useState<any[]>(initialExpenses);
@@ -72,6 +76,7 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
   const [editingId, setEditingId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [supplierId, setSupplierId] = useState("");
   const [type, setType] = useState<"income" | "need" | "want" | "emergency">("need");
   const [label, setLabel] = useState("");
   const [periodicity, setPeriodicity] = useState<"weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual">("monthly");
@@ -94,6 +99,7 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
     setEditingId(null);
     setAmount("");
     setCategoryId("");
+    setSupplierId("");
     setLabel("");
     setPeriodicity("monthly");
     setIsEstimated(false);
@@ -107,6 +113,7 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
     setEditingId(b.id);
     setAmount(String(b.amount));
     setCategoryId(b.category_id || "");
+    setSupplierId(b.supplier_id || "");
     setType(b.type);
     setLabel(b.label);
     setPeriodicity(b.periodicity);
@@ -192,6 +199,7 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
         const payload = {
           amount: Number(amount),
           category_id: type === "income" ? null : (categoryId || null),
+          supplier_id: type === "income" ? null : (supplierId || null),
           type,
           label: label.trim(),
           periodicity: type === "income" ? "monthly" : periodicity,
@@ -790,6 +798,34 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
               </div>
             )}
 
+            {/* Fornitore (preimpostato: verra' ereditato automaticamente quando confermi il pagamento reale) */}
+            {type !== "income" && (
+              <div className="space-y-1.5 animate-fade-in">
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Fornitore (opzionale)</label>
+                <select
+                  value={supplierId}
+                  onChange={(e) => setSupplierId(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
+                  style={{
+                    background: "hsl(240 10% 4% / 0.8)",
+                    borderColor: "hsl(240 5% 18%)",
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = "hsl(245 85% 55%)"}
+                  onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 18%)"}
+                >
+                  <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun fornitore</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id} style={{ background: "hsl(240 10% 10%)" }}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[9px] text-zinc-500 mt-1">
+                  Se indicato, verra' associato automaticamente quando confermi il pagamento come spesa reale.
+                </p>
+              </div>
+            )}
+
             {/* Durata Limitata (es. mutuo o finanziamento gia' in corso) */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider cursor-pointer">
@@ -1154,6 +1190,14 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
                                 }}
                               >
                                 {catName}
+                              </span>
+                            )}
+                            {b.suppliers?.name && (
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border bg-sky-500/10 text-sky-300 border-sky-500/20"
+                                title="Fornitore preimpostato per questa voce"
+                              >
+                                🏢 {b.suppliers.name}
                               </span>
                             )}
                             {b.end_year && b.end_month && (

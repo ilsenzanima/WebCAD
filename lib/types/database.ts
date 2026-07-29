@@ -75,6 +75,7 @@ export interface Budget {
   id: string;
   user_id: string;
   category_id: string | null;
+  supplier_id: string | null; // FK -> suppliers.id, ereditato dalla spesa reale quando si conferma il pagamento
   type: "income" | "need" | "want" | "emergency";
   amount: number;
   label: string;
@@ -317,6 +318,7 @@ export interface Database {
           id?: string;
           user_id?: string;
           category_id?: string | null;
+          supplier_id?: string | null;
           type: "income" | "need" | "want" | "emergency";
           amount: number;
           label: string;
@@ -332,6 +334,7 @@ export interface Database {
           id?: string;
           user_id?: string;
           category_id?: string | null;
+          supplier_id?: string | null;
           type?: "income" | "need" | "want" | "emergency";
           amount?: number;
           label?: string;
@@ -349,6 +352,13 @@ export interface Database {
             columns: ["category_id"];
             isOneToOne: false;
             referencedRelation: "expense_categories";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "budgets_supplier_id_fkey";
+            columns: ["supplier_id"];
+            isOneToOne: false;
+            referencedRelation: "suppliers";
             referencedColumns: ["id"];
           }
         ];
