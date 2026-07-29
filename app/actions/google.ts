@@ -60,13 +60,21 @@ export async function getGoogleConnectionStatus() {
 }
 
 export async function disconnectGoogleDrive() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Non autenticato");
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
 
-  await supabase.from("user_google_tokens").delete().eq("user_id", user.id);
-  revalidatePath("/dashboard/suppliers");
-  return { success: true };
+    const { error } = await supabase.from("user_google_tokens").delete().eq("user_id", user.id);
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard/suppliers");
+    revalidatePath("/dashboard/expenses");
+    revalidatePath("/dashboard/settings");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Errore durante lo scollegamento" };
+  }
 }
 
 export async function uploadSupplierDocumentToDrive(formData: FormData) {

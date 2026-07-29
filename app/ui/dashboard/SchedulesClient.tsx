@@ -3,10 +3,10 @@
 import { useState, useTransition, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib/types/database";
-import { createSchedule, deleteSchedule, paySchedule } from "@/app/actions/schedules";
+import { createSchedule, updateSchedule, deleteSchedule, paySchedule } from "@/app/actions/schedules";
 import { syncSchedulesToCalendar } from "@/app/actions/google";
 import { DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
-import { DeleteIcon, CheckIcon, SchedulesIcon } from "./icons";
+import { DeleteIcon, EditIcon, CheckIcon, SchedulesIcon } from "./icons";
 
 interface ScheduleWithRelations extends Omit<PaymentSchedule, "amount"> {
   amount: number;
@@ -65,6 +65,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState(new Date().toISOString().split("T")[0]);
   const [recurrence, setRecurrence] = useState<"one-time" | "weekly" | "monthly" | "yearly">("one-time");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [filterPaid, setFilterPaid] = useState<"all" | "pending" | "paid">("pending");
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
@@ -76,6 +77,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     setDescription("");
     setDueDate(new Date().toISOString().split("T")[0]);
     setRecurrence("one-time");
+    setEditingId(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -103,17 +105,39 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           recurrence,
         };
 
-        const res = await createSchedule(payload);
-        if (!res.success || !res.data) {
-          alert(res.error || "Errore durante il salvataggio");
-          return;
+        if (editingId) {
+          const res = await updateSchedule(editingId, payload);
+          if (!res.success || !res.data) {
+            alert(res.error || "Errore durante la modifica");
+            return;
+          }
+          setSchedules(prev =>
+            prev.map(s => s.id === editingId ? res.data : s)
+              .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+          );
+        } else {
+          const res = await createSchedule(payload);
+          if (!res.success || !res.data) {
+            alert(res.error || "Errore durante il salvataggio");
+            return;
+          }
+          setSchedules(prev => [res.data, ...prev].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()));
         }
-        setSchedules(prev => [res.data, ...prev].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()));
         resetForm();
       } catch (err: any) {
-        alert(err.message || "Errore durante la creazione");
+        alert(err.message || "Errore durante il salvataggio");
       }
     });
+  };
+
+  const handleEdit = (item: ScheduleWithRelations) => {
+    setEditingId(item.id);
+    setAmount(String(item.amount));
+    setCategoryId(item.category_id || categories[0]?.id || "");
+    setSupplierId(item.supplier_id || "");
+    setDescription(item.description || "");
+    setDueDate(item.due_date);
+    setRecurrence(item.recurrence);
   };
 
   const handlePay = (scheduleId: string) => {
@@ -145,6 +169,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           return;
         }
         setSchedules(prev => prev.filter(item => item.id !== id));
+        if (editingId === id) resetForm();
       } catch (err: any) {
         alert(err.message || "Errore durante l'eliminazione");
       }
@@ -248,9 +273,20 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
         >
           <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-amber-500/5 blur-[50px] pointer-events-none" />
 
-          <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2">
-            <span className="text-amber-400"><SchedulesIcon size={16} /></span>
-            Programma Scadenza
+          <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2 justify-between">
+            <span className="flex items-center gap-2">
+              <span className="text-amber-400"><SchedulesIcon size={16} /></span>
+              {editingId ? "Modifica Scadenza" : "Programma Scadenza"}
+            </span>
+            {editingId && (
+              <button
+                type="button"
+                onClick={resetForm}
+                className="text-[9px] font-bold text-zinc-500 hover:text-white normal-case tracking-normal"
+              >
+                Annulla
+              </button>
+            )}
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
@@ -384,7 +420,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                 cursor: isPending ? "not-allowed" : "pointer",
               }}
             >
-              {isPending ? "Salvataggio..." : "Salva Scadenza"}
+              {isPending ? "Salvataggio..." : editingId ? "Salva Modifiche" : "Salva Scadenza"}
             </button>
           </form>
         </div>
@@ -502,6 +538,13 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                                 Saldata
                               </span>
                             )}
+                            <button
+                              onClick={() => handleEdit(item)}
+                              className="p-1 rounded text-slate-500 hover:text-sky-400 hover:bg-sky-500/10 transition-all opacity-0 group-hover:opacity-100"
+                              title="Modifica"
+                            >
+                              <EditIcon size={12} />
+                            </button>
                             <button
                               onClick={() => handleDelete(item.id)}
                               className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"

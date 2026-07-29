@@ -59,6 +59,48 @@ export async function createSchedule(formData: {
   }
 }
 
+export async function updateSchedule(id: string, formData: {
+  amount: number;
+  category_id: string | null;
+  supplier_id: string | null;
+  category_name: string;
+  description: string;
+  due_date: string;
+  recurrence: "one-time" | "weekly" | "monthly" | "yearly";
+}) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase
+      .from("payment_schedules")
+      .update({
+        amount: formData.amount,
+        category: formData.category_name,
+        category_id: formData.category_id || null,
+        supplier_id: formData.supplier_id || null,
+        description: formData.description || null,
+        due_date: formData.due_date,
+        recurrence: formData.recurrence,
+      })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select("*, expense_categories(name, color), suppliers(name)")
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/expenses");
+    revalidatePath("/dashboard/schedules");
+    revalidatePath("/dashboard/calendar");
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function deleteSchedule(id: string) {
   try {
     const supabase = (await createClient()) as any;

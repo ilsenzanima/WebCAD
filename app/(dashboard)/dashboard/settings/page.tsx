@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCategories } from "@/app/actions/categories";
+import { getGoogleConnectionStatus } from "@/app/actions/google";
 import SettingsClient from "@/app/ui/dashboard/SettingsClient";
 
 export const metadata = {
@@ -13,7 +14,10 @@ export default async function SettingsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const categories = await getCategories().catch(() => []);
+  const [categories, { connected: googleConnected }] = await Promise.all([
+    getCategories().catch(() => []),
+    getGoogleConnectionStatus(),
+  ]);
 
-  return <SettingsClient categories={categories} />;
+  return <SettingsClient categories={categories} googleConnected={googleConnected} />;
 }

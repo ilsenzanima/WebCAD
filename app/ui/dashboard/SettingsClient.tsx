@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { type ExpenseCategory } from "@/lib/types/database";
 import { createCategory, updateCategory, deleteCategory } from "@/app/actions/categories";
 import { changePassword } from "@/app/actions/auth";
+import { disconnectGoogleDrive } from "@/app/actions/google";
 import { EditIcon, DeleteIcon } from "./icons";
 
 interface SettingsClientProps {
   categories: ExpenseCategory[];
+  googleConnected: boolean;
 }
 
 const COLOR_OPTIONS = [
@@ -21,9 +24,39 @@ const COLOR_OPTIONS = [
   { value: "slate", label: "Grigio", bg: "rgba(107,114,128,0.2)", text: "hsl(215 15% 75%)" },
 ];
 
-export default function SettingsClient({ categories: initialCategories }: SettingsClientProps) {
-  const [activeTab, setActiveTab] = useState<"security" | "categories">("categories");
+export default function SettingsClient({ categories: initialCategories, googleConnected: initialGoogleConnected }: SettingsClientProps) {
+  const [activeTab, setActiveTab] = useState<"security" | "categories" | "connections">("categories");
   const [isPending, startTransition] = useTransition();
+  const [googleConnected, setGoogleConnected] = useState(initialGoogleConnected);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const googleError = searchParams.get("google_error");
+    if (googleError) {
+      alert(`Errore durante il collegamento a Google: ${googleError}`);
+      setActiveTab("connections");
+      router.replace("/dashboard/settings");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const handleDisconnectGoogle = () => {
+    if (!confirm("Scollegare l'account Google? Non potrai più caricare allegati su Drive né sincronizzare il Calendario finché non lo ricolleghi.")) return;
+
+    startTransition(async () => {
+      try {
+        const res = await disconnectGoogleDrive();
+        if (!res.success) {
+          alert(res.error || "Errore durante lo scollegamento");
+          return;
+        }
+        setGoogleConnected(false);
+      } catch (err: any) {
+        alert(err.message || "Errore durante lo scollegamento");
+      }
+    });
+  };
 
   // Password state
   const [password, setPassword] = useState("");
@@ -152,6 +185,15 @@ export default function SettingsClient({ categories: initialCategories }: Settin
             }`}
           >
             🔒 Sicurezza Account
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("connections")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "connections" ? "bg-white/10 text-white shadow-lg" : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            🔗 Collegamenti
           </button>
         </div>
       </div>
@@ -315,6 +357,51 @@ export default function SettingsClient({ categories: initialCategories }: Settin
                 {isPending ? "Aggiornamento..." : "Aggiorna Password"}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Content Tab Collegamenti */}
+      {activeTab === "connections" && (
+        <div className="max-w-md mx-auto animate-fade-in">
+          <div
+            className="rounded-2xl p-6 border shadow-2xl backdrop-blur-xl"
+            style={{
+              background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+              borderColor: "hsla(240, 5%, 18%, 0.7)",
+            }}
+          >
+            <h2 className="text-base font-extrabold text-white mb-4">Account Google</h2>
+            <p className="text-[11px] text-slate-400 mb-4 leading-relaxed">
+              Usato per caricare gli allegati su Google Drive e sincronizzare le scadenze su Google Calendar.
+            </p>
+
+            {googleConnected ? (
+              <div className="space-y-3">
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-300 font-semibold flex items-center gap-2">
+                  <span>✅</span> Account Google collegato
+                </div>
+                <button
+                  onClick={handleDisconnectGoogle}
+                  disabled={isPending}
+                  className="w-full py-3 rounded-xl text-xs font-extrabold text-rose-300 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 transition-all disabled:opacity-50"
+                >
+                  {isPending ? "Scollegamento..." : "Scollega Account Google"}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 font-semibold flex items-center gap-2">
+                  <span>⚠️</span> Nessun account Google collegato
+                </div>
+                <a
+                  href="/api/google/connect?next=/dashboard/settings"
+                  className="block text-center w-full py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all"
+                >
+                  🔗 Collega Account Google
+                </a>
+              </div>
+            )}
           </div>
         </div>
       )}
