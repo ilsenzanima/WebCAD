@@ -106,6 +106,30 @@ export async function updateCategory(id: string, formData: { name: string; color
   }
 }
 
+export async function updateCategoryBudget(id: string, monthlyBudget: number | null) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase
+      .from("expense_categories")
+      .update({ monthly_budget: monthlyBudget })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/budget");
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function deleteCategory(id: string) {
   try {
     const supabase = (await createClient()) as any;

@@ -3,6 +3,7 @@
 import { useState, useTransition, useMemo } from "react";
 import { type Budget, type BudgetOverride, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createBudget, updateBudget, deleteBudget, upsertBudgetOverride, deleteBudgetOverride, confirmBudgetExpense } from "@/app/actions/budget";
+import { updateCategoryBudget } from "@/app/actions/categories";
 import { formatCurrency } from "@/lib/format";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
 
@@ -50,11 +51,16 @@ const PERIODS = [
   { value: "annual", label: "Annuale" },
 ];
 
-export default function BudgetClient({ initialBudgets, categories, initialExpenses, initialOverrides, suppliers }: BudgetClientProps) {
+export default function BudgetClient({ initialBudgets, categories: initialCategories, initialExpenses, initialOverrides, suppliers }: BudgetClientProps) {
   const [budgets, setBudgets] = useState<BudgetWithRelations[]>(initialBudgets);
   const [overrides, setOverrides] = useState<BudgetOverride[]>(initialOverrides);
   const [expenses, setExpenses] = useState<any[]>(initialExpenses);
+  const [categories, setCategories] = useState<ExpenseCategory[]>(initialCategories);
   const [isPending, startTransition] = useTransition();
+
+  // Editing inline del budget mensile per categoria
+  const [editingCategoryBudgetId, setEditingCategoryBudgetId] = useState<string | null>(null);
+  const [categoryBudgetDraft, setCategoryBudgetDraft] = useState("");
 
   // Mese selezionato per l'analisi previsto/reale (default: mese corrente)
   const now = new Date();
@@ -334,6 +340,39 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
     });
   };
 
+  const startEditCategoryBudget = (cat: ExpenseCategory) => {
+    setEditingCategoryBudgetId(cat.id);
+    setCategoryBudgetDraft(cat.monthly_budget != null ? String(cat.monthly_budget) : "");
+  };
+
+  const cancelEditCategoryBudget = () => {
+    setEditingCategoryBudgetId(null);
+    setCategoryBudgetDraft("");
+  };
+
+  const saveCategoryBudget = (cat: ExpenseCategory) => {
+    const trimmed = categoryBudgetDraft.trim();
+    const value = trimmed === "" ? null : Number(trimmed);
+    if (value !== null && (isNaN(value) || value < 0)) {
+      alert("Inserisci un importo valido");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await updateCategoryBudget(cat.id, value);
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore durante il salvataggio del budget per categoria");
+          return;
+        }
+        setCategories(prev => prev.map(c => c.id === cat.id ? res.data : c));
+        cancelEditCategoryBudget();
+      } catch (err: any) {
+        alert(err.message || "Errore durante il salvataggio del budget per categoria");
+      }
+    });
+  };
+
   const handleDelete = (id: string) => {
     if (!confirm("Sei sicuro di voler eliminare questa voce di budget?")) return;
 
@@ -475,43 +514,48 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
     return map;
   }, [priorMonths, expenses, budgets, overrides]);
 
-  // Consolidamento budget per categoria
+  // Consolidamento budget per categoria. Il "target" con cui confrontare il reale e':
+  // - il limite impostato manualmente sulla categoria (categories.monthly_budget), se presente
+  //   (es. "Utenze: 300€ di media" a prescindere da quante singole voci/fornitori la compongono)
+  // - altrimenti, in mancanza di un limite esplicito, la somma delle singole voci di budget
+  //   pianificate in quella categoria (comportamento precedente, mantenuto come fallback)
   const categoryBudgetComparison = useMemo(() => {
-    const map: Record<string, { categoryName: string; color: string; budgetAmt: number; realAmt: number; rollover: number }> = {};
+    const map: Record<string, { categoryId: string; categoryName: string; color: string; budgetAmt: number; realAmt: number; rollover: number; manualCap: number | null }> = {};
+
+    const ensure = (catId: string) => {
+      if (map[catId]) return map[catId];
+      const catObj = categories.find(c => c.id === catId);
+      map[catId] = {
+        categoryId: catId,
+        categoryName: catObj ? catObj.name : "Generica / Altro",
+        color: catObj ? catObj.color : "slate",
+        budgetAmt: 0,
+        realAmt: realExpensesByCategory[catId] || 0,
+        rollover: categoryRollover[catId] || 0,
+        manualCap: catObj ? catObj.monthly_budget : null,
+      };
+      return map[catId];
+    };
 
     budgets.forEach(b => {
       if (b.type === "income") return;
       const catId = b.category_id || "unassigned";
-      const catName = b.expense_categories?.name || "Generica / Altro";
-      const catColor = b.expense_categories?.color || "slate";
       const monthlyAmt = getEffectiveAmount(b, selectedYear, selectedMonth);
-
-      if (!map[catId]) {
-        map[catId] = {
-          categoryName: catName,
-          color: catColor,
-          budgetAmt: 0,
-          realAmt: realExpensesByCategory[catId] || 0,
-          rollover: categoryRollover[catId] || 0,
-        };
-      }
-      map[catId].budgetAmt += monthlyAmt;
+      ensure(catId).budgetAmt += monthlyAmt;
     });
 
-    Object.keys(realExpensesByCategory).forEach(catId => {
-      if (!map[catId]) {
-        const catObj = categories.find(c => c.id === catId);
-        map[catId] = {
-          categoryName: catObj ? catObj.name : "Generica / Altro",
-          color: catObj ? catObj.color : "slate",
-          budgetAmt: 0,
-          realAmt: realExpensesByCategory[catId],
-          rollover: categoryRollover[catId] || 0,
-        };
-      }
+    Object.keys(realExpensesByCategory).forEach(catId => ensure(catId));
+
+    // Include anche le categorie con un limite impostato manualmente ma ancora senza spese/voci nel mese,
+    // cosi' da poter vedere subito "0 / 300€" invece di doverne aspettare la prima spesa.
+    categories.forEach(cat => {
+      if (cat.monthly_budget != null) ensure(cat.id);
     });
 
-    return Object.values(map);
+    return Object.values(map).map(item => ({
+      ...item,
+      targetAmt: item.manualCap != null ? item.manualCap : item.budgetAmt,
+    }));
   }, [budgets, overrides, realExpensesByCategory, categories, categoryRollover, selectedYear, selectedMonth]);
 
   // Percentuale realizzazione entrate
@@ -972,7 +1016,7 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
             <h3 className="text-sm font-extrabold text-white tracking-wide">
               📊 Confronto Uscite per Categoria
             </h3>
-            <p className="text-[10px] text-zinc-500 mt-1">Confronto del budget previsto contro le uscite reali registrate nel mese selezionato.</p>
+            <p className="text-[10px] text-zinc-500 mt-1">Confronto delle uscite reali del mese contro un limite per categoria: clicca su "Somma voci previste" per impostarne uno fisso (es. Utenze: 300€) indipendente da quante singole voci la compongono.</p>
           </div>
 
           <div className="flex-1 overflow-x-auto pr-1 relative z-10 space-y-4">
@@ -983,10 +1027,10 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
               </div>
             ) : (
               <div className="space-y-5">
-                {categoryBudgetComparison.map((item, idx) => {
-                  const percent = item.budgetAmt > 0 ? (item.realAmt / item.budgetAmt) * 100 : 0;
+                {categoryBudgetComparison.map((item) => {
+                  const percent = item.targetAmt > 0 ? (item.realAmt / item.targetAmt) * 100 : 0;
                   const isOver = percent > 100;
-                  
+
                   let barColor = "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]";
                   if (percent > 80 && percent <= 100) {
                     barColor = "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]";
@@ -995,10 +1039,12 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
                   }
 
                   const badge = COLOR_MAP[item.color] || COLOR_MAP.slate;
+                  const isEditingCap = editingCategoryBudgetId === item.categoryId;
+                  const catObj = categories.find(c => c.id === item.categoryId);
 
                   return (
-                    <div key={idx} className="space-y-2 border-b border-zinc-800/40 pb-4">
-                      <div className="flex justify-between items-center text-xs">
+                    <div key={item.categoryId} className="space-y-2 border-b border-zinc-800/40 pb-4">
+                      <div className="flex justify-between items-center text-xs flex-wrap gap-y-1">
                         <div className="flex items-center gap-2">
                           <span
                             className="px-2 py-0.5 rounded border text-[9px] font-extrabold"
@@ -1011,8 +1057,36 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
                             {item.categoryName}
                           </span>
                         </div>
-                        <div className="text-[10px] font-medium text-slate-400">
-                          Reale: <span className="text-white font-black">{formatCurrency(item.realAmt)}</span> / Budget Mensilizzato: <span className="text-zinc-500">{formatCurrency(item.budgetAmt)}</span>
+                        <div className="text-[10px] font-medium text-slate-400 flex items-center gap-1.5">
+                          Reale: <span className="text-white font-black">{formatCurrency(item.realAmt)}</span> /
+                          {isEditingCap ? (
+                            <span className="inline-flex items-center gap-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                autoFocus
+                                value={categoryBudgetDraft}
+                                onChange={(e) => setCategoryBudgetDraft(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter" && catObj) saveCategoryBudget(catObj); if (e.key === "Escape") cancelEditCategoryBudget(); }}
+                                placeholder="Nessun limite"
+                                className="w-20 px-1.5 py-0.5 rounded text-right text-[10px] text-white bg-zinc-950 border border-indigo-500/50 focus:outline-none"
+                              />
+                              <button onClick={() => catObj && saveCategoryBudget(catObj)} className="text-emerald-400 hover:text-emerald-300 text-[10px] font-bold px-0.5" title="Salva">✓</button>
+                              <button onClick={cancelEditCategoryBudget} className="text-zinc-500 hover:text-white text-[10px] font-bold px-0.5" title="Annulla">✕</button>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => catObj && startEditCategoryBudget(catObj)}
+                              className="hover:underline"
+                              title="Imposta un limite mensile fisso per l'intera categoria"
+                            >
+                              {item.manualCap != null ? (
+                                <span className="text-zinc-300">Limite categoria: {formatCurrency(item.manualCap)}</span>
+                              ) : (
+                                <span className="text-zinc-500">Somma voci previste: {formatCurrency(item.budgetAmt)} (imposta un limite)</span>
+                              )}
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -1027,11 +1101,11 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
                         <span className="text-zinc-500 font-bold">
                           {percent > 0 ? `${Math.round(percent)}% utilizzato` : "Nessun budget definito per categoria"}
                         </span>
-                        {item.budgetAmt > 0 && (
+                        {item.targetAmt > 0 && (
                           <span className={`font-black ${isOver ? "text-rose-400" : "text-emerald-400"}`}>
                             {isOver
-                              ? `Sforato di ${formatCurrency(item.realAmt - item.budgetAmt)}`
-                              : `Rimanenti ${formatCurrency(item.budgetAmt - item.realAmt)}`
+                              ? `Sforato di ${formatCurrency(item.realAmt - item.targetAmt)}`
+                              : `Rimanenti ${formatCurrency(item.targetAmt - item.realAmt)}`
                             }
                           </span>
                         )}
@@ -1045,8 +1119,8 @@ export default function BudgetClient({ initialBudgets, categories, initialExpens
                               {item.rollover >= 0 ? "+" : ""}{formatCurrency(item.rollover)}
                             </span>
                           </span>
-                          <span className={`font-black ${(item.budgetAmt + item.rollover - item.realAmt) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                            Disponibile: {formatCurrency(item.budgetAmt + item.rollover - item.realAmt)}
+                          <span className={`font-black ${(item.targetAmt + item.rollover - item.realAmt) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                            Disponibile: {formatCurrency(item.targetAmt + item.rollover - item.realAmt)}
                           </span>
                         </div>
                       )}

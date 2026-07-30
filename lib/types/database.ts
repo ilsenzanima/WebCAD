@@ -10,6 +10,7 @@ export interface ExpenseCategory {
   user_id: string;
   name: string;
   color: string;
+  monthly_budget: number | null; // limite mensile impostato per l'intera categoria (es. "Utenze: 300€ di media")
   created_at: string;
 }
 
@@ -126,6 +127,7 @@ export interface Database {
           user_id?: string;
           name: string;
           color?: string;
+          monthly_budget?: number | null;
           created_at?: string;
         };
         Update: {
@@ -133,6 +135,7 @@ export interface Database {
           user_id?: string;
           name?: string;
           color?: string;
+          monthly_budget?: number | null;
           created_at?: string;
         };
         Relationships: [];
