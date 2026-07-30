@@ -284,8 +284,9 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
               const isSelected = selectedDate === cell.dateStr;
               const dayExpenses = getExpensesForDate(cell.dateStr);
               const daySchedules = getSchedulesForDate(cell.dateStr);
-              
-              const totalExpenses = dayExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+
+              const totalOut = dayExpenses.filter(e => !e.is_income).reduce((sum, e) => sum + Number(e.amount), 0);
+              const totalIn = dayExpenses.filter(e => e.is_income).reduce((sum, e) => sum + Number(e.amount), 0);
               const hasPending = daySchedules.some(s => !s.is_paid);
 
               const todayStr = toLocalDateStr();
@@ -314,10 +315,19 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                     {cell.dayNum}
                   </span>
 
-                  {totalExpenses > 0 && (
-                    <span className="text-[8px] font-black text-rose-400/90 whitespace-nowrap truncate max-w-full">
-                      -{Math.round(totalExpenses)}€
-                    </span>
+                  {(totalOut > 0 || totalIn > 0) && (
+                    <div className="flex flex-col items-center leading-none">
+                      {totalOut > 0 && (
+                        <span className="text-[8px] font-black text-rose-400/90 whitespace-nowrap truncate max-w-full">
+                          -{Math.round(totalOut)}€
+                        </span>
+                      )}
+                      {totalIn > 0 && (
+                        <span className="text-[8px] font-black text-emerald-400/90 whitespace-nowrap truncate max-w-full">
+                          +{Math.round(totalIn)}€
+                        </span>
+                      )}
+                    </div>
                   )}
 
                   <div className="flex gap-0.5 justify-center w-full pb-0.5">
@@ -349,14 +359,14 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
               📅 Dettaglio Giorno: {selectedDate ? new Date(selectedDate).toLocaleDateString("it-IT", { day: "numeric", month: "long" }) : "-"}
             </h3>
 
-            {/* SEZIONE 1: Spese Effettuate */}
+            {/* SEZIONE 1: Spese & Entrate Effettuate */}
             <div className="space-y-4">
-              <h4 className="text-[10px] font-bold text-rose-400 uppercase tracking-widest flex items-center gap-1.5 border-b border-zinc-800 pb-2">
-                <ExpensesIcon size={10} /> Spese Registrate ({selectedDateExpenses.length})
+              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 border-b border-zinc-800 pb-2">
+                <ExpensesIcon size={10} /> Spese & Entrate Registrate ({selectedDateExpenses.length})
               </h4>
 
               {selectedDateExpenses.length === 0 ? (
-                <p className="text-[10px] text-zinc-500 py-1 font-medium">Nessuna spesa effettuata.</p>
+                <p className="text-[10px] text-zinc-500 py-1 font-medium">Nessuna spesa o entrata registrata.</p>
               ) : (
                 <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
                   {selectedDateExpenses.map((exp) => {
@@ -394,13 +404,13 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-rose-400">
-                            -{formatCurrency(exp.amount)}
+                          <span className={`text-xs font-black ${exp.is_income ? "text-emerald-400" : "text-rose-400"}`}>
+                            {exp.is_income ? "+" : "-"}{formatCurrency(exp.amount)}
                           </span>
                           <button
                             onClick={() => handleDeleteExpense(exp.id)}
                             className="p-1 rounded hover:bg-rose-500/10 text-slate-500 hover:text-rose-400 transition-colors"
-                            title="Elimina Spesa"
+                            title="Elimina"
                           >
                             <DeleteIcon size={11} />
                           </button>
