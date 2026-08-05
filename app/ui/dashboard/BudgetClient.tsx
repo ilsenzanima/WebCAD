@@ -4,6 +4,7 @@ import { useState, useTransition, useMemo } from "react";
 import { type Budget, type BudgetOverride, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createBudget, updateBudget, deleteBudget, upsertBudgetOverride, deleteBudgetOverride, confirmBudgetExpense } from "@/app/actions/budget";
 import { updateCategoryBudget } from "@/app/actions/categories";
+import { generateScheduleFromBudget } from "@/app/actions/schedules";
 import { formatCurrency } from "@/lib/format";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
 
@@ -24,6 +25,7 @@ interface BudgetClientProps {
   initialExpenses: any[];
   initialOverrides: BudgetOverride[];
   suppliers: Supplier[];
+  initialSchedules: any[];
 }
 
 const MONTH_LABELS = [
@@ -51,16 +53,22 @@ const PERIODS = [
   { value: "annual", label: "Annuale" },
 ];
 
-export default function BudgetClient({ initialBudgets, categories: initialCategories, initialExpenses, initialOverrides, suppliers }: BudgetClientProps) {
+export default function BudgetClient({ initialBudgets, categories: initialCategories, initialExpenses, initialOverrides, suppliers, initialSchedules }: BudgetClientProps) {
   const [budgets, setBudgets] = useState<BudgetWithRelations[]>(initialBudgets);
   const [overrides, setOverrides] = useState<BudgetOverride[]>(initialOverrides);
   const [expenses, setExpenses] = useState<any[]>(initialExpenses);
   const [categories, setCategories] = useState<ExpenseCategory[]>(initialCategories);
+  const [schedules, setSchedules] = useState<any[]>(initialSchedules);
   const [isPending, startTransition] = useTransition();
 
   // Editing inline del budget mensile per categoria
   const [editingCategoryBudgetId, setEditingCategoryBudgetId] = useState<string | null>(null);
   const [categoryBudgetDraft, setCategoryBudgetDraft] = useState("");
+
+  // Generazione di una scadenza da pagare a partire da una voce di budget ricorrente
+  const [generatingScheduleBudgetId, setGeneratingScheduleBudgetId] = useState<string | null>(null);
+  const [scheduleAmount, setScheduleAmount] = useState("");
+  const [scheduleDate, setScheduleDate] = useState("");
 
   // Mese selezionato per l'analisi previsto/reale (default: mese corrente)
   const now = new Date();
@@ -336,6 +344,54 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
         cancelConfirmExpense();
       } catch (err: any) {
         alert(err.message || "Errore durante la conferma");
+      }
+    });
+  };
+
+  // Trova l'eventuale scadenza gia' generata per questa voce di budget nel mese indicato
+  const findLinkedSchedule = (budgetId: string, year: number, month: number) =>
+    schedules.find((s: any) => {
+      if (s.budget_id !== budgetId) return false;
+      const sDate = new Date(s.due_date);
+      return sDate.getFullYear() === year && sDate.getMonth() + 1 === month;
+    });
+
+  const startGenerateSchedule = (b: BudgetWithRelations) => {
+    setGeneratingScheduleBudgetId(b.id);
+    setScheduleAmount(String(getEffectiveAmount(b, selectedYear, selectedMonth)));
+    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+    const day = Math.min(b.day_of_month || Math.min(now.getDate(), daysInMonth), daysInMonth);
+    setScheduleDate(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+  };
+
+  const cancelGenerateSchedule = () => {
+    setGeneratingScheduleBudgetId(null);
+    setScheduleAmount("");
+    setScheduleDate("");
+  };
+
+  const saveGenerateSchedule = (b: BudgetWithRelations) => {
+    const value = Number(scheduleAmount);
+    if (isNaN(value) || value <= 0) {
+      alert("Inserisci un importo valido");
+      return;
+    }
+    if (!scheduleDate) {
+      alert("Inserisci una data valida");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await generateScheduleFromBudget(b.id, { amount: value, due_date: scheduleDate, recurrence: "monthly" });
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore durante la generazione della scadenza");
+          return;
+        }
+        setSchedules(prev => [res.data, ...prev]);
+        cancelGenerateSchedule();
+      } catch (err: any) {
+        alert(err.message || "Errore durante la generazione della scadenza");
       }
     });
   };
@@ -1248,6 +1304,8 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                     const isEditingOverride = editingOverrideBudgetId === b.id;
                     const linkedExpense = findLinkedExpense(b.id, selectedYear, selectedMonth);
                     const isConfirming = confirmingBudgetId === b.id;
+                    const linkedSchedule = findLinkedSchedule(b.id, selectedYear, selectedMonth);
+                    const isGeneratingSchedule = generatingScheduleBudgetId === b.id;
 
                     return (
                       <tr key={b.id} className="hover:bg-white/2 transition-colors duration-150 group animate-fade-in">
@@ -1363,6 +1421,14 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                                   🔗 Registrata
                                 </span>
                               )}
+                              {linkedSchedule && (
+                                <span
+                                  className={`text-[7px] uppercase font-extrabold tracking-widest ${linkedSchedule.is_paid ? "text-emerald-500" : "text-amber-500"}`}
+                                  title={`Scadenza ${linkedSchedule.is_paid ? "saldata" : "da pagare"} il ${new Date(linkedSchedule.due_date).toLocaleDateString("it-IT")}`}
+                                >
+                                  📅 {linkedSchedule.is_paid ? "Scadenza saldata" : "Scadenza generata"}
+                                </span>
+                              )}
                             </button>
                           )}
                         </td>
@@ -1389,6 +1455,28 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                                 <button onClick={cancelConfirmExpense} className="text-zinc-500 hover:text-white text-[9px] font-bold px-1" title="Annulla">✕</button>
                               </div>
                             </div>
+                          ) : isGeneratingSchedule ? (
+                            <div className="flex flex-col gap-1 items-end animate-fade-in">
+                              <input
+                                type="number"
+                                step="0.01"
+                                autoFocus
+                                value={scheduleAmount}
+                                onChange={(e) => setScheduleAmount(e.target.value)}
+                                placeholder="Importo"
+                                className="w-24 px-1.5 py-1 rounded text-right text-[10px] text-white bg-zinc-950 border border-amber-500/50 focus:outline-none"
+                              />
+                              <input
+                                type="date"
+                                value={scheduleDate}
+                                onChange={(e) => setScheduleDate(e.target.value)}
+                                className="w-32 px-1.5 py-1 rounded text-[10px] text-white bg-zinc-950 border border-amber-500/50 focus:outline-none"
+                              />
+                              <div className="flex gap-1">
+                                <button onClick={() => saveGenerateSchedule(b)} className="text-amber-400 hover:text-amber-300 text-[9px] font-bold px-1" title="Genera in Scadenze">✓ Genera</button>
+                                <button onClick={cancelGenerateSchedule} className="text-zinc-500 hover:text-white text-[9px] font-bold px-1" title="Annulla">✕</button>
+                              </div>
+                            </div>
                           ) : (
                             <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                               {!linkedExpense && (
@@ -1398,6 +1486,15 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                                   title="Conferma come spesa/entrata reale in Spese & Entrate"
                                 >
                                   ✅
+                                </button>
+                              )}
+                              {b.type !== "income" && b.periodicity === "monthly" && !linkedSchedule && (
+                                <button
+                                  onClick={() => startGenerateSchedule(b)}
+                                  className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all text-[10px]"
+                                  title="Genera una scadenza da pagare in Scadenze"
+                                >
+                                  📅
                                 </button>
                               )}
                               {override && !isEditingOverride && (

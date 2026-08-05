@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getBudgets, getBudgetOverrides } from "@/app/actions/budget";
 import { getCategories } from "@/app/actions/categories";
 import { getExpenses } from "@/app/actions/expenses";
+import { getSchedules } from "@/app/actions/schedules";
 import { getSuppliers } from "@/app/actions/suppliers";
 import BudgetClient from "@/app/ui/dashboard/BudgetClient";
 
@@ -17,12 +18,13 @@ export default async function BudgetPage() {
   if (!user) redirect("/login");
 
   // Caricamento in parallelo delle risorse necessarie
-  const [budgets, categories, expenses, overrides, suppliers] = await Promise.all([
+  const [budgets, categories, expenses, overrides, suppliers, schedules] = await Promise.all([
     getBudgets().catch(() => []),
     getCategories().catch(() => []),
     getExpenses().catch(() => []),
     getBudgetOverrides().catch(() => []),
     getSuppliers().catch(() => []),
+    getSchedules().catch(() => []),
   ]);
 
   return (
@@ -32,6 +34,7 @@ export default async function BudgetPage() {
       initialExpenses={expenses}
       initialOverrides={overrides}
       suppliers={suppliers}
+      initialSchedules={schedules}
     />
   );
 }

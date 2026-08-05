@@ -67,6 +67,7 @@ export interface PaymentSchedule {
   recurrence: "one-time" | "weekly" | "monthly" | "yearly";
   category_id: string | null; // FK -> expense_categories.id
   supplier_id: string | null; // FK -> suppliers.id
+  budget_id: string | null; // FK -> budgets.id (se generata da una voce di budget ricorrente)
   google_event_id: string | null;
   created_at: string;
   updated_at: string;
@@ -279,6 +280,7 @@ export interface Database {
           recurrence?: "one-time" | "weekly" | "monthly" | "yearly";
           category_id?: string | null;
           supplier_id?: string | null;
+          budget_id?: string | null;
           google_event_id?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -294,6 +296,7 @@ export interface Database {
           recurrence?: "one-time" | "weekly" | "monthly" | "yearly";
           category_id?: string | null;
           supplier_id?: string | null;
+          budget_id?: string | null;
           google_event_id?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -311,6 +314,13 @@ export interface Database {
             columns: ["supplier_id"];
             isOneToOne: false;
             referencedRelation: "suppliers";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payment_schedules_budget_id_fkey";
+            columns: ["budget_id"];
+            isOneToOne: false;
+            referencedRelation: "budgets";
             referencedColumns: ["id"];
           }
         ];
