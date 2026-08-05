@@ -169,7 +169,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
           category_id: target.category_id,
           supplier_id: target.supplier_id,
           schedule_id: target.id,
-          budget_id: null,
+          budget_id: target.budget_id,
           account_id: null,
           consumption_value: null,
           description: `Pagamento programmato: ${target.description || "Nessuna descrizione"}`,

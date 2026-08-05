@@ -473,6 +473,8 @@ export default function ExpensesClient({
           categories={categories}
           suppliers={suppliersList}
           googleConnected={googleConnected}
+          onExpenseCreated={(exp) => setExpenses(prev => [exp, ...prev])}
+          onSupplierCreated={(sup) => setSuppliersList(prev => [...prev, sup].sort((a, b) => a.name.localeCompare(b.name)))}
         />
       ) : (
         <>

@@ -4,9 +4,11 @@ import { useState, useTransition, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createSchedule, updateSchedule, deleteSchedule, paySchedule } from "@/app/actions/schedules";
+import { createSupplier } from "@/app/actions/suppliers";
 import { syncSchedulesToCalendar } from "@/app/actions/google";
 import { DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
 import { formatCurrency, formatDate, toLocalDateStr } from "@/lib/format";
+import { getNextDueDate } from "@/lib/recurrence";
 import { DeleteIcon, EditIcon, CheckIcon, SchedulesIcon } from "./icons";
 
 interface ScheduleWithRelations extends Omit<PaymentSchedule, "amount"> {
@@ -25,6 +27,8 @@ interface SchedulesClientProps {
   categories: ExpenseCategory[];
   suppliers: Supplier[];
   googleConnected: boolean;
+  onExpenseCreated?: (expense: any) => void;
+  onSupplierCreated?: (supplier: Supplier) => void;
 }
 
 const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = {
@@ -45,8 +49,9 @@ const RECURRENCES = [
   { value: "yearly", label: "Annuale" },
 ];
 
-export default function SchedulesClient({ initialSchedules, categories, suppliers, googleConnected }: SchedulesClientProps) {
+export default function SchedulesClient({ initialSchedules, categories, suppliers, googleConnected, onExpenseCreated, onSupplierCreated }: SchedulesClientProps) {
   const [schedules, setSchedules] = useState<ScheduleWithRelations[]>(initialSchedules);
+  const [suppliersList, setSuppliersList] = useState<Supplier[]>(suppliers);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -70,6 +75,45 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
   const [filterPaid, setFilterPaid] = useState<"all" | "pending" | "paid">("pending");
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
+
+  // Aggiunta rapida di un nuovo fornitore dal form
+  const [isAddingSupplier, setIsAddingSupplier] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState("");
+  const [newSupplierIsUtility, setNewSupplierIsUtility] = useState(false);
+  const [newSupplierUnit, setNewSupplierUnit] = useState("kWh");
+  const [isCreatingSupplier, setIsCreatingSupplier] = useState(false);
+
+  const handleCreateSupplierInline = () => {
+    if (!newSupplierName.trim()) {
+      alert("Inserisci il nome del fornitore");
+      return;
+    }
+    setIsCreatingSupplier(true);
+    startTransition(async () => {
+      try {
+        const res = await createSupplier({
+          name: newSupplierName.trim(),
+          is_utility: newSupplierIsUtility,
+          consumption_unit: newSupplierIsUtility ? newSupplierUnit : null,
+        });
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore durante la creazione del fornitore");
+          return;
+        }
+        setSuppliersList(prev => [...prev, res.data].sort((a, b) => a.name.localeCompare(b.name)));
+        setSupplierId(res.data.id);
+        onSupplierCreated?.(res.data);
+        setIsAddingSupplier(false);
+        setNewSupplierName("");
+        setNewSupplierIsUtility(false);
+        setNewSupplierUnit("kWh");
+      } catch (err: any) {
+        alert(err.message || "Errore durante la creazione del fornitore");
+      } finally {
+        setIsCreatingSupplier(false);
+      }
+    });
+  };
 
   const resetForm = () => {
     setAmount("");
@@ -149,10 +193,45 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           alert(res.error || "Errore nel contrassegnare come pagato");
           return;
         }
-        
-        setSchedules(prev => 
-          prev.map(s => s.id === scheduleId ? { ...s, is_paid: true } : s)
-        );
+
+        const target = schedules.find(s => s.id === scheduleId);
+
+        setSchedules(prev => {
+          const updated = prev.map(s => s.id === scheduleId ? { ...s, is_paid: true } : s);
+          if (target && target.recurrence !== "one-time") {
+            const nextDueDateStr = getNextDueDate(target.due_date, target.recurrence);
+            const nextSched: ScheduleWithRelations = {
+              ...target,
+              id: Math.random().toString(),
+              due_date: nextDueDateStr,
+              is_paid: false,
+            };
+            return [...updated, nextSched].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+          }
+          return updated;
+        });
+
+        if (target && onExpenseCreated) {
+          onExpenseCreated({
+            id: Math.random().toString(),
+            user_id: "",
+            amount: target.amount,
+            category: target.category,
+            category_id: target.category_id,
+            supplier_id: target.supplier_id,
+            schedule_id: target.id,
+            budget_id: target.budget_id,
+            account_id: null,
+            consumption_value: null,
+            description: `Pagamento programmato: ${target.description || "Nessuna descrizione"}`,
+            date: toLocalDateStr(),
+            is_income: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            expense_categories: target.expense_categories,
+            suppliers: target.suppliers,
+          });
+        }
       } catch (err: any) {
         alert(err.message || "Errore durante il salvataggio");
       }
@@ -338,22 +417,82 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
             {/* Fornitore */}
             <div className="space-y-1.5">
               <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Fornitore / Gestore</label>
-              <select
-                value={supplierId}
-                onChange={(e) => setSupplierId(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
-                style={{
-                  background: "hsl(240 10% 4% / 0.8)",
-                  borderColor: "hsl(240 5% 18%)",
-                }}
-              >
-                <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun Fornitore</option>
-                {suppliers.map((sup) => (
-                  <option key={sup.id} value={sup.id} style={{ background: "hsl(240 10% 10%)" }}>
-                    {sup.name}
-                  </option>
-                ))}
-              </select>
+              {!isAddingSupplier ? (
+                <select
+                  value={supplierId}
+                  onChange={(e) => {
+                    if (e.target.value === "__new__") {
+                      setIsAddingSupplier(true);
+                      return;
+                    }
+                    setSupplierId(e.target.value);
+                  }}
+                  className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
+                  style={{
+                    background: "hsl(240 10% 4% / 0.8)",
+                    borderColor: "hsl(240 5% 18%)",
+                  }}
+                >
+                  <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun Fornitore</option>
+                  {suppliersList.map((sup) => (
+                    <option key={sup.id} value={sup.id} style={{ background: "hsl(240 10% 10%)" }}>
+                      {sup.name}
+                    </option>
+                  ))}
+                  <option value="__new__" style={{ background: "hsl(240 10% 10%)" }}>+ Aggiungi nuovo fornitore...</option>
+                </select>
+              ) : (
+                <div className="space-y-2 animate-fade-in">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      autoFocus
+                      value={newSupplierName}
+                      onChange={(e) => setNewSupplierName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreateSupplierInline(); } }}
+                      placeholder="Nome nuovo fornitore"
+                      className="flex-1 px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
+                      style={{ background: "hsl(240 10% 4% / 0.8)", borderColor: "hsl(38 90% 50%)" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateSupplierInline}
+                      disabled={isCreatingSupplier}
+                      className="px-3 rounded-xl text-xs font-extrabold text-white bg-amber-600 hover:bg-amber-500 transition-all disabled:opacity-50"
+                    >
+                      ✓
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setIsAddingSupplier(false); setNewSupplierName(""); }}
+                      className="px-3 rounded-xl text-xs font-bold text-zinc-400 hover:text-white border border-zinc-800"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <label className="flex items-center gap-2 text-[9px] font-bold text-zinc-500 uppercase tracking-wider cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newSupplierIsUtility}
+                      onChange={(e) => setNewSupplierIsUtility(e.target.checked)}
+                      className="accent-amber-500"
+                    />
+                    È un'utenza (luce, gas, acqua...)
+                  </label>
+                  {newSupplierIsUtility && (
+                    <select
+                      value={newSupplierUnit}
+                      onChange={(e) => setNewSupplierUnit(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                    >
+                      <option value="kWh">kWh (luce)</option>
+                      <option value="m³">m³ (gas/acqua)</option>
+                      <option value="L">Litri</option>
+                      <option value="GB">GB (dati)</option>
+                    </select>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Data Scadenza */}
