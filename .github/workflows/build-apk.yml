@@ -52,7 +52,7 @@ jobs:
           fi
           echo "sdkmanager trovato: $SDKMANAGER"
           yes | "$SDKMANAGER" --licenses 2>/dev/null || true
-          "$SDKMANAGER" "platforms;android-34" "build-tools;34.0.0" "platform-tools" 2>&1 || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" "platform-tools" 2>&1 || true
           echo "=== SDK installato ==="
 
       - name: Set up Node.js
