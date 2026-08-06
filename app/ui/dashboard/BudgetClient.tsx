@@ -6,6 +6,7 @@ import { createBudget, updateBudget, deleteBudget, upsertBudgetOverride, deleteB
 import { updateCategoryBudget } from "@/app/actions/categories";
 import { generateScheduleFromBudget } from "@/app/actions/schedules";
 import { formatCurrency } from "@/lib/format";
+import { getMonthlyEquivalent as getMonthlyEquivalentBase, isBudgetEnded as isBudgetEndedBase, getEffectiveAmount as getEffectiveAmountBase } from "@/lib/budgetCalc";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
 
 interface BudgetWithRelations extends Omit<Budget, "amount"> {
@@ -144,37 +145,18 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     }
   };
 
-  const getMonthlyEquivalent = (amt: number, period: string) => {
-    switch (period) {
-      case "weekly": return amt * 4.33;
-      case "bimonthly": return amt / 2;
-      case "quarterly": return amt / 3;
-      case "semiannual": return amt / 6;
-      case "annual": return amt / 12;
-      case "monthly":
-      default:
-        return amt;
-    }
-  };
+  const getMonthlyEquivalent = getMonthlyEquivalentBase;
 
   // Trova l'eventuale override per una voce di budget in un mese/anno specifico
   const findOverride = (budgetId: string, year: number, month: number) =>
     overrides.find(o => o.budget_id === budgetId && o.year === year && o.month === month);
 
   // Una voce con scadenza (es. mutuo/finanziamento) e' conclusa se il mese richiesto e' oltre end_year/end_month
-  const isBudgetEnded = (b: BudgetWithRelations, year: number, month: number) => {
-    if (!b.end_year || !b.end_month) return false;
-    return year > b.end_year || (year === b.end_year && month > b.end_month);
-  };
+  const isBudgetEnded = (b: BudgetWithRelations, year: number, month: number) => isBudgetEndedBase(b, year, month);
 
   // Importo effettivo previsto per una voce in un mese specifico: usa l'override se presente,
   // altrimenti la stima di base (0 se la voce ha gia' una scadenza superata quel mese)
-  const getEffectiveAmount = (b: BudgetWithRelations, year: number, month: number) => {
-    const ov = findOverride(b.id, year, month);
-    if (ov) return Number(ov.amount);
-    if (isBudgetEnded(b, year, month)) return 0;
-    return getMonthlyEquivalent(b.amount, b.periodicity);
-  };
+  const getEffectiveAmount = (b: BudgetWithRelations, year: number, month: number) => getEffectiveAmountBase(b, overrides, year, month);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

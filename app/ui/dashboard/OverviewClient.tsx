@@ -2,8 +2,9 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { type Expense, type PaymentSchedule, type Account } from "@/lib/types/database";
+import { type Expense, type PaymentSchedule, type Account, type Budget, type BudgetOverride } from "@/lib/types/database";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { getEffectiveAmount } from "@/lib/budgetCalc";
 import { ExpensesIcon, SchedulesIcon, OverviewIcon, WalletIcon } from "./icons";
 
 interface ExpenseWithRelations extends Omit<Expense, "amount"> {
@@ -32,6 +33,8 @@ interface OverviewClientProps {
   expenses: any[];
   schedules: any[];
   accounts: Account[];
+  budgets: Budget[];
+  budgetOverrides: BudgetOverride[];
 }
 
 const COLOR_MAP: Record<string, string> = {
@@ -45,7 +48,7 @@ const COLOR_MAP: Record<string, string> = {
   slate: "linear-gradient(90deg, hsl(215 15% 50%), hsl(215 10% 40%))",
 };
 
-export default function OverviewClient({ expenses, schedules, accounts }: OverviewClientProps) {
+export default function OverviewClient({ expenses, schedules, accounts, budgets, budgetOverrides }: OverviewClientProps) {
   const accountBalances = useMemo(() => {
     return accounts.map(acc => {
       let balance = Number(acc.initial_balance);
@@ -129,6 +132,30 @@ export default function OverviewClient({ expenses, schedules, accounts }: Overvi
     };
   }, [expenses, schedules]);
 
+  // Budget pianificato per il mese corrente (previsto), confrontato con le spese/entrate reali gia' calcolate sopra
+  const budgetStats = useMemo(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+
+    let plannedIncome = 0;
+    let plannedOutgoings = 0;
+
+    budgets.forEach((b) => {
+      const amt = getEffectiveAmount(b, budgetOverrides, year, month);
+      if (b.type === "income") plannedIncome += amt;
+      else plannedOutgoings += amt;
+    });
+
+    return {
+      hasBudget: budgets.length > 0,
+      plannedIncome,
+      plannedOutgoings,
+      remaining: plannedOutgoings - stats.totalCurrentMonthExpenses,
+      outgoingsPercent: plannedOutgoings > 0 ? (stats.totalCurrentMonthExpenses / plannedOutgoings) * 100 : 0,
+    };
+  }, [budgets, budgetOverrides, stats.totalCurrentMonthExpenses]);
+
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -176,6 +203,62 @@ export default function OverviewClient({ expenses, schedules, accounts }: Overvi
           </div>
         </div>
       )}
+
+      {/* Budget del Mese */}
+      <div
+        className="rounded-2xl p-6 border relative overflow-hidden animate-fade-in"
+        style={{
+          background: "linear-gradient(135deg, hsla(270, 60%, 15%, 0.1), hsla(240, 10%, 10%, 0.6))",
+          borderColor: "hsla(270, 60%, 50%, 0.15)",
+        }}
+      >
+        <div className="flex items-center justify-between mb-4 relative z-10">
+          <h2 className="text-sm font-extrabold text-white tracking-wide flex items-center gap-2">
+            <span className="text-purple-400">📋</span> Budget del Mese
+          </h2>
+          <Link href="/dashboard/budget" className="text-xs font-bold text-purple-400 hover:text-purple-300 transition-colors">
+            Gestisci →
+          </Link>
+        </div>
+
+        {budgetStats.hasBudget ? (
+          <div className="relative z-10 space-y-3">
+            <div className="flex flex-wrap justify-between items-center gap-2 text-xs">
+              <span className="text-slate-400 font-medium">
+                Uscite reali: <span className="text-white font-black">{formatCurrency(stats.totalCurrentMonthExpenses)}</span> / previste: <span className="text-zinc-400">{formatCurrency(budgetStats.plannedOutgoings)}</span>
+              </span>
+              {budgetStats.plannedOutgoings > 0 && (
+                <span className={`font-black ${budgetStats.remaining >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                  {budgetStats.remaining >= 0
+                    ? `Disponibili ${formatCurrency(budgetStats.remaining)}`
+                    : `Sforato di ${formatCurrency(-budgetStats.remaining)}`
+                  }
+                </span>
+              )}
+            </div>
+            <div className="relative h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  budgetStats.outgoingsPercent > 100
+                    ? "bg-rose-500 shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+                    : budgetStats.outgoingsPercent > 80
+                      ? "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]"
+                      : "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+                }`}
+                style={{ width: `${Math.min(budgetStats.outgoingsPercent, 100)}%` }}
+              />
+            </div>
+            <div className="text-[10px] text-slate-500 font-medium">
+              Entrate previste questo mese: <span className="text-zinc-300 font-bold">{formatCurrency(budgetStats.plannedIncome)}</span> (reali finora: {formatCurrency(stats.totalCurrentMonthIncomes)})
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500 relative z-10">
+            Non hai ancora pianificato un budget.{" "}
+            <Link href="/dashboard/budget" className="text-purple-400 hover:text-purple-300 font-bold">Creane uno →</Link>
+          </p>
+        )}
+      </div>
 
       {/* Grid delle schede KPI (Entrate, Uscite, Bilancio Netto, Scadenze) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
