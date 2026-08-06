@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Diagnostica ambiente Android
         run: |
@@ -37,7 +37,7 @@ jobs:
           ls $ANDROID_HOME/platforms || echo "platforms non trovate"
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -56,7 +56,7 @@ jobs:
           echo "=== SDK installato ==="
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -145,14 +145,14 @@ jobs:
           ls -lh public/downloads/
 
       - name: Commit APK nel repository
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "build: compilato APK debug v${{ steps.get_version.outputs.VERSION }} (build #${{ github.run_number }})"
           file_pattern: "public/downloads/webcad-*.apk android/app/debug.keystore lib/version.ts public/version.json"
           branch: main
 
       - name: Upload APK come artifact GitHub
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: webcad-v${{ steps.get_version.outputs.VERSION }}-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
