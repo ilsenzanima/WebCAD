@@ -8,6 +8,7 @@ import { generateScheduleFromBudget } from "@/app/actions/schedules";
 import { formatCurrency } from "@/lib/format";
 import { getMonthlyEquivalent as getMonthlyEquivalentBase, isBudgetEnded as isBudgetEndedBase, getEffectiveAmount as getEffectiveAmountBase } from "@/lib/budgetCalc";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
+import BudgetForecast from "./BudgetForecast";
 
 interface BudgetWithRelations extends Omit<Budget, "amount"> {
   amount: number;
@@ -642,6 +643,18 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
           )}
         </div>
       </div>
+
+      {/* Panoramica Prossimi Mesi (previsione multi-mese + spostamento pagamenti) */}
+      <BudgetForecast
+        budgets={budgets}
+        overrides={overrides}
+        setOverrides={setOverrides}
+        baseYear={now.getFullYear()}
+        baseMonth={now.getMonth() + 1}
+        onSelectMonth={(y, m) => { setSelectedYear(y); setSelectedMonth(m); }}
+        selectedYear={selectedYear}
+        selectedMonth={selectedMonth}
+      />
 
       {/* KPI Cards (Design Premium Neon) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-fade-in">
