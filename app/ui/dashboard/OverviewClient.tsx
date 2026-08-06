@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { type Expense, type PaymentSchedule, type Account, type Budget, type BudgetOverride } from "@/lib/types/database";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { getEffectiveAmount } from "@/lib/budgetCalc";
+import { getEffectiveAmount, isBudgetEnded } from "@/lib/budgetCalc";
 import { ExpensesIcon, SchedulesIcon, OverviewIcon, WalletIcon } from "./icons";
 
 interface ExpenseWithRelations extends Omit<Expense, "amount"> {
@@ -140,12 +140,25 @@ export default function OverviewClient({ expenses, schedules, accounts, budgets,
 
     let plannedIncome = 0;
     let plannedOutgoings = 0;
+    const items: { id: string; label: string; amount: number; registered: boolean }[] = [];
 
     budgets.forEach((b) => {
       const amt = getEffectiveAmount(b, budgetOverrides, year, month);
-      if (b.type === "income") plannedIncome += amt;
-      else plannedOutgoings += amt;
+      if (amt <= 0) return;
+      if (b.type === "income") {
+        plannedIncome += amt;
+        return;
+      }
+      plannedOutgoings += amt;
+      const registered = expenses.some((e: ExpenseWithRelations) => {
+        if (e.budget_id !== b.id || e.is_income) return false;
+        const d = new Date(e.date);
+        return d.getFullYear() === year && d.getMonth() + 1 === month;
+      });
+      items.push({ id: b.id, label: b.label, amount: amt, registered });
     });
+
+    items.sort((a, b) => b.amount - a.amount);
 
     return {
       hasBudget: budgets.length > 0,
@@ -153,8 +166,78 @@ export default function OverviewClient({ expenses, schedules, accounts, budgets,
       plannedOutgoings,
       remaining: plannedOutgoings - stats.totalCurrentMonthExpenses,
       outgoingsPercent: plannedOutgoings > 0 ? (stats.totalCurrentMonthExpenses / plannedOutgoings) * 100 : 0,
+      items,
     };
-  }, [budgets, budgetOverrides, stats.totalCurrentMonthExpenses]);
+  }, [budgets, budgetOverrides, expenses, stats.totalCurrentMonthExpenses]);
+
+  // Voci di budget con un giorno fisso del mese non ancora registrate ne' generate come scadenza vera:
+  // vengono mostrate come "previste" tra le prossime scadenze, cosi' da vederle senza doverle generare a mano.
+  const plannedUpcoming = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const windowEnd = new Date(today);
+    windowEnd.setDate(today.getDate() + 30);
+
+    const items: { id: string; label: string; amount: number; dueDate: Date }[] = [];
+
+    budgets.forEach((b) => {
+      if (b.type === "income" || !b.day_of_month) return;
+
+      for (const offset of [0, 1]) {
+        const ref = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+        const year = ref.getFullYear();
+        const month = ref.getMonth() + 1;
+        if (isBudgetEnded(b, year, month)) continue;
+
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const day = Math.min(b.day_of_month, daysInMonth);
+        const dueDate = new Date(year, month - 1, day);
+        if (dueDate < today || dueDate > windowEnd) continue;
+
+        const alreadyHandled =
+          schedules.some((s: any) => {
+            if (s.budget_id !== b.id) return false;
+            const d = new Date(s.due_date);
+            return d.getFullYear() === year && d.getMonth() + 1 === month;
+          }) ||
+          expenses.some((e: any) => {
+            if (e.budget_id !== b.id || e.is_income) return false;
+            const d = new Date(e.date);
+            return d.getFullYear() === year && d.getMonth() + 1 === month;
+          });
+        if (alreadyHandled) break;
+
+        items.push({
+          id: `${b.id}-${year}-${month}`,
+          label: b.label,
+          amount: getEffectiveAmount(b, budgetOverrides, year, month),
+          dueDate,
+        });
+        break;
+      }
+    });
+
+    return items.sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+  }, [budgets, budgetOverrides, schedules, expenses]);
+
+  // Elenco combinato di scadenze reali + voci di budget previste, ordinato per data
+  const combinedUpcoming = useMemo(() => {
+    const real = stats.upcomingSchedules.map((s: ScheduleWithRelations) => ({
+      key: `real-${s.id}`,
+      label: s.description || s.category,
+      amount: Number(s.amount),
+      date: new Date(s.due_date),
+      planned: false,
+    }));
+    const planned = plannedUpcoming.map(p => ({
+      key: `planned-${p.id}`,
+      label: p.label,
+      amount: p.amount,
+      date: p.dueDate,
+      planned: true,
+    }));
+    return [...real, ...planned].sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, 6);
+  }, [stats.upcomingSchedules, plannedUpcoming]);
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -251,6 +334,24 @@ export default function OverviewClient({ expenses, schedules, accounts, budgets,
             <div className="text-[10px] text-slate-500 font-medium">
               Entrate previste questo mese: <span className="text-zinc-300 font-bold">{formatCurrency(budgetStats.plannedIncome)}</span> (reali finora: {formatCurrency(stats.totalCurrentMonthIncomes)})
             </div>
+
+            {budgetStats.items.length > 0 && (
+              <div className="pt-2 border-t border-white/5 flex flex-wrap gap-1.5">
+                {budgetStats.items.map((item) => (
+                  <span
+                    key={item.id}
+                    title={item.registered ? "Gia' registrata come spesa reale questo mese" : "Ancora da pagare/registrare questo mese"}
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold border ${
+                      item.registered
+                        ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-300"
+                        : "bg-zinc-950/60 border-zinc-800 text-zinc-300"
+                    }`}
+                  >
+                    {item.registered && "✓ "}{item.label} · {formatCurrency(item.amount)}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <p className="text-xs text-slate-500 relative z-10">
@@ -465,23 +566,34 @@ export default function OverviewClient({ expenses, schedules, accounts, budgets,
               </Link>
             </div>
 
-            {stats.upcomingSchedules.length === 0 ? (
+            {combinedUpcoming.length === 0 ? (
               <p className="text-xs text-slate-500 py-8 text-center">Nessuna scadenza in programma.</p>
             ) : (
               <div className="space-y-3">
-                {stats.upcomingSchedules.map((schedule: ScheduleWithRelations) => (
+                {combinedUpcoming.map((item) => (
                   <div
-                    key={schedule.id}
-                    className="p-3.5 rounded-xl border border-zinc-800/80 bg-zinc-950/40 flex items-center justify-between transition-all hover:border-amber-500/30"
+                    key={item.key}
+                    className={`p-3.5 rounded-xl border flex items-center justify-between transition-all ${
+                      item.planned
+                        ? "border-dashed border-zinc-700 bg-zinc-950/20 hover:border-purple-500/40"
+                        : "border-zinc-800/80 bg-zinc-950/40 hover:border-amber-500/30"
+                    }`}
                   >
                     <div>
-                      <h4 className="text-xs font-bold text-white line-clamp-1">{schedule.description || schedule.category}</h4>
+                      <h4 className="text-xs font-bold text-white line-clamp-1 flex items-center gap-1.5">
+                        {item.label}
+                        {item.planned && (
+                          <span className="text-[7px] uppercase font-extrabold tracking-widest text-purple-400 border border-purple-500/30 rounded px-1 py-0.5">
+                            Previsto
+                          </span>
+                        )}
+                      </h4>
                       <span className="text-[10px] text-slate-400">
-                        Scadenza: {new Date(schedule.due_date).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" })}
+                        {item.planned ? "Previsto per il" : "Scadenza:"} {item.date.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" })}
                       </span>
                     </div>
-                    <span className="text-xs font-black text-amber-400 whitespace-nowrap">
-                      {formatCurrency(schedule.amount)}
+                    <span className={`text-xs font-black whitespace-nowrap ${item.planned ? "text-purple-300" : "text-amber-400"}`}>
+                      {formatCurrency(item.amount)}
                     </span>
                   </div>
                 ))}
