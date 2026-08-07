@@ -497,7 +497,36 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
       .reduce((sum, t) => sum + Number(t.amount), 0);
   }, [currentMonthTransactions]);
 
-  // Calcoli Totali Budget per il mese selezionato (stima di base, corretta dagli eventuali override)
+  // Scadenze (Scadenze & Pagamenti) con categoria/data ma non collegate a nessuna voce di budget:
+  // vanno comunque contate come spesa prevista del mese, altrimenti restano invisibili nel Budget.
+  // Le scadenze scadute e non ancora saldate (es. una del mese scorso mai pagata) restano un
+  // impegno di "adesso": vengono agganciate al mese corrente finche' non risultano saldate,
+  // invece di sparire semplicemente perche' la loro data e' passata.
+  const unlinkedScheduledByCategory = useMemo(() => {
+    const map: Record<string, { amount: number; items: { label: string; amount: number }[] }> = {};
+    schedules.forEach((s: any) => {
+      if (s.budget_id) return; // gia' contato tramite la voce di budget collegata
+      const sDate = new Date(s.due_date);
+      const inSelectedMonth = sDate.getFullYear() === selectedYear && sDate.getMonth() + 1 === selectedMonth;
+      const isOverdueUnpaid = !s.is_paid && isCurrentMonth && !inSelectedMonth && sDate < now;
+      if (!inSelectedMonth && !isOverdueUnpaid) return;
+      const catId = s.category_id || "unassigned";
+      if (!map[catId]) map[catId] = { amount: 0, items: [] };
+      map[catId].amount += Number(s.amount);
+      const label = s.description || s.category;
+      map[catId].items.push({ label: isOverdueUnpaid ? `${label} (scaduta)` : label, amount: Number(s.amount) });
+    });
+    return map;
+  }, [schedules, selectedYear, selectedMonth, isCurrentMonth, now]);
+
+  const unplannedScheduledTotal = useMemo(
+    () => Object.values(unlinkedScheduledByCategory).reduce((sum, v) => sum + v.amount, 0),
+    [unlinkedScheduledByCategory]
+  );
+
+  // Calcoli Totali Budget per il mese selezionato (stima di base, corretta dagli eventuali override).
+  // Le scadenze non collegate a nessuna voce di budget vengono sommate ai "Bisogni": sono comunque
+  // spese obbligatorie previste quel mese (es. bollo auto, assicurazione) anche se non pianificate.
   const totals = useMemo(() => {
     let income = 0;
     let need = 0;
@@ -512,12 +541,14 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
       else if (b.type === "emergency") emergency += monthlyAmt;
     });
 
+    need += unplannedScheduledTotal;
+
     const totalOutgoings = need + want + emergency;
     const powerOfSpending = income - need; // Entrate - Bisogni
     const remainingBudget = income - totalOutgoings;
 
     return { income, need, want, emergency, totalOutgoings, powerOfSpending, remainingBudget };
-  }, [budgets, overrides, selectedYear, selectedMonth]);
+  }, [budgets, overrides, selectedYear, selectedMonth, unplannedScheduledTotal]);
 
   // Analisi Regola 50/30/20 (Bisogni, Desideri, Risparmio/Imprevisti)
   const ruleAnalysis = useMemo(() => {
@@ -592,23 +623,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
     return map;
   }, [priorMonths, expenses, budgets, overrides]);
-
-  // Scadenze del mese selezionato non collegate a nessuna voce di budget ricorrente (es. il bollo auto
-  // schedulato a mano): sono comunque un costo previsto e noto, quindi vengono sommate al previsto
-  // per categoria cosi' da non "sparire" solo perche' non fanno parte di un budget pianificato.
-  const unlinkedScheduledByCategory = useMemo(() => {
-    const map: Record<string, { amount: number; items: { label: string; amount: number }[] }> = {};
-    schedules.forEach((s: any) => {
-      if (s.budget_id) return; // gia' contato tramite la voce di budget collegata
-      const sDate = new Date(s.due_date);
-      if (sDate.getFullYear() !== selectedYear || sDate.getMonth() + 1 !== selectedMonth) return;
-      const catId = s.category_id || "unassigned";
-      if (!map[catId]) map[catId] = { amount: 0, items: [] };
-      map[catId].amount += Number(s.amount);
-      map[catId].items.push({ label: s.description || s.category, amount: Number(s.amount) });
-    });
-    return map;
-  }, [schedules, selectedYear, selectedMonth]);
 
   // Consolidamento budget per categoria. Il "target" con cui confrontare il reale e', in ordine di priorita':
   // - una percentuale delle entrate previste del mese (categories.budget_percent), se impostata
@@ -753,7 +767,10 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
           <div className="absolute top-[-30%] right-[-20%] w-32 h-32 rounded-full bg-rose-500/5 blur-[40px]" />
           <h4 className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Bisogni (Essenziali)</h4>
           <p className="text-2xl font-black text-white mt-2">{formatCurrency(totals.need)}</p>
-          <div className="text-[9px] text-slate-500 mt-1 font-semibold">Spese fisse e variabili obbligatorie</div>
+          <div className="text-[9px] text-slate-500 mt-1 font-semibold">
+            Spese fisse e variabili obbligatorie
+            {unplannedScheduledTotal > 0 && ` (incluse ${formatCurrency(unplannedScheduledTotal)} di scadenze non pianificate)`}
+          </div>
         </div>
 
         {/* Potere di Spesa Residuo */}
