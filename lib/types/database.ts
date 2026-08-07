@@ -11,6 +11,7 @@ export interface ExpenseCategory {
   name: string;
   color: string;
   monthly_budget: number | null; // limite mensile impostato per l'intera categoria (es. "Utenze: 300€ di media")
+  budget_percent: number | null; // in alternativa a monthly_budget: percentuale delle entrate mensili previste (0-100)
   created_at: string;
 }
 
@@ -129,6 +130,7 @@ export interface Database {
           name: string;
           color?: string;
           monthly_budget?: number | null;
+          budget_percent?: number | null;
           created_at?: string;
         };
         Update: {
@@ -137,6 +139,7 @@ export interface Database {
           name?: string;
           color?: string;
           monthly_budget?: number | null;
+          budget_percent?: number | null;
           created_at?: string;
         };
         Relationships: [];

@@ -3,7 +3,7 @@
 import { useState, useTransition, useMemo } from "react";
 import { type Budget, type BudgetOverride, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createBudget, updateBudget, deleteBudget, upsertBudgetOverride, deleteBudgetOverride, confirmBudgetExpense } from "@/app/actions/budget";
-import { updateCategoryBudget } from "@/app/actions/categories";
+import { updateCategoryBudget, updateCategoryBudgetPercent } from "@/app/actions/categories";
 import { generateScheduleFromBudget } from "@/app/actions/schedules";
 import { formatCurrency } from "@/lib/format";
 import { getMonthlyEquivalent as getMonthlyEquivalentBase, isBudgetEnded as isBudgetEndedBase, getEffectiveAmount as getEffectiveAmountBase } from "@/lib/budgetCalc";
@@ -63,9 +63,21 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
   const [schedules, setSchedules] = useState<any[]>(initialSchedules);
   const [isPending, startTransition] = useTransition();
 
-  // Editing inline del budget mensile per categoria
+  // Editing inline del budget mensile per categoria (€ fisso oppure % delle entrate previste)
   const [editingCategoryBudgetId, setEditingCategoryBudgetId] = useState<string | null>(null);
   const [categoryBudgetDraft, setCategoryBudgetDraft] = useState("");
+  const [categoryBudgetMode, setCategoryBudgetMode] = useState<"amount" | "percent">("amount");
+
+  // Categorie espanse nella vista "Confronto per Categoria" (vista veloce collassata di default)
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<Set<string>>(new Set());
+  const toggleCategoryExpanded = (categoryId: string) => {
+    setExpandedCategoryIds(prev => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) next.delete(categoryId);
+      else next.add(categoryId);
+      return next;
+    });
+  };
 
   // Generazione di una scadenza da pagare a partire da una voce di budget ricorrente
   const [generatingScheduleBudgetId, setGeneratingScheduleBudgetId] = useState<string | null>(null);
@@ -381,7 +393,13 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
   const startEditCategoryBudget = (cat: ExpenseCategory) => {
     setEditingCategoryBudgetId(cat.id);
-    setCategoryBudgetDraft(cat.monthly_budget != null ? String(cat.monthly_budget) : "");
+    if (cat.budget_percent != null) {
+      setCategoryBudgetMode("percent");
+      setCategoryBudgetDraft(String(cat.budget_percent));
+    } else {
+      setCategoryBudgetMode("amount");
+      setCategoryBudgetDraft(cat.monthly_budget != null ? String(cat.monthly_budget) : "");
+    }
   };
 
   const cancelEditCategoryBudget = () => {
@@ -392,6 +410,28 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
   const saveCategoryBudget = (cat: ExpenseCategory) => {
     const trimmed = categoryBudgetDraft.trim();
     const value = trimmed === "" ? null : Number(trimmed);
+
+    if (categoryBudgetMode === "percent") {
+      if (value !== null && (isNaN(value) || value < 0 || value > 100)) {
+        alert("Inserisci una percentuale valida (0-100)");
+        return;
+      }
+      startTransition(async () => {
+        try {
+          const res = await updateCategoryBudgetPercent(cat.id, value);
+          if (!res.success || !res.data) {
+            alert(res.error || "Errore durante il salvataggio del budget per categoria");
+            return;
+          }
+          setCategories(prev => prev.map(c => c.id === cat.id ? res.data : c));
+          cancelEditCategoryBudget();
+        } catch (err: any) {
+          alert(err.message || "Errore durante il salvataggio del budget per categoria");
+        }
+      });
+      return;
+    }
+
     if (value !== null && (isNaN(value) || value < 0)) {
       alert("Inserisci un importo valido");
       return;
@@ -553,25 +593,51 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     return map;
   }, [priorMonths, expenses, budgets, overrides]);
 
-  // Consolidamento budget per categoria. Il "target" con cui confrontare il reale e':
-  // - il limite impostato manualmente sulla categoria (categories.monthly_budget), se presente
+  // Scadenze del mese selezionato non collegate a nessuna voce di budget ricorrente (es. il bollo auto
+  // schedulato a mano): sono comunque un costo previsto e noto, quindi vengono sommate al previsto
+  // per categoria cosi' da non "sparire" solo perche' non fanno parte di un budget pianificato.
+  const unlinkedScheduledByCategory = useMemo(() => {
+    const map: Record<string, { amount: number; items: { label: string; amount: number }[] }> = {};
+    schedules.forEach((s: any) => {
+      if (s.budget_id) return; // gia' contato tramite la voce di budget collegata
+      const sDate = new Date(s.due_date);
+      if (sDate.getFullYear() !== selectedYear || sDate.getMonth() + 1 !== selectedMonth) return;
+      const catId = s.category_id || "unassigned";
+      if (!map[catId]) map[catId] = { amount: 0, items: [] };
+      map[catId].amount += Number(s.amount);
+      map[catId].items.push({ label: s.description || s.category, amount: Number(s.amount) });
+    });
+    return map;
+  }, [schedules, selectedYear, selectedMonth]);
+
+  // Consolidamento budget per categoria. Il "target" con cui confrontare il reale e', in ordine di priorita':
+  // - una percentuale delle entrate previste del mese (categories.budget_percent), se impostata
+  // - altrimenti il limite fisso impostato manualmente (categories.monthly_budget), se presente
   //   (es. "Utenze: 300€ di media" a prescindere da quante singole voci/fornitori la compongono)
-  // - altrimenti, in mancanza di un limite esplicito, la somma delle singole voci di budget
-  //   pianificate in quella categoria (comportamento precedente, mantenuto come fallback)
+  // - altrimenti, in mancanza di un limite esplicito, la somma delle voci di budget pianificate
+  //   in quella categoria + le eventuali scadenze non pianificate in arrivo quel mese
   const categoryBudgetComparison = useMemo(() => {
-    const map: Record<string, { categoryId: string; categoryName: string; color: string; budgetAmt: number; realAmt: number; rollover: number; manualCap: number | null }> = {};
+    const map: Record<string, {
+      categoryId: string; categoryName: string; color: string;
+      budgetAmt: number; scheduledAmt: number; scheduledItems: { label: string; amount: number }[];
+      realAmt: number; rollover: number; manualCap: number | null; percentTarget: number | null;
+    }> = {};
 
     const ensure = (catId: string) => {
       if (map[catId]) return map[catId];
       const catObj = categories.find(c => c.id === catId);
+      const scheduled = unlinkedScheduledByCategory[catId];
       map[catId] = {
         categoryId: catId,
         categoryName: catObj ? catObj.name : "Generica / Altro",
         color: catObj ? catObj.color : "slate",
         budgetAmt: 0,
+        scheduledAmt: scheduled?.amount || 0,
+        scheduledItems: scheduled?.items || [],
         realAmt: realExpensesByCategory[catId] || 0,
         rollover: categoryRollover[catId] || 0,
         manualCap: catObj ? catObj.monthly_budget : null,
+        percentTarget: catObj ? catObj.budget_percent : null,
       };
       return map[catId];
     };
@@ -583,19 +649,22 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
       ensure(catId).budgetAmt += monthlyAmt;
     });
 
+    // Tutte le categorie sono sempre elencate (vista completa), non solo quelle con dati questo mese.
+    categories.forEach(cat => ensure(cat.id));
     Object.keys(realExpensesByCategory).forEach(catId => ensure(catId));
+    Object.keys(unlinkedScheduledByCategory).forEach(catId => ensure(catId));
 
-    // Include anche le categorie con un limite impostato manualmente ma ancora senza spese/voci nel mese,
-    // cosi' da poter vedere subito "0 / 300€" invece di doverne aspettare la prima spesa.
-    categories.forEach(cat => {
-      if (cat.monthly_budget != null) ensure(cat.id);
-    });
-
-    return Object.values(map).map(item => ({
-      ...item,
-      targetAmt: item.manualCap != null ? item.manualCap : item.budgetAmt,
-    }));
-  }, [budgets, overrides, realExpensesByCategory, categories, categoryRollover, selectedYear, selectedMonth]);
+    return Object.values(map)
+      .map(item => ({
+        ...item,
+        targetAmt: item.percentTarget != null
+          ? (totals.income * item.percentTarget) / 100
+          : item.manualCap != null
+            ? item.manualCap
+            : item.budgetAmt + item.scheduledAmt,
+      }))
+      .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
+  }, [budgets, overrides, realExpensesByCategory, categories, categoryRollover, unlinkedScheduledByCategory, totals.income, selectedYear, selectedMonth]);
 
   // Percentuale realizzazione entrate
   const incomePercent = totals.income > 0 ? (realIncomeTotal / totals.income) * 100 : 0;
@@ -1072,7 +1141,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
             </span>
           </div>
 
-          <div className="flex-1 overflow-x-auto pr-1 relative z-10 max-h-[340px] overflow-y-auto">
+          <div className="flex-1 overflow-x-auto pr-1 relative z-10 overflow-y-auto">
             {budgets.length === 0 ? (
               <p className="text-xs text-slate-500 py-12 text-center">Nessuna voce programmata nel budget.</p>
             ) : (
@@ -1419,118 +1488,169 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
             <h3 className="text-sm font-extrabold text-white tracking-wide">
               📊 Confronto Uscite per Categoria
             </h3>
-            <p className="text-[10px] text-zinc-500 mt-1">Confronto delle uscite reali del mese contro un limite per categoria: clicca su "Somma voci previste" per impostarne uno fisso (es. Utenze: 300€) indipendente da quante singole voci la compongono.</p>
+            <p className="text-[10px] text-zinc-500 mt-1">Tutte le categorie, vista veloce collassata: clicca su una riga per espanderla e vedere i dettagli, impostare un limite fisso o una percentuale delle entrate.</p>
           </div>
 
-          <div className="flex-1 overflow-x-auto pr-1 relative z-10 space-y-4">
+          <div className="flex-1 overflow-x-auto pr-1 relative z-10 space-y-2">
             {categoryBudgetComparison.length === 0 ? (
               <div className="text-center py-16 text-slate-500 flex flex-col items-center justify-center">
                 <span className="text-3xl mb-2">📈</span>
-                <p className="text-xs">Pianifica le uscite per attivare il confronto.</p>
+                <p className="text-xs">Crea una categoria in Impostazioni per attivare il confronto.</p>
               </div>
             ) : (
-              <div className="space-y-5">
-                {categoryBudgetComparison.map((item) => {
-                  const percent = item.targetAmt > 0 ? (item.realAmt / item.targetAmt) * 100 : 0;
-                  const isOver = percent > 100;
+              categoryBudgetComparison.map((item) => {
+                const percent = item.targetAmt > 0 ? (item.realAmt / item.targetAmt) * 100 : 0;
+                const isOver = percent > 100;
 
-                  let barColor = "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]";
-                  if (percent > 80 && percent <= 100) {
-                    barColor = "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]";
-                  } else if (percent > 100) {
-                    barColor = "bg-rose-500 shadow-[0_0_10px_rgba(239,68,68,0.4)]";
-                  }
+                let barColor = "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]";
+                if (percent > 80 && percent <= 100) {
+                  barColor = "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]";
+                } else if (percent > 100) {
+                  barColor = "bg-rose-500 shadow-[0_0_10px_rgba(239,68,68,0.4)]";
+                }
 
-                  const badge = COLOR_MAP[item.color] || COLOR_MAP.slate;
-                  const isEditingCap = editingCategoryBudgetId === item.categoryId;
-                  const catObj = categories.find(c => c.id === item.categoryId);
+                const badge = COLOR_MAP[item.color] || COLOR_MAP.slate;
+                const isEditingCap = editingCategoryBudgetId === item.categoryId;
+                const catObj = categories.find(c => c.id === item.categoryId);
+                const isExpanded = expandedCategoryIds.has(item.categoryId);
 
-                  return (
-                    <div key={item.categoryId} className="space-y-2 border-b border-zinc-800/40 pb-4">
-                      <div className="flex justify-between items-center text-xs flex-wrap gap-y-1">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="px-2 py-0.5 rounded border text-[9px] font-extrabold"
-                            style={{
-                              backgroundColor: badge.bg,
-                              color: badge.text,
-                              borderColor: badge.border,
-                            }}
-                          >
-                            {item.categoryName}
-                          </span>
+                return (
+                  <div
+                    key={item.categoryId}
+                    className="rounded-xl border overflow-hidden transition-colors"
+                    style={{ borderColor: isExpanded ? "hsla(245, 60%, 55%, 0.3)" : "hsl(240 5% 18% / 0.5)" }}
+                  >
+                    {/* Vista veloce collassata */}
+                    <button
+                      type="button"
+                      onClick={() => toggleCategoryExpanded(item.categoryId)}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.03] transition-colors"
+                    >
+                      <span
+                        className="px-2 py-0.5 rounded border text-[9px] font-extrabold flex-shrink-0 truncate max-w-[110px]"
+                        style={{ backgroundColor: badge.bg, color: badge.text, borderColor: badge.border }}
+                        title={item.categoryName}
+                      >
+                        {item.categoryName}
+                      </span>
+                      <div className="flex-1 min-w-[40px]">
+                        <div className="relative h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+                          <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${Math.min(percent, 100)}%` }} />
                         </div>
-                        <div className="text-[10px] font-medium text-slate-400 flex items-center gap-1.5">
-                          Reale: <span className="text-white font-black">{formatCurrency(item.realAmt)}</span> /
+                      </div>
+                      <span className="text-[9px] font-bold text-slate-400 whitespace-nowrap flex-shrink-0">
+                        {formatCurrency(item.realAmt)} <span className="text-zinc-600">/</span> {item.targetAmt > 0 ? formatCurrency(item.targetAmt) : "—"}
+                      </span>
+                      <span className={`text-[9px] text-zinc-500 flex-shrink-0 inline-block transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}>
+                        ▶
+                      </span>
+                    </button>
+
+                    {/* Dettaglio espanso */}
+                    {isExpanded && (
+                      <div className="px-3 pb-3.5 pt-1 space-y-2.5 border-t animate-fade-in" style={{ borderColor: "hsl(240 5% 18% / 0.5)" }}>
+                        <div className="flex justify-between items-center text-[10px] font-medium text-slate-400 flex-wrap gap-y-1.5 pt-2">
+                          <span>Reale: <span className="text-white font-black">{formatCurrency(item.realAmt)}</span></span>
                           {isEditingCap ? (
-                            <span className="inline-flex items-center gap-1">
+                            <div className="inline-flex items-center gap-1">
+                              <div className="flex rounded overflow-hidden border border-zinc-700 text-[9px] font-bold flex-shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setCategoryBudgetMode("amount")}
+                                  className="px-1.5 py-0.5 transition-colors"
+                                  style={{ background: categoryBudgetMode === "amount" ? "hsla(245, 85%, 55%, 0.3)" : "transparent", color: categoryBudgetMode === "amount" ? "white" : "hsl(240 5% 55%)" }}
+                                >
+                                  €
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setCategoryBudgetMode("percent")}
+                                  className="px-1.5 py-0.5 transition-colors"
+                                  style={{ background: categoryBudgetMode === "percent" ? "hsla(245, 85%, 55%, 0.3)" : "transparent", color: categoryBudgetMode === "percent" ? "white" : "hsl(240 5% 55%)" }}
+                                >
+                                  %
+                                </button>
+                              </div>
                               <input
                                 type="number"
-                                step="0.01"
+                                step={categoryBudgetMode === "percent" ? "1" : "0.01"}
                                 autoFocus
                                 value={categoryBudgetDraft}
                                 onChange={(e) => setCategoryBudgetDraft(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter" && catObj) saveCategoryBudget(catObj); if (e.key === "Escape") cancelEditCategoryBudget(); }}
-                                placeholder="Nessun limite"
-                                className="w-20 px-1.5 py-0.5 rounded text-right text-[10px] text-white bg-zinc-950 border border-indigo-500/50 focus:outline-none"
+                                placeholder={categoryBudgetMode === "percent" ? "es. 15" : "Nessun limite"}
+                                className="w-16 px-1.5 py-0.5 rounded text-right text-[10px] text-white bg-zinc-950 border border-indigo-500/50 focus:outline-none"
                               />
                               <button onClick={() => catObj && saveCategoryBudget(catObj)} className="text-emerald-400 hover:text-emerald-300 text-[10px] font-bold px-0.5" title="Salva">✓</button>
                               <button onClick={cancelEditCategoryBudget} className="text-zinc-500 hover:text-white text-[10px] font-bold px-0.5" title="Annulla">✕</button>
-                            </span>
+                            </div>
                           ) : (
                             <button
                               onClick={() => catObj && startEditCategoryBudget(catObj)}
                               className="hover:underline"
-                              title="Imposta un limite mensile fisso per l'intera categoria"
+                              title="Imposta un limite mensile fisso in euro oppure una percentuale delle entrate previste"
                             >
-                              {item.manualCap != null ? (
+                              {item.percentTarget != null ? (
+                                <span className="text-zinc-300">{item.percentTarget}% delle entrate ({formatCurrency(item.targetAmt)})</span>
+                              ) : item.manualCap != null ? (
                                 <span className="text-zinc-300">Limite categoria: {formatCurrency(item.manualCap)}</span>
                               ) : (
-                                <span className="text-zinc-500">Somma voci previste: {formatCurrency(item.budgetAmt)} (imposta un limite)</span>
+                                <span className="text-zinc-500">Previsto: {formatCurrency(item.targetAmt)} (imposta un limite)</span>
                               )}
                             </button>
                           )}
                         </div>
-                      </div>
 
-                      <div className="relative h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                          style={{ width: `${Math.min(percent, 100)}%` }}
-                        />
-                      </div>
+                        <div className="relative h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                            style={{ width: `${Math.min(percent, 100)}%` }}
+                          />
+                        </div>
 
-                      <div className="flex justify-between items-center text-[9px]">
-                        <span className="text-zinc-500 font-bold">
-                          {percent > 0 ? `${Math.round(percent)}% utilizzato` : "Nessun budget definito per categoria"}
-                        </span>
-                        {item.targetAmt > 0 && (
-                          <span className={`font-black ${isOver ? "text-rose-400" : "text-emerald-400"}`}>
-                            {isOver
-                              ? `Sforato di ${formatCurrency(item.realAmt - item.targetAmt)}`
-                              : `Rimanenti ${formatCurrency(item.targetAmt - item.realAmt)}`
-                            }
+                        <div className="flex justify-between items-center text-[9px]">
+                          <span className="text-zinc-500 font-bold">
+                            {percent > 0 ? `${Math.round(percent)}% utilizzato` : "Nessun budget definito per categoria"}
                           </span>
+                          {item.targetAmt > 0 && (
+                            <span className={`font-black ${isOver ? "text-rose-400" : "text-emerald-400"}`}>
+                              {isOver
+                                ? `Sforato di ${formatCurrency(item.realAmt - item.targetAmt)}`
+                                : `Rimanenti ${formatCurrency(item.targetAmt - item.realAmt)}`
+                              }
+                            </span>
+                          )}
+                        </div>
+
+                        {item.rollover !== 0 && (
+                          <div className="flex justify-between items-center text-[9px] pt-1 border-t border-zinc-800/30">
+                            <span className="text-zinc-500 font-semibold">
+                              Riporto mesi precedenti:{" "}
+                              <span className={item.rollover >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                                {item.rollover >= 0 ? "+" : ""}{formatCurrency(item.rollover)}
+                              </span>
+                            </span>
+                            <span className={`font-black ${(item.targetAmt + item.rollover - item.realAmt) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                              Disponibile: {formatCurrency(item.targetAmt + item.rollover - item.realAmt)}
+                            </span>
+                          </div>
+                        )}
+
+                        {item.scheduledItems.length > 0 && (
+                          <div className="text-[9px] pt-1 border-t border-zinc-800/30">
+                            <span className="text-zinc-500 font-semibold">Scadenze non pianificate incluse: </span>
+                            {item.scheduledItems.map((s, i) => (
+                              <span key={i} className="text-amber-400">
+                                {s.label} ({formatCurrency(s.amount)}){i < item.scheduledItems.length - 1 ? ", " : ""}
+                              </span>
+                            ))}
+                          </div>
                         )}
                       </div>
-
-                      {item.rollover !== 0 && (
-                        <div className="flex justify-between items-center text-[9px] pt-1 border-t border-zinc-800/30">
-                          <span className="text-zinc-500 font-semibold">
-                            Riporto mesi precedenti:{" "}
-                            <span className={item.rollover >= 0 ? "text-emerald-400" : "text-rose-400"}>
-                              {item.rollover >= 0 ? "+" : ""}{formatCurrency(item.rollover)}
-                            </span>
-                          </span>
-                          <span className={`font-black ${(item.targetAmt + item.rollover - item.realAmt) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                            Disponibile: {formatCurrency(item.targetAmt + item.rollover - item.realAmt)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>

@@ -114,7 +114,32 @@ export async function updateCategoryBudget(id: string, monthlyBudget: number | n
 
     const { data, error } = await supabase
       .from("expense_categories")
-      .update({ monthly_budget: monthlyBudget })
+      // Il limite in € e la percentuale sulle entrate sono alternativi: impostando l'uno si azzera l'altro.
+      .update({ monthly_budget: monthlyBudget, budget_percent: null })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/budget");
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function updateCategoryBudgetPercent(id: string, budgetPercent: number | null) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase
+      .from("expense_categories")
+      .update({ budget_percent: budgetPercent, monthly_budget: null })
       .eq("id", id)
       .eq("user_id", user.id)
       .select()
