@@ -1053,206 +1053,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
           </form>
         </div>
 
-        {/* Confronto Budget vs Spese Reali (2 Colonne) */}
-        <div
-          className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-6 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
-          style={{
-            background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
-            borderColor: "hsla(240, 5%, 18%, 0.7)",
-          }}
-        >
-          <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
-
-          <div>
-            <h3 className="text-sm font-extrabold text-white tracking-wide">
-              📊 Confronto Uscite per Categoria
-            </h3>
-            <p className="text-[10px] text-zinc-500 mt-1">Confronto delle uscite reali del mese contro un limite per categoria: clicca su "Somma voci previste" per impostarne uno fisso (es. Utenze: 300€) indipendente da quante singole voci la compongono.</p>
-          </div>
-
-          <div className="flex-1 overflow-x-auto pr-1 relative z-10 space-y-4">
-            {categoryBudgetComparison.length === 0 ? (
-              <div className="text-center py-16 text-slate-500 flex flex-col items-center justify-center">
-                <span className="text-3xl mb-2">📈</span>
-                <p className="text-xs">Pianifica le uscite per attivare il confronto.</p>
-              </div>
-            ) : (
-              <div className="space-y-5">
-                {categoryBudgetComparison.map((item) => {
-                  const percent = item.targetAmt > 0 ? (item.realAmt / item.targetAmt) * 100 : 0;
-                  const isOver = percent > 100;
-
-                  let barColor = "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]";
-                  if (percent > 80 && percent <= 100) {
-                    barColor = "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]";
-                  } else if (percent > 100) {
-                    barColor = "bg-rose-500 shadow-[0_0_10px_rgba(239,68,68,0.4)]";
-                  }
-
-                  const badge = COLOR_MAP[item.color] || COLOR_MAP.slate;
-                  const isEditingCap = editingCategoryBudgetId === item.categoryId;
-                  const catObj = categories.find(c => c.id === item.categoryId);
-
-                  return (
-                    <div key={item.categoryId} className="space-y-2 border-b border-zinc-800/40 pb-4">
-                      <div className="flex justify-between items-center text-xs flex-wrap gap-y-1">
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="px-2 py-0.5 rounded border text-[9px] font-extrabold"
-                            style={{
-                              backgroundColor: badge.bg,
-                              color: badge.text,
-                              borderColor: badge.border,
-                            }}
-                          >
-                            {item.categoryName}
-                          </span>
-                        </div>
-                        <div className="text-[10px] font-medium text-slate-400 flex items-center gap-1.5">
-                          Reale: <span className="text-white font-black">{formatCurrency(item.realAmt)}</span> /
-                          {isEditingCap ? (
-                            <span className="inline-flex items-center gap-1">
-                              <input
-                                type="number"
-                                step="0.01"
-                                autoFocus
-                                value={categoryBudgetDraft}
-                                onChange={(e) => setCategoryBudgetDraft(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter" && catObj) saveCategoryBudget(catObj); if (e.key === "Escape") cancelEditCategoryBudget(); }}
-                                placeholder="Nessun limite"
-                                className="w-20 px-1.5 py-0.5 rounded text-right text-[10px] text-white bg-zinc-950 border border-indigo-500/50 focus:outline-none"
-                              />
-                              <button onClick={() => catObj && saveCategoryBudget(catObj)} className="text-emerald-400 hover:text-emerald-300 text-[10px] font-bold px-0.5" title="Salva">✓</button>
-                              <button onClick={cancelEditCategoryBudget} className="text-zinc-500 hover:text-white text-[10px] font-bold px-0.5" title="Annulla">✕</button>
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => catObj && startEditCategoryBudget(catObj)}
-                              className="hover:underline"
-                              title="Imposta un limite mensile fisso per l'intera categoria"
-                            >
-                              {item.manualCap != null ? (
-                                <span className="text-zinc-300">Limite categoria: {formatCurrency(item.manualCap)}</span>
-                              ) : (
-                                <span className="text-zinc-500">Somma voci previste: {formatCurrency(item.budgetAmt)} (imposta un limite)</span>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="relative h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
-                        <div
-                          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                          style={{ width: `${Math.min(percent, 100)}%` }}
-                        />
-                      </div>
-
-                      <div className="flex justify-between items-center text-[9px]">
-                        <span className="text-zinc-500 font-bold">
-                          {percent > 0 ? `${Math.round(percent)}% utilizzato` : "Nessun budget definito per categoria"}
-                        </span>
-                        {item.targetAmt > 0 && (
-                          <span className={`font-black ${isOver ? "text-rose-400" : "text-emerald-400"}`}>
-                            {isOver
-                              ? `Sforato di ${formatCurrency(item.realAmt - item.targetAmt)}`
-                              : `Rimanenti ${formatCurrency(item.targetAmt - item.realAmt)}`
-                            }
-                          </span>
-                        )}
-                      </div>
-
-                      {item.rollover !== 0 && (
-                        <div className="flex justify-between items-center text-[9px] pt-1 border-t border-zinc-800/30">
-                          <span className="text-zinc-500 font-semibold">
-                            Riporto mesi precedenti:{" "}
-                            <span className={item.rollover >= 0 ? "text-emerald-400" : "text-rose-400"}>
-                              {item.rollover >= 0 ? "+" : ""}{formatCurrency(item.rollover)}
-                            </span>
-                          </span>
-                          <span className={`font-black ${(item.targetAmt + item.rollover - item.realAmt) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                            Disponibile: {formatCurrency(item.targetAmt + item.rollover - item.realAmt)}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-      </div>
-
-      {/* Ripartizione Consigliata & Elenco Voci */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Regola 50/30/20 */}
-        <div
-          className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
-          style={{
-            background: "linear-gradient(135deg, hsla(270, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
-            borderColor: "hsla(270, 60%, 50%, 0.15)",
-          }}
-        >
-          <div className="absolute top-[-30%] left-[-20%] w-40 h-40 rounded-full bg-purple-500/5 blur-[50px] pointer-events-none" />
-
-          <h3 className="text-sm font-extrabold text-white tracking-wide mb-4">
-            💡 Ripartizione 50/30/20 (Normalizzata)
-          </h3>
-
-          {ruleAnalysis ? (
-            <div className="space-y-4 text-xs z-10 relative">
-              <p className="text-[10px] text-slate-400 leading-relaxed">
-                Ripartizione calcolata classificando le spese in base all'effettiva utilità reale (Bisogni, Desideri, Fondi Risparmio ed Emergenza):
-              </p>
-              
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] font-bold">
-                  <span className="text-rose-400">Bisogni (Essenziali) - 50% max</span>
-                  <span className="text-white">{ruleAnalysis.needPercent}%</span>
-                </div>
-                <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
-                  <div className="h-full bg-rose-500 rounded-full" style={{ width: `${Math.min(ruleAnalysis.needPercent, 100)}%` }} />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] font-bold">
-                  <span className="text-sky-400">Desideri (Voluttuarie) - 30% max</span>
-                  <span className="text-white">{ruleAnalysis.wantPercent}%</span>
-                </div>
-                <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
-                  <div className="h-full bg-sky-500 rounded-full" style={{ width: `${Math.min(ruleAnalysis.wantPercent, 100)}%` }} />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between text-[10px] font-bold">
-                  <span className="text-emerald-400">Risparmio & Imprevisti - 20% min</span>
-                  <span className="text-white">{ruleAnalysis.savingsPercent}%</span>
-                </div>
-                <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
-                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.max(0, Math.min(ruleAnalysis.savingsPercent, 100))}%` }} />
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-zinc-800 text-[10px] text-slate-400 leading-relaxed">
-                {ruleAnalysis.needPercent > 50 ? (
-                  <span className="text-rose-400 font-semibold">⚠️ I tuoi bisogni essenziali superano il 50%. Valuta se ottimizzare spese fisse (bollette, affitti) o ridurre uscite variabili essenziali.</span>
-                ) : ruleAnalysis.savingsPercent < 20 ? (
-                  <span className="text-amber-400 font-semibold">⚠️ Stai accantonando meno del 20% raccomandato. Prova a tagliare leggermente le spese voluttuarie (Desideri).</span>
-                ) : (
-                  <span className="text-emerald-400 font-semibold">✨ Allocazione ottimale! Il tuo bilancio preventivo rispetta appieno i parametri di stabilità finanziaria.</span>
-                )}
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs text-slate-500 py-6 text-center">Inserisci prima un'entrata mensile per calcolare la ripartizione consigliata.</p>
-          )}
-        </div>
-
         {/* Elenco Voci Pianificate */}
         <div
           className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-4 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
@@ -1424,6 +1224,14 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                                   📅 {linkedSchedule.is_paid ? "Scadenza saldata" : "Scadenza generata"}
                                 </span>
                               )}
+                              {!linkedSchedule && !linkedExpense && b.type !== "income" && b.periodicity === "monthly" && !ended && (
+                                <span
+                                  className="text-[7px] uppercase font-extrabold tracking-widest text-zinc-600"
+                                  title="Nessuna scadenza generata per questo mese: usa il pulsante 📅 per crearla in Scadenze"
+                                >
+                                  📅 Scadenza non generata
+                                </span>
+                              )}
                             </button>
                           )}
                         </td>
@@ -1523,6 +1331,206 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                   })}
                 </tbody>
               </table>
+            )}
+          </div>
+        </div>
+
+      </div>
+
+      {/* Ripartizione Consigliata & Elenco Voci */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Regola 50/30/20 */}
+        <div
+          className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
+          style={{
+            background: "linear-gradient(135deg, hsla(270, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
+            borderColor: "hsla(270, 60%, 50%, 0.15)",
+          }}
+        >
+          <div className="absolute top-[-30%] left-[-20%] w-40 h-40 rounded-full bg-purple-500/5 blur-[50px] pointer-events-none" />
+
+          <h3 className="text-sm font-extrabold text-white tracking-wide mb-4">
+            💡 Ripartizione 50/30/20 (Normalizzata)
+          </h3>
+
+          {ruleAnalysis ? (
+            <div className="space-y-4 text-xs z-10 relative">
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                Ripartizione calcolata classificando le spese in base all'effettiva utilità reale (Bisogni, Desideri, Fondi Risparmio ed Emergenza):
+              </p>
+              
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-bold">
+                  <span className="text-rose-400">Bisogni (Essenziali) - 50% max</span>
+                  <span className="text-white">{ruleAnalysis.needPercent}%</span>
+                </div>
+                <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+                  <div className="h-full bg-rose-500 rounded-full" style={{ width: `${Math.min(ruleAnalysis.needPercent, 100)}%` }} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-bold">
+                  <span className="text-sky-400">Desideri (Voluttuarie) - 30% max</span>
+                  <span className="text-white">{ruleAnalysis.wantPercent}%</span>
+                </div>
+                <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+                  <div className="h-full bg-sky-500 rounded-full" style={{ width: `${Math.min(ruleAnalysis.wantPercent, 100)}%` }} />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex justify-between text-[10px] font-bold">
+                  <span className="text-emerald-400">Risparmio & Imprevisti - 20% min</span>
+                  <span className="text-white">{ruleAnalysis.savingsPercent}%</span>
+                </div>
+                <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.max(0, Math.min(ruleAnalysis.savingsPercent, 100))}%` }} />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-zinc-800 text-[10px] text-slate-400 leading-relaxed">
+                {ruleAnalysis.needPercent > 50 ? (
+                  <span className="text-rose-400 font-semibold">⚠️ I tuoi bisogni essenziali superano il 50%. Valuta se ottimizzare spese fisse (bollette, affitti) o ridurre uscite variabili essenziali.</span>
+                ) : ruleAnalysis.savingsPercent < 20 ? (
+                  <span className="text-amber-400 font-semibold">⚠️ Stai accantonando meno del 20% raccomandato. Prova a tagliare leggermente le spese voluttuarie (Desideri).</span>
+                ) : (
+                  <span className="text-emerald-400 font-semibold">✨ Allocazione ottimale! Il tuo bilancio preventivo rispetta appieno i parametri di stabilità finanziaria.</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 py-6 text-center">Inserisci prima un'entrata mensile per calcolare la ripartizione consigliata.</p>
+          )}
+        </div>
+
+        {/* Confronto Budget vs Spese Reali (2 Colonne) */}
+        <div
+          className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-6 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
+          style={{
+            background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+            borderColor: "hsla(240, 5%, 18%, 0.7)",
+          }}
+        >
+          <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
+
+          <div>
+            <h3 className="text-sm font-extrabold text-white tracking-wide">
+              📊 Confronto Uscite per Categoria
+            </h3>
+            <p className="text-[10px] text-zinc-500 mt-1">Confronto delle uscite reali del mese contro un limite per categoria: clicca su "Somma voci previste" per impostarne uno fisso (es. Utenze: 300€) indipendente da quante singole voci la compongono.</p>
+          </div>
+
+          <div className="flex-1 overflow-x-auto pr-1 relative z-10 space-y-4">
+            {categoryBudgetComparison.length === 0 ? (
+              <div className="text-center py-16 text-slate-500 flex flex-col items-center justify-center">
+                <span className="text-3xl mb-2">📈</span>
+                <p className="text-xs">Pianifica le uscite per attivare il confronto.</p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {categoryBudgetComparison.map((item) => {
+                  const percent = item.targetAmt > 0 ? (item.realAmt / item.targetAmt) * 100 : 0;
+                  const isOver = percent > 100;
+
+                  let barColor = "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]";
+                  if (percent > 80 && percent <= 100) {
+                    barColor = "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.4)]";
+                  } else if (percent > 100) {
+                    barColor = "bg-rose-500 shadow-[0_0_10px_rgba(239,68,68,0.4)]";
+                  }
+
+                  const badge = COLOR_MAP[item.color] || COLOR_MAP.slate;
+                  const isEditingCap = editingCategoryBudgetId === item.categoryId;
+                  const catObj = categories.find(c => c.id === item.categoryId);
+
+                  return (
+                    <div key={item.categoryId} className="space-y-2 border-b border-zinc-800/40 pb-4">
+                      <div className="flex justify-between items-center text-xs flex-wrap gap-y-1">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="px-2 py-0.5 rounded border text-[9px] font-extrabold"
+                            style={{
+                              backgroundColor: badge.bg,
+                              color: badge.text,
+                              borderColor: badge.border,
+                            }}
+                          >
+                            {item.categoryName}
+                          </span>
+                        </div>
+                        <div className="text-[10px] font-medium text-slate-400 flex items-center gap-1.5">
+                          Reale: <span className="text-white font-black">{formatCurrency(item.realAmt)}</span> /
+                          {isEditingCap ? (
+                            <span className="inline-flex items-center gap-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                autoFocus
+                                value={categoryBudgetDraft}
+                                onChange={(e) => setCategoryBudgetDraft(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter" && catObj) saveCategoryBudget(catObj); if (e.key === "Escape") cancelEditCategoryBudget(); }}
+                                placeholder="Nessun limite"
+                                className="w-20 px-1.5 py-0.5 rounded text-right text-[10px] text-white bg-zinc-950 border border-indigo-500/50 focus:outline-none"
+                              />
+                              <button onClick={() => catObj && saveCategoryBudget(catObj)} className="text-emerald-400 hover:text-emerald-300 text-[10px] font-bold px-0.5" title="Salva">✓</button>
+                              <button onClick={cancelEditCategoryBudget} className="text-zinc-500 hover:text-white text-[10px] font-bold px-0.5" title="Annulla">✕</button>
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => catObj && startEditCategoryBudget(catObj)}
+                              className="hover:underline"
+                              title="Imposta un limite mensile fisso per l'intera categoria"
+                            >
+                              {item.manualCap != null ? (
+                                <span className="text-zinc-300">Limite categoria: {formatCurrency(item.manualCap)}</span>
+                              ) : (
+                                <span className="text-zinc-500">Somma voci previste: {formatCurrency(item.budgetAmt)} (imposta un limite)</span>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="relative h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                          style={{ width: `${Math.min(percent, 100)}%` }}
+                        />
+                      </div>
+
+                      <div className="flex justify-between items-center text-[9px]">
+                        <span className="text-zinc-500 font-bold">
+                          {percent > 0 ? `${Math.round(percent)}% utilizzato` : "Nessun budget definito per categoria"}
+                        </span>
+                        {item.targetAmt > 0 && (
+                          <span className={`font-black ${isOver ? "text-rose-400" : "text-emerald-400"}`}>
+                            {isOver
+                              ? `Sforato di ${formatCurrency(item.realAmt - item.targetAmt)}`
+                              : `Rimanenti ${formatCurrency(item.targetAmt - item.realAmt)}`
+                            }
+                          </span>
+                        )}
+                      </div>
+
+                      {item.rollover !== 0 && (
+                        <div className="flex justify-between items-center text-[9px] pt-1 border-t border-zinc-800/30">
+                          <span className="text-zinc-500 font-semibold">
+                            Riporto mesi precedenti:{" "}
+                            <span className={item.rollover >= 0 ? "text-emerald-400" : "text-rose-400"}>
+                              {item.rollover >= 0 ? "+" : ""}{formatCurrency(item.rollover)}
+                            </span>
+                          </span>
+                          <span className={`font-black ${(item.targetAmt + item.rollover - item.realAmt) >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                            Disponibile: {formatCurrency(item.targetAmt + item.rollover - item.realAmt)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
