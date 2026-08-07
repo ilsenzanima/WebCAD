@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib/types/database";
-import { createSchedule, updateSchedule, deleteSchedule, paySchedule } from "@/app/actions/schedules";
+import { createSchedule, updateSchedule, deleteSchedule, paySchedule, splitScheduleIntoInstallments } from "@/app/actions/schedules";
 import { createSupplier } from "@/app/actions/suppliers";
 import { syncSchedulesToCalendar } from "@/app/actions/google";
 import { DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
@@ -75,6 +75,16 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
   const [filterPaid, setFilterPaid] = useState<"all" | "pending" | "paid">("pending");
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
+
+  // Ripianificazione rapida (nuova data) per le scadenze non saldate e gia' scadute
+  const [reschedulingId, setReschedulingId] = useState<string | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+
+  // Divisione in rate: importo per rata calcolato automaticamente ma modificabile a mano
+  const [splittingId, setSplittingId] = useState<string | null>(null);
+  const [splitCount, setSplitCount] = useState(2);
+  const [splitStartDate, setSplitStartDate] = useState("");
+  const [splitInstallments, setSplitInstallments] = useState<{ amount: string; due_date: string }[]>([]);
 
   // Aggiunta rapida di un nuovo fornitore dal form
   const [isAddingSupplier, setIsAddingSupplier] = useState(false);
@@ -252,6 +262,128 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
         if (editingId === id) resetForm();
       } catch (err: any) {
         alert(err.message || "Errore durante l'eliminazione");
+      }
+    });
+  };
+
+  const todayStr = toLocalDateStr();
+  const isOverdue = (item: ScheduleWithRelations) => !item.is_paid && item.due_date < todayStr;
+
+  const startReschedule = (item: ScheduleWithRelations) => {
+    setReschedulingId(item.id);
+    setRescheduleDate(todayStr);
+  };
+
+  const cancelReschedule = () => {
+    setReschedulingId(null);
+    setRescheduleDate("");
+  };
+
+  const saveReschedule = (item: ScheduleWithRelations) => {
+    if (!rescheduleDate) {
+      alert("Seleziona una data valida");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const res = await updateSchedule(item.id, {
+          amount: item.amount,
+          category_id: item.category_id,
+          supplier_id: item.supplier_id,
+          category_name: item.expense_categories?.name || item.category,
+          description: item.description || "",
+          due_date: rescheduleDate,
+          recurrence: item.recurrence,
+        });
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore durante la ripianificazione");
+          return;
+        }
+        setSchedules(prev =>
+          prev.map(s => s.id === item.id ? res.data : s)
+            .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+        );
+        cancelReschedule();
+      } catch (err: any) {
+        alert(err.message || "Errore durante la ripianificazione");
+      }
+    });
+  };
+
+  // Divide l'importo totale in `n` rate mensili a partire da `startDateStr`, in parti uguali
+  // arrotondate a 2 decimali: l'eventuale resto di arrotondamento va sull'ultima rata cosi'
+  // che la somma delle rate torni sempre esatta all'importo originale.
+  const buildEvenInstallments = (totalAmount: number, n: number, startDateStr: string) => {
+    const start = new Date(`${startDateStr}T00:00:00`);
+    const per = Math.floor((totalAmount / n) * 100) / 100;
+    const arr: { amount: string; due_date: string }[] = [];
+    let runningSum = 0;
+    for (let i = 0; i < n; i++) {
+      const d = new Date(start);
+      d.setMonth(d.getMonth() + i);
+      const isLast = i === n - 1;
+      const amt = isLast ? Math.round((totalAmount - runningSum) * 100) / 100 : per;
+      runningSum += amt;
+      arr.push({ amount: amt.toFixed(2), due_date: toLocalDateStr(d) });
+    }
+    return arr;
+  };
+
+  const startSplit = (item: ScheduleWithRelations) => {
+    setSplittingId(item.id);
+    setSplitCount(2);
+    setSplitStartDate(item.due_date);
+    setSplitInstallments(buildEvenInstallments(item.amount, 2, item.due_date));
+  };
+
+  const cancelSplit = () => {
+    setSplittingId(null);
+    setSplitInstallments([]);
+  };
+
+  const handleSplitCountChange = (item: ScheduleWithRelations, rawCount: number) => {
+    const n = Math.max(2, Math.min(36, rawCount || 2));
+    setSplitCount(n);
+    setSplitInstallments(buildEvenInstallments(item.amount, n, splitStartDate || item.due_date));
+  };
+
+  const handleSplitStartDateChange = (item: ScheduleWithRelations, newDate: string) => {
+    setSplitStartDate(newDate);
+    if (newDate) setSplitInstallments(buildEvenInstallments(item.amount, splitCount, newDate));
+  };
+
+  const redistributeSplitEvenly = (item: ScheduleWithRelations) => {
+    setSplitInstallments(buildEvenInstallments(item.amount, splitCount, splitStartDate || item.due_date));
+  };
+
+  const updateSplitInstallment = (idx: number, field: "amount" | "due_date", value: string) => {
+    setSplitInstallments(prev => prev.map((inst, i) => i === idx ? { ...inst, [field]: value } : inst));
+  };
+
+  const splitTotal = splitInstallments.reduce((sum, inst) => sum + (Number(inst.amount) || 0), 0);
+
+  const saveSplit = (item: ScheduleWithRelations) => {
+    if (splitInstallments.some(inst => !inst.amount || isNaN(Number(inst.amount)) || Number(inst.amount) <= 0 || !inst.due_date)) {
+      alert("Inserisci un importo valido e una data per ogni rata");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const res = await splitScheduleIntoInstallments(
+          item.id,
+          splitInstallments.map(inst => ({ amount: Number(inst.amount), due_date: inst.due_date }))
+        );
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore durante la divisione in rate");
+          return;
+        }
+        setSchedules(prev => {
+          const withoutOriginal = prev.filter(s => s.id !== item.id);
+          return [...withoutOriginal, ...res.data].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+        });
+        cancelSplit();
+      } catch (err: any) {
+        alert(err.message || "Errore durante la divisione in rate");
       }
     });
   };
@@ -629,7 +761,8 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                     const badge = COLOR_MAP[catColor] || COLOR_MAP.slate;
 
                     return (
-                      <tr key={item.id} className="hover:bg-white/2 transition-all duration-150 group">
+                      <Fragment key={item.id}>
+                      <tr className="hover:bg-white/2 transition-all duration-150 group">
                         <td className="py-4 text-slate-300 font-semibold whitespace-nowrap">
                           {formatDate(item.due_date)}
                         </td>
@@ -659,38 +792,172 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                           {formatCurrency(item.amount)}
                         </td>
                         <td className="py-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {!item.is_paid ? (
+                          {reschedulingId === item.id ? (
+                            <div className="flex items-center justify-center gap-1 animate-fade-in">
+                              <input
+                                type="date"
+                                autoFocus
+                                value={rescheduleDate}
+                                onChange={(e) => setRescheduleDate(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") saveReschedule(item); if (e.key === "Escape") cancelReschedule(); }}
+                                className="px-2 py-1 rounded-lg text-[10px] text-white bg-zinc-950 border border-rose-500/50 focus:outline-none"
+                              />
+                              <button onClick={() => saveReschedule(item)} className="text-emerald-400 hover:text-emerald-300 text-[10px] font-bold px-1" title="Conferma nuova data">✓</button>
+                              <button onClick={cancelReschedule} className="text-zinc-500 hover:text-white text-[10px] font-bold px-1" title="Annulla">✕</button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                              {isOverdue(item) && (
+                                <button
+                                  onClick={() => startReschedule(item)}
+                                  className="px-2 py-1 rounded-lg text-[10px] font-extrabold text-rose-300 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 transition-all"
+                                  title="Sposta questa scadenza a una nuova data"
+                                >
+                                  🗓 Ripianifica
+                                </button>
+                              )}
+                              {!item.is_paid ? (
+                                <button
+                                  onClick={() => handlePay(item.id)}
+                                  className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center gap-1"
+                                  title="Segna come Saldata"
+                                >
+                                  <CheckIcon size={12} />
+                                  <span>Salda</span>
+                                </button>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
+                                  Saldata
+                                </span>
+                              )}
+                              {!item.is_paid && (
+                                <button
+                                  onClick={() => splittingId === item.id ? cancelSplit() : startSplit(item)}
+                                  className={`p-1 rounded transition-all text-[10px] ${
+                                    splittingId === item.id
+                                      ? "text-amber-400 bg-amber-500/10"
+                                      : "text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 opacity-0 group-hover:opacity-100"
+                                  }`}
+                                  title="Dividi in rate"
+                                >
+                                  ✂
+                                </button>
+                              )}
                               <button
-                                onClick={() => handlePay(item.id)}
-                                className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center gap-1"
-                                title="Segna come Saldata"
+                                onClick={() => handleEdit(item)}
+                                className="p-1 rounded text-slate-500 hover:text-sky-400 hover:bg-sky-500/10 transition-all opacity-0 group-hover:opacity-100"
+                                title="Modifica"
                               >
-                                <CheckIcon size={12} />
-                                <span>Salda</span>
+                                <EditIcon size={12} />
                               </button>
-                            ) : (
-                              <span className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
-                                Saldata
-                              </span>
-                            )}
-                            <button
-                              onClick={() => handleEdit(item)}
-                              className="p-1 rounded text-slate-500 hover:text-sky-400 hover:bg-sky-500/10 transition-all opacity-0 group-hover:opacity-100"
-                              title="Modifica"
-                            >
-                              <EditIcon size={12} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(item.id)}
-                              className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
-                              title="Elimina"
-                            >
-                              <DeleteIcon size={12} />
-                            </button>
-                          </div>
+                              <button
+                                onClick={() => handleDelete(item.id)}
+                                className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
+                                title="Elimina"
+                              >
+                                <DeleteIcon size={12} />
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
+                      {splittingId === item.id && (
+                        <tr className="bg-white/[0.02]">
+                          <td colSpan={5} className="py-4 px-1">
+                            <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.03] p-4 space-y-3 animate-fade-in">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-[11px] font-extrabold text-amber-300">
+                                  ✂ Dividi "{item.description || item.category}" in rate
+                                </h4>
+                                <button onClick={cancelSplit} className="text-[9px] font-bold text-zinc-500 hover:text-white">Chiudi</button>
+                              </div>
+
+                              <div className="flex flex-wrap gap-3 items-end">
+                                <div className="space-y-1">
+                                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Numero di rate</label>
+                                  <input
+                                    type="number"
+                                    min={2}
+                                    max={36}
+                                    value={splitCount}
+                                    onChange={(e) => handleSplitCountChange(item, Number(e.target.value))}
+                                    className="w-20 px-2 py-1.5 rounded-lg text-xs text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Prima rata il</label>
+                                  <input
+                                    type="date"
+                                    value={splitStartDate}
+                                    onChange={(e) => handleSplitStartDateChange(item, e.target.value)}
+                                    className="px-2 py-1.5 rounded-lg text-xs text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => redistributeSplitEvenly(item)}
+                                  className="px-3 py-1.5 rounded-lg text-[10px] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 transition-all"
+                                  title="Ricalcola le rate in parti uguali, sovrascrivendo le modifiche manuali"
+                                >
+                                  ↺ Distribuisci equamente
+                                </button>
+                              </div>
+
+                              <p className="text-[9px] text-zinc-500">
+                                Le rate sono divise in automatico in parti uguali: modifica ogni importo per riflettere l'esatta rateizzazione comunicata dal fornitore (es. con interessi inclusi).
+                              </p>
+
+                              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                                {splitInstallments.map((inst, idx) => (
+                                  <div key={idx} className="flex items-center gap-2 text-[10px]">
+                                    <span className="w-14 flex-shrink-0 text-zinc-500 font-bold">Rata {idx + 1}</span>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      min="0.01"
+                                      value={inst.amount}
+                                      onChange={(e) => updateSplitInstallment(idx, "amount", e.target.value)}
+                                      className="w-24 px-2 py-1 rounded-lg text-right text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                                    />
+                                    <input
+                                      type="date"
+                                      value={inst.due_date}
+                                      onChange={(e) => updateSplitInstallment(idx, "due_date", e.target.value)}
+                                      className="px-2 py-1 rounded-lg text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="flex items-center justify-between flex-wrap gap-2 text-[10px] font-bold pt-2 border-t border-white/5">
+                                <span className="text-zinc-400">
+                                  Totale rate: <span className="text-white">{formatCurrency(splitTotal)}</span>
+                                  <span className="text-zinc-600"> / Originale: {formatCurrency(item.amount)}</span>
+                                </span>
+                                {Math.abs(splitTotal - item.amount) > 0.005 && (
+                                  <span className={splitTotal > item.amount ? "text-amber-400" : "text-sky-400"}>
+                                    {splitTotal > item.amount ? "+" : ""}{formatCurrency(splitTotal - item.amount)} {splitTotal > item.amount ? "in più" : "in meno"} rispetto all'originale
+                                  </span>
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => saveSplit(item)}
+                                disabled={isPending}
+                                className="w-full py-2 rounded-lg text-[10px] font-extrabold text-white transition-all disabled:opacity-50"
+                                style={{
+                                  background: "linear-gradient(135deg, hsl(38 90% 50%), hsl(30 80% 45%))",
+                                  cursor: isPending ? "not-allowed" : "pointer",
+                                }}
+                              >
+                                {isPending ? "Salvataggio..." : `Conferma divisione in ${splitCount} rate`}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                     );
                   })}
                 </tbody>

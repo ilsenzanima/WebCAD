@@ -197,6 +197,83 @@ export async function paySchedule(id: string) {
   }
 }
 
+// Divide una scadenza non ancora saldata in piu' rate (es. una bolletta che il fornitore
+// permette di rateizzare): l'importo di ogni rata e' calcolato lato client (di norma in parti
+// uguali, ma modificabile a piacere per riflettere eventuali interessi/maggiorazioni comunicati
+// dal fornitore) e passato gia' pronto qui. La scadenza originale diventa la prima rata, le altre
+// vengono create come nuove scadenze "una tantum" che ereditano categoria/fornitore/budget_id.
+export async function splitScheduleIntoInstallments(id: string, installments: { amount: number; due_date: string }[]) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    if (!Array.isArray(installments) || installments.length < 2) {
+      throw new Error("Servono almeno 2 rate per dividere una scadenza");
+    }
+    if (installments.some(i => !i.due_date || !(i.amount > 0))) {
+      throw new Error("Ogni rata deve avere un importo positivo e una data valida");
+    }
+
+    const { data: original, error: fetchError } = await supabase
+      .from("payment_schedules")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .single();
+
+    if (fetchError || !original) throw new Error(fetchError?.message || "Scadenza non trovata");
+    if (original.is_paid) throw new Error("Non puoi dividere in rate una scadenza gia' saldata");
+
+    const total = installments.length;
+    const baseDescription = (original.description || original.category || "").replace(/\s*\(Rata \d+\/\d+\)$/, "");
+
+    const { data: firstInstallment, error: updateError } = await supabase
+      .from("payment_schedules")
+      .update({
+        amount: installments[0].amount,
+        due_date: installments[0].due_date,
+        description: `${baseDescription} (Rata 1/${total})`,
+        recurrence: "one-time",
+      })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select("*, expense_categories(name, color), suppliers(name)")
+      .single();
+
+    if (updateError) throw new Error(updateError.message);
+
+    const restRows = installments.slice(1).map((inst, idx) => ({
+      user_id: user.id,
+      amount: inst.amount,
+      category: original.category,
+      category_id: original.category_id,
+      supplier_id: original.supplier_id,
+      budget_id: original.budget_id,
+      description: `${baseDescription} (Rata ${idx + 2}/${total})`,
+      due_date: inst.due_date,
+      recurrence: "one-time",
+      is_paid: false,
+    }));
+
+    const { data: restInstallments, error: insertError } = await supabase
+      .from("payment_schedules")
+      .insert(restRows)
+      .select("*, expense_categories(name, color), suppliers(name)");
+
+    if (insertError) throw new Error(insertError.message);
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/expenses");
+    revalidatePath("/dashboard/schedules");
+    revalidatePath("/dashboard/budget");
+    revalidatePath("/dashboard/calendar");
+    return { success: true, data: [firstInstallment, ...(restInstallments || [])] };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 // Genera una scadenza da pagare a partire da una voce di budget ricorrente
 // (es. "Mutuo" con giorno del mese 15), collegandola tramite budget_id.
 // Se la scadenza e' ricorrente, quando viene pagata (paySchedule) il budget_id
