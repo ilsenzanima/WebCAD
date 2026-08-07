@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
+import Link from "next/link";
 import { type Budget, type BudgetOverride, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createBudget, updateBudget, deleteBudget, upsertBudgetOverride, deleteBudgetOverride, confirmBudgetExpense } from "@/app/actions/budget";
 import { updateCategoryBudget, updateCategoryBudgetPercent } from "@/app/actions/categories";
@@ -502,22 +503,34 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
   // Le scadenze scadute e non ancora saldate (es. una del mese scorso mai pagata) restano un
   // impegno di "adesso": vengono agganciate al mese corrente finche' non risultano saldate,
   // invece di sparire semplicemente perche' la loro data e' passata.
+  const unlinkedScheduledItemsList = useMemo(() => {
+    return schedules
+      .filter((s: any) => {
+        if (s.budget_id) return false; // gia' contato tramite la voce di budget collegata
+        const sDate = new Date(s.due_date);
+        const inSelectedMonth = sDate.getFullYear() === selectedYear && sDate.getMonth() + 1 === selectedMonth;
+        const isOverdueUnpaid = !s.is_paid && isCurrentMonth && !inSelectedMonth && sDate < now;
+        return inSelectedMonth || isOverdueUnpaid;
+      })
+      .map((s: any) => {
+        const sDate = new Date(s.due_date);
+        const inSelectedMonth = sDate.getFullYear() === selectedYear && sDate.getMonth() + 1 === selectedMonth;
+        return { ...s, isOverdue: !inSelectedMonth };
+      })
+      .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+  }, [schedules, selectedYear, selectedMonth, isCurrentMonth, now]);
+
   const unlinkedScheduledByCategory = useMemo(() => {
     const map: Record<string, { amount: number; items: { label: string; amount: number }[] }> = {};
-    schedules.forEach((s: any) => {
-      if (s.budget_id) return; // gia' contato tramite la voce di budget collegata
-      const sDate = new Date(s.due_date);
-      const inSelectedMonth = sDate.getFullYear() === selectedYear && sDate.getMonth() + 1 === selectedMonth;
-      const isOverdueUnpaid = !s.is_paid && isCurrentMonth && !inSelectedMonth && sDate < now;
-      if (!inSelectedMonth && !isOverdueUnpaid) return;
+    unlinkedScheduledItemsList.forEach((s: any) => {
       const catId = s.category_id || "unassigned";
       if (!map[catId]) map[catId] = { amount: 0, items: [] };
       map[catId].amount += Number(s.amount);
       const label = s.description || s.category;
-      map[catId].items.push({ label: isOverdueUnpaid ? `${label} (scaduta)` : label, amount: Number(s.amount) });
+      map[catId].items.push({ label: s.isOverdue ? `${label} (scaduta)` : label, amount: Number(s.amount) });
     });
     return map;
-  }, [schedules, selectedYear, selectedMonth, isCurrentMonth, now]);
+  }, [unlinkedScheduledItemsList]);
 
   const unplannedScheduledTotal = useMemo(
     () => Object.values(unlinkedScheduledByCategory).reduce((sum, v) => sum + v.amount, 0),
@@ -1159,7 +1172,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
           </div>
 
           <div className="flex-1 overflow-x-auto pr-1 relative z-10 overflow-y-auto">
-            {budgets.length === 0 ? (
+            {budgets.length === 0 && unlinkedScheduledItemsList.length === 0 ? (
               <p className="text-xs text-slate-500 py-12 text-center">Nessuna voce programmata nel budget.</p>
             ) : (
               <table className="w-full text-left text-xs border-collapse">
@@ -1411,6 +1424,60 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                               </button>
                             </div>
                           )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {unlinkedScheduledItemsList.map((s: any) => {
+                    const catObj = categories.find(c => c.id === s.category_id);
+                    const catName = catObj?.name || s.category || "Generica / Altro";
+                    const catColor = catObj?.color || "slate";
+                    const badge = COLOR_MAP[catColor] || COLOR_MAP.slate;
+                    return (
+                      <tr key={`sched-${s.id}`} className="hover:bg-white/2 transition-colors duration-150 group animate-fade-in">
+                        <td className="py-3 pr-2">
+                          <div className="font-bold text-white truncate max-w-[120px]">{s.description || s.category}</div>
+                          <div className="flex flex-wrap gap-1 mt-0.5">
+                            <span
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border"
+                              style={{ backgroundColor: badge.bg, color: badge.text, borderColor: badge.border }}
+                            >
+                              {catName}
+                            </span>
+                            <span
+                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border ${
+                                s.isOverdue ? "bg-rose-500/10 text-rose-300 border-rose-500/20" : "bg-amber-500/10 text-amber-300 border-amber-500/20"
+                              }`}
+                              title={`Scadenza del ${new Date(s.due_date).toLocaleDateString("it-IT")}, non collegata a una voce di budget`}
+                            >
+                              📅 {s.isOverdue ? "Scaduta" : "Da Scadenze"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-3">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[9px] font-bold text-zinc-400">Bisogno</span>
+                            <span className="text-[7px] uppercase font-extrabold tracking-widest text-zinc-500">Non pianificata</span>
+                          </div>
+                        </td>
+                        <td className="py-3 text-slate-400 font-semibold uppercase tracking-wider text-[8px]">
+                          {s.recurrence === "one-time" ? "Una tantum" : s.recurrence === "weekly" ? "Settimanale" : s.recurrence === "monthly" ? "Mensile" : "Annuale"}
+                        </td>
+                        <td className="py-3 text-right font-black text-xs text-white">-{formatCurrency(Number(s.amount))}</td>
+                        <td className="py-3 text-right">
+                          <span className="font-black text-xs text-zinc-300">-{formatCurrency(Number(s.amount))}</span>
+                          {s.isOverdue && (
+                            <div className="text-[7px] uppercase font-extrabold tracking-widest text-rose-500">Non saldata</div>
+                          )}
+                        </td>
+                        <td className="py-3 text-center">
+                          <Link
+                            href="/dashboard/schedules"
+                            className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 text-[10px] inline-flex opacity-0 group-hover:opacity-100 transition-all"
+                            title="Gestisci o salda in Scadenze & Pagamenti"
+                          >
+                            <SchedulesIcon size={12} />
+                          </Link>
                         </td>
                       </tr>
                     );
