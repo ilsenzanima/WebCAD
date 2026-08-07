@@ -225,7 +225,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
   const selectedDateSchedules = selectedDate ? getSchedulesForDate(selectedDate) : [];
 
   return (
-    <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 space-y-8 max-w-[100rem] mx-auto">
       {/* Header */}
       <div className="animate-fade-in space-y-1">
         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
@@ -234,11 +234,11 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
         <p className="text-sm text-slate-400">Visualizzazione unificata delle spese passate ed uscite future.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+
         {/* Calendario Mensile Unificato */}
         <div
-          className="lg:col-span-2 rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
+          className="lg:col-span-3 rounded-2xl p-5 md:p-7 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
             background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
             borderColor: "hsla(240, 5%, 18%, 0.7)",
@@ -248,28 +248,28 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
 
           {/* Navigazione Mese */}
           <div className="flex justify-between items-center mb-6 relative z-10">
-            <h3 className="text-base font-extrabold text-white tracking-wide">
+            <h3 className="text-lg font-extrabold text-white tracking-wide">
               {monthNames[month]} {year}
             </h3>
             <div className="flex gap-2">
               <button
                 onClick={handlePrevMonth}
-                className="w-8 h-8 rounded-lg flex items-center justify-center border hover:bg-white/5 transition-all text-xs font-bold text-slate-300"
+                className="w-9 h-9 rounded-lg flex items-center justify-center border hover:bg-white/5 transition-all text-xs font-bold text-slate-300"
                 style={{ borderColor: "hsl(240 5% 18%)", background: "hsl(240 10% 4%)" }}
               >
-                <ArrowLeftIcon size={10} />
+                <ArrowLeftIcon size={11} />
               </button>
               <button
                 onClick={handleNextMonth}
-                className="w-8 h-8 rounded-lg flex items-center justify-center border hover:bg-white/5 transition-all text-xs font-bold text-slate-300"
+                className="w-9 h-9 rounded-lg flex items-center justify-center border hover:bg-white/5 transition-all text-xs font-bold text-slate-300"
                 style={{ borderColor: "hsl(240 5% 18%)", background: "hsl(240 10% 4%)" }}
               >
-                <ArrowRightIcon size={10} />
+                <ArrowRightIcon size={11} />
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-1 text-center font-bold text-slate-500 text-[10px] uppercase tracking-wider mb-2 relative z-10">
+          <div className="grid grid-cols-7 gap-1.5 md:gap-2 text-center font-bold text-slate-400 text-[11px] uppercase tracking-wider mb-2 relative z-10">
             <span>Lun</span>
             <span>Mar</span>
             <span>Mer</span>
@@ -279,7 +279,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
             <span>Dom</span>
           </div>
 
-          <div className="grid grid-cols-7 gap-1 bg-zinc-950/20 p-1.5 rounded-xl border border-white/5 relative z-10">
+          <div className="grid grid-cols-7 gap-1.5 md:gap-2 bg-black/30 p-2 md:p-3 rounded-2xl border border-white/10 relative z-10">
             {calendarCells.map((cell, idx) => {
               const isSelected = selectedDate === cell.dateStr;
               const dayExpenses = getExpensesForDate(cell.dateStr);
@@ -287,7 +287,8 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
 
               const totalOut = dayExpenses.filter(e => !e.is_income).reduce((sum, e) => sum + Number(e.amount), 0);
               const totalIn = dayExpenses.filter(e => e.is_income).reduce((sum, e) => sum + Number(e.amount), 0);
-              const hasPending = daySchedules.some(s => !s.is_paid);
+              const pendingCount = daySchedules.filter(s => !s.is_paid).length;
+              const paidCount = daySchedules.filter(s => s.is_paid).length;
 
               const todayStr = toLocalDateStr();
               const isToday = cell.dateStr === todayStr;
@@ -296,46 +297,58 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                 <button
                   key={idx}
                   onClick={() => setSelectedDate(cell.dateStr)}
-                  className="aspect-square p-1 rounded-xl flex flex-col items-center justify-between border transition-all duration-200 relative group overflow-hidden"
+                  className="aspect-square min-h-[64px] md:min-h-[84px] p-1.5 rounded-xl flex flex-col items-center justify-between border transition-all duration-200 relative group overflow-hidden hover:brightness-125"
                   style={{
-                    borderColor: isSelected 
-                      ? "hsl(220 90% 56%)" 
-                      : isToday 
-                        ? "hsla(220, 90%, 56%, 0.3)" 
-                        : "transparent",
+                    borderColor: isSelected
+                      ? "hsl(220 90% 56%)"
+                      : isToday
+                        ? "hsla(220, 90%, 56%, 0.4)"
+                        : cell.isCurrentMonth
+                          ? "hsl(240 8% 30% / 0.6)"
+                          : "transparent",
                     background: isSelected
-                      ? "hsla(220, 90%, 56%, 0.12)"
+                      ? "hsla(220, 90%, 56%, 0.14)"
                       : cell.isCurrentMonth
-                        ? "hsl(240 10% 4% / 0.4)"
+                        ? "hsl(240 10% 20% / 0.5)"
                         : "transparent",
-                    opacity: cell.isCurrentMonth ? 1 : 0.3,
+                    opacity: cell.isCurrentMonth ? 1 : 0.35,
                   }}
                 >
-                  <span className={`text-[10px] font-bold ${isToday ? "text-blue-400" : "text-white"}`}>
+                  <span className={`text-xs md:text-sm font-bold ${isToday ? "text-blue-400" : "text-white"}`}>
                     {cell.dayNum}
                   </span>
 
                   {(totalOut > 0 || totalIn > 0) && (
-                    <div className="flex flex-col items-center leading-none">
+                    <div className="flex flex-col items-center leading-tight">
                       {totalOut > 0 && (
-                        <span className="text-[8px] font-black text-rose-400/90 whitespace-nowrap truncate max-w-full">
+                        <span className="text-[9px] md:text-[10px] font-black text-rose-400/90 whitespace-nowrap truncate max-w-full">
                           -{Math.round(totalOut)}€
                         </span>
                       )}
                       {totalIn > 0 && (
-                        <span className="text-[8px] font-black text-emerald-400/90 whitespace-nowrap truncate max-w-full">
+                        <span className="text-[9px] md:text-[10px] font-black text-emerald-400/90 whitespace-nowrap truncate max-w-full">
                           +{Math.round(totalIn)}€
                         </span>
                       )}
                     </div>
                   )}
 
-                  <div className="flex gap-0.5 justify-center w-full pb-0.5">
-                    {hasPending && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.5)] animate-pulse" />
+                  <div className="flex gap-1 justify-center w-full flex-wrap">
+                    {pendingCount > 0 && (
+                      <span
+                        className="inline-flex items-center px-1.5 py-[1px] rounded-full text-[8px] md:text-[9px] font-extrabold bg-amber-500/25 text-amber-300 border border-amber-500/40"
+                        title={`${pendingCount} scadenza/e da saldare`}
+                      >
+                        ⏳{pendingCount}
+                      </span>
                     )}
-                    {daySchedules.some(s => s.is_paid) && (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.5)]" />
+                    {paidCount > 0 && (
+                      <span
+                        className="inline-flex items-center px-1.5 py-[1px] rounded-full text-[8px] md:text-[9px] font-extrabold bg-emerald-500/25 text-emerald-300 border border-emerald-500/40"
+                        title={`${paidCount} scadenza/e saldata/e`}
+                      >
+                        ✓{paidCount}
+                      </span>
                     )}
                   </div>
                 </button>
@@ -345,7 +358,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
         </div>
 
         {/* Dettaglio del Giorno Selezionato */}
-        <div className="space-y-6 animate-fade-in">
+        <div className="lg:col-span-2 space-y-6 animate-fade-in">
           <div
             className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden backdrop-blur-xl"
             style={{
