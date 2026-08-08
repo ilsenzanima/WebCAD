@@ -2,11 +2,12 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { type Expense, type PaymentSchedule, type Account, type Budget, type BudgetOverride } from "@/lib/types/database";
+import { type Expense, type PaymentSchedule, type Account, type Budget, type BudgetOverride, type AccountBalanceAdjustment } from "@/lib/types/database";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { getEffectiveAmount, isBudgetEnded } from "@/lib/budgetCalc";
 import { ExpensesIcon, SchedulesIcon, OverviewIcon, WalletIcon } from "./icons";
 import { getCategoryGradient } from "@/lib/categoryColors";
+import { computeAccountBalances } from "@/lib/accountBalance";
 
 interface ExpenseWithRelations extends Omit<Expense, "amount"> {
   amount: number;
@@ -36,19 +37,14 @@ interface OverviewClientProps {
   accounts: Account[];
   budgets: Budget[];
   budgetOverrides: BudgetOverride[];
+  accountAdjustments: AccountBalanceAdjustment[];
 }
 
-export default function OverviewClient({ expenses, schedules, accounts, budgets, budgetOverrides }: OverviewClientProps) {
+export default function OverviewClient({ expenses, schedules, accounts, budgets, budgetOverrides, accountAdjustments }: OverviewClientProps) {
   const accountBalances = useMemo(() => {
-    return accounts.map(acc => {
-      let balance = Number(acc.initial_balance);
-      expenses.forEach((e: ExpenseWithRelations) => {
-        if (e.account_id !== acc.id) return;
-        balance += e.is_income ? Number(e.amount) : -Number(e.amount);
-      });
-      return { ...acc, balance };
-    });
-  }, [accounts, expenses]);
+    const balanceMap = computeAccountBalances(accounts, expenses, accountAdjustments);
+    return accounts.map(acc => ({ ...acc, balance: balanceMap[acc.id] ?? Number(acc.initial_balance) }));
+  }, [accounts, expenses, accountAdjustments]);
 
   const totalBalance = useMemo(
     () => accountBalances.reduce((sum, a) => sum + a.balance, 0),

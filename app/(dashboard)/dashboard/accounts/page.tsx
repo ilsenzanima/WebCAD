@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getAccounts } from "@/app/actions/accounts";
+import { getAccounts, getAccountAdjustments } from "@/app/actions/accounts";
 import { getExpenses } from "@/app/actions/expenses";
 import AccountsClient from "@/app/ui/dashboard/AccountsClient";
 
@@ -14,10 +14,11 @@ export default async function AccountsPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [accounts, expenses] = await Promise.all([
+  const [accounts, expenses, adjustments] = await Promise.all([
     getAccounts().catch(() => []),
     getExpenses().catch(() => []),
+    getAccountAdjustments().catch(() => []),
   ]);
 
-  return <AccountsClient initialAccounts={accounts} expenses={expenses} />;
+  return <AccountsClient initialAccounts={accounts} expenses={expenses} initialAdjustments={adjustments} />;
 }

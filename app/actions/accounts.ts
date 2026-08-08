@@ -90,6 +90,80 @@ export async function updateAccount(id: string, formData: {
   }
 }
 
+export async function getAccountAdjustments() {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase
+      .from("account_balance_adjustments")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("date", { ascending: true });
+
+    if (error) throw new Error(error.message);
+    return data || [];
+  } catch (err: any) {
+    console.error("Errore getAccountAdjustments:", err.message);
+    return [];
+  }
+}
+
+// Aggiornamento manuale del saldo di un conto: l'utente segna il saldo reale osservato
+// (es. dall'app della banca) a una certa data, per assorbire spese minori non registrate
+// senza doverle cercare una per una.
+export async function createAccountAdjustment(formData: {
+  account_id: string;
+  date: string;
+  balance: number;
+  note?: string | null;
+}) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase.from("account_balance_adjustments").insert({
+      user_id: user.id,
+      account_id: formData.account_id,
+      date: formData.date,
+      balance: formData.balance,
+      note: formData.note || null,
+    }).select().single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/accounts");
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteAccountAdjustment(id: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { error } = await supabase
+      .from("account_balance_adjustments")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/accounts");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function deleteAccount(id: string) {
   try {
     const supabase = (await createClient()) as any;

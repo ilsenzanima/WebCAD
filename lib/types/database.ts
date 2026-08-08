@@ -39,6 +39,16 @@ export interface Account {
   updated_at: string;
 }
 
+export interface AccountBalanceAdjustment {
+  id: string;
+  user_id: string;
+  account_id: string;
+  date: string;
+  balance: number; // saldo reale osservato a questa data (es. letto dall'app della banca)
+  note: string | null;
+  created_at: string;
+}
+
 export interface Expense {
   id: string;
   user_id: string;
@@ -270,6 +280,36 @@ export interface Database {
           updated_at?: string;
         };
         Relationships: [];
+      };
+      account_balance_adjustments: {
+        Row: AccountBalanceAdjustment;
+        Insert: {
+          id?: string;
+          user_id?: string;
+          account_id: string;
+          date: string;
+          balance: number;
+          note?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          account_id?: string;
+          date?: string;
+          balance?: number;
+          note?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "account_balance_adjustments_account_id_fkey";
+            columns: ["account_id"];
+            isOneToOne: false;
+            referencedRelation: "accounts";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       payment_schedules: {
         Row: PaymentSchedule;

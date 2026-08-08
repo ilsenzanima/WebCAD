@@ -1,15 +1,17 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import { type Account } from "@/lib/types/database";
-import { createAccount, updateAccount, deleteAccount } from "@/app/actions/accounts";
-import { formatCurrency } from "@/lib/format";
+import { type Account, type AccountBalanceAdjustment } from "@/lib/types/database";
+import { createAccount, updateAccount, deleteAccount, createAccountAdjustment, deleteAccountAdjustment } from "@/app/actions/accounts";
+import { formatCurrency, formatDate, toLocalDateStr } from "@/lib/format";
 import { EditIcon, DeleteIcon, WalletIcon } from "./icons";
 import { getCategoryBadgeStyle, CATEGORY_COLOR_TONES } from "@/lib/categoryColors";
+import { computeAccountBalances, getLatestAdjustments } from "@/lib/accountBalance";
 
 interface AccountsClientProps {
   initialAccounts: Account[];
   expenses: any[];
+  initialAdjustments: AccountBalanceAdjustment[];
 }
 
 const TYPE_LABELS: Record<Account["type"], string> = {
@@ -28,8 +30,9 @@ const TYPE_ICONS: Record<Account["type"], string> = {
   other: "📦",
 };
 
-export default function AccountsClient({ initialAccounts, expenses }: AccountsClientProps) {
+export default function AccountsClient({ initialAccounts, expenses, initialAdjustments }: AccountsClientProps) {
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts);
+  const [adjustments, setAdjustments] = useState<AccountBalanceAdjustment[]>(initialAdjustments);
   const [isPending, startTransition] = useTransition();
 
   const [name, setName] = useState("");
@@ -109,16 +112,93 @@ export default function AccountsClient({ initialAccounts, expenses }: AccountsCl
     });
   };
 
-  // Saldo corrente per conto: saldo iniziale + entrate collegate - uscite collegate
-  const balances = useMemo(() => {
-    const map: Record<string, number> = {};
-    accounts.forEach(a => { map[a.id] = Number(a.initial_balance); });
-    expenses.forEach((e: any) => {
-      if (!e.account_id || !(e.account_id in map)) return;
-      map[e.account_id] += e.is_income ? Number(e.amount) : -Number(e.amount);
-    });
+  // Aggiornamenti manuali del saldo
+  const [adjustingAccountId, setAdjustingAccountId] = useState<string | null>(null);
+  const [adjustDate, setAdjustDate] = useState("");
+  const [adjustBalance, setAdjustBalance] = useState("");
+  const [adjustNote, setAdjustNote] = useState("");
+  const [historyAccountId, setHistoryAccountId] = useState<string | null>(null);
+
+  const todayStr = toLocalDateStr();
+
+  const adjustmentsByAccount = useMemo(() => {
+    const map: Record<string, AccountBalanceAdjustment[]> = {};
+    adjustments.forEach(a => { (map[a.account_id] ||= []).push(a); });
+    Object.values(map).forEach(list => list.sort((a, b) => a.date.localeCompare(b.date)));
     return map;
-  }, [accounts, expenses]);
+  }, [adjustments]);
+
+  // L'aggiornamento manuale piu' recente (con data non futura) diventa il nuovo punto di
+  // partenza del saldo, cosi' da assorbire spese minori mai registrate senza doverle cercare.
+  const latestAdjustmentByAccount = useMemo(
+    () => getLatestAdjustments(accounts, adjustments, todayStr),
+    [accounts, adjustments, todayStr]
+  );
+
+  const balances = useMemo(
+    () => computeAccountBalances(accounts, expenses, adjustments, todayStr),
+    [accounts, expenses, adjustments, todayStr]
+  );
+
+  const startAdjust = (acc: Account) => {
+    setAdjustingAccountId(acc.id);
+    setAdjustDate(todayStr);
+    setAdjustBalance(String((balances[acc.id] ?? Number(acc.initial_balance)).toFixed(2)));
+    setAdjustNote("");
+    setHistoryAccountId(null);
+  };
+
+  const cancelAdjust = () => {
+    setAdjustingAccountId(null);
+    setAdjustDate("");
+    setAdjustBalance("");
+    setAdjustNote("");
+  };
+
+  const saveAdjust = (acc: Account) => {
+    if (adjustBalance === "" || isNaN(Number(adjustBalance))) {
+      alert("Inserisci un saldo valido");
+      return;
+    }
+    if (!adjustDate) {
+      alert("Seleziona una data valida");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const res = await createAccountAdjustment({
+          account_id: acc.id,
+          date: adjustDate,
+          balance: Number(adjustBalance),
+          note: adjustNote.trim() || null,
+        });
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore durante il salvataggio");
+          return;
+        }
+        setAdjustments(prev => [...prev, res.data]);
+        cancelAdjust();
+      } catch (err: any) {
+        alert(err.message || "Errore durante il salvataggio");
+      }
+    });
+  };
+
+  const handleDeleteAdjustment = (id: string) => {
+    if (!confirm("Eliminare questo aggiornamento di saldo?")) return;
+    startTransition(async () => {
+      try {
+        const res = await deleteAccountAdjustment(id);
+        if (!res.success) {
+          alert(res.error || "Errore durante l'eliminazione");
+          return;
+        }
+        setAdjustments(prev => prev.filter(a => a.id !== id));
+      } catch (err: any) {
+        alert(err.message || "Errore durante l'eliminazione");
+      }
+    });
+  };
 
   const totalBalance = useMemo(
     () => accounts.reduce((sum, a) => sum + (balances[a.id] ?? Number(a.initial_balance)), 0),
@@ -264,6 +344,10 @@ export default function AccountsClient({ initialAccounts, expenses }: AccountsCl
               {accounts.map((acc) => {
                 const badge = getCategoryBadgeStyle(acc.color);
                 const balance = balances[acc.id] ?? Number(acc.initial_balance);
+                const latestAdjustment = latestAdjustmentByAccount[acc.id];
+                const accountAdjustments = adjustmentsByAccount[acc.id] || [];
+                const isAdjusting = adjustingAccountId === acc.id;
+                const isHistoryOpen = historyAccountId === acc.id;
 
                 return (
                   <div
@@ -289,6 +373,13 @@ export default function AccountsClient({ initialAccounts, expenses }: AccountsCl
                         </div>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
+                            onClick={() => (isAdjusting ? cancelAdjust() : startAdjust(acc))}
+                            className={`p-1 rounded transition-all ${isAdjusting ? "text-amber-300 bg-amber-500/10" : "text-slate-400 hover:text-amber-300 hover:bg-amber-500/10"}`}
+                            title="Aggiorna saldo manualmente (es. per spese minori mai registrate)"
+                          >
+                            📌
+                          </button>
+                          <button
                             onClick={() => handleEdit(acc)}
                             className="p-1 rounded text-slate-400 hover:text-sky-300 hover:bg-sky-500/10 transition-all"
                             title="Modifica"
@@ -310,8 +401,103 @@ export default function AccountsClient({ initialAccounts, expenses }: AccountsCl
                         <span className={`text-xl font-black ${balance >= 0 ? "text-white" : "text-rose-400"}`}>
                           {formatCurrency(balance)}
                         </span>
+                        {latestAdjustment && (
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-[9px] text-slate-500 font-semibold">
+                              📌 Aggiornato al {formatDate(latestAdjustment.date)}
+                            </span>
+                            {accountAdjustments.length > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setHistoryAccountId(isHistoryOpen ? null : acc.id)}
+                                className="text-[9px] text-sky-400 hover:text-sky-300 font-bold underline underline-offset-2"
+                              >
+                                {isHistoryOpen ? "nascondi" : "cronologia"}
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
+
+                    {isAdjusting && (
+                      <div
+                        className="space-y-2.5 p-3 rounded-xl border animate-fade-in"
+                        style={{ background: "hsl(240 10% 4% / 0.6)", borderColor: "hsla(38, 90%, 50%, 0.25)" }}
+                      >
+                        <p className="text-[9px] text-zinc-400 font-medium leading-relaxed">
+                          Scrivi il saldo reale (es. dall'app della banca) e la data: verra' usato come nuovo punto di partenza, cosi' le spese minori dimenticate non falsano piu' i mesi successivi.
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Data</label>
+                            <input
+                              type="date"
+                              value={adjustDate}
+                              max={todayStr}
+                              onChange={(e) => setAdjustDate(e.target.value)}
+                              className="w-full px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Saldo Reale (€)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              autoFocus
+                              value={adjustBalance}
+                              onChange={(e) => setAdjustBalance(e.target.value)}
+                              className="w-full px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        <input
+                          type="text"
+                          value={adjustNote}
+                          onChange={(e) => setAdjustNote(e.target.value)}
+                          placeholder="Nota (opzionale)"
+                          className="w-full px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={cancelAdjust}
+                            className="flex-1 py-1.5 rounded-lg text-[10px] font-bold text-slate-300 bg-zinc-800 hover:bg-zinc-700 transition-all"
+                          >
+                            Annulla
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => saveAdjust(acc)}
+                            disabled={isPending}
+                            className="flex-1 py-1.5 rounded-lg text-[10px] font-extrabold text-white bg-amber-600 hover:bg-amber-500 transition-all disabled:opacity-50"
+                          >
+                            Salva
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {isHistoryOpen && accountAdjustments.length > 0 && (
+                      <div className="space-y-1.5 p-3 rounded-xl border border-zinc-800/60 bg-zinc-950/40 animate-fade-in max-h-32 overflow-y-auto">
+                        {[...accountAdjustments].reverse().map((adj) => (
+                          <div key={adj.id} className="flex items-center justify-between text-[9px] gap-2">
+                            <div className="min-w-0">
+                              <span className="text-zinc-400 font-semibold">{formatDate(adj.date)}</span>
+                              <span className="text-white font-bold ml-1.5">{formatCurrency(Number(adj.balance))}</span>
+                              {adj.note && <span className="text-zinc-600 ml-1.5 truncate">— {adj.note}</span>}
+                            </div>
+                            <button
+                              onClick={() => handleDeleteAdjustment(adj.id)}
+                              className="text-slate-500 hover:text-rose-400 transition-colors flex-shrink-0"
+                              title="Elimina questo aggiornamento"
+                            >
+                              <DeleteIcon size={10} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
