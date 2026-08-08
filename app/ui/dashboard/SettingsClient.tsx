@@ -9,33 +9,13 @@ import { disconnectGoogleDrive } from "@/app/actions/google";
 import { setFontPreference } from "@/app/actions/preferences";
 import { FONT_OPTIONS } from "@/lib/fonts";
 import { EditIcon, DeleteIcon } from "./icons";
+import { CATEGORY_COLOR_TONES, getCategoryBadgeStyle } from "@/lib/categoryColors";
 
 interface SettingsClientProps {
   categories: ExpenseCategory[];
   googleConnected: boolean;
   currentFontId: string;
 }
-
-const COLOR_OPTIONS = [
-  { value: "indigo", label: "Indaco", bg: "rgba(99,102,241,0.2)", text: "hsl(245 85% 75%)" },
-  { value: "rose", label: "Rosa", bg: "rgba(239,68,68,0.2)", text: "hsl(0 80% 75%)" },
-  { value: "emerald", label: "Smeraldo", bg: "rgba(16,185,129,0.2)", text: "hsl(150 70% 70%)" },
-  { value: "amber", label: "Ambra", bg: "rgba(245,158,11,0.2)", text: "hsl(38 90% 70%)" },
-  { value: "sky", label: "Cielo", bg: "rgba(14,165,233,0.2)", text: "hsl(200 85% 70%)" },
-  { value: "pink", label: "Fucsia", bg: "rgba(236,72,153,0.2)", text: "hsl(330 80% 75%)" },
-  { value: "purple", label: "Viola", bg: "rgba(168,85,247,0.2)", text: "hsl(270 80% 75%)" },
-  { value: "slate", label: "Grigio", bg: "rgba(107,114,128,0.2)", text: "hsl(215 15% 75%)" },
-  { value: "red", label: "Rosso", bg: "rgba(220,38,38,0.2)", text: "hsl(0 74% 72%)" },
-  { value: "orange", label: "Arancione", bg: "rgba(249,115,22,0.2)", text: "hsl(24 94% 70%)" },
-  { value: "yellow", label: "Giallo", bg: "rgba(234,179,8,0.2)", text: "hsl(45 90% 65%)" },
-  { value: "lime", label: "Lime", bg: "rgba(132,204,22,0.2)", text: "hsl(83 70% 65%)" },
-  { value: "green", label: "Verde", bg: "rgba(34,197,94,0.2)", text: "hsl(142 65% 65%)" },
-  { value: "teal", label: "Turchese", bg: "rgba(20,184,166,0.2)", text: "hsl(173 65% 62%)" },
-  { value: "cyan", label: "Ciano", bg: "rgba(6,182,212,0.2)", text: "hsl(189 80% 65%)" },
-  { value: "blue", label: "Blu", bg: "rgba(59,130,246,0.2)", text: "hsl(217 85% 72%)" },
-  { value: "violet", label: "Violetto", bg: "rgba(139,92,246,0.2)", text: "hsl(258 85% 75%)" },
-  { value: "fuchsia", label: "Magenta", bg: "rgba(217,70,239,0.2)", text: "hsl(292 80% 72%)" },
-];
 
 // Ampia selezione di emoji pronte all'uso per le icone delle categorie,
 // raggruppate per area tematica (casa, trasporti, cibo, salute, svago...).
@@ -118,11 +98,14 @@ export default function SettingsClient({ categories: initialCategories, googleCo
   const [categories, setCategories] = useState<ExpenseCategory[]>(initialCategories);
   const [catName, setCatName] = useState("");
   const [catColor, setCatColor] = useState("indigo");
+  // Colore del testo del badge, se diverso dallo sfondo: vuoto = stesso colore dello sfondo (badge monocromo, come sempre).
+  const [catTextColor, setCatTextColor] = useState("");
   const [editingCatId, setEditingCatId] = useState<string | null>(null);
 
   const resetCatForm = () => {
     setCatName("");
     setCatColor("indigo");
+    setCatTextColor("");
     setEditingCatId(null);
   };
 
@@ -164,17 +147,21 @@ export default function SettingsClient({ categories: initialCategories, googleCo
       return;
     }
 
+    // Se il colore del testo scelto e' diverso dallo sfondo, salva la combinazione "sfondo:testo";
+    // altrimenti salva solo lo sfondo come tinta unica (formato monocromo di sempre).
+    const finalColor = catTextColor && catTextColor !== catColor ? `${catColor}:${catTextColor}` : catColor;
+
     startTransition(async () => {
       try {
         if (editingCatId) {
-          const res = await updateCategory(editingCatId, { name: catName.trim(), color: catColor });
+          const res = await updateCategory(editingCatId, { name: catName.trim(), color: finalColor });
           if (!res.success) {
             alert(res.error || "Errore durante la modifica");
             return;
           }
-          setCategories(prev => prev.map(c => c.id === editingCatId ? { ...c, name: catName.trim(), color: catColor } : c));
+          setCategories(prev => prev.map(c => c.id === editingCatId ? { ...c, name: catName.trim(), color: finalColor } : c));
         } else {
-          const res = await createCategory({ name: catName.trim(), color: catColor });
+          const res = await createCategory({ name: catName.trim(), color: finalColor });
           if (!res.success || !res.data) {
             alert(res.error || "Errore durante la creazione");
             return;
@@ -191,7 +178,9 @@ export default function SettingsClient({ categories: initialCategories, googleCo
   const handleEditCategory = (cat: ExpenseCategory) => {
     setEditingCatId(cat.id);
     setCatName(cat.name);
-    setCatColor(cat.color);
+    const [bgPart, textPart] = (cat.color || "indigo").split(":");
+    setCatColor(bgPart);
+    setCatTextColor(textPart && textPart !== bgPart ? textPart : "");
   };
 
   const handleDeleteCategory = (id: string) => {
@@ -210,6 +199,9 @@ export default function SettingsClient({ categories: initialCategories, googleCo
       }
     });
   };
+
+  const catPreviewColor = catTextColor && catTextColor !== catColor ? `${catColor}:${catTextColor}` : catColor;
+  const catPreviewStyle = getCategoryBadgeStyle(catPreviewColor);
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -311,19 +303,56 @@ export default function SettingsClient({ categories: initialCategories, googleCo
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Colore Badge</label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Colore Sfondo</label>
+                  <span
+                    className="px-2.5 py-1 rounded-full text-[10px] font-bold border"
+                    style={{ backgroundColor: catPreviewStyle.bg, color: catPreviewStyle.text, borderColor: catPreviewStyle.border }}
+                  >
+                    {catName.trim() || "Anteprima"}
+                  </span>
+                </div>
                 <div className="grid grid-cols-4 gap-2">
-                  {COLOR_OPTIONS.map((col) => (
+                  {CATEGORY_COLOR_TONES.map((tone) => (
                     <button
-                      key={col.value}
+                      key={tone.value}
                       type="button"
-                      onClick={() => setCatColor(col.value)}
+                      onClick={() => setCatColor(tone.value)}
                       className={`py-2 rounded-xl text-[10px] font-bold border transition-all ${
-                        catColor === col.value ? "ring-2 ring-indigo-500 border-transparent scale-105" : "border-zinc-800"
+                        catColor === tone.value ? "ring-2 ring-indigo-500 border-transparent scale-105" : "border-zinc-800"
                       }`}
-                      style={{ backgroundColor: col.bg, color: col.text }}
+                      style={{ backgroundColor: tone.bg, color: tone.text }}
                     >
-                      {col.label}
+                      {tone.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Colore Testo (opzionale)</label>
+                <p className="text-[9px] text-zinc-500 -mt-0.5">Per un badge a due colori, es. sfondo ambra con testo indaco.</p>
+                <div className="grid grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCatTextColor("")}
+                    className={`py-2 rounded-xl text-[9px] font-bold border transition-all text-zinc-300 bg-zinc-950/80 ${
+                      catTextColor === "" ? "ring-2 ring-indigo-500 border-transparent scale-105" : "border-zinc-800"
+                    }`}
+                  >
+                    Uguale
+                  </button>
+                  {CATEGORY_COLOR_TONES.map((tone) => (
+                    <button
+                      key={tone.value}
+                      type="button"
+                      onClick={() => setCatTextColor(tone.value)}
+                      className={`py-2 rounded-xl text-[10px] font-bold border transition-all ${
+                        catTextColor === tone.value ? "ring-2 ring-indigo-500 border-transparent scale-105" : "border-zinc-800"
+                      }`}
+                      style={{ backgroundColor: "hsl(240 10% 4% / 0.8)", color: tone.text }}
+                    >
+                      {tone.label}
                     </button>
                   ))}
                 </div>
@@ -361,7 +390,7 @@ export default function SettingsClient({ categories: initialCategories, googleCo
             <h3 className="text-sm font-extrabold text-white mb-4">Elenco Categorie Configurate</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {categories.map((cat) => {
-                const colorObj = COLOR_OPTIONS.find(c => c.value === cat.color) || COLOR_OPTIONS[0];
+                const colorObj = getCategoryBadgeStyle(cat.color);
                 return (
                   <div
                     key={cat.id}
@@ -369,7 +398,7 @@ export default function SettingsClient({ categories: initialCategories, googleCo
                   >
                     <span
                       className="px-3 py-1 rounded-full text-xs font-extrabold border"
-                      style={{ backgroundColor: colorObj.bg, color: colorObj.text, borderColor: colorObj.bg }}
+                      style={{ backgroundColor: colorObj.bg, color: colorObj.text, borderColor: colorObj.border }}
                     >
                       {cat.name}
                     </span>

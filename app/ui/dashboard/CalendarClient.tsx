@@ -7,6 +7,7 @@ import { deleteSchedule, paySchedule } from "@/app/actions/schedules";
 import { formatCurrency, toLocalDateStr } from "@/lib/format";
 import { getNextDueDate } from "@/lib/recurrence";
 import { ArrowLeftIcon, ArrowRightIcon, DeleteIcon, CheckIcon, SchedulesIcon, ExpensesIcon } from "./icons";
+import { getCategoryBadgeStyle } from "@/lib/categoryColors";
 
 interface ExpenseWithRelations extends Omit<Expense, "amount"> {
   amount: number;
@@ -34,27 +35,6 @@ interface CalendarClientProps {
   expenses: any[];
   schedules: any[];
 }
-
-const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = {
-  indigo: { bg: "rgba(99,102,241,0.12)", text: "hsl(245 85% 75%)", border: "rgba(99,102,241,0.2)" },
-  rose: { bg: "rgba(239,68,68,0.12)", text: "hsl(0 80% 75%)", border: "rgba(239,68,68,0.2)" },
-  emerald: { bg: "rgba(16,185,129,0.12)", text: "hsl(150 70% 70%)", border: "rgba(16,185,129,0.2)" },
-  amber: { bg: "rgba(245,158,11,0.12)", text: "hsl(38 90% 70%)", border: "rgba(245,158,11,0.2)" },
-  sky: { bg: "rgba(14,165,233,0.12)", text: "hsl(200 85% 70%)", border: "rgba(14,165,233,0.2)" },
-  pink: { bg: "rgba(236,72,153,0.12)", text: "hsl(330 80% 75%)", border: "rgba(236,72,153,0.2)" },
-  purple: { bg: "rgba(168,85,247,0.12)", text: "hsl(270 80% 75%)", border: "rgba(168,85,247,0.2)" },
-  slate: { bg: "rgba(107,114,128,0.15)", text: "hsl(215 15% 75%)", border: "rgba(107,114,128,0.25)" },
-  red: { bg: "rgba(220,38,38,0.12)", text: "hsl(0 74% 72%)", border: "rgba(220,38,38,0.2)" },
-  orange: { bg: "rgba(249,115,22,0.12)", text: "hsl(24 94% 70%)", border: "rgba(249,115,22,0.2)" },
-  yellow: { bg: "rgba(234,179,8,0.12)", text: "hsl(45 90% 65%)", border: "rgba(234,179,8,0.2)" },
-  lime: { bg: "rgba(132,204,22,0.12)", text: "hsl(83 70% 65%)", border: "rgba(132,204,22,0.2)" },
-  green: { bg: "rgba(34,197,94,0.12)", text: "hsl(142 65% 65%)", border: "rgba(34,197,94,0.2)" },
-  teal: { bg: "rgba(20,184,166,0.12)", text: "hsl(173 65% 62%)", border: "rgba(20,184,166,0.2)" },
-  cyan: { bg: "rgba(6,182,212,0.12)", text: "hsl(189 80% 65%)", border: "rgba(6,182,212,0.2)" },
-  blue: { bg: "rgba(59,130,246,0.12)", text: "hsl(217 85% 72%)", border: "rgba(59,130,246,0.2)" },
-  violet: { bg: "rgba(139,92,246,0.12)", text: "hsl(258 85% 75%)", border: "rgba(139,92,246,0.2)" },
-  fuchsia: { bg: "rgba(217,70,239,0.12)", text: "hsl(292 80% 72%)", border: "rgba(217,70,239,0.2)" },
-};
 
 export default function CalendarClient({ expenses: initialExpenses, schedules: initialSchedules }: CalendarClientProps) {
   const [expenses, setExpenses] = useState<ExpenseWithRelations[]>(initialExpenses);
@@ -395,7 +375,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                   {selectedDateExpenses.map((exp) => {
                     const catName = exp.expense_categories?.name || exp.category;
                     const catColor = exp.expense_categories?.color || "slate";
-                    const badge = COLOR_MAP[catColor] || COLOR_MAP.slate;
+                    const badge = getCategoryBadgeStyle(catColor);
 
                     return (
                       <div
@@ -458,7 +438,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                   {selectedDateSchedules.map((sched) => {
                     const catName = sched.expense_categories?.name || sched.category;
                     const catColor = sched.expense_categories?.color || "slate";
-                    const badge = COLOR_MAP[catColor] || COLOR_MAP.slate;
+                    const badge = getCategoryBadgeStyle(catColor);
 
                     return (
                       <div

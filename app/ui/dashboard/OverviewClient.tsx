@@ -6,6 +6,7 @@ import { type Expense, type PaymentSchedule, type Account, type Budget, type Bud
 import { formatCurrency, formatDate } from "@/lib/format";
 import { getEffectiveAmount, isBudgetEnded } from "@/lib/budgetCalc";
 import { ExpensesIcon, SchedulesIcon, OverviewIcon, WalletIcon } from "./icons";
+import { getCategoryGradient } from "@/lib/categoryColors";
 
 interface ExpenseWithRelations extends Omit<Expense, "amount"> {
   amount: number;
@@ -36,27 +37,6 @@ interface OverviewClientProps {
   budgets: Budget[];
   budgetOverrides: BudgetOverride[];
 }
-
-const COLOR_MAP: Record<string, string> = {
-  indigo: "linear-gradient(90deg, hsl(220 90% 56%), hsl(215 85% 48%))",
-  rose: "linear-gradient(90deg, hsl(350 85% 55%), hsl(340 75% 45%))",
-  emerald: "linear-gradient(90deg, hsl(142 70% 45%), hsl(150 60% 40%))",
-  amber: "linear-gradient(90deg, hsl(38 90% 50%), hsl(30 80% 45%))",
-  sky: "linear-gradient(90deg, hsl(200 85% 50%), hsl(190 75% 45%))",
-  pink: "linear-gradient(90deg, hsl(330 85% 55%), hsl(320 75% 45%))",
-  purple: "linear-gradient(90deg, hsl(270 80% 55%), hsl(250 75% 50%))",
-  slate: "linear-gradient(90deg, hsl(215 15% 50%), hsl(215 10% 40%))",
-  red: "linear-gradient(90deg, hsl(0 84% 55%), hsl(0 70% 45%))",
-  orange: "linear-gradient(90deg, hsl(25 95% 55%), hsl(20 85% 48%))",
-  yellow: "linear-gradient(90deg, hsl(45 93% 50%), hsl(40 85% 45%))",
-  lime: "linear-gradient(90deg, hsl(83 78% 45%), hsl(90 65% 40%))",
-  green: "linear-gradient(90deg, hsl(142 71% 45%), hsl(145 65% 40%))",
-  teal: "linear-gradient(90deg, hsl(173 80% 40%), hsl(178 70% 35%))",
-  cyan: "linear-gradient(90deg, hsl(189 94% 43%), hsl(195 80% 40%))",
-  blue: "linear-gradient(90deg, hsl(217 91% 60%), hsl(221 80% 52%))",
-  violet: "linear-gradient(90deg, hsl(258 90% 66%), hsl(250 80% 58%))",
-  fuchsia: "linear-gradient(90deg, hsl(292 84% 61%), hsl(300 75% 52%))",
-};
 
 export default function OverviewClient({ expenses, schedules, accounts, budgets, budgetOverrides }: OverviewClientProps) {
   const accountBalances = useMemo(() => {
@@ -528,7 +508,7 @@ export default function OverviewClient({ expenses, schedules, accounts, budgets,
             <div className="space-y-4">
               {stats.categoriesData.map((cat) => {
                 const percentage = Math.round((cat.value / stats.totalCurrentMonthExpenses) * 100) || 0;
-                const barGradient = COLOR_MAP[cat.color] || COLOR_MAP.slate;
+                const barGradient = getCategoryGradient(cat.color);
 
                 return (
                   <div key={cat.name} className="space-y-2">
