@@ -70,6 +70,7 @@ export interface PaymentSchedule {
   supplier_id: string | null; // FK -> suppliers.id
   budget_id: string | null; // FK -> budgets.id (se generata da una voce di budget ricorrente)
   google_event_id: string | null;
+  was_rescheduled: boolean; // true se spostata col pulsante "Ripianifica" dopo essere risultata scaduta
   created_at: string;
   updated_at: string;
 }
@@ -285,6 +286,7 @@ export interface Database {
           supplier_id?: string | null;
           budget_id?: string | null;
           google_event_id?: string | null;
+          was_rescheduled?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -301,6 +303,7 @@ export interface Database {
           supplier_id?: string | null;
           budget_id?: string | null;
           google_event_id?: string | null;
+          was_rescheduled?: boolean;
           created_at?: string;
           updated_at?: string;
         };

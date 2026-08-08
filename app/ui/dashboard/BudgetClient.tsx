@@ -490,25 +490,19 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
   // Scadenze (Scadenze & Pagamenti) con categoria/data ma non collegate a nessuna voce di budget:
   // vanno comunque contate come spesa prevista del mese, altrimenti restano invisibili nel Budget.
-  // Le scadenze scadute e non ancora saldate (es. una del mese scorso mai pagata) restano un
-  // impegno di "adesso": vengono agganciate al mese corrente finche' non risultano saldate,
-  // invece di sparire semplicemente perche' la loro data e' passata.
+  // Contano solo per il mese della loro data di scadenza: una scadenza scaduta e non ancora
+  // saldata NON viene trascinata nel mese corrente, per non farla contare due volte (nel mese
+  // in cui era originariamente prevista e in quello in corso) finche' l'utente non la salda o
+  // la ripianifica (pulsante "Ripianifica" in Scadenze) a una nuova data.
   const unlinkedScheduledItemsList = useMemo(() => {
     return schedules
       .filter((s: any) => {
         if (s.budget_id) return false; // gia' contato tramite la voce di budget collegata
         const sDate = new Date(s.due_date);
-        const inSelectedMonth = sDate.getFullYear() === selectedYear && sDate.getMonth() + 1 === selectedMonth;
-        const isOverdueUnpaid = !s.is_paid && isCurrentMonth && !inSelectedMonth && sDate < now;
-        return inSelectedMonth || isOverdueUnpaid;
-      })
-      .map((s: any) => {
-        const sDate = new Date(s.due_date);
-        const inSelectedMonth = sDate.getFullYear() === selectedYear && sDate.getMonth() + 1 === selectedMonth;
-        return { ...s, isOverdue: !inSelectedMonth };
+        return sDate.getFullYear() === selectedYear && sDate.getMonth() + 1 === selectedMonth;
       })
       .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
-  }, [schedules, selectedYear, selectedMonth, isCurrentMonth, now]);
+  }, [schedules, selectedYear, selectedMonth]);
 
   const unlinkedScheduledByCategory = useMemo(() => {
     const map: Record<string, { amount: number; items: { label: string; amount: number }[] }> = {};
@@ -516,8 +510,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
       const catId = s.category_id || "unassigned";
       if (!map[catId]) map[catId] = { amount: 0, items: [] };
       map[catId].amount += Number(s.amount);
-      const label = s.description || s.category;
-      map[catId].items.push({ label: s.isOverdue ? `${label} (scaduta)` : label, amount: Number(s.amount) });
+      map[catId].items.push({ label: s.description || s.category, amount: Number(s.amount) });
     });
     return map;
   }, [unlinkedScheduledItemsList]);
@@ -1435,13 +1428,19 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                               {catName}
                             </span>
                             <span
-                              className={`inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border ${
-                                s.isOverdue ? "bg-rose-500/10 text-rose-300 border-rose-500/20" : "bg-amber-500/10 text-amber-300 border-amber-500/20"
-                              }`}
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border bg-amber-500/10 text-amber-300 border-amber-500/20"
                               title={`Scadenza del ${new Date(s.due_date).toLocaleDateString("it-IT")}, non collegata a una voce di budget`}
                             >
-                              📅 {s.isOverdue ? "Scaduta" : "Da Scadenze"}
+                              📅 Da Scadenze
                             </span>
+                            {s.was_rescheduled && (
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border bg-sky-500/10 text-sky-300 border-sky-500/20"
+                                title="Questa scadenza era scaduta e non saldata: e' stata ripianificata a questa nuova data"
+                              >
+                                🗓 Ripianificata
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td className="py-3">
@@ -1456,9 +1455,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                         <td className="py-3 text-right font-black text-xs text-white">-{formatCurrency(Number(s.amount))}</td>
                         <td className="py-3 text-right">
                           <span className="font-black text-xs text-zinc-300">-{formatCurrency(Number(s.amount))}</span>
-                          {s.isOverdue && (
-                            <div className="text-[7px] uppercase font-extrabold tracking-widest text-rose-500">Non saldata</div>
-                          )}
                         </td>
                         <td className="py-3 text-center">
                           <Link

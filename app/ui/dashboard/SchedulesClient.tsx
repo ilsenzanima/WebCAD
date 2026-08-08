@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib/types/database";
-import { createSchedule, updateSchedule, deleteSchedule, paySchedule, splitScheduleIntoInstallments } from "@/app/actions/schedules";
+import { createSchedule, updateSchedule, deleteSchedule, paySchedule, splitScheduleIntoInstallments, rescheduleSchedule } from "@/app/actions/schedules";
 import { createSupplier } from "@/app/actions/suppliers";
 import { syncSchedulesToCalendar } from "@/app/actions/google";
 import { DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
@@ -276,15 +276,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     }
     startTransition(async () => {
       try {
-        const res = await updateSchedule(item.id, {
-          amount: item.amount,
-          category_id: item.category_id,
-          supplier_id: item.supplier_id,
-          category_name: item.expense_categories?.name || item.category,
-          description: item.description || "",
-          due_date: rescheduleDate,
-          recurrence: item.recurrence,
-        });
+        const res = await rescheduleSchedule(item.id, rescheduleDate);
         if (!res.success || !res.data) {
           alert(res.error || "Errore durante la ripianificazione");
           return;

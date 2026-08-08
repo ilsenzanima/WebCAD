@@ -103,6 +103,36 @@ export async function updateSchedule(id: string, formData: {
   }
 }
 
+// Sposta una scadenza scaduta e non saldata a una nuova data (pulsante "Ripianifica" in Scadenze).
+// A differenza di updateSchedule, marca la scadenza come was_rescheduled cosi' che compaia con un
+// banner dedicato ovunque venga elencata nella pagina Budget, invece di sembrare una voce normale.
+export async function rescheduleSchedule(id: string, newDueDate: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase
+      .from("payment_schedules")
+      .update({ due_date: newDueDate, was_rescheduled: true })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select("*, expense_categories(name, color), suppliers(name)")
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/expenses");
+    revalidatePath("/dashboard/schedules");
+    revalidatePath("/dashboard/budget");
+    revalidatePath("/dashboard/calendar");
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function deleteSchedule(id: string) {
   try {
     const supabase = (await createClient()) as any;
