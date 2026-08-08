@@ -25,7 +25,35 @@ const COLOR_OPTIONS = [
   { value: "pink", label: "Fucsia", bg: "rgba(236,72,153,0.2)", text: "hsl(330 80% 75%)" },
   { value: "purple", label: "Viola", bg: "rgba(168,85,247,0.2)", text: "hsl(270 80% 75%)" },
   { value: "slate", label: "Grigio", bg: "rgba(107,114,128,0.2)", text: "hsl(215 15% 75%)" },
+  { value: "red", label: "Rosso", bg: "rgba(220,38,38,0.2)", text: "hsl(0 74% 72%)" },
+  { value: "orange", label: "Arancione", bg: "rgba(249,115,22,0.2)", text: "hsl(24 94% 70%)" },
+  { value: "yellow", label: "Giallo", bg: "rgba(234,179,8,0.2)", text: "hsl(45 90% 65%)" },
+  { value: "lime", label: "Lime", bg: "rgba(132,204,22,0.2)", text: "hsl(83 70% 65%)" },
+  { value: "green", label: "Verde", bg: "rgba(34,197,94,0.2)", text: "hsl(142 65% 65%)" },
+  { value: "teal", label: "Turchese", bg: "rgba(20,184,166,0.2)", text: "hsl(173 65% 62%)" },
+  { value: "cyan", label: "Ciano", bg: "rgba(6,182,212,0.2)", text: "hsl(189 80% 65%)" },
+  { value: "blue", label: "Blu", bg: "rgba(59,130,246,0.2)", text: "hsl(217 85% 72%)" },
+  { value: "violet", label: "Violetto", bg: "rgba(139,92,246,0.2)", text: "hsl(258 85% 75%)" },
+  { value: "fuchsia", label: "Magenta", bg: "rgba(217,70,239,0.2)", text: "hsl(292 80% 72%)" },
 ];
+
+// Ampia selezione di emoji pronte all'uso per le icone delle categorie,
+// raggruppate per area tematica (casa, trasporti, cibo, salute, svago...).
+const CATEGORY_EMOJIS = [
+  "🏠", "🏡", "🔑", "🛋️", "🛠️", "🧹", "🧺", "💡", "💧", "🔥", "📶", "📱", "💻", "🪑",
+  "🚗", "⛽", "🅿️", "🚌", "🚆", "🚲", "🛵", "✈️", "🏖️", "🧳", "🚕", "🛳️",
+  "🛒", "🍽️", "☕", "🍕", "🍔", "🍎", "🍺", "🍷", "🎂", "🧁",
+  "💊", "🏥", "🩺", "🦷", "👓", "💉", "🧘", "💪", "🏋️",
+  "🎮", "🎬", "🎵", "📚", "🎓", "🎨", "🎉", "🎁", "🎯", "📷", "⚽", "🏀",
+  "👕", "👗", "👟", "💇", "💅", "💄",
+  "👶", "🧸", "🐾", "🌳", "🌱", "🐶", "🐱",
+  "💼", "💰", "🏦", "💳", "📈", "📉", "🧾", "⚖️", "🛡️", "❤️", "🎗️", "🤝",
+  "📦", "➕", "❓", "⭐",
+];
+
+// Individua un emoji iniziale gia' presente nel nome (es. "🏠 Casa") cosi'
+// da poterlo sostituire con un click invece di accumularne diversi in fila.
+const LEADING_EMOJI_REGEX = /^(\p{Extended_Pictographic}(️|‍\p{Extended_Pictographic})*\s*)/u;
 
 export default function SettingsClient({ categories: initialCategories, googleConnected: initialGoogleConnected, currentFontId }: SettingsClientProps) {
   const [activeTab, setActiveTab] = useState<"security" | "categories" | "connections" | "appearance">("categories");
@@ -96,6 +124,10 @@ export default function SettingsClient({ categories: initialCategories, googleCo
     setCatName("");
     setCatColor("indigo");
     setEditingCatId(null);
+  };
+
+  const insertCategoryEmoji = (emoji: string) => {
+    setCatName(prev => `${emoji} ${prev.replace(LEADING_EMOJI_REGEX, "")}`.trimEnd());
   };
 
   const handlePasswordUpdate = (e: React.FormEvent) => {
@@ -258,6 +290,24 @@ export default function SettingsClient({ categories: initialCategories, googleCo
                   required
                   className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Icona (Emoji)</label>
+                <div className="grid grid-cols-8 gap-1 p-2.5 rounded-xl border border-zinc-800 bg-zinc-950/80 max-h-32 overflow-y-auto">
+                  {CATEGORY_EMOJIS.map((emoji, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => insertCategoryEmoji(emoji)}
+                      className="aspect-square flex items-center justify-center rounded-lg text-base hover:bg-white/10 transition-all active:scale-90"
+                      title={`Usa ${emoji}`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[9px] text-zinc-500">Scegli un'icona: verrà aggiunta all'inizio del nome della categoria.</p>
               </div>
 
               <div className="space-y-1.5">

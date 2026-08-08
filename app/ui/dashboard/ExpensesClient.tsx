@@ -43,6 +43,16 @@ const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = 
   pink: { bg: "rgba(236,72,153,0.12)", text: "hsl(330 80% 75%)", border: "rgba(236,72,153,0.2)" },
   purple: { bg: "rgba(168,85,247,0.12)", text: "hsl(270 80% 75%)", border: "rgba(168,85,247,0.2)" },
   slate: { bg: "rgba(107,114,128,0.15)", text: "hsl(215 15% 75%)", border: "rgba(107,114,128,0.25)" },
+  red: { bg: "rgba(220,38,38,0.12)", text: "hsl(0 74% 72%)", border: "rgba(220,38,38,0.2)" },
+  orange: { bg: "rgba(249,115,22,0.12)", text: "hsl(24 94% 70%)", border: "rgba(249,115,22,0.2)" },
+  yellow: { bg: "rgba(234,179,8,0.12)", text: "hsl(45 90% 65%)", border: "rgba(234,179,8,0.2)" },
+  lime: { bg: "rgba(132,204,22,0.12)", text: "hsl(83 70% 65%)", border: "rgba(132,204,22,0.2)" },
+  green: { bg: "rgba(34,197,94,0.12)", text: "hsl(142 65% 65%)", border: "rgba(34,197,94,0.2)" },
+  teal: { bg: "rgba(20,184,166,0.12)", text: "hsl(173 65% 62%)", border: "rgba(20,184,166,0.2)" },
+  cyan: { bg: "rgba(6,182,212,0.12)", text: "hsl(189 80% 65%)", border: "rgba(6,182,212,0.2)" },
+  blue: { bg: "rgba(59,130,246,0.12)", text: "hsl(217 85% 72%)", border: "rgba(59,130,246,0.2)" },
+  violet: { bg: "rgba(139,92,246,0.12)", text: "hsl(258 85% 75%)", border: "rgba(139,92,246,0.2)" },
+  fuchsia: { bg: "rgba(217,70,239,0.12)", text: "hsl(292 80% 72%)", border: "rgba(217,70,239,0.2)" },
 };
 
 export default function ExpensesClient({
