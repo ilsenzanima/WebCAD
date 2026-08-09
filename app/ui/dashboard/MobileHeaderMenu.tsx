@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
-import { OverviewIcon, ExpensesIcon, SettingsIcon, CalendarIcon, TagIcon, SupplierIcon, WalletIcon } from "./icons";
+import { OverviewIcon, ExpensesIcon, SettingsIcon, CalendarIcon, TagIcon, SupplierIcon, WalletIcon, InboxIcon } from "./icons";
 
 interface MobileHeaderMenuProps {
   initials: string;
@@ -23,6 +23,7 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
     { href: "/dashboard/calendar", icon: <CalendarIcon size={14} />, label: "Calendario" },
     { href: "/dashboard/budget", icon: <TagIcon size={14} />, label: "Budget" },
     { href: "/dashboard/suppliers", icon: <SupplierIcon size={14} />, label: "Fornitori" },
+    { href: "/dashboard/scansioni", icon: <InboxIcon size={14} />, label: "Smistamento Scansioni" },
     { href: "/dashboard/settings", icon: <SettingsIcon size={14} />, label: "Impostazioni" },
   ];
 
