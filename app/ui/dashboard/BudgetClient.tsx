@@ -544,14 +544,24 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     return map;
   }, [unlinkedScheduledItemsList]);
 
-  const unplannedScheduledTotal = useMemo(
-    () => Object.values(unlinkedScheduledByCategory).reduce((sum, v) => sum + v.amount, 0),
-    [unlinkedScheduledByCategory]
-  );
+  // Ripartisce le scadenze non pianificate tra Bisogno/Desiderio/Imprevisto usando il tipo
+  // impostato sulla loro categoria (Confronto Uscite per Categoria): prima venivano sommate
+  // sempre e comunque ai "Bisogni", rendendo la classificazione della categoria ininfluente
+  // sul previsto - la spesa reale gia' ne teneva conto, ora anche quella pianificata.
+  const unplannedScheduledByType = useMemo(() => {
+    let need = 0, want = 0, emergency = 0;
+    Object.entries(unlinkedScheduledByCategory).forEach(([catId, data]) => {
+      const type = categories.find(c => c.id === catId)?.budget_type || "need";
+      if (type === "want") want += data.amount;
+      else if (type === "emergency") emergency += data.amount;
+      else need += data.amount;
+    });
+    return { need, want, emergency };
+  }, [unlinkedScheduledByCategory, categories]);
 
   // Calcoli Totali Budget per il mese selezionato (stima di base, corretta dagli eventuali override).
-  // Le scadenze non collegate a nessuna voce di budget vengono sommate ai "Bisogni": sono comunque
-  // spese obbligatorie previste quel mese (es. bollo auto, assicurazione) anche se non pianificate.
+  // Le scadenze non collegate a nessuna voce di budget vengono comunque sommate: sono spese
+  // previste quel mese (es. bollo auto, assicurazione) anche se non pianificate esplicitamente.
   const totals = useMemo(() => {
     let income = 0;
     let need = 0;
@@ -566,14 +576,16 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
       else if (b.type === "emergency") emergency += monthlyAmt;
     });
 
-    need += unplannedScheduledTotal;
+    need += unplannedScheduledByType.need;
+    want += unplannedScheduledByType.want;
+    emergency += unplannedScheduledByType.emergency;
 
     const totalOutgoings = need + want + emergency;
     const powerOfSpending = income - need; // Entrate - Bisogni
     const remainingBudget = income - totalOutgoings;
 
     return { income, need, want, emergency, totalOutgoings, powerOfSpending, remainingBudget };
-  }, [budgets, overrides, selectedYear, selectedMonth, unplannedScheduledTotal]);
+  }, [budgets, overrides, selectedYear, selectedMonth, unplannedScheduledByType]);
 
   // Analisi Regola 50/30/20 (Bisogni, Desideri, Risparmio/Imprevisti)
   const ruleAnalysis = useMemo(() => {
@@ -818,7 +830,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
           <p className="text-2xl font-black text-white mt-2">{formatCurrency(totals.need)}</p>
           <div className="text-[9px] text-slate-500 mt-1 font-semibold">
             Spese fisse e variabili obbligatorie
-            {unplannedScheduledTotal > 0 && ` (incluse ${formatCurrency(unplannedScheduledTotal)} di scadenze non pianificate)`}
+            {unplannedScheduledByType.need > 0 && ` (incluse ${formatCurrency(unplannedScheduledByType.need)} di scadenze non pianificate)`}
           </div>
         </div>
 
@@ -1134,7 +1146,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                               </div>
                             </div>
                           ) : (
-                            <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                            <div className="flex items-center justify-center gap-1">
                               {!linkedExpense && (
                                 <button
                                   onClick={() => startConfirmExpense(b)}
@@ -1348,7 +1360,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                         <td className="py-3 text-center">
                           <Link
                             href="/dashboard/schedules"
-                            className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 text-[10px] inline-flex opacity-0 group-hover:opacity-100 transition-all"
+                            className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 text-[10px] inline-flex transition-all"
                             title="Gestisci o salda in Scadenze & Pagamenti"
                           >
                             <SchedulesIcon size={12} />
