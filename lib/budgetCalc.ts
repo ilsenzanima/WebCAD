@@ -5,6 +5,17 @@
  */
 import type { Budget, BudgetOverride } from "@/lib/types/database";
 
+/** Periodicita' disponibili per una voce di budget, condivisa tra la pagina Budget e i punti
+ * (Scadenze, Spese & Entrate) da cui ora si crea una nuova voce di budget collegata. */
+export const BUDGET_PERIODS = [
+  { value: "weekly", label: "Settimanale" },
+  { value: "monthly", label: "Mensile" },
+  { value: "bimonthly", label: "Bimestrale" },
+  { value: "quarterly", label: "Trimestrale" },
+  { value: "semiannual", label: "Semestrale" },
+  { value: "annual", label: "Annuale" },
+] as const;
+
 /** Converte l'importo di una voce (in base alla sua periodicita') nell'equivalente mensile. */
 export function getMonthlyEquivalent(amount: number, periodicity: string): number {
   switch (periodicity) {

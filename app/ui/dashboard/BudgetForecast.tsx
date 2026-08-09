@@ -16,6 +16,7 @@ interface BudgetForecastProps {
   budgets: BudgetWithRelations[];
   overrides: BudgetOverride[];
   setOverrides: React.Dispatch<React.SetStateAction<BudgetOverride[]>>;
+  schedules: any[];
   baseYear: number;
   baseMonth: number; // 1-12, di solito il mese corrente reale
   onSelectMonth: (year: number, month: number) => void;
@@ -35,7 +36,7 @@ function addMonths(year: number, month: number, delta: number) {
 }
 
 export default function BudgetForecast({
-  budgets, overrides, setOverrides, baseYear, baseMonth, onSelectMonth, selectedYear, selectedMonth,
+  budgets, overrides, setOverrides, schedules, baseYear, baseMonth, onSelectMonth, selectedYear, selectedMonth,
 }: BudgetForecastProps) {
   const [isPending, startTransition] = useTransition();
   const [movingKey, setMovingKey] = useState<string | null>(null);
@@ -51,15 +52,27 @@ export default function BudgetForecast({
         .filter(x => x.amount > 0);
 
       const income = items.filter(x => x.budget.type === "income").reduce((s, x) => s + x.amount, 0);
-      const outgoings = items.filter(x => x.budget.type !== "income").reduce((s, x) => s + x.amount, 0);
 
-      const outgoingItems = items
+      const budgetOutgoingItems = items
         .filter(x => x.budget.type !== "income")
-        .sort((a, b) => b.amount - a.amount);
+        .map(x => ({ kind: "budget" as const, key: x.budget.id, label: x.budget.label, amount: x.amount, budget: x.budget }));
+
+      // Scadenze non collegate a nessuna voce di budget: senza queste, il previsto del mese
+      // qui risultava incompleto rispetto a quanto mostrato in "Voci di Budget Pianificate".
+      const scheduleOutgoingItems = schedules
+        .filter((s: any) => {
+          if (s.budget_id) return false;
+          const sDate = new Date(s.due_date);
+          return sDate.getFullYear() === year && sDate.getMonth() + 1 === month;
+        })
+        .map((s: any) => ({ kind: "schedule" as const, key: `sched-${s.id}`, label: s.description || s.category, amount: Number(s.amount) }));
+
+      const outgoingItems = [...budgetOutgoingItems, ...scheduleOutgoingItems].sort((a, b) => b.amount - a.amount);
+      const outgoings = outgoingItems.reduce((s, x) => s + x.amount, 0);
 
       return { year, month, income, outgoings, saldo: income - outgoings, outgoingItems };
     });
-  }, [months, budgets, overrides]);
+  }, [months, budgets, overrides, schedules]);
 
   const moveToNextMonth = (b: BudgetWithRelations, year: number, month: number, amount: number) => {
     const { year: nextYear, month: nextMonth } = addMonths(year, month, 1);
@@ -166,21 +179,25 @@ export default function BudgetForecast({
 
               {outgoingItems.length > 0 && (
                 <div className="pt-1 border-t border-zinc-800/40 space-y-1 max-h-28 overflow-y-auto">
-                  {outgoingItems.map(({ budget: b, amount }) => {
-                    const key = `${b.id}-${year}-${month}`;
+                  {outgoingItems.map((item) => {
+                    const moveKey = item.kind === "budget" ? `${item.budget.id}-${year}-${month}` : null;
                     return (
-                      <div key={b.id} className="flex items-center justify-between gap-1 group/item">
-                        <span className="text-[8px] text-zinc-400 truncate flex-1" title={b.label}>{b.label}</span>
-                        <span className="text-[8px] text-zinc-300 font-semibold whitespace-nowrap">{formatCurrency(amount)}</span>
-                        <button
-                          type="button"
-                          onClick={() => moveToNextMonth(b, year, month, amount)}
-                          disabled={isPending && movingKey === key}
-                          className="opacity-0 group-hover/item:opacity-100 text-[9px] text-amber-500 hover:text-amber-300 transition-all disabled:opacity-50 flex-shrink-0"
-                          title={`Sposta "${b.label}" al mese successivo`}
-                        >
-                          {isPending && movingKey === key ? "…" : "➡"}
-                        </button>
+                      <div key={item.key} className="flex items-center justify-between gap-1 group/item">
+                        <span className="text-[8px] text-zinc-400 truncate flex-1" title={item.label}>
+                          {item.kind === "schedule" && "📅 "}{item.label}
+                        </span>
+                        <span className="text-[8px] text-zinc-300 font-semibold whitespace-nowrap">{formatCurrency(item.amount)}</span>
+                        {item.kind === "budget" && (
+                          <button
+                            type="button"
+                            onClick={() => moveToNextMonth(item.budget, year, month, item.amount)}
+                            disabled={isPending && movingKey === moveKey}
+                            className="opacity-0 group-hover/item:opacity-100 text-[9px] text-amber-500 hover:text-amber-300 transition-all disabled:opacity-50 flex-shrink-0"
+                            title={`Sposta "${item.label}" al mese successivo`}
+                          >
+                            {isPending && movingKey === moveKey ? "…" : "➡"}
+                          </button>
+                        )}
                       </div>
                     );
                   })}

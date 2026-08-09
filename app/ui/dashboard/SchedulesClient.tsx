@@ -4,6 +4,8 @@ import { useState, useTransition, useEffect, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createSchedule, updateSchedule, deleteSchedule, paySchedule, splitScheduleIntoInstallments, rescheduleSchedule } from "@/app/actions/schedules";
+import { createBudget } from "@/app/actions/budget";
+import { BUDGET_PERIODS } from "@/lib/budgetCalc";
 import { createSupplier } from "@/app/actions/suppliers";
 import { syncSchedulesToCalendar } from "@/app/actions/google";
 import { DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
@@ -115,6 +117,13 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     });
   };
 
+  // Crea anche una voce di budget ricorrente collegata, cosi' la scadenza entra nelle stime
+  // dei mesi futuri e nella Ripartizione 50/30/20 senza doverla reinserire a mano nel Budget.
+  const [addToBudget, setAddToBudget] = useState(false);
+  const [budgetType, setBudgetType] = useState<"need" | "want" | "emergency">("need");
+  const [budgetPeriodicity, setBudgetPeriodicity] = useState<"weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual">("monthly");
+  const [budgetIsEstimated, setBudgetIsEstimated] = useState(false);
+
   const resetForm = () => {
     setAmount("");
     setCategoryId(categories[0]?.id || "");
@@ -123,6 +132,10 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     setDueDate(toLocalDateStr());
     setRecurrence("one-time");
     setEditingId(null);
+    setAddToBudget(false);
+    setBudgetType("need");
+    setBudgetPeriodicity("monthly");
+    setBudgetIsEstimated(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -140,6 +153,26 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
     startTransition(async () => {
       try {
+        let linkedBudgetId: string | null = null;
+
+        if (!editingId && addToBudget) {
+          const budgetRes = await createBudget({
+            amount: Number(amount),
+            category_id: categoryId,
+            supplier_id: supplierId || null,
+            type: budgetType,
+            label: description.trim() || selectedCat.name,
+            periodicity: budgetPeriodicity,
+            is_estimated: budgetIsEstimated,
+            day_of_month: new Date(`${dueDate}T00:00:00`).getDate(),
+          });
+          if (!budgetRes.success || !budgetRes.data) {
+            alert(budgetRes.error || "Errore durante la creazione della previsione nel Budget");
+            return;
+          }
+          linkedBudgetId = budgetRes.data.id;
+        }
+
         const payload = {
           amount: Number(amount),
           category_id: categoryId,
@@ -148,6 +181,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           description,
           due_date: dueDate,
           recurrence,
+          ...(linkedBudgetId ? { budget_id: linkedBudgetId } : {}),
         };
 
         if (editingId) {
@@ -660,6 +694,68 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                 }}
               />
             </div>
+
+            {/* Aggiungi anche come previsione ricorrente nel Budget */}
+            {!editingId && (
+              <div className="space-y-2 p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/[0.03]">
+                <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-300 uppercase tracking-wider cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={addToBudget}
+                    onChange={(e) => {
+                      setAddToBudget(e.target.checked);
+                      if (e.target.checked) {
+                        setBudgetPeriodicity(recurrence === "weekly" ? "weekly" : recurrence === "yearly" ? "annual" : "monthly");
+                      }
+                    }}
+                    className="accent-indigo-500"
+                  />
+                  📊 Aggiungi anche come previsione nel Budget
+                </label>
+                {addToBudget && (
+                  <div className="space-y-2.5 animate-fade-in pt-1">
+                    <p className="text-[9px] text-zinc-500 leading-relaxed">
+                      Crea anche una voce ricorrente nella pagina Budget, cosi' questa spesa entra nelle stime dei prossimi mesi e nella Ripartizione 50/30/20.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Tipo</label>
+                        <select
+                          value={budgetType}
+                          onChange={(e) => setBudgetType(e.target.value as any)}
+                          className="w-full px-2 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none select-custom"
+                        >
+                          <option value="need" style={{ background: "hsl(240 10% 10%)" }}>Bisogno</option>
+                          <option value="want" style={{ background: "hsl(240 10% 10%)" }}>Desiderio</option>
+                          <option value="emergency" style={{ background: "hsl(240 10% 10%)" }}>Imprevisto</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Periodicità Budget</label>
+                        <select
+                          value={budgetPeriodicity}
+                          onChange={(e) => setBudgetPeriodicity(e.target.value as any)}
+                          className="w-full px-2 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none select-custom"
+                        >
+                          {BUDGET_PERIODS.map((p) => (
+                            <option key={p.value} value={p.value} style={{ background: "hsl(240 10% 10%)" }}>{p.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2 text-[9px] font-bold text-zinc-500 uppercase tracking-wider cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={budgetIsEstimated}
+                        onChange={(e) => setBudgetIsEstimated(e.target.checked)}
+                        className="accent-amber-500"
+                      />
+                      Importo stimato (non certo)
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
 
             <button
               type="submit"

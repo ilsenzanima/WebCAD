@@ -4,6 +4,8 @@ import { useState, useTransition, useMemo, useEffect, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type Expense, type ExpenseCategory, type Supplier, type SupplierDocument, type Account } from "@/lib/types/database";
 import { createExpense, updateExpense, deleteExpense } from "@/app/actions/expenses";
+import { createBudget } from "@/app/actions/budget";
+import { BUDGET_PERIODS } from "@/lib/budgetCalc";
 import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
 import { createSupplier } from "@/app/actions/suppliers";
 import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
@@ -114,6 +116,12 @@ export default function ExpensesClient({
     return map;
   }, [documents]);
 
+  // Crea anche una voce di budget "Entrata" ricorrente collegata, cosi' questa entrata entra
+  // nelle stime dei prossimi mesi e nella Ripartizione 50/30/20 senza reinserirla nel Budget.
+  const [addToBudget, setAddToBudget] = useState(false);
+  const [budgetPeriodicity, setBudgetPeriodicity] = useState<"weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual">("monthly");
+  const [budgetIsEstimated, setBudgetIsEstimated] = useState(false);
+
   const resetForm = () => {
     setAmount("");
     setCategoryId(categories[0]?.id || "");
@@ -129,6 +137,9 @@ export default function ExpensesClient({
     setNewSupplierName("");
     setNewSupplierIsUtility(false);
     setNewSupplierUnit("kWh");
+    setAddToBudget(false);
+    setBudgetPeriodicity("monthly");
+    setBudgetIsEstimated(false);
   };
 
   // Carica su Google Drive e collega il documento a una spesa/entrata (ed eventualmente al fornitore)
@@ -233,6 +244,26 @@ export default function ExpensesClient({
 
     startTransition(async () => {
       try {
+        let linkedBudgetId: string | null = null;
+
+        if (!editingId && isIncomeMode && addToBudget) {
+          const budgetRes = await createBudget({
+            amount: Number(amount),
+            category_id: null,
+            supplier_id: null,
+            type: "income",
+            label: description.trim() || "Entrata",
+            periodicity: budgetPeriodicity,
+            is_estimated: budgetIsEstimated,
+            day_of_month: new Date(`${date}T00:00:00`).getDate(),
+          });
+          if (!budgetRes.success || !budgetRes.data) {
+            alert(budgetRes.error || "Errore durante la creazione della previsione nel Budget");
+            return;
+          }
+          linkedBudgetId = budgetRes.data.id;
+        }
+
         const payload = {
           amount: Number(amount),
           category_id: isIncomeMode ? null : categoryId,
@@ -245,6 +276,7 @@ export default function ExpensesClient({
             ? Number(consumptionValue)
             : null,
           account_id: accountId || null,
+          ...(linkedBudgetId ? { budget_id: linkedBudgetId } : {}),
         };
 
         let targetExpenseId: string | null = null;
@@ -791,6 +823,53 @@ export default function ExpensesClient({
                     </p>
                   )}
                 </div>
+
+                {/* Aggiungi anche come previsione ricorrente nel Budget (solo entrate nuove) */}
+                {isIncomeMode && !editingId && (
+                  <div className="space-y-2 p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03]">
+                    <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-300 uppercase tracking-wider cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={addToBudget}
+                        onChange={(e) => setAddToBudget(e.target.checked)}
+                        className="accent-emerald-500"
+                      />
+                      📊 Aggiungi anche come previsione nel Budget
+                    </label>
+                    {addToBudget && (
+                      <div className="space-y-2.5 animate-fade-in pt-1">
+                        <p className="text-[9px] text-zinc-500 leading-relaxed">
+                          Crea anche una voce "Entrata" ricorrente nella pagina Budget (es. stipendio mensile), cosi' entra nelle stime dei prossimi mesi e nella Ripartizione 50/30/20.
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Periodicità Budget</label>
+                            <select
+                              value={budgetPeriodicity}
+                              onChange={(e) => setBudgetPeriodicity(e.target.value as any)}
+                              className="w-full px-2 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none select-custom"
+                            >
+                              {BUDGET_PERIODS.map((p) => (
+                                <option key={p.value} value={p.value} style={{ background: "hsl(240 10% 10%)" }}>{p.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-1 flex flex-col justify-end">
+                            <label className="flex items-center gap-2 text-[9px] font-bold text-zinc-500 uppercase tracking-wider cursor-pointer pb-2">
+                              <input
+                                type="checkbox"
+                                checked={budgetIsEstimated}
+                                onChange={(e) => setBudgetIsEstimated(e.target.checked)}
+                                className="accent-amber-500"
+                              />
+                              Importo stimato
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Pulsanti */}
                 <div className="flex gap-3 pt-2">
