@@ -19,8 +19,11 @@ DROP POLICY IF EXISTS "Il proprietario puo' aggiornare le proprie planimetrie" O
 DROP POLICY IF EXISTS "Utenti autenticati possono eliminare le proprie planimetrie" ON storage.objects;
 DROP POLICY IF EXISTS "Il proprietario puo' eliminare le proprie planimetrie" ON storage.objects;
 
-DELETE FROM storage.objects WHERE bucket_id = 'plans';
-DELETE FROM storage.buckets WHERE id = 'plans';
+-- NB: Supabase blocca la DELETE diretta su storage.objects/storage.buckets
+-- via SQL (trigger storage.protect_delete) per evitare perdite accidentali:
+-- il bucket "plans" e i suoi file vanno eliminati dalla dashboard
+-- (Storage > bucket "plans" > seleziona tutto > Elimina, poi elimina il
+-- bucket stesso) oppure tramite la Storage API, non da qui.
 
 -- Funzione ed enum orfani della vecchia numerazione appunti di cantiere
 -- (le tabelle a cui si appoggiavano non esistono piu' su questo database).
