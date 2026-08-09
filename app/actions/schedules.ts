@@ -174,7 +174,7 @@ export async function deleteSchedule(id: string) {
   }
 }
 
-export async function paySchedule(id: string) {
+export async function paySchedule(id: string, consumptionValue?: number | null) {
   try {
     const supabase = (await createClient()) as any;
     const { data: { user } } = await supabase.auth.getUser();
@@ -192,7 +192,8 @@ export async function paySchedule(id: string) {
       throw new Error(fetchError?.message || "Pianificazione non trovata");
     }
 
-    // 2. Crea la spesa corrispondente (ereditando category_id, supplier_id e budget_id)
+    // 2. Crea la spesa corrispondente (ereditando category_id, supplier_id e budget_id;
+    // consumption_value solo se fornito, tipicamente per i fornitori-utenza)
     const today = new Date().toISOString().split("T")[0];
     const { error: expenseError } = await supabase.from("expenses").insert({
       user_id: user.id,
@@ -202,6 +203,7 @@ export async function paySchedule(id: string) {
       supplier_id: schedule.supplier_id,
       schedule_id: schedule.id,
       budget_id: schedule.budget_id,
+      consumption_value: consumptionValue ?? null,
       description: `Pagamento programmato: ${schedule.description || "Nessuna descrizione"}`,
       date: today,
     });
