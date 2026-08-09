@@ -7,6 +7,7 @@ import { createSchedule, updateSchedule, deleteSchedule, paySchedule, splitSched
 import { createSupplier } from "@/app/actions/suppliers";
 import { syncSchedulesToCalendar } from "@/app/actions/google";
 import { DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
+import { uploadAndLinkDocument } from "@/lib/uploadDocument";
 import { formatCurrency, formatDate, toLocalDateStr } from "@/lib/format";
 import { getNextDueDate } from "@/lib/recurrence";
 import { DeleteIcon, EditIcon, CheckIcon, SchedulesIcon } from "./icons";
@@ -85,9 +86,12 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [splitInstallments, setSplitInstallments] = useState<{ amount: string; due_date: string }[]>([]);
 
   // Conferma pagamento di una scadenza legata a un fornitore-utenza: prima di saldare
-  // chiede il consumo del periodo, cosi' resta tracciato sulla spesa generata.
+  // chiede il consumo del periodo e, facoltativamente, il documento (bolletta) da allegare,
+  // cosi' restano tracciati sulla spesa generata.
   const [payingId, setPayingId] = useState<string | null>(null);
   const [payConsumptionValue, setPayConsumptionValue] = useState("");
+  const [payDocFile, setPayDocFile] = useState<File | null>(null);
+  const [payDocType, setPayDocType] = useState<"contratto" | "bolletta" | "altro">("bolletta");
 
   // Aggiunta rapida di un nuovo fornitore dal form
   const [isAddingSupplier, setIsAddingSupplier] = useState(false);
@@ -235,14 +239,20 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     }
   };
 
-  const handlePay = (scheduleId: string, consumptionValue: number | null = null) => {
+  const handlePay = (
+    scheduleId: string,
+    consumptionValue: number | null = null,
+    docFile: File | null = null,
+    docType: "contratto" | "bolletta" | "altro" = "bolletta"
+  ) => {
     startTransition(async () => {
       try {
         const res = await paySchedule(scheduleId, consumptionValue);
-        if (!res.success) {
+        if (!res.success || !res.data) {
           alert(res.error || "Errore nel contrassegnare come pagato");
           return;
         }
+        const newExpense = res.data;
 
         const target = schedules.find(s => s.id === scheduleId);
 
@@ -263,23 +273,21 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
         if (target && onExpenseCreated) {
           onExpenseCreated({
-            id: Math.random().toString(),
-            user_id: "",
-            amount: target.amount,
-            category: target.category,
-            category_id: target.category_id,
-            supplier_id: target.supplier_id,
-            schedule_id: target.id,
-            budget_id: target.budget_id,
-            account_id: null,
-            consumption_value: consumptionValue,
-            description: `Pagamento programmato: ${target.description || "Nessuna descrizione"}`,
-            date: toLocalDateStr(),
-            is_income: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
+            ...newExpense,
             expense_categories: target.expense_categories,
             suppliers: target.suppliers,
+          });
+        }
+
+        if (docFile) {
+          await uploadAndLinkDocument({
+            file: docFile,
+            expenseId: newExpense.id,
+            supplierId: target?.supplier_id ?? null,
+            suppliersList,
+            title: target?.description || target?.category || "Bolletta",
+            docType,
+            googleConnected,
           });
         }
 
@@ -295,11 +303,15 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const startPay = (item: ScheduleWithRelations) => {
     setPayingId(item.id);
     setPayConsumptionValue("");
+    setPayDocFile(null);
+    setPayDocType("bolletta");
   };
 
   const cancelPay = () => {
     setPayingId(null);
     setPayConsumptionValue("");
+    setPayDocFile(null);
+    setPayDocType("bolletta");
   };
 
   const handlePayClick = (item: ScheduleWithRelations) => {
@@ -315,13 +327,23 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     handlePay(item.id);
   };
 
+  const handlePayDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Il file supera la dimensione massima consigliata di 10MB");
+      return;
+    }
+    setPayDocFile(file);
+  };
+
   const confirmUtilityPay = (item: ScheduleWithRelations) => {
     const value = payConsumptionValue.trim() ? Number(payConsumptionValue) : null;
     if (payConsumptionValue.trim() && (isNaN(value as number) || (value as number) < 0)) {
       alert("Inserisci un consumo valido");
       return;
     }
-    handlePay(item.id, value);
+    handlePay(item.id, value, payDocFile, payDocType);
   };
 
   const handleDelete = (id: string) => {
@@ -1054,6 +1076,39 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                                     className="w-40 px-3 py-2 rounded-lg text-xs text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
                                   />
                                 </div>
+                                <div className="space-y-1">
+                                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Allega documento (facoltativo)</label>
+                                  {googleConnected ? (
+                                    <input
+                                      type="file"
+                                      accept="application/pdf,image/*"
+                                      onChange={handlePayDocFileChange}
+                                      className="text-[10px] text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-[9px] file:font-bold file:bg-sky-500/20 file:text-sky-300 hover:file:bg-sky-500/30 cursor-pointer"
+                                    />
+                                  ) : (
+                                    <a
+                                      href="/dashboard/schedules"
+                                      onClick={(e) => { e.preventDefault(); window.location.href = "/api/google/connect?next=/dashboard/schedules"; }}
+                                      className="inline-block px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold text-amber-300 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20"
+                                    >
+                                      🔗 Collega Google Drive per allegare
+                                    </a>
+                                  )}
+                                </div>
+                                {payDocFile && (
+                                  <div className="space-y-1">
+                                    <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Tipo documento</label>
+                                    <select
+                                      value={payDocType}
+                                      onChange={(e) => setPayDocType(e.target.value as any)}
+                                      className="px-2 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                                    >
+                                      <option value="bolletta">📄 Bolletta</option>
+                                      <option value="contratto">📑 Contratto</option>
+                                      <option value="altro">📎 Altro</option>
+                                    </select>
+                                  </div>
+                                )}
                                 <button
                                   onClick={() => confirmUtilityPay(item)}
                                   disabled={isPending}
@@ -1068,7 +1123,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                                   Annulla
                                 </button>
                               </div>
-                              <p className="text-[9px] text-zinc-500">Puoi lasciarlo vuoto e saldare comunque senza registrare il consumo.</p>
+                              <p className="text-[9px] text-zinc-500">Puoi lasciare consumo e documento vuoti e saldare comunque: verranno segnalati come mancanti nell'elenco spese.</p>
                             </div>
                           </td>
                         </tr>

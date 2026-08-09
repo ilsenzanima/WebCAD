@@ -6,9 +6,9 @@ import { type Expense, type ExpenseCategory, type Supplier, type SupplierDocumen
 import { createExpense, updateExpense, deleteExpense } from "@/app/actions/expenses";
 import { createBudget } from "@/app/actions/budget";
 import { BUDGET_PERIODS } from "@/lib/budgetCalc";
-import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
+import { deleteSupplierDocument } from "@/app/actions/documents";
 import { createSupplier } from "@/app/actions/suppliers";
-import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
+import { uploadAndLinkDocument as uploadAndLinkDocumentShared, utilityMissingTags } from "@/lib/uploadDocument";
 import { formatCurrency, formatFileSize, formatDate, toLocalDateStr } from "@/lib/format";
 import SchedulesClient from "./SchedulesClient";
 import { EditIcon, DeleteIcon, ExpensesIcon } from "./icons";
@@ -152,51 +152,16 @@ export default function ExpensesClient({
     title: string,
     docType: "contratto" | "bolletta" | "altro" = "bolletta"
   ) => {
-    if (!googleConnected) {
-      alert("Spesa salvata, ma per allegare documenti devi prima collegare il tuo account Google Drive.");
-      return;
-    }
-    try {
-      const supplierForDoc = supplierIdForDoc ? suppliersList.find((s) => s.id === supplierIdForDoc) : null;
-      const currentYear = new Date().getFullYear();
-
-      const uploadFormData = new FormData();
-      uploadFormData.append("file", file);
-      uploadFormData.append("fileName", `${title}_${file.name}`);
-      if (supplierForDoc) {
-        uploadFormData.append("supplierName", supplierForDoc.name);
-        uploadFormData.append("year", String(currentYear));
-      }
-
-      const driveRes = await uploadSupplierDocumentToDrive(uploadFormData);
-      if (!driveRes.success || !driveRes.data) {
-        alert(driveRes.error || "La registrazione è stata salvata ma il caricamento dell'allegato su Google Drive è fallito.");
-        return;
-      }
-
-      const fileUrl = driveRes.data.webViewLink || driveRes.data.webContentLink || `https://drive.google.com/file/d/${driveRes.data.id}/view`;
-
-      const res = await createSupplierDocument({
-        expense_id: expenseId,
-        supplier_id: supplierIdForDoc,
-        title,
-        file_url: fileUrl,
-        provider: "gdrive",
-        file_size: file.size,
-        doc_type: docType,
-        gdrive_file_id: driveRes.data.id,
-        document_year: supplierForDoc ? currentYear : null,
-      });
-
-      if (!res.success || !res.data) {
-        alert(res.error || "La registrazione è stata salvata ma il salvataggio dell'allegato è fallito.");
-        return;
-      }
-
-      setDocuments(prev => [res.data, ...prev]);
-    } catch (err: any) {
-      alert(err.message || "Errore durante il caricamento dell'allegato");
-    }
+    const doc = await uploadAndLinkDocumentShared({
+      file,
+      expenseId,
+      supplierId: supplierIdForDoc,
+      suppliersList,
+      title,
+      docType,
+      googleConnected,
+    });
+    if (doc) setDocuments(prev => [doc, ...prev]);
   };
 
   const handleNewDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1012,6 +977,8 @@ export default function ExpensesClient({
                         const badge = getCategoryBadgeStyle(catColor);
                         const attachments = docsByExpense[exp.id] || [];
                         const isExpanded = expandedExpenseId === exp.id;
+                        const expSupplier = exp.supplier_id ? suppliersList.find(s => s.id === exp.supplier_id) : null;
+                        const { missingConsumption, missingDocument } = utilityMissingTags(expSupplier, exp.consumption_value, attachments.length);
 
                         return (
                           <Fragment key={exp.id}>
@@ -1042,6 +1009,20 @@ export default function ExpensesClient({
                                 {(exp as any).is_emergency && (
                                   <div className="text-[8px] text-rose-400/90 font-bold uppercase tracking-wider mt-0.5">
                                     ⚠️ Imprevisto
+                                  </div>
+                                )}
+                                {(missingConsumption || missingDocument) && (
+                                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+                                    {missingConsumption && (
+                                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-extrabold text-amber-300 bg-amber-500/10 border border-amber-500/25">
+                                        ⚠ Consumo mancante
+                                      </span>
+                                    )}
+                                    {missingDocument && (
+                                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-extrabold text-amber-300 bg-amber-500/10 border border-amber-500/25">
+                                        ⚠ Documento mancante
+                                      </span>
+                                    )}
                                   </div>
                                 )}
                               </td>
