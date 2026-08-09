@@ -11,7 +11,11 @@ export const GOOGLE_CONFIG = {
   // tra i fornitori (pagina /dashboard/scansioni).
   scansioniFolderId: process.env.NEXT_PUBLIC_GOOGLE_DRIVE_SCANSIONI_FOLDER_ID || "1IMJ-WTnVAJquaMA-A-QRvFjU0N64HA10",
   scopes: {
-    drive: "https://www.googleapis.com/auth/drive.file",
+    // Serve lo scope "drive" completo (non il piu' ristretto "drive.file")
+    // perche' la pagina di smistamento deve leggere ed eventualmente spostare
+    // file che l'utente ha aggiunto direttamente su Drive (cartella
+    // "Scansioni"), non solo quelli creati dall'app stessa.
+    drive: "https://www.googleapis.com/auth/drive",
     calendar: "https://www.googleapis.com/auth/calendar.events",
     tasks: "https://www.googleapis.com/auth/tasks",
   },
