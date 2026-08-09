@@ -78,6 +78,11 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [splitStartDate, setSplitStartDate] = useState("");
   const [splitInstallments, setSplitInstallments] = useState<{ amount: string; due_date: string }[]>([]);
 
+  // Conferma pagamento di una scadenza legata a un fornitore-utenza: prima di saldare
+  // chiede il consumo del periodo, cosi' resta tracciato sulla spesa generata.
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const [payConsumptionValue, setPayConsumptionValue] = useState("");
+
   // Aggiunta rapida di un nuovo fornitore dal form
   const [isAddingSupplier, setIsAddingSupplier] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState("");
@@ -219,10 +224,10 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     setRecurrence(item.recurrence);
   };
 
-  const handlePay = (scheduleId: string) => {
+  const handlePay = (scheduleId: string, consumptionValue: number | null = null) => {
     startTransition(async () => {
       try {
-        const res = await paySchedule(scheduleId);
+        const res = await paySchedule(scheduleId, consumptionValue);
         if (!res.success) {
           alert(res.error || "Errore nel contrassegnare come pagato");
           return;
@@ -256,7 +261,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
             schedule_id: target.id,
             budget_id: target.budget_id,
             account_id: null,
-            consumption_value: null,
+            consumption_value: consumptionValue,
             description: `Pagamento programmato: ${target.description || "Nessuna descrizione"}`,
             date: toLocalDateStr(),
             is_income: false,
@@ -266,10 +271,46 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
             suppliers: target.suppliers,
           });
         }
+
+        if (payingId === scheduleId) cancelPay();
       } catch (err: any) {
         alert(err.message || "Errore durante il salvataggio");
       }
     });
+  };
+
+  const supplierOf = (item: ScheduleWithRelations) => suppliersList.find(s => s.id === item.supplier_id) || null;
+
+  const startPay = (item: ScheduleWithRelations) => {
+    setPayingId(item.id);
+    setPayConsumptionValue("");
+  };
+
+  const cancelPay = () => {
+    setPayingId(null);
+    setPayConsumptionValue("");
+  };
+
+  const handlePayClick = (item: ScheduleWithRelations) => {
+    const supplier = supplierOf(item);
+    if (supplier?.is_utility) {
+      if (payingId === item.id) {
+        cancelPay();
+      } else {
+        startPay(item);
+      }
+      return;
+    }
+    handlePay(item.id);
+  };
+
+  const confirmUtilityPay = (item: ScheduleWithRelations) => {
+    const value = payConsumptionValue.trim() ? Number(payConsumptionValue) : null;
+    if (payConsumptionValue.trim() && (isNaN(value as number) || (value as number) < 0)) {
+      alert("Inserisci un consumo valido");
+      return;
+    }
+    handlePay(item.id, value);
   };
 
   const handleDelete = (id: string) => {
@@ -896,8 +937,12 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                               )}
                               {!item.is_paid ? (
                                 <button
-                                  onClick={() => handlePay(item.id)}
-                                  className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center gap-1"
+                                  onClick={() => handlePayClick(item)}
+                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold border transition-all flex items-center gap-1 ${
+                                    payingId === item.id
+                                      ? "text-emerald-300 bg-emerald-500/20 border-emerald-500/40"
+                                      : "text-emerald-400 bg-emerald-500/10 border-emerald-500/20 hover:bg-emerald-500/20"
+                                  }`}
                                   title="Segna come Saldata"
                                 >
                                   <CheckIcon size={12} />
@@ -939,6 +984,53 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                           )}
                         </td>
                       </tr>
+                      {payingId === item.id && (
+                        <tr className="bg-white/[0.02]">
+                          <td colSpan={5} className="py-4 px-1">
+                            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03] p-4 space-y-3 animate-fade-in">
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-[11px] font-extrabold text-emerald-300">
+                                  ✓ Salda "{item.description || item.category}" — {item.suppliers?.name}
+                                </h4>
+                                <button onClick={cancelPay} className="text-[9px] font-bold text-zinc-500 hover:text-white">Chiudi</button>
+                              </div>
+
+                              <div className="flex flex-wrap gap-3 items-end">
+                                <div className="space-y-1">
+                                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                                    Consumo del periodo ({supplierOf(item)?.consumption_unit || "unità"})
+                                  </label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    autoFocus
+                                    value={payConsumptionValue}
+                                    onChange={(e) => setPayConsumptionValue(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") confirmUtilityPay(item); if (e.key === "Escape") cancelPay(); }}
+                                    placeholder={`es. 320 ${supplierOf(item)?.consumption_unit || ""}`}
+                                    className="w-40 px-3 py-2 rounded-lg text-xs text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                                  />
+                                </div>
+                                <button
+                                  onClick={() => confirmUtilityPay(item)}
+                                  disabled={isPending}
+                                  className="px-3 py-2 rounded-lg text-[10px] font-extrabold text-white bg-emerald-600 hover:bg-emerald-500 transition-all disabled:opacity-50"
+                                >
+                                  Conferma pagamento
+                                </button>
+                                <button
+                                  onClick={cancelPay}
+                                  className="px-3 py-2 rounded-lg text-[10px] font-extrabold text-zinc-400 bg-zinc-900 border border-zinc-800 hover:text-white transition-all"
+                                >
+                                  Annulla
+                                </button>
+                              </div>
+                              <p className="text-[9px] text-zinc-500">Puoi lasciarlo vuoto e saldare comunque senza registrare il consumo.</p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                       {splittingId === item.id && (
                         <tr className="bg-white/[0.02]">
                           <td colSpan={5} className="py-4 px-1">
