@@ -581,8 +581,9 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     const needPercent = (totals.need / totals.income) * 100;
     const wantPercent = (totals.want / totals.income) * 100;
 
-    // Il risparmio include la quota per gli imprevisti (emergency) + il risparmio residuo
-    const savingsPercent = ((totals.income - totals.need - totals.want) / totals.income) * 100;
+    // Il risparmio e' il residuo dopo Bisogni, Desideri e Imprevisti: un imprevisto pianificato
+    // o speso davvero riduce il risparmio reale/previsto, non e' un "extra" invisibile.
+    const savingsPercent = ((totals.income - totals.need - totals.want - totals.emergency) / totals.income) * 100;
 
     // Target in euro dalle entrate stimate del mese: utili per decidere, PRIMA di creare una
     // voce di budget, se rientra ancora tra i Bisogni o va classificata come Desiderio.
@@ -593,7 +594,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     // Confronto con i dati reali del mese: se non ci sono ancora entrate registrate si usa la
     // stima come base, cosi' la percentuale resta leggibile invece di dividere per zero.
     const realBase = realIncomeTotal > 0 ? realIncomeTotal : totals.income;
-    const realSavings = realIncomeTotal - realSpendingByType.need - realSpendingByType.want;
+    const realSavings = realIncomeTotal - realSpendingByType.need - realSpendingByType.want - realSpendingByType.emergency;
 
     return {
       needPercent: Math.round(needPercent),
@@ -604,6 +605,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
       savingsTarget,
       realNeed: realSpendingByType.need,
       realWant: realSpendingByType.want,
+      realEmergency: realSpendingByType.emergency,
       realSavings,
       realNeedPercent: Math.round((realSpendingByType.need / realBase) * 100),
       realWantPercent: Math.round((realSpendingByType.want / realBase) * 100),
@@ -1430,11 +1432,17 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                   <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.max(0, Math.min(ruleAnalysis.savingsPercent, 100))}%` }} />
                 </div>
                 <div className="flex justify-between text-[9px] text-zinc-500">
-                  <span>Pianificato {formatCurrency(totals.income - totals.need - totals.want)} ({ruleAnalysis.savingsPercent}%)</span>
+                  <span>Pianificato {formatCurrency(totals.income - totals.need - totals.want - totals.emergency)} ({ruleAnalysis.savingsPercent}%)</span>
                   <span className={`font-bold ${ruleAnalysis.realSavingsPercent < 20 ? "text-rose-400" : "text-emerald-400"}`}>
                     Reale {formatCurrency(ruleAnalysis.realSavings)} ({ruleAnalysis.realSavingsPercent}%)
                   </span>
                 </div>
+                {(totals.emergency > 0 || ruleAnalysis.realEmergency > 0) && (
+                  <div className="flex justify-between text-[9px] text-zinc-600 pt-0.5">
+                    <span>di cui Imprevisti pianificato: {formatCurrency(totals.emergency)}</span>
+                    <span className="font-bold text-amber-400">Imprevisti reale: {formatCurrency(ruleAnalysis.realEmergency)}</span>
+                  </div>
+                )}
               </div>
 
               {ruleAnalysis.unclassified > 0 && (
@@ -1593,7 +1601,12 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                         </div>
 
                         <div className="flex items-center justify-between text-[9px] gap-2 flex-wrap">
-                          <span className="text-zinc-500 font-semibold">Utilità reale (per la Ripartizione 50/30/20):</span>
+                          <span
+                            className="text-zinc-500 font-semibold"
+                            title="Si applica solo alle spese reali di questa categoria NON gia' collegate a una voce di Budget: quelle collegate ereditano il tipo dalla voce stessa (visibile nella tabella Voci di Budget Pianificate), non da qui."
+                          >
+                            Utilità reale (per la Ripartizione 50/30/20) ⓘ:
+                          </span>
                           <div className="flex gap-1">
                             {([
                               { value: "need" as const, label: "Bisogno", active: "bg-rose-500/20 text-rose-300 border-rose-500/40" },
