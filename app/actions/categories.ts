@@ -74,6 +74,7 @@ export async function createCategory(formData: { name: string; color: string }) 
     revalidatePath("/dashboard/settings");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/schedules");
+    revalidatePath("/dashboard/budget");
     return { success: true, data };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -100,6 +101,7 @@ export async function updateCategory(id: string, formData: { name: string; color
     revalidatePath("/dashboard/settings");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/schedules");
+    revalidatePath("/dashboard/budget");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -197,6 +199,7 @@ export async function deleteCategory(id: string) {
     revalidatePath("/dashboard/settings");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/schedules");
+    revalidatePath("/dashboard/budget");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
