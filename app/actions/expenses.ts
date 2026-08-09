@@ -33,6 +33,7 @@ export async function createExpense(formData: {
   is_income?: boolean;
   consumption_value?: number | null;
   account_id?: string | null;
+  budget_id?: string | null;
 }) {
   try {
     const supabase = (await createClient()) as any;
@@ -50,6 +51,7 @@ export async function createExpense(formData: {
       is_income: formData.is_income ?? false,
       consumption_value: formData.consumption_value ?? null,
       account_id: formData.account_id || null,
+      budget_id: formData.budget_id || null,
     }).select("*, expense_categories(name, color), suppliers(name)").single();
 
     if (error) throw new Error(error.message);

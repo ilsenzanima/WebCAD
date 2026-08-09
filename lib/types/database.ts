@@ -12,6 +12,7 @@ export interface ExpenseCategory {
   color: string;
   monthly_budget: number | null; // limite mensile impostato per l'intera categoria (es. "Utenze: 300€ di media")
   budget_percent: number | null; // in alternativa a monthly_budget: percentuale delle entrate mensili previste (0-100)
+  budget_type: "need" | "want" | "emergency" | null; // classificazione Bisogno/Desiderio/Imprevisto ai fini della ripartizione 50/30/20
   created_at: string;
 }
 
@@ -144,6 +145,7 @@ export interface Database {
           color?: string;
           monthly_budget?: number | null;
           budget_percent?: number | null;
+          budget_type?: "need" | "want" | "emergency" | null;
           created_at?: string;
         };
         Update: {
@@ -153,6 +155,7 @@ export interface Database {
           color?: string;
           monthly_budget?: number | null;
           budget_percent?: number | null;
+          budget_type?: "need" | "want" | "emergency" | null;
           created_at?: string;
         };
         Relationships: [];

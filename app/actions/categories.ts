@@ -155,6 +155,31 @@ export async function updateCategoryBudgetPercent(id: string, budgetPercent: num
   }
 }
 
+export async function updateCategoryBudgetType(id: string, budgetType: "need" | "want" | "emergency" | null) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase
+      .from("expense_categories")
+      .update({ budget_type: budgetType })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/budget");
+    revalidatePath("/dashboard/settings");
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function deleteCategory(id: string) {
   try {
     const supabase = (await createClient()) as any;

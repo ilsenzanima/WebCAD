@@ -32,6 +32,7 @@ export async function createSchedule(formData: {
   description: string;
   due_date: string;
   recurrence: "one-time" | "weekly" | "monthly" | "yearly";
+  budget_id?: string | null;
 }) {
   try {
     const supabase = (await createClient()) as any;
@@ -47,6 +48,7 @@ export async function createSchedule(formData: {
       description: formData.description || null,
       due_date: formData.due_date,
       recurrence: formData.recurrence,
+      budget_id: formData.budget_id || null,
       is_paid: false,
     }).select("*, expense_categories(name, color), suppliers(name)").single();
 
@@ -54,6 +56,7 @@ export async function createSchedule(formData: {
 
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/schedules");
+    revalidatePath("/dashboard/budget");
     revalidatePath("/dashboard/calendar");
     return { success: true, data };
   } catch (err: any) {
