@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getSupplierDetail } from "@/app/actions/suppliers";
+import { getCategories } from "@/app/actions/categories";
 import { getGoogleConnectionStatus } from "@/app/actions/google";
 import SupplierDetailClient from "@/app/ui/dashboard/SupplierDetailClient";
 
@@ -25,7 +26,10 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
   if (!user) redirect("/login");
 
   const { id } = await params;
-  const data = await getSupplierDetail(id);
+  const [data, categories] = await Promise.all([
+    getSupplierDetail(id),
+    getCategories().catch(() => []),
+  ]);
   if (!data || !data.supplier) return notFound();
 
   const { connected: googleConnected } = await getGoogleConnectionStatus();
@@ -36,6 +40,7 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
       expenses={data.expenses}
       schedules={data.schedules}
       documents={data.documents}
+      categories={categories}
       googleConnected={googleConnected}
     />
   );

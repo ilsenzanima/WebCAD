@@ -3,8 +3,8 @@
 import { useState, useTransition, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type Supplier, type SupplierDocument } from "@/lib/types/database";
-import { createSupplierDocument, deleteSupplierDocument } from "@/app/actions/documents";
+import { type Supplier, type SupplierDocument, type ExpenseCategory } from "@/lib/types/database";
+import { createDocumentWithFinancials, deleteSupplierDocument } from "@/app/actions/documents";
 import { updateSupplier } from "@/app/actions/suppliers";
 import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
 import { formatCurrency, formatFileSize, formatDate, toLocalDateStr } from "@/lib/format";
@@ -15,6 +15,7 @@ interface SupplierDetailClientProps {
   expenses: any[];
   schedules: any[];
   documents: SupplierDocument[];
+  categories: ExpenseCategory[];
   googleConnected: boolean;
 }
 
@@ -23,6 +24,7 @@ export default function SupplierDetailClient({
   expenses,
   schedules,
   documents: initialDocuments,
+  categories,
   googleConnected,
 }: SupplierDetailClientProps) {
   const [documents, setDocuments] = useState<SupplierDocument[]>(initialDocuments);
@@ -72,12 +74,25 @@ export default function SupplierDetailClient({
   const [fileName, setFileName] = useState<string>("");
   const [fileSize, setFileSize] = useState<number | null>(null);
 
+  // Dati finanziari facoltativi: se inserisci un importo, in base al check "Pagato"
+  // viene creata una Spesa (gia' pagata) o una Scadenza (da saldare) collegata al documento.
+  const [docAmount, setDocAmount] = useState("");
+  const [docCategoryId, setDocCategoryId] = useState(categories[0]?.id || "");
+  const [docConsumptionValue, setDocConsumptionValue] = useState("");
+  const [docIsPaid, setDocIsPaid] = useState(true);
+  const [docDate, setDocDate] = useState(toLocalDateStr());
+
   const resetDocForm = () => {
     setDocTitle("");
     setDocType("bolletta");
     setSelectedFile(null);
     setFileName("");
     setFileSize(null);
+    setDocAmount("");
+    setDocCategoryId(categories[0]?.id || "");
+    setDocConsumptionValue("");
+    setDocIsPaid(true);
+    setDocDate(toLocalDateStr());
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,6 +122,20 @@ export default function SupplierDetailClient({
       alert("Collega prima il tuo account Google Drive per poter caricare la bolletta.");
       return;
     }
+    const amountNum = docAmount.trim() ? Number(docAmount) : null;
+    if (docAmount.trim() && (isNaN(amountNum as number) || (amountNum as number) <= 0)) {
+      alert("Inserisci un importo valido");
+      return;
+    }
+    if (amountNum && !docDate) {
+      alert("Inserisci una data di pagamento o di scadenza");
+      return;
+    }
+    const consumptionNum = docConsumptionValue.trim() ? Number(docConsumptionValue) : null;
+    if (docConsumptionValue.trim() && (isNaN(consumptionNum as number) || (consumptionNum as number) < 0)) {
+      alert("Inserisci un consumo valido");
+      return;
+    }
 
     startTransition(async () => {
       try {
@@ -123,16 +152,22 @@ export default function SupplierDetailClient({
         }
 
         const finalFileUrl = driveRes.data.webViewLink || driveRes.data.webContentLink || `https://drive.google.com/file/d/${driveRes.data.id}/view`;
+        const category = categories.find(c => c.id === docCategoryId);
 
-        const res = await createSupplierDocument({
+        const res = await createDocumentWithFinancials({
           supplier_id: supplier.id,
           title: docTitle.trim(),
           file_url: finalFileUrl,
-          provider: "gdrive",
           file_size: fileSize,
           doc_type: docType,
           gdrive_file_id: driveRes.data.id,
           document_year: new Date().getFullYear(),
+          amount: amountNum,
+          category_id: amountNum ? docCategoryId || null : null,
+          category_name: category?.name || "Generica",
+          consumption_value: consumptionNum,
+          is_paid: docIsPaid,
+          date: amountNum ? docDate : null,
         });
 
         if (!res.success || !res.data) {
@@ -140,7 +175,7 @@ export default function SupplierDetailClient({
           return;
         }
 
-        setDocuments(prev => [res.data, ...prev]);
+        setDocuments(prev => [res.data.document, ...prev]);
         resetDocForm();
       } catch (err: any) {
         alert(err.message || "Errore durante il caricamento");
@@ -520,6 +555,81 @@ export default function SupplierDetailClient({
                 <span>{formatFileSize(fileSize)}</span>
               </div>
             )}
+
+            {/* Dati finanziari facoltativi collegati al documento */}
+            <div className="border-t border-zinc-800 pt-3 space-y-3">
+              <p className="text-[9px] text-zinc-500">Facoltativo: inserisci l'importo per registrare subito anche la Spesa o la Scadenza collegata a questo documento.</p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Importo (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={docAmount}
+                    onChange={(e) => setDocAmount(e.target.value)}
+                    placeholder="es. 85.50"
+                    className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Categoria</label>
+                  <select
+                    value={docCategoryId}
+                    onChange={(e) => setDocCategoryId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
+                  >
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {supplierState.is_utility && (
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Consumo del periodo ({supplierState.consumption_unit || "unità"})
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={docConsumptionValue}
+                    onChange={(e) => setDocConsumptionValue(e.target.value)}
+                    placeholder={`es. 320 ${supplierState.consumption_unit || ""}`}
+                    className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  id="supplier-doc-paid"
+                  type="checkbox"
+                  checked={docIsPaid}
+                  onChange={(e) => setDocIsPaid(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded accent-emerald-500"
+                />
+                <label htmlFor="supplier-doc-paid" className="text-[10px] font-bold text-zinc-300">Pagato</label>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                  {docIsPaid ? "Data pagamento" : "Data di scadenza"}
+                </label>
+                <input
+                  type="date"
+                  value={docDate}
+                  onChange={(e) => setDocDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
+                />
+                <p className="text-[8px] text-zinc-600">
+                  {docIsPaid ? "Verrà creata una Spesa già registrata." : "Verrà creata una Scadenza da saldare."}
+                </p>
+              </div>
+            </div>
 
             <button
               type="submit"

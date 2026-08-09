@@ -11,7 +11,7 @@ import {
   GOOGLE_CONFIG,
 } from "@/lib/gdrive";
 import { getOrCreateDedicatedGoogleCalendar, syncScheduleToGoogleCalendar } from "@/lib/gcalendar";
-import { createSupplierDocument } from "@/app/actions/documents";
+import { createDocumentWithFinancials } from "@/app/actions/documents";
 
 const EXPIRY_SAFETY_BUFFER_MS = 60 * 1000;
 
@@ -165,6 +165,12 @@ export async function assignScansioneDocument({
   year,
   title,
   docType,
+  amount,
+  categoryId,
+  categoryName,
+  consumptionValue,
+  isPaid,
+  date,
 }: {
   fileId: string;
   fileSize?: number | null;
@@ -173,6 +179,12 @@ export async function assignScansioneDocument({
   year: number;
   title: string;
   docType: "contratto" | "bolletta" | "altro";
+  amount?: number | null;
+  categoryId?: string | null;
+  categoryName?: string;
+  consumptionValue?: number | null;
+  isPaid?: boolean;
+  date?: string | null;
 }) {
   try {
     const supabase = (await createClient()) as any;
@@ -195,15 +207,20 @@ export async function assignScansioneDocument({
 
     const fileUrl = moved.webViewLink || moved.webContentLink || `https://drive.google.com/file/d/${fileId}/view`;
 
-    const docRes = await createSupplierDocument({
+    const docRes = await createDocumentWithFinancials({
       supplier_id: supplierId,
       title,
       file_url: fileUrl,
-      provider: "gdrive",
+      gdrive_file_id: fileId,
       file_size: fileSize ?? null,
       doc_type: docType,
-      gdrive_file_id: fileId,
       document_year: year,
+      amount,
+      category_id: categoryId,
+      category_name: categoryName,
+      consumption_value: consumptionValue,
+      is_paid: isPaid,
+      date,
     });
 
     if (!docRes.success) throw new Error(docRes.error || "Errore durante la creazione del documento");

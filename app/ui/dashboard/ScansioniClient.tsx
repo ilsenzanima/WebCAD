@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import { type Supplier } from "@/lib/types/database";
+import { type Supplier, type ExpenseCategory } from "@/lib/types/database";
 import { assignScansioneDocument } from "@/app/actions/google";
 import { createSupplier } from "@/app/actions/suppliers";
-import { formatFileSize } from "@/lib/format";
+import { formatFileSize, toLocalDateStr } from "@/lib/format";
 import { InboxIcon } from "./icons";
 
 interface ScanDocument {
@@ -20,6 +20,7 @@ interface ScanDocument {
 interface ScansioniClientProps {
   initialDocuments: ScanDocument[];
   suppliers: Supplier[];
+  categories: ExpenseCategory[];
   googleConnected: boolean;
   loadError: string | null;
   scansioniFolderUrl: string;
@@ -34,6 +35,7 @@ function stripExtension(name: string) {
 export default function ScansioniClient({
   initialDocuments,
   suppliers,
+  categories,
   googleConnected,
   loadError,
   scansioniFolderUrl,
@@ -50,11 +52,20 @@ export default function ScansioniClient({
   const [title, setTitle] = useState("");
   const [titleTouched, setTitleTouched] = useState(false);
 
+  // Dati finanziari facoltativi: se inserisci un importo, in base al check "Pagato"
+  // viene creata una Spesa (gia' pagata) o una Scadenza (da saldare) collegata al documento.
+  const [amount, setAmount] = useState("");
+  const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
+  const [consumptionValue, setConsumptionValue] = useState("");
+  const [isPaid, setIsPaid] = useState(true);
+  const [date, setDate] = useState(toLocalDateStr());
+
   const [showNewSupplier, setShowNewSupplier] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState("");
 
   const total = documents.length;
   const current = documents[currentIndex] || null;
+  const selectedSupplier = suppliersList.find((s) => s.id === supplierId) || null;
 
   const resetFormFor = (doc: ScanDocument | null) => {
     setSupplierId("");
@@ -62,6 +73,11 @@ export default function ScansioniClient({
     setDocType("bolletta");
     setTitle(doc ? stripExtension(doc.name) : "");
     setTitleTouched(false);
+    setAmount("");
+    setCategoryId(categories[0]?.id || "");
+    setConsumptionValue("");
+    setIsPaid(true);
+    setDate(toLocalDateStr());
     setShowNewSupplier(false);
     setNewSupplierName("");
     setError(null);
@@ -110,9 +126,24 @@ export default function ScansioniClient({
       setError("Fornitore non valido");
       return;
     }
+    const amountNum = amount.trim() ? Number(amount) : null;
+    if (amount.trim() && (isNaN(amountNum as number) || (amountNum as number) <= 0)) {
+      setError("Inserisci un importo valido");
+      return;
+    }
+    if (amountNum && !date) {
+      setError("Inserisci una data di pagamento o di scadenza");
+      return;
+    }
+    const consumptionNum = consumptionValue.trim() ? Number(consumptionValue) : null;
+    if (consumptionValue.trim() && (isNaN(consumptionNum as number) || (consumptionNum as number) < 0)) {
+      setError("Inserisci un consumo valido");
+      return;
+    }
 
     setError(null);
     const docBeingAssigned = current;
+    const category = categories.find((c) => c.id === categoryId);
 
     startTransition(async () => {
       const res = await assignScansioneDocument({
@@ -123,6 +154,12 @@ export default function ScansioniClient({
         year: yearNum,
         title: effectiveTitle.trim() || stripExtension(docBeingAssigned.name),
         docType,
+        amount: amountNum,
+        categoryId: amountNum ? categoryId || null : null,
+        categoryName: category?.name || "Generica",
+        consumptionValue: consumptionNum,
+        isPaid,
+        date: amountNum ? date : null,
       });
 
       if (!res.success) {
@@ -331,6 +368,80 @@ export default function ScansioniClient({
                 onChange={(e) => { setTitle(e.target.value); setTitleTouched(true); }}
                 className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-900"
               />
+            </div>
+
+            <div className="border-t border-zinc-800 pt-3 space-y-3">
+              <p className="text-[9px] text-zinc-500">Facoltativo: inserisci l'importo per registrare subito anche la Spesa o la Scadenza collegata a questo documento.</p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Importo (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="es. 85.50"
+                    className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-900"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Categoria</label>
+                  <select
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-900"
+                  >
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {selectedSupplier?.is_utility && (
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                    Consumo del periodo ({selectedSupplier.consumption_unit || "unità"})
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={consumptionValue}
+                    onChange={(e) => setConsumptionValue(e.target.value)}
+                    placeholder={`es. 320 ${selectedSupplier.consumption_unit || ""}`}
+                    className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-900"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  id="scansioni-paid"
+                  type="checkbox"
+                  checked={isPaid}
+                  onChange={(e) => setIsPaid(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded accent-emerald-500"
+                />
+                <label htmlFor="scansioni-paid" className="text-[10px] font-bold text-zinc-300">Pagato</label>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
+                  {isPaid ? "Data pagamento" : "Data di scadenza"}
+                </label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-900"
+                />
+                <p className="text-[8px] text-zinc-600">
+                  {isPaid ? "Verrà creata una Spesa già registrata." : "Verrà creata una Scadenza da saldare."}
+                </p>
+              </div>
             </div>
 
             {current?.size != null && (
