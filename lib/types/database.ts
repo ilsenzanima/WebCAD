@@ -64,6 +64,7 @@ export interface Expense {
   account_id: string | null; // FK -> accounts.id
   consumption_value: number | null; // consumo del periodo (unita' definita da suppliers.consumption_unit)
   is_income: boolean;
+  is_emergency: boolean; // segnata come imprevisto al momento della registrazione, a prescindere dal tipo della categoria
   created_at: string;
   updated_at: string;
 }
@@ -76,12 +77,15 @@ export interface PaymentSchedule {
   description: string | null;
   due_date: string;
   is_paid: boolean;
-  recurrence: "one-time" | "weekly" | "monthly" | "yearly";
+  recurrence: "one-time" | "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "yearly";
   category_id: string | null; // FK -> expense_categories.id
   supplier_id: string | null; // FK -> suppliers.id
-  budget_id: string | null; // FK -> budgets.id (se generata da una voce di budget ricorrente)
+  budget_id: string | null; // FK -> budgets.id (legacy: collegamento a una vecchia voce di budget)
   google_event_id: string | null;
   was_rescheduled: boolean; // true se spostata col pulsante "Ripianifica" dopo essere risultata scaduta
+  end_month: number | null; // 1-12, ultimo mese in cui questa scadenza ricorrente e' attiva (es. fine finanziamento)
+  end_year: number | null;
+  is_estimated: boolean; // true se l'importo e' una stima e non un valore certo
   created_at: string;
   updated_at: string;
 }
@@ -200,6 +204,7 @@ export interface Database {
           account_id?: string | null;
           consumption_value?: number | null;
           is_income?: boolean;
+          is_emergency?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -217,6 +222,7 @@ export interface Database {
           account_id?: string | null;
           consumption_value?: number | null;
           is_income?: boolean;
+          is_emergency?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -324,12 +330,15 @@ export interface Database {
           description?: string | null;
           due_date: string;
           is_paid?: boolean;
-          recurrence?: "one-time" | "weekly" | "monthly" | "yearly";
+          recurrence?: "one-time" | "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "yearly";
           category_id?: string | null;
           supplier_id?: string | null;
           budget_id?: string | null;
           google_event_id?: string | null;
           was_rescheduled?: boolean;
+          end_month?: number | null;
+          end_year?: number | null;
+          is_estimated?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -341,12 +350,15 @@ export interface Database {
           description?: string | null;
           due_date?: string;
           is_paid?: boolean;
-          recurrence?: "one-time" | "weekly" | "monthly" | "yearly";
+          recurrence?: "one-time" | "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "yearly";
           category_id?: string | null;
           supplier_id?: string | null;
           budget_id?: string | null;
           google_event_id?: string | null;
           was_rescheduled?: boolean;
+          end_month?: number | null;
+          end_year?: number | null;
+          is_estimated?: boolean;
           created_at?: string;
           updated_at?: string;
         };

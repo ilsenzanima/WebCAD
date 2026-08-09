@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo } from "react";
 import { type Budget, type BudgetOverride } from "@/lib/types/database";
-import { upsertBudgetOverride } from "@/app/actions/budget";
 import { formatCurrency } from "@/lib/format";
 import { getEffectiveAmount } from "@/lib/budgetCalc";
+import { getNextDueDate, isRecurrenceEnded } from "@/lib/recurrence";
 
 interface BudgetWithRelations extends Omit<Budget, "amount"> {
   amount: number;
@@ -15,7 +15,6 @@ interface BudgetWithRelations extends Omit<Budget, "amount"> {
 interface BudgetForecastProps {
   budgets: BudgetWithRelations[];
   overrides: BudgetOverride[];
-  setOverrides: React.Dispatch<React.SetStateAction<BudgetOverride[]>>;
   schedules: any[];
   baseYear: number;
   baseMonth: number; // 1-12, di solito il mese corrente reale
@@ -35,86 +34,65 @@ function addMonths(year: number, month: number, delta: number) {
   return { year: y, month: m };
 }
 
-export default function BudgetForecast({
-  budgets, overrides, setOverrides, schedules, baseYear, baseMonth, onSelectMonth, selectedYear, selectedMonth,
-}: BudgetForecastProps) {
-  const [isPending, startTransition] = useTransition();
-  const [movingKey, setMovingKey] = useState<string | null>(null);
+// Le uscite non vivono piu' nelle voci di budget: si proietta in avanti la ricorrenza di ogni
+// scadenza non ancora saldata (unica occorrenza "attiva" per ogni impegno ricorrente, dato che
+// pagarla ne genera subito una nuova per il ciclo successivo) per capire se ricade nel mese
+// richiesto, fermandosi alla sua eventuale data di fine (es. ultima rata di un finanziamento).
+function amountForMonth(schedule: any, year: number, month: number): number | null {
+  const due = new Date(schedule.due_date);
+  const dueYear = due.getFullYear();
+  const dueMonth = due.getMonth() + 1;
 
+  if (dueYear === year && dueMonth === month) return Number(schedule.amount);
+  if (schedule.recurrence === "one-time") return null;
+
+  const isAfter = year > dueYear || (year === dueYear && month > dueMonth);
+  if (!isAfter) return null;
+
+  let cursor = schedule.due_date;
+  for (let i = 0; i < 24; i++) {
+    cursor = getNextDueDate(cursor, schedule.recurrence);
+    if (isRecurrenceEnded(cursor, schedule.end_month, schedule.end_year)) return null;
+    const d = new Date(cursor);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    if (y === year && m === month) return Number(schedule.amount);
+    if (y > year || (y === year && m > month)) return null;
+  }
+  return null;
+}
+
+export default function BudgetForecast({
+  budgets, overrides, schedules, baseYear, baseMonth, onSelectMonth, selectedYear, selectedMonth,
+}: BudgetForecastProps) {
   const months = useMemo(() => {
     return Array.from({ length: MONTHS_AHEAD }, (_, i) => addMonths(baseYear, baseMonth, i));
   }, [baseYear, baseMonth]);
 
+  // Solo le scadenze non ancora saldate: quella pagata ha gia' generato la successiva occorrenza
+  // (se ricorrente), quindi usarle entrambe come base di proiezione conterebbe gli stessi mesi due volte.
+  const activeSchedules = useMemo(() => schedules.filter((s: any) => !s.is_paid), [schedules]);
+
   const monthsData = useMemo(() => {
     return months.map(({ year, month }) => {
-      const items = budgets
-        .map(b => ({ budget: b, amount: getEffectiveAmount(b, overrides, year, month) }))
-        .filter(x => x.amount > 0);
+      const income = budgets
+        .filter(b => b.type === "income")
+        .reduce((sum, b) => sum + getEffectiveAmount(b, overrides, year, month), 0);
 
-      const income = items.filter(x => x.budget.type === "income").reduce((s, x) => s + x.amount, 0);
-
-      const budgetOutgoingItems = items
-        .filter(x => x.budget.type !== "income")
-        .map(x => ({ kind: "budget" as const, key: x.budget.id, label: x.budget.label, amount: x.amount, budget: x.budget }));
-
-      // Scadenze non collegate a nessuna voce di budget: senza queste, il previsto del mese
-      // qui risultava incompleto rispetto a quanto mostrato in "Voci di Budget Pianificate".
-      const scheduleOutgoingItems = schedules
-        .filter((s: any) => {
-          if (s.budget_id) return false;
-          const sDate = new Date(s.due_date);
-          return sDate.getFullYear() === year && sDate.getMonth() + 1 === month;
+      const outgoingItems = activeSchedules
+        .map((s: any) => {
+          const amount = amountForMonth(s, year, month);
+          if (amount === null) return null;
+          return { key: `sched-${s.id}`, label: s.description || s.category, amount };
         })
-        .map((s: any) => ({ kind: "schedule" as const, key: `sched-${s.id}`, label: s.description || s.category, amount: Number(s.amount) }));
+        .filter((x): x is { key: string; label: string; amount: number } => x !== null)
+        .sort((a, b) => b.amount - a.amount);
 
-      const outgoingItems = [...budgetOutgoingItems, ...scheduleOutgoingItems].sort((a, b) => b.amount - a.amount);
       const outgoings = outgoingItems.reduce((s, x) => s + x.amount, 0);
 
       return { year, month, income, outgoings, saldo: income - outgoings, outgoingItems };
     });
-  }, [months, budgets, overrides, schedules]);
-
-  const moveToNextMonth = (b: BudgetWithRelations, year: number, month: number, amount: number) => {
-    const { year: nextYear, month: nextMonth } = addMonths(year, month, 1);
-    const nextCurrent = getEffectiveAmount(b, overrides, nextYear, nextMonth);
-    const nextTotal = nextCurrent + amount;
-
-    if (!confirm(
-      `Spostare "${b.label}" (${formatCurrency(amount)}) da ${MONTH_SHORT[month - 1]} ${year} a ${MONTH_SHORT[nextMonth - 1]} ${nextYear}?\n\n` +
-      `${MONTH_SHORT[month - 1]}: passera' a 0€ per questa voce.\n` +
-      `${MONTH_SHORT[nextMonth - 1]}: passera' da ${formatCurrency(nextCurrent)} a ${formatCurrency(nextTotal)}.`
-    )) {
-      return;
-    }
-
-    const key = `${b.id}-${year}-${month}`;
-    setMovingKey(key);
-    startTransition(async () => {
-      try {
-        const res1 = await upsertBudgetOverride({ budget_id: b.id, year, month, amount: 0 });
-        if (!res1.success || !res1.data) {
-          alert(res1.error || "Errore durante lo spostamento");
-          return;
-        }
-        const res2 = await upsertBudgetOverride({ budget_id: b.id, year: nextYear, month: nextMonth, amount: nextTotal });
-        if (!res2.success || !res2.data) {
-          alert(res2.error || "Errore durante lo spostamento");
-          return;
-        }
-        setOverrides(prev => {
-          const filtered = prev.filter(o =>
-            !(o.budget_id === b.id && o.year === year && o.month === month) &&
-            !(o.budget_id === b.id && o.year === nextYear && o.month === nextMonth)
-          );
-          return [...filtered, res1.data, res2.data];
-        });
-      } catch (err: any) {
-        alert(err.message || "Errore durante lo spostamento");
-      } finally {
-        setMovingKey(null);
-      }
-    });
-  };
+  }, [months, budgets, overrides, activeSchedules]);
 
   return (
     <div
@@ -128,7 +106,7 @@ export default function BudgetForecast({
         <div>
           <h3 className="text-sm font-extrabold text-white tracking-wide">🗓️ Panoramica Prossimi Mesi</h3>
           <p className="text-[10px] text-zinc-500 mt-1">
-            Confronta entrate e uscite previste dei prossimi {MONTHS_AHEAD} mesi. Passa il mouse su una voce per spostarla al mese successivo.
+            Confronta entrate previste e uscite proiettate dalle Scadenze ricorrenti dei prossimi {MONTHS_AHEAD} mesi. Per spostare un impegno a un mese diverso, ripianificalo direttamente in Scadenze.
           </p>
         </div>
       </div>
@@ -179,28 +157,14 @@ export default function BudgetForecast({
 
               {outgoingItems.length > 0 && (
                 <div className="pt-1 border-t border-zinc-800/40 space-y-1 max-h-28 overflow-y-auto">
-                  {outgoingItems.map((item) => {
-                    const moveKey = item.kind === "budget" ? `${item.budget.id}-${year}-${month}` : null;
-                    return (
-                      <div key={item.key} className="flex items-center justify-between gap-1 group/item">
-                        <span className="text-[8px] text-zinc-400 truncate flex-1" title={item.label}>
-                          {item.kind === "schedule" && "📅 "}{item.label}
-                        </span>
-                        <span className="text-[8px] text-zinc-300 font-semibold whitespace-nowrap">{formatCurrency(item.amount)}</span>
-                        {item.kind === "budget" && (
-                          <button
-                            type="button"
-                            onClick={() => moveToNextMonth(item.budget, year, month, item.amount)}
-                            disabled={isPending && movingKey === moveKey}
-                            className="opacity-0 group-hover/item:opacity-100 text-[9px] text-amber-500 hover:text-amber-300 transition-all disabled:opacity-50 flex-shrink-0"
-                            title={`Sposta "${item.label}" al mese successivo`}
-                          >
-                            {isPending && movingKey === moveKey ? "…" : "➡"}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {outgoingItems.map((item) => (
+                    <div key={item.key} className="flex items-center justify-between gap-1">
+                      <span className="text-[8px] text-zinc-400 truncate flex-1" title={item.label}>
+                        📅 {item.label}
+                      </span>
+                      <span className="text-[8px] text-zinc-300 font-semibold whitespace-nowrap">{formatCurrency(item.amount)}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
