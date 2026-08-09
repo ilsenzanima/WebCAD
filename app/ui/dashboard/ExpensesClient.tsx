@@ -80,6 +80,7 @@ export default function ExpensesClient({
   const [date, setDate] = useState(toLocalDateStr());
   const [consumptionValue, setConsumptionValue] = useState("");
   const [accountId, setAccountId] = useState("");
+  const [isEmergency, setIsEmergency] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -130,6 +131,7 @@ export default function ExpensesClient({
     setDate(toLocalDateStr());
     setConsumptionValue("");
     setAccountId("");
+    setIsEmergency(false);
     setEditingId(null);
     setNewDocFile(null);
     setNewDocType("bolletta");
@@ -281,6 +283,7 @@ export default function ExpensesClient({
           description,
           date,
           is_income: isIncomeMode,
+          is_emergency: !isIncomeMode && isEmergency,
           consumption_value: (!isIncomeMode && selectedSupplier?.is_utility && consumptionValue)
             ? Number(consumptionValue)
             : null,
@@ -341,6 +344,7 @@ export default function ExpensesClient({
     setDate(exp.date);
     setConsumptionValue(exp.consumption_value != null ? String(exp.consumption_value) : "");
     setAccountId(exp.account_id || "");
+    setIsEmergency((exp as any).is_emergency || false);
     setNewDocFile(null);
   };
 
@@ -730,6 +734,26 @@ export default function ExpensesClient({
                   </div>
                 )}
 
+                {/* Imprevisto: spesa non pianificata, segnata a prescindere dal tipo di default della categoria */}
+                {!isIncomeMode && (
+                  <label
+                    className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider cursor-pointer p-3 rounded-xl border"
+                    style={{
+                      background: isEmergency ? "hsla(38, 90%, 50%, 0.08)" : "hsl(240 10% 4% / 0.8)",
+                      borderColor: isEmergency ? "hsla(38, 90%, 50%, 0.4)" : "hsl(240 5% 18%)",
+                      color: isEmergency ? "hsl(38 90% 65%)" : "hsl(240 5% 65%)",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isEmergency}
+                      onChange={(e) => setIsEmergency(e.target.checked)}
+                      className="accent-amber-500"
+                    />
+                    ⚠️ Imprevisto (spesa non pianificata)
+                  </label>
+                )}
+
                 {/* Data */}
                 <div className="space-y-1.5">
                   <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Data registrata</label>
@@ -1013,6 +1037,11 @@ export default function ExpensesClient({
                                 {exp.schedule_id && (
                                   <div className="text-[8px] text-amber-500/80 font-bold uppercase tracking-wider mt-0.5">
                                     📅 Da scadenza pagata
+                                  </div>
+                                )}
+                                {(exp as any).is_emergency && (
+                                  <div className="text-[8px] text-rose-400/90 font-bold uppercase tracking-wider mt-0.5">
+                                    ⚠️ Imprevisto
                                   </div>
                                 )}
                               </td>

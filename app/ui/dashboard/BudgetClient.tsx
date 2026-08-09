@@ -1,14 +1,12 @@
 "use client";
 
 import { useState, useTransition, useMemo, Fragment } from "react";
-import Link from "next/link";
 import { type Budget, type BudgetOverride, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createBudget, updateBudget, deleteBudget, upsertBudgetOverride, deleteBudgetOverride, confirmBudgetExpense } from "@/app/actions/budget";
 import { updateCategoryBudget, updateCategoryBudgetPercent, updateCategoryBudgetType } from "@/app/actions/categories";
-import { generateScheduleFromBudget } from "@/app/actions/schedules";
 import { formatCurrency } from "@/lib/format";
 import { getMonthlyEquivalent as getMonthlyEquivalentBase, isBudgetEnded as isBudgetEndedBase, getEffectiveAmount as getEffectiveAmountBase, BUDGET_PERIODS as PERIODS } from "@/lib/budgetCalc";
-import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
+import { DeleteIcon } from "./icons";
 import BudgetForecast from "./BudgetForecast";
 import { getCategoryBadgeStyle } from "@/lib/categoryColors";
 
@@ -61,11 +59,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     });
   };
 
-  // Generazione di una scadenza da pagare a partire da una voce di budget ricorrente
-  const [generatingScheduleBudgetId, setGeneratingScheduleBudgetId] = useState<string | null>(null);
-  const [scheduleAmount, setScheduleAmount] = useState("");
-  const [scheduleDate, setScheduleDate] = useState("");
-
   // Mese selezionato per l'analisi previsto/reale (default: mese corrente)
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
@@ -82,12 +75,11 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
   const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth() + 1;
 
-  // Stati del form (creazione/modifica voce di budget)
+  // Stati del form (modifica di una previsione di Entrata gia' esistente: le uscite si
+  // creano/modificano ora solo da Scadenze, qui restano solo le entrate ricorrenti previste,
+  // es. lo stipendio mensile - vedi "Entrate Previste" piu' sotto).
   const [editingId, setEditingId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [supplierId, setSupplierId] = useState("");
-  const [type, setType] = useState<"income" | "need" | "want" | "emergency">("need");
   const [label, setLabel] = useState("");
   const [periodicity, setPeriodicity] = useState<"weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual">("monthly");
   const [isEstimated, setIsEstimated] = useState(false);
@@ -108,8 +100,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
   const resetForm = () => {
     setEditingId(null);
     setAmount("");
-    setCategoryId("");
-    setSupplierId("");
     setLabel("");
     setPeriodicity("monthly");
     setIsEstimated(false);
@@ -122,9 +112,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
   const startEditBudget = (b: BudgetWithRelations) => {
     setEditingId(b.id);
     setAmount(String(b.amount));
-    setCategoryId(b.category_id || "");
-    setSupplierId(b.supplier_id || "");
-    setType(b.type);
     setLabel(b.label);
     setPeriodicity(b.periodicity);
     setIsEstimated(b.is_estimated);
@@ -189,12 +176,12 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
       try {
         const payload = {
           amount: Number(amount),
-          category_id: type === "income" ? null : (categoryId || null),
-          supplier_id: type === "income" ? null : (supplierId || null),
-          type,
+          category_id: null,
+          supplier_id: null,
+          type: "income" as const,
           label: label.trim(),
-          periodicity: type === "income" ? "monthly" : periodicity,
-          is_estimated: isEstimated, // Abilitato anche per le entrate
+          periodicity,
+          is_estimated: isEstimated,
           end_month: endMonth,
           end_year: endYear,
           day_of_month: dayOfMonthValue,
@@ -325,53 +312,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     });
   };
 
-  // Trova l'eventuale scadenza gia' generata per questa voce di budget nel mese indicato
-  const findLinkedSchedule = (budgetId: string, year: number, month: number) =>
-    schedules.find((s: any) => {
-      if (s.budget_id !== budgetId) return false;
-      const sDate = new Date(s.due_date);
-      return sDate.getFullYear() === year && sDate.getMonth() + 1 === month;
-    });
-
-  const startGenerateSchedule = (b: BudgetWithRelations) => {
-    setGeneratingScheduleBudgetId(b.id);
-    setScheduleAmount(String(getEffectiveAmount(b, selectedYear, selectedMonth)));
-    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
-    const day = Math.min(b.day_of_month || Math.min(now.getDate(), daysInMonth), daysInMonth);
-    setScheduleDate(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
-  };
-
-  const cancelGenerateSchedule = () => {
-    setGeneratingScheduleBudgetId(null);
-    setScheduleAmount("");
-    setScheduleDate("");
-  };
-
-  const saveGenerateSchedule = (b: BudgetWithRelations) => {
-    const value = Number(scheduleAmount);
-    if (isNaN(value) || value <= 0) {
-      alert("Inserisci un importo valido");
-      return;
-    }
-    if (!scheduleDate) {
-      alert("Inserisci una data valida");
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const res = await generateScheduleFromBudget(b.id, { amount: value, due_date: scheduleDate, recurrence: "monthly" });
-        if (!res.success || !res.data) {
-          alert(res.error || "Errore durante la generazione della scadenza");
-          return;
-        }
-        setSchedules(prev => [res.data, ...prev]);
-        cancelGenerateSchedule();
-      } catch (err: any) {
-        alert(err.message || "Errore durante la generazione della scadenza");
-      }
-    });
-  };
 
   const startEditCategoryBudget = (cat: ExpenseCategory) => {
     setEditingCategoryBudgetId(cat.id);
@@ -497,16 +437,14 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
   }, [currentMonthTransactions]);
 
   // Classificazione Bisogno/Desiderio/Imprevisto delle spese reali del mese, per il confronto
-  // pianificato/reale nella Ripartizione 50/30/20: una spesa collegata a una voce di budget
-  // eredita il tipo di quella voce; altrimenti usa il tipo impostato sulla sua categoria
-  // (Confronto Uscite per Categoria); se nessuno dei due e' definito resta "non classificata".
+  // pianificato/reale nella Ripartizione 50/30/20: una spesa segnata "Imprevisto" al momento
+  // della registrazione (spunta in Spese & Entrate) conta sempre come tale; altrimenti usa il
+  // tipo impostato sulla sua categoria (Confronto Uscite per Categoria); se la categoria non ha
+  // un tipo impostato resta "non classificata".
   const realSpendingByType = useMemo(() => {
-    const budgetTypeById: Record<string, string> = {};
-    budgets.forEach(b => { budgetTypeById[b.id] = b.type; });
-
     let need = 0, want = 0, emergency = 0, unclassified = 0;
     currentMonthTransactions.filter(t => !t.is_income).forEach((e: any) => {
-      const type = (e.budget_id && budgetTypeById[e.budget_id]) || categories.find(c => c.id === e.category_id)?.budget_type || null;
+      const type = e.is_emergency ? "emergency" : (categories.find(c => c.id === e.category_id)?.budget_type || null);
       const amt = Number(e.amount);
       if (type === "need") need += amt;
       else if (type === "want") want += amt;
@@ -515,77 +453,63 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     });
 
     return { need, want, emergency, unclassified };
-  }, [currentMonthTransactions, budgets, categories]);
+  }, [currentMonthTransactions, categories]);
 
-  // Scadenze (Scadenze & Pagamenti) con categoria/data ma non collegate a nessuna voce di budget:
-  // vanno comunque contate come spesa prevista del mese, altrimenti restano invisibili nel Budget.
-  // Contano solo per il mese della loro data di scadenza: una scadenza scaduta e non ancora
-  // saldata NON viene trascinata nel mese corrente, per non farla contare due volte (nel mese
-  // in cui era originariamente prevista e in quello in corso) finche' l'utente non la salda o
-  // la ripianifica (pulsante "Ripianifica" in Scadenze) a una nuova data.
-  const unlinkedScheduledItemsList = useMemo(() => {
+  // Scadenze (Scadenze & Pagamenti) del mese selezionato: sono l'unica fonte del previsto in
+  // uscita (Bisogno/Desiderio/Imprevisto), dato che le voci di budget non gestiscono piu' le
+  // uscite. Una scadenza conta solo per il mese della sua data di scadenza: se e' scaduta e non
+  // ancora saldata NON viene trascinata nel mese corrente (niente doppio conteggio) finche'
+  // l'utente non la salda o la ripianifica (pulsante "Ripianifica" in Scadenze) a una nuova data.
+  const scheduledItemsList = useMemo(() => {
     return schedules
       .filter((s: any) => {
-        if (s.budget_id) return false; // gia' contato tramite la voce di budget collegata
         const sDate = new Date(s.due_date);
         return sDate.getFullYear() === selectedYear && sDate.getMonth() + 1 === selectedMonth;
       })
       .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
   }, [schedules, selectedYear, selectedMonth]);
 
-  const unlinkedScheduledByCategory = useMemo(() => {
+  const scheduledByCategory = useMemo(() => {
     const map: Record<string, { amount: number; items: { label: string; amount: number }[] }> = {};
-    unlinkedScheduledItemsList.forEach((s: any) => {
+    scheduledItemsList.forEach((s: any) => {
       const catId = s.category_id || "unassigned";
       if (!map[catId]) map[catId] = { amount: 0, items: [] };
       map[catId].amount += Number(s.amount);
       map[catId].items.push({ label: s.description || s.category, amount: Number(s.amount) });
     });
     return map;
-  }, [unlinkedScheduledItemsList]);
+  }, [scheduledItemsList]);
 
-  // Ripartisce le scadenze non pianificate tra Bisogno/Desiderio/Imprevisto usando il tipo
-  // impostato sulla loro categoria (Confronto Uscite per Categoria): prima venivano sommate
-  // sempre e comunque ai "Bisogni", rendendo la classificazione della categoria ininfluente
-  // sul previsto - la spesa reale gia' ne teneva conto, ora anche quella pianificata.
-  const unplannedScheduledByType = useMemo(() => {
+  // Ripartisce le scadenze del mese tra Bisogno/Desiderio/Imprevisto usando il tipo impostato
+  // sulla loro categoria (Confronto Uscite per Categoria); se la categoria non ha un tipo
+  // impostato, di default conta come Bisogno.
+  const scheduledByType = useMemo(() => {
     let need = 0, want = 0, emergency = 0;
-    Object.entries(unlinkedScheduledByCategory).forEach(([catId, data]) => {
+    Object.entries(scheduledByCategory).forEach(([catId, data]) => {
       const type = categories.find(c => c.id === catId)?.budget_type || "need";
       if (type === "want") want += data.amount;
       else if (type === "emergency") emergency += data.amount;
       else need += data.amount;
     });
     return { need, want, emergency };
-  }, [unlinkedScheduledByCategory, categories]);
+  }, [scheduledByCategory, categories]);
 
-  // Calcoli Totali Budget per il mese selezionato (stima di base, corretta dagli eventuali override).
-  // Le scadenze non collegate a nessuna voce di budget vengono comunque sommate: sono spese
-  // previste quel mese (es. bollo auto, assicurazione) anche se non pianificate esplicitamente.
+  // Calcoli Totali per il mese selezionato: le entrate vengono dalle previsioni di Entrata
+  // (uniche voci di budget rimaste), le uscite (Bisogno/Desiderio/Imprevisto) dalle Scadenze
+  // del mese classificate per tipo di categoria.
   const totals = useMemo(() => {
     let income = 0;
-    let need = 0;
-    let want = 0;
-    let emergency = 0;
-
     budgets.forEach(b => {
-      const monthlyAmt = getEffectiveAmount(b, selectedYear, selectedMonth);
-      if (b.type === "income") income += monthlyAmt;
-      else if (b.type === "need") need += monthlyAmt;
-      else if (b.type === "want") want += monthlyAmt;
-      else if (b.type === "emergency") emergency += monthlyAmt;
+      if (b.type === "income") income += getEffectiveAmount(b, selectedYear, selectedMonth);
     });
 
-    need += unplannedScheduledByType.need;
-    want += unplannedScheduledByType.want;
-    emergency += unplannedScheduledByType.emergency;
-
+    const { need, want, emergency } = scheduledByType;
     const totalOutgoings = need + want + emergency;
     const powerOfSpending = income - need; // Entrate - Bisogni
     const remainingBudget = income - totalOutgoings;
 
     return { income, need, want, emergency, totalOutgoings, powerOfSpending, remainingBudget };
-  }, [budgets, overrides, selectedYear, selectedMonth, unplannedScheduledByType]);
+  }, [budgets, overrides, selectedYear, selectedMonth, scheduledByType]);
 
   // Analisi Regola 50/30/20 (Bisogni, Desideri, Risparmio/Imprevisti)
   const ruleAnalysis = useMemo(() => {
@@ -700,7 +624,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     const ensure = (catId: string) => {
       if (map[catId]) return map[catId];
       const catObj = categories.find(c => c.id === catId);
-      const scheduled = unlinkedScheduledByCategory[catId];
+      const scheduled = scheduledByCategory[catId];
       map[catId] = {
         categoryId: catId,
         categoryName: catObj ? catObj.name : "Generica / Altro",
@@ -726,7 +650,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     // Tutte le categorie sono sempre elencate (vista completa), non solo quelle con dati questo mese.
     categories.forEach(cat => ensure(cat.id));
     Object.keys(realExpensesByCategory).forEach(catId => ensure(catId));
-    Object.keys(unlinkedScheduledByCategory).forEach(catId => ensure(catId));
+    Object.keys(scheduledByCategory).forEach(catId => ensure(catId));
 
     return Object.values(map)
       .map(item => ({
@@ -738,7 +662,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
             : item.budgetAmt + item.scheduledAmt,
       }))
       .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
-  }, [budgets, overrides, realExpensesByCategory, categories, categoryRollover, unlinkedScheduledByCategory, totals.income, selectedYear, selectedMonth]);
+  }, [budgets, overrides, realExpensesByCategory, categories, categoryRollover, scheduledByCategory, totals.income, selectedYear, selectedMonth]);
 
   // Percentuale realizzazione entrate
   const incomePercent = totals.income > 0 ? (realIncomeTotal / totals.income) * 100 : 0;
@@ -791,7 +715,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
       <BudgetForecast
         budgets={budgets}
         overrides={overrides}
-        setOverrides={setOverrides}
         schedules={schedules}
         baseYear={now.getFullYear()}
         baseMonth={now.getMonth() + 1}
@@ -830,7 +753,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
           <p className="text-2xl font-black text-white mt-2">{formatCurrency(totals.need)}</p>
           <div className="text-[9px] text-slate-500 mt-1 font-semibold">
             Spese fisse e variabili obbligatorie
-            {unplannedScheduledByType.need > 0 && ` (incluse ${formatCurrency(unplannedScheduledByType.need)} di scadenze non pianificate)`}
+            {scheduledByType.need > 0 && ` (incluse ${formatCurrency(scheduledByType.need)} di scadenze non pianificate)`}
           </div>
         </div>
 
@@ -913,7 +836,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
       <div className="grid grid-cols-1 gap-8">
 
-        {/* Elenco Voci Pianificate */}
+        {/* Entrate Previste */}
         <div
           className="rounded-2xl p-6 border flex flex-col space-y-4 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
@@ -925,25 +848,25 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
           <div className="flex items-center justify-between flex-wrap gap-y-1">
             <h3 className="text-sm font-extrabold text-white tracking-wide">
-              📋 Voci di Budget Pianificate
+              💰 Entrate Previste
             </h3>
             <span className="text-[9px] font-bold text-zinc-500">
               Previsto per {MONTH_LABELS[selectedMonth - 1]} {selectedYear}
             </span>
           </div>
           <p className="text-[10px] text-zinc-500 -mt-2">
-            Per aggiungere una nuova voce, spunta "Aggiungi anche come previsione nel Budget" quando crei una scadenza (Scadenze & Pagamenti) o un'entrata ricorrente (Spese & Entrate). Qui puoi modificare o eliminare quelle già create.
+            Le uscite (Bisogni/Desideri/Imprevisti) si gestiscono ora da Scadenze & Pagamenti; qui restano solo le entrate ricorrenti previste (es. stipendio), che spunti aggiungendo un'entrata in Spese & Entrate.
           </p>
 
           <div className="flex-1 overflow-x-auto pr-1 relative z-10 overflow-y-auto">
-            {budgets.length === 0 && unlinkedScheduledItemsList.length === 0 ? (
-              <p className="text-xs text-slate-500 py-12 text-center">Nessuna voce programmata nel budget.</p>
+            {budgets.length === 0 ? (
+              <p className="text-xs text-slate-500 py-12 text-center">Nessuna entrata prevista ancora registrata.</p>
             ) : (
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b" style={{ borderColor: "hsl(240 5% 18% / 0.7)" }}>
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Descrizione</th>
-                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Tipo & Stima</th>
+                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Stima</th>
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Frequenza</th>
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Stima Base</th>
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Previsto Mese</th>
@@ -952,18 +875,12 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                 </thead>
                 <tbody className="divide-y" style={{ borderColor: "hsl(240 5% 18% / 0.3)" }}>
                   {budgets.map((b) => {
-                    const catName = b.expense_categories?.name || "Generica / Altro";
-                    const catColor = b.expense_categories?.color || "slate";
-                    const badge = getCategoryBadgeStyle(catColor);
-                    const monthlyEquivalent = getMonthlyEquivalent(b.amount, b.periodicity);
                     const override = findOverride(b.id, selectedYear, selectedMonth);
                     const ended = isBudgetEnded(b, selectedYear, selectedMonth);
                     const effectiveAmount = getEffectiveAmount(b, selectedYear, selectedMonth);
                     const isEditingOverride = editingOverrideBudgetId === b.id;
                     const linkedExpense = findLinkedExpense(b.id, selectedYear, selectedMonth);
                     const isConfirming = confirmingBudgetId === b.id;
-                    const linkedSchedule = findLinkedSchedule(b.id, selectedYear, selectedMonth);
-                    const isGeneratingSchedule = generatingScheduleBudgetId === b.id;
                     const isEditingBudget = editingId === b.id;
 
                     return (
@@ -972,26 +889,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                         <td className="py-3 pr-2">
                           <div className="font-bold text-white break-words">{b.label}</div>
                           <div className="flex flex-wrap gap-1 mt-0.5">
-                            {b.type !== "income" && (
-                              <span
-                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border"
-                                style={{
-                                  backgroundColor: badge.bg,
-                                  color: badge.text,
-                                  borderColor: badge.border,
-                                }}
-                              >
-                                {catName}
-                              </span>
-                            )}
-                            {b.suppliers?.name && (
-                              <span
-                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border bg-sky-500/10 text-sky-300 border-sky-500/20"
-                                title="Fornitore preimpostato per questa voce"
-                              >
-                                🏢 {b.suppliers.name}
-                              </span>
-                            )}
                             {b.end_year && b.end_month && (
                               <span
                                 className={`inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border ${
@@ -1015,28 +912,15 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                           </div>
                         </td>
                         <td className="py-3">
-                          <div className="flex flex-col gap-0.5">
-                            <span className={`text-[9px] font-bold ${
-                              b.type === "income"
-                                ? "text-emerald-400"
-                                : b.type === "need"
-                                  ? "text-rose-400"
-                                  : b.type === "want"
-                                    ? "text-sky-400"
-                                    : "text-purple-400"
-                            }`}>
-                              {b.type === "income" ? "Entrata" : b.type === "need" ? "Bisogno" : b.type === "want" ? "Desiderio" : "Imprevisto"}
-                            </span>
-                            <span className={`text-[7px] uppercase font-extrabold tracking-widest ${b.is_estimated ? "text-amber-500" : "text-zinc-500"}`}>
-                              {b.is_estimated ? "Stimato" : "Certo"}
-                            </span>
-                          </div>
+                          <span className={`text-[7px] uppercase font-extrabold tracking-widest ${b.is_estimated ? "text-amber-500" : "text-zinc-500"}`}>
+                            {b.is_estimated ? "Stimato" : "Certo"}
+                          </span>
                         </td>
                         <td className="py-3 text-slate-400 font-semibold uppercase tracking-wider text-[8px]">
-                          {b.type === "income" ? "Mensile" : PERIODS.find(p => p.value === b.periodicity)?.label}
+                          {PERIODS.find(p => p.value === b.periodicity)?.label}
                         </td>
-                        <td className={`py-3 text-right font-black text-xs ${b.type === "income" ? "text-emerald-400" : "text-white"}`}>
-                          {b.type === "income" ? "+" : "-"}{formatCurrency(b.amount)}
+                        <td className="py-3 text-right font-black text-xs text-emerald-400">
+                          +{formatCurrency(b.amount)}
                         </td>
                         <td className="py-3 text-right">
                           {isEditingOverride ? (
@@ -1059,10 +943,8 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                               className="group/ov inline-flex flex-col items-end"
                               title="Modifica l'importo previsto per questo mese"
                             >
-                              <span className={`font-black text-xs group-hover/ov:underline ${
-                                ended && !override ? "text-zinc-600" : b.type === "income" ? "text-emerald-400" : "text-zinc-300"
-                              }`}>
-                                {ended && !override ? "—" : `${b.type === "income" ? "+" : "-"}${formatCurrency(effectiveAmount)}`}
+                              <span className={`font-black text-xs group-hover/ov:underline ${ended && !override ? "text-zinc-600" : "text-emerald-400"}`}>
+                                {ended && !override ? "—" : `+${formatCurrency(effectiveAmount)}`}
                               </span>
                               {override ? (
                                 <span className="text-[7px] uppercase font-extrabold tracking-widest text-amber-500">
@@ -1079,22 +961,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                                   title={`Già registrata in Spese & Entrate il ${new Date(linkedExpense.date).toLocaleDateString("it-IT")}`}
                                 >
                                   🔗 Registrata
-                                </span>
-                              )}
-                              {linkedSchedule && (
-                                <span
-                                  className={`text-[7px] uppercase font-extrabold tracking-widest ${linkedSchedule.is_paid ? "text-emerald-500" : "text-amber-500"}`}
-                                  title={`Scadenza ${linkedSchedule.is_paid ? "saldata" : "da pagare"} il ${new Date(linkedSchedule.due_date).toLocaleDateString("it-IT")}`}
-                                >
-                                  📅 {linkedSchedule.is_paid ? "Scadenza saldata" : "Scadenza generata"}
-                                </span>
-                              )}
-                              {!linkedSchedule && !linkedExpense && b.type !== "income" && b.periodicity === "monthly" && !ended && (
-                                <span
-                                  className="text-[7px] uppercase font-extrabold tracking-widest text-zinc-600"
-                                  title="Nessuna scadenza generata per questo mese: usa il pulsante 📅 per crearla in Scadenze"
-                                >
-                                  📅 Scadenza non generata
                                 </span>
                               )}
                             </button>
@@ -1123,46 +989,15 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                                 <button onClick={cancelConfirmExpense} className="text-zinc-500 hover:text-white text-[9px] font-bold px-1" title="Annulla">✕</button>
                               </div>
                             </div>
-                          ) : isGeneratingSchedule ? (
-                            <div className="flex flex-col gap-1 items-end animate-fade-in">
-                              <input
-                                type="number"
-                                step="0.01"
-                                autoFocus
-                                value={scheduleAmount}
-                                onChange={(e) => setScheduleAmount(e.target.value)}
-                                placeholder="Importo"
-                                className="w-24 px-1.5 py-1 rounded text-right text-[10px] text-white bg-zinc-950 border border-amber-500/50 focus:outline-none"
-                              />
-                              <input
-                                type="date"
-                                value={scheduleDate}
-                                onChange={(e) => setScheduleDate(e.target.value)}
-                                className="w-32 px-1.5 py-1 rounded text-[10px] text-white bg-zinc-950 border border-amber-500/50 focus:outline-none"
-                              />
-                              <div className="flex gap-1">
-                                <button onClick={() => saveGenerateSchedule(b)} className="text-amber-400 hover:text-amber-300 text-[9px] font-bold px-1" title="Genera in Scadenze">✓ Genera</button>
-                                <button onClick={cancelGenerateSchedule} className="text-zinc-500 hover:text-white text-[9px] font-bold px-1" title="Annulla">✕</button>
-                              </div>
-                            </div>
                           ) : (
                             <div className="flex items-center justify-center gap-1">
                               {!linkedExpense && (
                                 <button
                                   onClick={() => startConfirmExpense(b)}
                                   className="p-1 rounded text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all text-[10px]"
-                                  title="Conferma come spesa/entrata reale in Spese & Entrate"
+                                  title="Conferma come entrata reale in Spese & Entrate"
                                 >
                                   ✅
-                                </button>
-                              )}
-                              {b.type !== "income" && b.periodicity === "monthly" && !linkedSchedule && (
-                                <button
-                                  onClick={() => startGenerateSchedule(b)}
-                                  className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all text-[10px]"
-                                  title="Genera una scadenza da pagare in Scadenze"
-                                >
-                                  📅
                                 </button>
                               )}
                               {override && !isEditingOverride && (
@@ -1203,23 +1038,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
                               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <div className="space-y-1">
-                                  <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Tipo</label>
-                                  <select
-                                    value={type}
-                                    onChange={(e) => {
-                                      setType(e.target.value as any);
-                                      if (e.target.value === "income") { setCategoryId(""); setPeriodicity("monthly"); }
-                                    }}
-                                    className="w-full px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none select-custom"
-                                  >
-                                    <option value="need" style={{ background: "hsl(240 10% 10%)" }}>Bisogno</option>
-                                    <option value="want" style={{ background: "hsl(240 10% 10%)" }}>Desiderio</option>
-                                    <option value="emergency" style={{ background: "hsl(240 10% 10%)" }}>Imprevisto</option>
-                                    <option value="income" style={{ background: "hsl(240 10% 10%)" }}>Entrata</option>
-                                  </select>
-                                </div>
-
-                                <div className="space-y-1">
                                   <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Stima Importo</label>
                                   <div className="flex gap-1 p-0.5 bg-zinc-950/60 border border-white/5 rounded-lg text-[9px] font-bold">
                                     <button type="button" onClick={() => setIsEstimated(false)} className="flex-1 py-1 rounded transition-all" style={{ background: !isEstimated ? "hsl(240 10% 15%)" : "transparent", color: !isEstimated ? "white" : "hsl(240 5% 55%)" }}>Certo</button>
@@ -1227,40 +1045,14 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                                   </div>
                                 </div>
 
-                                {type !== "income" && (
-                                  <div className="space-y-1">
-                                    <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Frequenza</label>
-                                    <select value={periodicity} onChange={(e) => setPeriodicity(e.target.value as any)} className="w-full px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none select-custom">
-                                      {PERIODS.map((p) => (
-                                        <option key={p.value} value={p.value} style={{ background: "hsl(240 10% 10%)" }}>{p.label}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                )}
-
-                                {type !== "income" && (
-                                  <div className="space-y-1">
-                                    <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Categoria</label>
-                                    <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className="w-full px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none select-custom">
-                                      <option value="" style={{ background: "hsl(240 10% 10%)" }}>Generica</option>
-                                      {categories.map((cat) => (
-                                        <option key={cat.id} value={cat.id} style={{ background: "hsl(240 10% 10%)" }}>{cat.name}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                )}
-
-                                {type !== "income" && (
-                                  <div className="space-y-1">
-                                    <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Fornitore</label>
-                                    <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="w-full px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none select-custom">
-                                      <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessuno</option>
-                                      {suppliers.map((s) => (
-                                        <option key={s.id} value={s.id} style={{ background: "hsl(240 10% 10%)" }}>{s.name}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                )}
+                                <div className="space-y-1">
+                                  <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Frequenza</label>
+                                  <select value={periodicity} onChange={(e) => setPeriodicity(e.target.value as any)} className="w-full px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none select-custom">
+                                    {PERIODS.map((p) => (
+                                      <option key={p.value} value={p.value} style={{ background: "hsl(240 10% 10%)" }}>{p.label}</option>
+                                    ))}
+                                  </select>
+                                </div>
 
                                 <div className="space-y-1">
                                   <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Giorno del mese</label>
@@ -1274,7 +1066,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
                                 <div className="space-y-1">
                                   <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">
-                                    Importo {type !== "income" && PERIODS.find(p => p.value === periodicity)?.label.toLowerCase()} (€)
+                                    Importo {PERIODS.find(p => p.value === periodicity)?.label.toLowerCase()} (€)
                                   </label>
                                   <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required className="w-full px-2 py-1.5 rounded-lg text-right text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none" />
                                 </div>
@@ -1283,7 +1075,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                               <div className="space-y-1.5">
                                 <label className="flex items-center gap-2 text-[8px] font-bold text-zinc-500 uppercase tracking-wider cursor-pointer">
                                   <input type="checkbox" checked={hasDuration} onChange={(e) => setHasDuration(e.target.checked)} className="accent-sky-500" />
-                                  Ha una scadenza (mutuo, finanziamento...)
+                                  Ha una scadenza (es. entrata temporanea)
                                 </label>
                                 {hasDuration && (
                                   <div className="grid grid-cols-2 gap-2 animate-fade-in">
@@ -1312,63 +1104,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                       </Fragment>
                     );
                   })}
-                  {unlinkedScheduledItemsList.map((s: any) => {
-                    const catObj = categories.find(c => c.id === s.category_id);
-                    const catName = catObj?.name || s.category || "Generica / Altro";
-                    const catColor = catObj?.color || "slate";
-                    const badge = getCategoryBadgeStyle(catColor);
-                    return (
-                      <tr key={`sched-${s.id}`} className="hover:bg-white/2 transition-colors duration-150 group animate-fade-in">
-                        <td className="py-3 pr-2">
-                          <div className="font-bold text-white break-words">{s.description || s.category}</div>
-                          <div className="flex flex-wrap gap-1 mt-0.5">
-                            <span
-                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border"
-                              style={{ backgroundColor: badge.bg, color: badge.text, borderColor: badge.border }}
-                            >
-                              {catName}
-                            </span>
-                            <span
-                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border bg-amber-500/10 text-amber-300 border-amber-500/20"
-                              title={`Scadenza del ${new Date(s.due_date).toLocaleDateString("it-IT")}, non collegata a una voce di budget`}
-                            >
-                              📅 Da Scadenze
-                            </span>
-                            {s.was_rescheduled && (
-                              <span
-                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border bg-sky-500/10 text-sky-300 border-sky-500/20"
-                                title="Questa scadenza era scaduta e non saldata: e' stata ripianificata a questa nuova data"
-                              >
-                                🗓 Ripianificata
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-3">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[9px] font-bold text-zinc-400">Bisogno</span>
-                            <span className="text-[7px] uppercase font-extrabold tracking-widest text-zinc-500">Non pianificata</span>
-                          </div>
-                        </td>
-                        <td className="py-3 text-slate-400 font-semibold uppercase tracking-wider text-[8px]">
-                          {s.recurrence === "one-time" ? "Una tantum" : s.recurrence === "weekly" ? "Settimanale" : s.recurrence === "monthly" ? "Mensile" : "Annuale"}
-                        </td>
-                        <td className="py-3 text-right font-black text-xs text-white">-{formatCurrency(Number(s.amount))}</td>
-                        <td className="py-3 text-right">
-                          <span className="font-black text-xs text-zinc-300">-{formatCurrency(Number(s.amount))}</span>
-                        </td>
-                        <td className="py-3 text-center">
-                          <Link
-                            href="/dashboard/schedules"
-                            className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 text-[10px] inline-flex transition-all"
-                            title="Gestisci o salda in Scadenze & Pagamenti"
-                          >
-                            <SchedulesIcon size={12} />
-                          </Link>
-                        </td>
-                      </tr>
-                    );
-                  })}
                 </tbody>
               </table>
             )}
@@ -1379,7 +1114,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
       {/* Ripartizione Consigliata & Elenco Voci */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Regola 50/30/20 */}
         <div
           className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
@@ -1459,7 +1194,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
               {ruleAnalysis.unclassified > 0 && (
                 <div className="text-[9px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 leading-relaxed">
-                  ⚠️ {formatCurrency(ruleAnalysis.unclassified)} di spese reali non classificate (non collegate a una voce di budget e con categoria senza tipo). Assegna Bisogno/Desiderio/Imprevisto alla categoria dal "Confronto Uscite per Categoria" qui sotto per includerle nel confronto.
+                  ⚠️ {formatCurrency(ruleAnalysis.unclassified)} di spese reali non classificate (categoria senza un tipo impostato). Assegna Bisogno/Desiderio/Imprevisto alla categoria dal "Confronto Uscite per Categoria" qui sotto per includerle nel confronto.
                 </div>
               )}
 
@@ -1615,7 +1350,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                         <div className="flex items-center justify-between text-[9px] gap-2 flex-wrap">
                           <span
                             className="text-zinc-500 font-semibold"
-                            title="Si applica solo alle spese reali di questa categoria NON gia' collegate a una voce di Budget: quelle collegate ereditano il tipo dalla voce stessa (visibile nella tabella Voci di Budget Pianificate), non da qui."
+                            title="Classifica tutte le spese reali di questa categoria, tranne quelle segnate 'Imprevisto' al momento della registrazione in Spese & Entrate, che contano sempre come Imprevisto a prescindere da questa impostazione."
                           >
                             Utilità reale (per la Ripartizione 50/30/20) ⓘ:
                           </span>

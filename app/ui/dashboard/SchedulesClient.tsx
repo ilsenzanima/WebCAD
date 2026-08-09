@@ -4,8 +4,6 @@ import { useState, useTransition, useEffect, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createSchedule, updateSchedule, deleteSchedule, paySchedule, splitScheduleIntoInstallments, rescheduleSchedule } from "@/app/actions/schedules";
-import { createBudget } from "@/app/actions/budget";
-import { BUDGET_PERIODS } from "@/lib/budgetCalc";
 import { createSupplier } from "@/app/actions/suppliers";
 import { syncSchedulesToCalendar } from "@/app/actions/google";
 import { DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
@@ -38,7 +36,15 @@ const RECURRENCES = [
   { value: "one-time", label: "Una Tantum" },
   { value: "weekly", label: "Settimanale" },
   { value: "monthly", label: "Mensile" },
+  { value: "bimonthly", label: "Bimestrale" },
+  { value: "quarterly", label: "Trimestrale" },
+  { value: "semiannual", label: "Semestrale" },
   { value: "yearly", label: "Annuale" },
+];
+
+const MONTH_LABELS = [
+  "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
+  "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
 ];
 
 export default function SchedulesClient({ initialSchedules, categories, suppliers, googleConnected, onExpenseCreated, onSupplierCreated }: SchedulesClientProps) {
@@ -62,7 +68,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [supplierId, setSupplierId] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState(toLocalDateStr());
-  const [recurrence, setRecurrence] = useState<"one-time" | "weekly" | "monthly" | "yearly">("one-time");
+  const [recurrence, setRecurrence] = useState<"one-time" | "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "yearly">("one-time");
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [filterPaid, setFilterPaid] = useState<"all" | "pending" | "paid">("pending");
@@ -122,12 +128,14 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     });
   };
 
-  // Crea anche una voce di budget ricorrente collegata, cosi' la scadenza entra nelle stime
-  // dei mesi futuri e nella Ripartizione 50/30/20 senza doverla reinserire a mano nel Budget.
-  const [addToBudget, setAddToBudget] = useState(false);
-  const [budgetType, setBudgetType] = useState<"need" | "want" | "emergency">("need");
-  const [budgetPeriodicity, setBudgetPeriodicity] = useState<"weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual">("monthly");
-  const [budgetIsEstimated, setBudgetIsEstimated] = useState(false);
+  // La scadenza stessa e' la previsione (finche' non viene saldata): questi campi coprono i
+  // casi che prima vivevano solo nelle "voci di budget" (mutui/finanziamenti con una data di
+  // fine nota, importo certo o stimato), cosi' non serve piu' un doppio inserimento.
+  const [isEstimated, setIsEstimated] = useState(false);
+  const [hasDuration, setHasDuration] = useState(false);
+  const now = new Date();
+  const [endMonthInput, setEndMonthInput] = useState(now.getMonth() + 1);
+  const [endYearInput, setEndYearInput] = useState(now.getFullYear());
 
   const resetForm = () => {
     setAmount("");
@@ -137,10 +145,10 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     setDueDate(toLocalDateStr());
     setRecurrence("one-time");
     setEditingId(null);
-    setAddToBudget(false);
-    setBudgetType("need");
-    setBudgetPeriodicity("monthly");
-    setBudgetIsEstimated(false);
+    setIsEstimated(false);
+    setHasDuration(false);
+    setEndMonthInput(now.getMonth() + 1);
+    setEndYearInput(now.getFullYear());
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -156,28 +164,19 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
       return;
     }
 
+    let endMonth: number | null = null;
+    let endYear: number | null = null;
+    if (hasDuration) {
+      if (endYearInput < now.getFullYear() || (endYearInput === now.getFullYear() && endMonthInput < now.getMonth() + 1)) {
+        alert("La data di fine non può essere nel passato");
+        return;
+      }
+      endMonth = endMonthInput;
+      endYear = endYearInput;
+    }
+
     startTransition(async () => {
       try {
-        let linkedBudgetId: string | null = null;
-
-        if (!editingId && addToBudget) {
-          const budgetRes = await createBudget({
-            amount: Number(amount),
-            category_id: categoryId,
-            supplier_id: supplierId || null,
-            type: budgetType,
-            label: description.trim() || selectedCat.name,
-            periodicity: budgetPeriodicity,
-            is_estimated: budgetIsEstimated,
-            day_of_month: new Date(`${dueDate}T00:00:00`).getDate(),
-          });
-          if (!budgetRes.success || !budgetRes.data) {
-            alert(budgetRes.error || "Errore durante la creazione della previsione nel Budget");
-            return;
-          }
-          linkedBudgetId = budgetRes.data.id;
-        }
-
         const payload = {
           amount: Number(amount),
           category_id: categoryId,
@@ -186,7 +185,9 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           description,
           due_date: dueDate,
           recurrence,
-          ...(linkedBudgetId ? { budget_id: linkedBudgetId } : {}),
+          is_estimated: isEstimated,
+          end_month: endMonth,
+          end_year: endYear,
         };
 
         if (editingId) {
@@ -222,6 +223,16 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     setDescription(item.description || "");
     setDueDate(item.due_date);
     setRecurrence(item.recurrence);
+    setIsEstimated(item.is_estimated || false);
+    if (item.end_year && item.end_month) {
+      setHasDuration(true);
+      setEndMonthInput(item.end_month);
+      setEndYearInput(item.end_year);
+    } else {
+      setHasDuration(false);
+      setEndMonthInput(now.getMonth() + 1);
+      setEndYearInput(now.getFullYear());
+    }
   };
 
   const handlePay = (scheduleId: string, consumptionValue: number | null = null) => {
@@ -736,63 +747,74 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
               />
             </div>
 
-            {/* Aggiungi anche come previsione ricorrente nel Budget */}
-            {!editingId && (
-              <div className="space-y-2 p-3 rounded-xl border border-indigo-500/20 bg-indigo-500/[0.03]">
-                <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-300 uppercase tracking-wider cursor-pointer">
+            {/* Stima Importo (Certezza) */}
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Stima Importo</label>
+              <div className="flex gap-2 p-1 bg-zinc-950/60 border border-white/5 rounded-xl text-[10px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setIsEstimated(false)}
+                  className="flex-1 py-2 rounded-lg transition-all"
+                  style={{
+                    background: !isEstimated ? "hsl(240 10% 15%)" : "transparent",
+                    color: !isEstimated ? "white" : "hsl(240 5% 55%)",
+                  }}
+                >
+                  Importo Certo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEstimated(true)}
+                  className="flex-1 py-2 rounded-lg transition-all"
+                  style={{
+                    background: isEstimated ? "hsla(38, 90%, 50%, 0.12)" : "transparent",
+                    color: isEstimated ? "hsl(38 90% 60%)" : "hsl(240 5% 55%)",
+                  }}
+                >
+                  Importo Stimato
+                </button>
+              </div>
+            </div>
+
+            {/* Durata Limitata (es. mutuo o finanziamento gia' in corso, con l'ultima rata nota) */}
+            {recurrence !== "one-time" && (
+              <div className="space-y-1.5 animate-fade-in">
+                <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={addToBudget}
-                    onChange={(e) => {
-                      setAddToBudget(e.target.checked);
-                      if (e.target.checked) {
-                        setBudgetPeriodicity(recurrence === "weekly" ? "weekly" : recurrence === "yearly" ? "annual" : "monthly");
-                      }
-                    }}
-                    className="accent-indigo-500"
+                    checked={hasDuration}
+                    onChange={(e) => setHasDuration(e.target.checked)}
+                    className="accent-amber-500"
                   />
-                  📊 Aggiungi anche come previsione nel Budget
+                  Ha una scadenza (mutuo, finanziamento...)
                 </label>
-                {addToBudget && (
-                  <div className="space-y-2.5 animate-fade-in pt-1">
-                    <p className="text-[9px] text-zinc-500 leading-relaxed">
-                      Crea anche una voce ricorrente nella pagina Budget, cosi' questa spesa entra nelle stime dei prossimi mesi e nella Ripartizione 50/30/20.
-                    </p>
+                {hasDuration && (
+                  <div className="animate-fade-in space-y-1.5">
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Tipo</label>
-                        <select
-                          value={budgetType}
-                          onChange={(e) => setBudgetType(e.target.value as any)}
-                          className="w-full px-2 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none select-custom"
-                        >
-                          <option value="need" style={{ background: "hsl(240 10% 10%)" }}>Bisogno</option>
-                          <option value="want" style={{ background: "hsl(240 10% 10%)" }}>Desiderio</option>
-                          <option value="emergency" style={{ background: "hsl(240 10% 10%)" }}>Imprevisto</option>
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Periodicità Budget</label>
-                        <select
-                          value={budgetPeriodicity}
-                          onChange={(e) => setBudgetPeriodicity(e.target.value as any)}
-                          className="w-full px-2 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none select-custom"
-                        >
-                          {BUDGET_PERIODS.map((p) => (
-                            <option key={p.value} value={p.value} style={{ background: "hsl(240 10% 10%)" }}>{p.label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <label className="flex items-center gap-2 text-[9px] font-bold text-zinc-500 uppercase tracking-wider cursor-pointer">
+                      <select
+                        value={endMonthInput}
+                        onChange={(e) => setEndMonthInput(Number(e.target.value))}
+                        className="w-full px-3 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
+                        style={{ background: "hsl(240 10% 4% / 0.8)", borderColor: "hsl(240 5% 18%)" }}
+                      >
+                        {MONTH_LABELS.map((m, i) => (
+                          <option key={m} value={i + 1} style={{ background: "hsl(240 10% 10%)" }}>{m}</option>
+                        ))}
+                      </select>
                       <input
-                        type="checkbox"
-                        checked={budgetIsEstimated}
-                        onChange={(e) => setBudgetIsEstimated(e.target.checked)}
-                        className="accent-amber-500"
+                        type="number"
+                        min={now.getFullYear()}
+                        step="1"
+                        value={endYearInput}
+                        onChange={(e) => setEndYearInput(Number(e.target.value))}
+                        placeholder="Anno"
+                        className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all duration-200"
+                        style={{ background: "hsl(240 10% 4% / 0.8)", borderColor: "hsl(240 5% 18%)" }}
                       />
-                      Importo stimato (non certo)
-                    </label>
+                    </div>
+                    <p className="text-[9px] text-zinc-500 mt-1">
+                      Indica il mese/anno dell'ultima rata: dopo quella data, saldando questa scadenza non ne verra' generata una successiva.
+                    </p>
                   </div>
                 )}
               </div>
@@ -894,6 +916,26 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                               {item.description}
                             </div>
                           )}
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {item.recurrence !== "one-time" && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border bg-zinc-800/50 text-zinc-400 border-zinc-700">
+                                🔁 {RECURRENCES.find(r => r.value === item.recurrence)?.label}
+                              </span>
+                            )}
+                            {item.is_estimated && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border bg-amber-500/10 text-amber-300 border-amber-500/20">
+                                Stimato
+                              </span>
+                            )}
+                            {item.end_year && item.end_month && (
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border bg-indigo-500/10 text-indigo-300 border-indigo-500/20"
+                                title="Ultimo mese in cui questa scadenza si ripete"
+                              >
+                                🏁 fino a {MONTH_LABELS[item.end_month - 1].slice(0, 3)} {item.end_year}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="py-4">
                           <span

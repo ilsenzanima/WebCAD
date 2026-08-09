@@ -31,6 +31,7 @@ export async function createExpense(formData: {
   description: string;
   date: string;
   is_income?: boolean;
+  is_emergency?: boolean;
   consumption_value?: number | null;
   account_id?: string | null;
   budget_id?: string | null;
@@ -49,6 +50,7 @@ export async function createExpense(formData: {
       description: formData.description || null,
       date: formData.date,
       is_income: formData.is_income ?? false,
+      is_emergency: formData.is_emergency ?? false,
       consumption_value: formData.consumption_value ?? null,
       account_id: formData.account_id || null,
       budget_id: formData.budget_id || null,
@@ -75,6 +77,7 @@ export async function updateExpense(
     description: string;
     date: string;
     is_income?: boolean;
+    is_emergency?: boolean;
     consumption_value?: number | null;
     account_id?: string | null;
   }
@@ -94,6 +97,7 @@ export async function updateExpense(
         description: formData.description || null,
         date: formData.date,
         is_income: formData.is_income ?? false,
+        is_emergency: formData.is_emergency ?? false,
         consumption_value: formData.consumption_value ?? null,
         account_id: formData.account_id || null,
       })
