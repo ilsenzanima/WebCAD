@@ -19,7 +19,9 @@ export default async function ScansioniPage() {
 
   const [suppliers, scansioniRes] = await Promise.all([
     getSuppliers().catch(() => []),
-    googleConnected ? listScansioniDocuments() : Promise.resolve({ success: true, data: [] }),
+    googleConnected
+      ? listScansioniDocuments()
+      : Promise.resolve<{ success: boolean; data: any[]; error?: string }>({ success: true, data: [] }),
   ]);
 
   return (
