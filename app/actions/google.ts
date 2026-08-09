@@ -2,8 +2,16 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { uploadFileToGoogleDrive, refreshGoogleAccessToken, GOOGLE_CONFIG } from "@/lib/gdrive";
+import {
+  uploadFileToGoogleDrive,
+  refreshGoogleAccessToken,
+  listFilesInFolder,
+  getOrCreateSupplierYearFolderId,
+  moveFileToFolder,
+  GOOGLE_CONFIG,
+} from "@/lib/gdrive";
 import { getOrCreateDedicatedGoogleCalendar, syncScheduleToGoogleCalendar } from "@/lib/gcalendar";
+import { createSupplierDocument } from "@/app/actions/documents";
 
 const EXPIRY_SAFETY_BUFFER_MS = 60 * 1000;
 
@@ -87,18 +95,125 @@ export async function uploadSupplierDocumentToDrive(formData: FormData) {
     const fileName = formData.get("fileName") as string | null;
     if (!file || !fileName) throw new Error("File mancante");
 
+    const supplierName = formData.get("supplierName") as string | null;
+    const yearRaw = formData.get("year") as string | null;
+
     const accessToken = await getValidAccessToken(supabase, user.id);
+
+    // Se conosciamo il fornitore, archiviamo il file nella sua cartella
+    // organizzata per anno (<radice>/<Fornitore>/<Anno>) invece che alla rinfusa.
+    const folderId = supplierName
+      ? await getOrCreateSupplierYearFolderId({
+          supplierName,
+          year: yearRaw ? Number(yearRaw) : new Date().getFullYear(),
+          accessToken,
+        })
+      : GOOGLE_CONFIG.rootFolderId;
 
     const result = await uploadFileToGoogleDrive({
       file,
       fileName,
       accessToken,
-      folderId: GOOGLE_CONFIG.rootFolderId,
+      folderId,
     });
 
     return { success: true, data: result };
   } catch (err: any) {
     return { success: false, error: err.message || "Errore durante il caricamento su Google Drive" };
+  }
+}
+
+/**
+ * Elenca i documenti ancora da smistare nella cartella "Scansioni" (inbox),
+ * per la pagina di triage /dashboard/scansioni.
+ */
+export async function listScansioniDocuments() {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const accessToken = await getValidAccessToken(supabase, user.id);
+    const files = await listFilesInFolder({ folderId: GOOGLE_CONFIG.scansioniFolderId, accessToken });
+
+    const data = files.map((f) => ({
+      id: f.id,
+      name: f.name,
+      mimeType: f.mimeType,
+      size: f.size ? Number(f.size) : null,
+      createdTime: f.createdTime || null,
+      previewUrl: `https://drive.google.com/file/d/${f.id}/preview`,
+      webViewLink: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`,
+    }));
+
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Errore durante il recupero dei documenti da smistare", data: [] };
+  }
+}
+
+/**
+ * Assegna un documento scansionato (nella cartella "Scansioni") a un fornitore:
+ * sposta il file nella cartella <radice>/<Fornitore>/<Anno> su Drive e crea il
+ * record collegato in supplier_documents. Il file esce dalla cartella Scansioni.
+ */
+export async function assignScansioneDocument({
+  fileId,
+  fileSize,
+  supplierId,
+  supplierName,
+  year,
+  title,
+  docType,
+}: {
+  fileId: string;
+  fileSize?: number | null;
+  supplierId: string;
+  supplierName: string;
+  year: number;
+  title: string;
+  docType: "contratto" | "bolletta" | "altro";
+}) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    if (!supplierId || !supplierName) throw new Error("Seleziona il fornitore a cui assegnare il documento");
+    if (!year || year < 1900) throw new Error("Anno non valido");
+
+    const accessToken = await getValidAccessToken(supabase, user.id);
+
+    const targetFolderId = await getOrCreateSupplierYearFolderId({ supplierName, year, accessToken });
+
+    const moved = await moveFileToFolder({
+      fileId,
+      newParentId: targetFolderId,
+      oldParentId: GOOGLE_CONFIG.scansioniFolderId,
+      accessToken,
+    });
+
+    const fileUrl = moved.webViewLink || moved.webContentLink || `https://drive.google.com/file/d/${fileId}/view`;
+
+    const docRes = await createSupplierDocument({
+      supplier_id: supplierId,
+      title,
+      file_url: fileUrl,
+      provider: "gdrive",
+      file_size: fileSize ?? null,
+      doc_type: docType,
+      gdrive_file_id: fileId,
+      document_year: year,
+    });
+
+    if (!docRes.success) throw new Error(docRes.error || "Errore durante la creazione del documento");
+
+    revalidatePath("/dashboard/scansioni");
+    revalidatePath(`/dashboard/suppliers/${supplierId}`);
+
+    return { success: true, data: docRes.data };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Errore durante l'assegnazione del documento" };
   }
 }
 

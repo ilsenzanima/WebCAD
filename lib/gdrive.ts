@@ -7,12 +7,159 @@ export const GOOGLE_CONFIG = {
   clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "",
   clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
   rootFolderId: process.env.NEXT_PUBLIC_GOOGLE_DRIVE_ROOT_FOLDER_ID || "1fgA-JTpfzPRIlJ8xJeQ95Grxi6hVUnB9",
+  // Cartella "inbox" dove arrivano i documenti scansionati da smistare manualmente
+  // tra i fornitori (pagina /dashboard/scansioni).
+  scansioniFolderId: process.env.NEXT_PUBLIC_GOOGLE_DRIVE_SCANSIONI_FOLDER_ID || "1IMJ-WTnVAJquaMA-A-QRvFjU0N64HA10",
   scopes: {
     drive: "https://www.googleapis.com/auth/drive.file",
     calendar: "https://www.googleapis.com/auth/calendar.events",
     tasks: "https://www.googleapis.com/auth/tasks",
   },
 };
+
+const DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder";
+
+/** Effettua l'escape di un valore testuale da inserire in una query Drive `q=`. */
+function escapeDriveQueryValue(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+async function driveFetch(url: string, accessToken: string, init?: RequestInit) {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(init?.headers || {}),
+    },
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Errore nella chiamata a Google Drive: ${errText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Elenca i file (non le cartelle) contenuti direttamente in una cartella Drive.
+ */
+export async function listFilesInFolder({
+  folderId,
+  accessToken,
+}: {
+  folderId: string;
+  accessToken: string;
+}) {
+  const query = `'${escapeDriveQueryValue(folderId)}' in parents and trashed = false and mimeType != '${DRIVE_FOLDER_MIME_TYPE}'`;
+  const fields = "files(id,name,mimeType,size,createdTime,webViewLink,webContentLink,thumbnailLink)";
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=${encodeURIComponent(fields)}&pageSize=200&orderBy=createdTime`;
+
+  const result = await driveFetch(url, accessToken);
+  return (result.files || []) as {
+    id: string;
+    name: string;
+    mimeType: string;
+    size?: string;
+    createdTime?: string;
+    webViewLink?: string;
+    webContentLink?: string;
+    thumbnailLink?: string;
+  }[];
+}
+
+/**
+ * Trova una sottocartella per nome dentro `parentId`; se non esiste la crea.
+ * Restituisce l'id della cartella trovata/creata.
+ */
+export async function findOrCreateFolder({
+  name,
+  parentId,
+  accessToken,
+}: {
+  name: string;
+  parentId: string;
+  accessToken: string;
+}): Promise<string> {
+  const query = `mimeType = '${DRIVE_FOLDER_MIME_TYPE}' and name = '${escapeDriveQueryValue(name)}' and '${escapeDriveQueryValue(parentId)}' in parents and trashed = false`;
+  const listUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=${encodeURIComponent("files(id,name)")}`;
+
+  const existing = await driveFetch(listUrl, accessToken);
+  if (existing.files && existing.files.length > 0) {
+    return existing.files[0].id as string;
+  }
+
+  const created = await driveFetch(
+    "https://www.googleapis.com/drive/v3/files?fields=id",
+    accessToken,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        mimeType: DRIVE_FOLDER_MIME_TYPE,
+        parents: [parentId],
+      }),
+    }
+  );
+
+  return created.id as string;
+}
+
+/**
+ * Trova (creandola se serve) la cartella dell'archivio organizzato per un
+ * fornitore/anno: <rootFolderId>/<NomeFornitore>/<Anno>.
+ */
+export async function getOrCreateSupplierYearFolderId({
+  supplierName,
+  year,
+  accessToken,
+  rootFolderId = GOOGLE_CONFIG.rootFolderId,
+}: {
+  supplierName: string;
+  year: number;
+  accessToken: string;
+  rootFolderId?: string;
+}): Promise<string> {
+  const supplierFolderId = await findOrCreateFolder({
+    name: supplierName,
+    parentId: rootFolderId,
+    accessToken,
+  });
+
+  return findOrCreateFolder({
+    name: String(year),
+    parentId: supplierFolderId,
+    accessToken,
+  });
+}
+
+/**
+ * Sposta un file esistente da una cartella all'altra (rimuove il vecchio
+ * parent e aggiunge il nuovo).
+ */
+export async function moveFileToFolder({
+  fileId,
+  newParentId,
+  oldParentId,
+  accessToken,
+}: {
+  fileId: string;
+  newParentId: string;
+  oldParentId: string;
+  accessToken: string;
+}) {
+  const fields = "id,name,webViewLink,webContentLink";
+  const url = `https://www.googleapis.com/drive/v3/files/${fileId}?addParents=${encodeURIComponent(newParentId)}&removeParents=${encodeURIComponent(oldParentId)}&fields=${encodeURIComponent(fields)}`;
+
+  const result = await driveFetch(url, accessToken, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+
+  return result as { id: string; name: string; webViewLink?: string; webContentLink?: string };
+}
 
 /**
  * Carica un file direttamente nella cartella radice di Google Drive dell'utente

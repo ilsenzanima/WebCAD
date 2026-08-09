@@ -113,6 +113,8 @@ export default function SupplierDetailClient({
         const uploadFormData = new FormData();
         uploadFormData.append("file", selectedFile);
         uploadFormData.append("fileName", `${supplier.name}_${docTitle.trim()}_${selectedFile.name}`);
+        uploadFormData.append("supplierName", supplier.name);
+        uploadFormData.append("year", String(new Date().getFullYear()));
 
         const driveRes = await uploadSupplierDocumentToDrive(uploadFormData);
         if (!driveRes.success || !driveRes.data) {
@@ -129,6 +131,8 @@ export default function SupplierDetailClient({
           provider: "gdrive",
           file_size: fileSize,
           doc_type: docType,
+          gdrive_file_id: driveRes.data.id,
+          document_year: new Date().getFullYear(),
         });
 
         if (!res.success || !res.data) {

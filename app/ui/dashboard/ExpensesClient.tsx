@@ -155,9 +155,16 @@ export default function ExpensesClient({
       return;
     }
     try {
+      const supplierForDoc = supplierIdForDoc ? suppliersList.find((s) => s.id === supplierIdForDoc) : null;
+      const currentYear = new Date().getFullYear();
+
       const uploadFormData = new FormData();
       uploadFormData.append("file", file);
       uploadFormData.append("fileName", `${title}_${file.name}`);
+      if (supplierForDoc) {
+        uploadFormData.append("supplierName", supplierForDoc.name);
+        uploadFormData.append("year", String(currentYear));
+      }
 
       const driveRes = await uploadSupplierDocumentToDrive(uploadFormData);
       if (!driveRes.success || !driveRes.data) {
@@ -175,6 +182,8 @@ export default function ExpensesClient({
         provider: "gdrive",
         file_size: file.size,
         doc_type: docType,
+        gdrive_file_id: driveRes.data.id,
+        document_year: supplierForDoc ? currentYear : null,
       });
 
       if (!res.success || !res.data) {
