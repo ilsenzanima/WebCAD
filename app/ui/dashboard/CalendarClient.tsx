@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition, useMemo } from "react";
-import { type Expense, type PaymentSchedule } from "@/lib/types/database";
+import { useState, useTransition, useMemo, Fragment } from "react";
+import { type Expense, type PaymentSchedule, type Supplier, type SupplierDocument } from "@/lib/types/database";
 import { deleteExpense } from "@/app/actions/expenses";
 import { deleteSchedule, paySchedule } from "@/app/actions/schedules";
+import { uploadAndLinkDocument, utilityMissingTags } from "@/lib/uploadDocument";
 import { formatCurrency, toLocalDateStr } from "@/lib/format";
 import { getNextDueDate } from "@/lib/recurrence";
 import { ArrowLeftIcon, ArrowRightIcon, DeleteIcon, CheckIcon, SchedulesIcon, ExpensesIcon } from "./icons";
@@ -34,15 +35,36 @@ interface ScheduleWithRelations extends Omit<PaymentSchedule, "amount"> {
 interface CalendarClientProps {
   expenses: any[];
   schedules: any[];
+  suppliers: Supplier[];
+  initialDocuments: SupplierDocument[];
+  googleConnected: boolean;
 }
 
-export default function CalendarClient({ expenses: initialExpenses, schedules: initialSchedules }: CalendarClientProps) {
+export default function CalendarClient({ expenses: initialExpenses, schedules: initialSchedules, suppliers, initialDocuments, googleConnected }: CalendarClientProps) {
   const [expenses, setExpenses] = useState<ExpenseWithRelations[]>(initialExpenses);
   const [schedules, setSchedules] = useState<ScheduleWithRelations[]>(initialSchedules);
+  const [documents, setDocuments] = useState<SupplierDocument[]>(initialDocuments);
   const [isPending, startTransition] = useTransition();
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(toLocalDateStr());
+
+  // Conferma pagamento di una scadenza-utenza: chiede consumo e documento, come in Scadenze
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const [payConsumptionValue, setPayConsumptionValue] = useState("");
+  const [payDocFile, setPayDocFile] = useState<File | null>(null);
+  const [payDocType, setPayDocType] = useState<"contratto" | "bolletta" | "altro">("bolletta");
+
+  const docsByExpense = useMemo(() => {
+    const map: Record<string, SupplierDocument[]> = {};
+    documents.forEach((d) => {
+      if (!d.expense_id) return;
+      (map[d.expense_id] ||= []).push(d);
+    });
+    return map;
+  }, [documents]);
+
+  const supplierOf = (supplierId: string | null) => (supplierId ? suppliers.find(s => s.id === supplierId) || null : null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -116,20 +138,26 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
     return schedules.filter(s => s.due_date === dateStr);
   };
 
-  const handlePaySchedule = (id: string) => {
+  const handlePaySchedule = (
+    id: string,
+    consumptionValue: number | null = null,
+    docFile: File | null = null,
+    docType: "contratto" | "bolletta" | "altro" = "bolletta"
+  ) => {
     startTransition(async () => {
       try {
-        const res = await paySchedule(id);
-        if (!res.success) {
+        const res = await paySchedule(id, consumptionValue);
+        if (!res.success || !res.data) {
           alert(res.error || "Errore durante la registrazione del pagamento");
           return;
         }
+        const newExpenseRow = res.data;
 
         const target = schedules.find(s => s.id === id);
         if (!target) return;
 
         if (target.recurrence === "one-time") {
-          setSchedules(prev => 
+          setSchedules(prev =>
             prev.map(sched => sched.id === id ? { ...sched, is_paid: true } : sched)
           );
         } else {
@@ -143,39 +171,80 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
             is_paid: false,
           };
 
-          setSchedules(prev => 
+          setSchedules(prev =>
             prev.map(sched => sched.id === id ? { ...sched, is_paid: true } : sched)
                 .concat(nextSched)
           );
         }
 
-        // Inoltre, inseriamo la spesa di oggi
-        const todayStr = toLocalDateStr();
+        // Inoltre, inseriamo la spesa reale appena creata
         const newExp: ExpenseWithRelations = {
-          id: Math.random().toString(),
-          user_id: "",
-          amount: target.amount,
-          category: target.category,
-          category_id: target.category_id,
-          supplier_id: target.supplier_id,
-          schedule_id: target.id,
-          budget_id: target.budget_id,
-          account_id: null,
-          consumption_value: null,
-          description: `Pagamento programmato: ${target.description || "Nessuna descrizione"}`,
-          date: todayStr,
-          is_income: false,
-          is_emergency: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          ...newExpenseRow,
           expense_categories: target.expense_categories,
-          suppliers: target.suppliers
+          suppliers: target.suppliers,
         };
         setExpenses(prev => [newExp, ...prev]);
+
+        if (docFile) {
+          const doc = await uploadAndLinkDocument({
+            file: docFile,
+            expenseId: newExpenseRow.id,
+            supplierId: target.supplier_id,
+            suppliersList: suppliers,
+            title: target.description || target.category || "Bolletta",
+            docType,
+            googleConnected,
+          });
+          if (doc) setDocuments(prev => [doc, ...prev]);
+        }
+
+        if (payingId === id) cancelPay();
       } catch (err: any) {
         alert(err.message || "Errore durante la registrazione");
       }
     });
+  };
+
+  const startPay = (item: ScheduleWithRelations) => {
+    setPayingId(item.id);
+    setPayConsumptionValue("");
+    setPayDocFile(null);
+    setPayDocType("bolletta");
+  };
+
+  const cancelPay = () => {
+    setPayingId(null);
+    setPayConsumptionValue("");
+    setPayDocFile(null);
+    setPayDocType("bolletta");
+  };
+
+  const handlePayClick = (item: ScheduleWithRelations) => {
+    const supplier = supplierOf(item.supplier_id);
+    if (supplier?.is_utility) {
+      if (payingId === item.id) cancelPay(); else startPay(item);
+      return;
+    }
+    handlePaySchedule(item.id);
+  };
+
+  const handlePayDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Il file supera la dimensione massima consigliata di 10MB");
+      return;
+    }
+    setPayDocFile(file);
+  };
+
+  const confirmUtilityPay = (item: ScheduleWithRelations) => {
+    const value = payConsumptionValue.trim() ? Number(payConsumptionValue) : null;
+    if (payConsumptionValue.trim() && (isNaN(value as number) || (value as number) < 0)) {
+      alert("Inserisci un consumo valido");
+      return;
+    }
+    handlePaySchedule(item.id, value, payDocFile, payDocType);
   };
 
   const handleDeleteExpense = (id: string) => {
@@ -377,6 +446,10 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                     const catName = exp.expense_categories?.name || exp.category;
                     const catColor = exp.expense_categories?.color || "slate";
                     const badge = getCategoryBadgeStyle(catColor);
+                    const attachments = docsByExpense[exp.id] || [];
+                    const { missingConsumption, missingDocument } = utilityMissingTags(
+                      supplierOf(exp.supplier_id), exp.consumption_value, attachments.length
+                    );
 
                     return (
                       <div
@@ -406,6 +479,20 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                               <span className="text-[9px] text-slate-400 truncate max-w-[80px]">{exp.description}</span>
                             )}
                           </div>
+                          {(missingConsumption || missingDocument) && (
+                            <div className="flex items-center gap-1 mt-1 flex-wrap">
+                              {missingConsumption && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-extrabold text-amber-300 bg-amber-500/10 border border-amber-500/25">
+                                  ⚠ Consumo mancante
+                                </span>
+                              )}
+                              {missingDocument && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-extrabold text-amber-300 bg-amber-500/10 border border-amber-500/25">
+                                  ⚠ Documento mancante
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <span className={`text-xs font-black ${exp.is_income ? "text-emerald-400" : "text-rose-400"}`}>
@@ -441,9 +528,11 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                     const catColor = sched.expense_categories?.color || "slate";
                     const badge = getCategoryBadgeStyle(catColor);
 
+                    const schedSupplier = supplierOf(sched.supplier_id);
+
                     return (
+                      <Fragment key={sched.id}>
                       <div
-                        key={sched.id}
                         className="flex justify-between items-center p-2.5 rounded-xl border"
                         style={{
                           background: "hsl(240 10% 12% / 0.6)",
@@ -474,9 +563,13 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                           </span>
                           {!sched.is_paid ? (
                             <button
-                              onClick={() => handlePaySchedule(sched.id)}
+                              onClick={() => handlePayClick(sched)}
                               disabled={isPending}
-                              className="p-1 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 border border-emerald-500/25 font-bold transition-all"
+                              className={`p-1 rounded border font-bold transition-all ${
+                                payingId === sched.id
+                                  ? "bg-emerald-500 text-slate-950 border-emerald-500/50"
+                                  : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-slate-950 border-emerald-500/25"
+                              }`}
                               title="Segna come Pagato"
                             >
                               <CheckIcon size={10} />
@@ -493,6 +586,71 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                           </button>
                         </div>
                       </div>
+                      {payingId === sched.id && (
+                        <div className="p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03] space-y-2 animate-fade-in">
+                          <div className="space-y-1">
+                            <label className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wider">
+                              Consumo del periodo ({schedSupplier?.consumption_unit || "unità"})
+                            </label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              autoFocus
+                              value={payConsumptionValue}
+                              onChange={(e) => setPayConsumptionValue(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter") confirmUtilityPay(sched); if (e.key === "Escape") cancelPay(); }}
+                              placeholder={`es. 320 ${schedSupplier?.consumption_unit || ""}`}
+                              className="w-full px-2.5 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Allega documento (facoltativo)</label>
+                            {googleConnected ? (
+                              <input
+                                type="file"
+                                accept="application/pdf,image/*"
+                                onChange={handlePayDocFileChange}
+                                className="w-full text-[9px] text-slate-300 file:mr-2 file:py-1 file:px-2 file:rounded-lg file:border-0 file:text-[8px] file:font-bold file:bg-sky-500/20 file:text-sky-300 hover:file:bg-sky-500/30 cursor-pointer"
+                              />
+                            ) : (
+                              <a
+                                href="/api/google/connect?next=/dashboard/calendar"
+                                className="inline-block px-2 py-1 rounded-lg text-[8px] font-extrabold text-amber-300 bg-amber-500/10 border border-amber-500/20"
+                              >
+                                🔗 Collega Google Drive
+                              </a>
+                            )}
+                          </div>
+                          {payDocFile && (
+                            <select
+                              value={payDocType}
+                              onChange={(e) => setPayDocType(e.target.value as any)}
+                              className="w-full px-2 py-1.5 rounded-lg text-[9px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                            >
+                              <option value="bolletta">📄 Bolletta</option>
+                              <option value="contratto">📑 Contratto</option>
+                              <option value="altro">📎 Altro</option>
+                            </select>
+                          )}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => confirmUtilityPay(sched)}
+                              disabled={isPending}
+                              className="flex-1 py-1.5 rounded-lg text-[9px] font-extrabold text-white bg-emerald-600 hover:bg-emerald-500 transition-all disabled:opacity-50"
+                            >
+                              Conferma pagamento
+                            </button>
+                            <button
+                              onClick={cancelPay}
+                              className="px-2.5 py-1.5 rounded-lg text-[9px] font-extrabold text-zinc-400 bg-zinc-900 border border-zinc-800 hover:text-white transition-all"
+                            >
+                              Annulla
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      </Fragment>
                     );
                   })}
                 </div>

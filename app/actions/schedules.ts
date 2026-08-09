@@ -193,9 +193,10 @@ export async function paySchedule(id: string, consumptionValue?: number | null) 
     }
 
     // 2. Crea la spesa corrispondente (ereditando category_id, supplier_id e budget_id;
-    // consumption_value solo se fornito, tipicamente per i fornitori-utenza)
+    // consumption_value solo se fornito, tipicamente per i fornitori-utenza).
+    // Restituiamo la riga creata cosi' chi chiama puo' collegarci un documento (expense_id reale).
     const today = new Date().toISOString().split("T")[0];
-    const { error: expenseError } = await supabase.from("expenses").insert({
+    const { data: newExpense, error: expenseError } = await supabase.from("expenses").insert({
       user_id: user.id,
       amount: schedule.amount,
       category: schedule.category,
@@ -206,7 +207,7 @@ export async function paySchedule(id: string, consumptionValue?: number | null) 
       consumption_value: consumptionValue ?? null,
       description: `Pagamento programmato: ${schedule.description || "Nessuna descrizione"}`,
       date: today,
-    });
+    }).select().single();
 
     if (expenseError) throw new Error(expenseError.message);
 
@@ -247,7 +248,7 @@ export async function paySchedule(id: string, consumptionValue?: number | null) 
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/schedules");
     revalidatePath("/dashboard/calendar");
-    return { success: true };
+    return { success: true, data: newExpense };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
