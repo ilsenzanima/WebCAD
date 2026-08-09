@@ -12,6 +12,8 @@ export async function createSupplierDocument(formData: {
   provider?: "local" | "gdrive" | "onedrive";
   file_size?: number | null;
   doc_type?: "contratto" | "bolletta" | "altro";
+  gdrive_file_id?: string | null;
+  document_year?: number | null;
 }) {
   try {
     if (!formData.supplier_id && !formData.expense_id && !formData.schedule_id) {
@@ -32,6 +34,8 @@ export async function createSupplierDocument(formData: {
       provider: formData.provider || "local",
       file_size: formData.file_size || null,
       doc_type: formData.doc_type || "altro",
+      gdrive_file_id: formData.gdrive_file_id || null,
+      document_year: formData.document_year || null,
     }).select().single();
 
     if (error) throw new Error(error.message);

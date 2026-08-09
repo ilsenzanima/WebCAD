@@ -130,6 +130,8 @@ export interface SupplierDocument {
   provider: "local" | "gdrive" | "onedrive";
   file_size: number | null;
   doc_type: "contratto" | "bolletta" | "altro";
+  gdrive_file_id: string | null; // id del file su Google Drive, per poterlo spostare tra cartelle
+  document_year: number | null; // anno scelto per il documento, usato per la sottocartella Fornitore/Anno
   created_at: string;
 }
 
@@ -484,6 +486,8 @@ export interface Database {
           provider?: "local" | "gdrive" | "onedrive";
           file_size?: number | null;
           doc_type?: "contratto" | "bolletta" | "altro";
+          gdrive_file_id?: string | null;
+          document_year?: number | null;
           created_at?: string;
         };
         Update: {
@@ -497,6 +501,8 @@ export interface Database {
           provider?: "local" | "gdrive" | "onedrive";
           file_size?: number | null;
           doc_type?: "contratto" | "bolletta" | "altro";
+          gdrive_file_id?: string | null;
+          document_year?: number | null;
           created_at?: string;
         };
         Relationships: [];
