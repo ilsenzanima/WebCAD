@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib/types/database";
-import { createSchedule, updateSchedule, deleteSchedule, paySchedule, splitScheduleIntoInstallments, rescheduleSchedule } from "@/app/actions/schedules";
+import { createSchedule, updateSchedule, deleteSchedule, paySchedule, unpaySchedule, splitScheduleIntoInstallments, rescheduleSchedule } from "@/app/actions/schedules";
 import { createSupplier } from "@/app/actions/suppliers";
 import { syncSchedulesToCalendar } from "@/app/actions/google";
 import { DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
@@ -31,6 +31,7 @@ interface SchedulesClientProps {
   suppliers: Supplier[];
   googleConnected: boolean;
   onExpenseCreated?: (expense: any) => void;
+  onExpenseDeleted?: (expenseIds: string[]) => void;
   onSupplierCreated?: (supplier: Supplier) => void;
 }
 
@@ -49,7 +50,7 @@ const MONTH_LABELS = [
   "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
 ];
 
-export default function SchedulesClient({ initialSchedules, categories, suppliers, googleConnected, onExpenseCreated, onSupplierCreated }: SchedulesClientProps) {
+export default function SchedulesClient({ initialSchedules, categories, suppliers, googleConnected, onExpenseCreated, onExpenseDeleted, onSupplierCreated }: SchedulesClientProps) {
   const [schedules, setSchedules] = useState<ScheduleWithRelations[]>(initialSchedules);
   const [suppliersList, setSuppliersList] = useState<Supplier[]>(suppliers);
   const [isPending, startTransition] = useTransition();
@@ -86,10 +87,12 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [splitStartDate, setSplitStartDate] = useState("");
   const [splitInstallments, setSplitInstallments] = useState<{ amount: string; due_date: string }[]>([]);
 
-  // Conferma pagamento di una scadenza legata a un fornitore-utenza: prima di saldare
-  // chiede il consumo del periodo e, facoltativamente, il documento (bolletta) da allegare,
-  // cosi' restano tracciati sulla spesa generata.
+  // Conferma di saldo: prima di registrare la spesa chiede sempre l'importo reale (puo'
+  // differire dalla stima), e per i fornitori-utenza anche il consumo del periodo e,
+  // facoltativamente, il documento (bolletta) da allegare, cosi' restano tracciati sulla spesa
+  // generata.
   const [payingId, setPayingId] = useState<string | null>(null);
+  const [payAmount, setPayAmount] = useState("");
   const [payConsumptionValue, setPayConsumptionValue] = useState("");
   const [payPeriodStart, setPayPeriodStart] = useState("");
   const [payPeriodEnd, setPayPeriodEnd] = useState("");
@@ -255,6 +258,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
   const handlePay = (
     scheduleId: string,
+    amount: number,
     consumptionValue: number | null = null,
     docFile: File | null = null,
     docType: "contratto" | "bolletta" | "altro" = "bolletta",
@@ -263,7 +267,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   ) => {
     startTransition(async () => {
       try {
-        const res = await paySchedule(scheduleId, consumptionValue, periodStart, periodEnd);
+        const res = await paySchedule(scheduleId, amount, consumptionValue, periodStart, periodEnd);
         if (!res.success || !res.data) {
           alert(res.error || "Errore nel contrassegnare come pagato");
           return;
@@ -281,6 +285,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
               id: Math.random().toString(),
               due_date: nextDueDateStr,
               is_paid: false,
+              generated_from_schedule_id: target.id,
             };
             return [...updated, nextSched].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
           }
@@ -318,6 +323,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
   const startPay = (item: ScheduleWithRelations) => {
     setPayingId(item.id);
+    setPayAmount(String(item.amount));
     setPayConsumptionValue("");
     setPayPeriodStart("");
     setPayPeriodEnd("");
@@ -327,6 +333,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
   const cancelPay = () => {
     setPayingId(null);
+    setPayAmount("");
     setPayConsumptionValue("");
     setPayPeriodStart("");
     setPayPeriodEnd("");
@@ -334,17 +341,14 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     setPayDocType("bolletta");
   };
 
+  // Il saldo chiede sempre conferma dell'importo reale (puo' differire dalla stima), cosi' un
+  // clic su "Salda" non registra piu' automaticamente l'importo pianificato senza controllo.
   const handlePayClick = (item: ScheduleWithRelations) => {
-    const supplier = supplierOf(item);
-    if (supplier?.is_utility) {
-      if (payingId === item.id) {
-        cancelPay();
-      } else {
-        startPay(item);
-      }
-      return;
+    if (payingId === item.id) {
+      cancelPay();
+    } else {
+      startPay(item);
     }
-    handlePay(item.id);
   };
 
   const handlePayDocFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -357,7 +361,12 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     setPayDocFile(file);
   };
 
-  const confirmUtilityPay = (item: ScheduleWithRelations) => {
+  const confirmPay = (item: ScheduleWithRelations) => {
+    const amount = Number(payAmount);
+    if (!payAmount.trim() || isNaN(amount) || amount <= 0) {
+      alert("Inserisci un importo reale valido");
+      return;
+    }
     const value = payConsumptionValue.trim() ? Number(payConsumptionValue) : null;
     if (payConsumptionValue.trim() && (isNaN(value as number) || (value as number) < 0)) {
       alert("Inserisci un consumo valido");
@@ -365,12 +374,40 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     }
     handlePay(
       item.id,
+      amount,
       value,
       payDocFile,
       payDocType,
       monthInputToDate(payPeriodStart),
       monthInputToDate(payPeriodEnd || payPeriodStart)
     );
+  };
+
+  // Annulla il saldo di una scadenza cliccata "Salda" per errore: elimina la spesa generata e,
+  // se non ancora saldata, la prossima occorrenza che il saldo aveva creato automaticamente.
+  const handleUnpay = (item: ScheduleWithRelations) => {
+    if (!confirm(`Annullare il saldo di "${item.description || item.category}"? La spesa registrata verrà eliminata.`)) return;
+
+    startTransition(async () => {
+      try {
+        const res = await unpaySchedule(item.id);
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore durante l'annullamento del saldo");
+          return;
+        }
+        setSchedules(prev => {
+          const withoutNext = res.deletedNextOccurrenceId
+            ? prev.filter(s => s.id !== res.deletedNextOccurrenceId)
+            : prev;
+          return withoutNext.map(s => s.id === item.id ? res.data : s);
+        });
+        if (onExpenseDeleted && res.deletedExpenseIds?.length) {
+          onExpenseDeleted(res.deletedExpenseIds);
+        }
+      } catch (err: any) {
+        alert(err.message || "Errore durante l'annullamento del saldo");
+      }
+    });
   };
 
   const handleDelete = (id: string) => {
@@ -1079,8 +1116,17 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                                   <span>Salda</span>
                                 </button>
                               ) : (
-                                <span className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
-                                  Saldata
+                                <span className="inline-flex items-center gap-1">
+                                  <span className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
+                                    Saldata
+                                  </span>
+                                  <button
+                                    onClick={() => handleUnpay(item)}
+                                    className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all text-[10px] opacity-0 group-hover:opacity-100"
+                                    title="Annulla il saldo (es. cliccato per errore): elimina la spesa registrata"
+                                  >
+                                    ↺
+                                  </button>
                                 </span>
                               )}
                               {!item.is_paid && (
@@ -1120,12 +1166,29 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03] p-4 space-y-3 animate-fade-in">
                               <div className="flex items-center justify-between">
                                 <h4 className="text-[11px] font-extrabold text-emerald-300">
-                                  ✓ Salda "{item.description || item.category}" — {item.suppliers?.name}
+                                  ✓ Salda "{item.description || item.category}"{item.suppliers?.name ? ` — ${item.suppliers.name}` : ""}
                                 </h4>
                                 <button onClick={cancelPay} className="text-[9px] font-bold text-zinc-500 hover:text-white">Chiudi</button>
                               </div>
 
                               <div className="flex flex-wrap gap-3 items-end">
+                                <div className="space-y-1">
+                                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Importo reale (€)</label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0.01"
+                                    autoFocus
+                                    value={payAmount}
+                                    onChange={(e) => setPayAmount(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") confirmPay(item); if (e.key === "Escape") cancelPay(); }}
+                                    className="w-32 px-3 py-2 rounded-lg text-xs text-white bg-zinc-950 border border-emerald-500/50 focus:outline-none"
+                                  />
+                                  {Number(payAmount) !== item.amount && payAmount.trim() && !isNaN(Number(payAmount)) && (
+                                    <p className="text-[8px] text-amber-400 font-semibold">Diverso dal previsto ({formatCurrency(item.amount)})</p>
+                                  )}
+                                </div>
+                                {supplierOf(item)?.is_utility && (
                                 <div className="space-y-1">
                                   <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">
                                     Consumo del periodo ({supplierOf(item)?.consumption_unit || "unità"})
@@ -1134,14 +1197,15 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                                     type="number"
                                     step="0.01"
                                     min="0"
-                                    autoFocus
                                     value={payConsumptionValue}
                                     onChange={(e) => setPayConsumptionValue(e.target.value)}
-                                    onKeyDown={(e) => { if (e.key === "Enter") confirmUtilityPay(item); if (e.key === "Escape") cancelPay(); }}
+                                    onKeyDown={(e) => { if (e.key === "Enter") confirmPay(item); if (e.key === "Escape") cancelPay(); }}
                                     placeholder={`es. 320 ${supplierOf(item)?.consumption_unit || ""}`}
                                     className="w-40 px-3 py-2 rounded-lg text-xs text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
                                   />
                                 </div>
+                                )}
+                                {supplierOf(item)?.is_utility && (
                                 <div className="space-y-1">
                                   <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Periodo di copertura</label>
                                   <div className="flex items-center gap-1.5">
@@ -1162,6 +1226,8 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                                     />
                                   </div>
                                 </div>
+                                )}
+                                {supplierOf(item)?.is_utility && (
                                 <div className="space-y-1">
                                   <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Allega documento (facoltativo)</label>
                                   {googleConnected ? (
@@ -1181,6 +1247,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                                     </a>
                                   )}
                                 </div>
+                                )}
                                 {payDocFile && (
                                   <div className="space-y-1">
                                     <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Tipo documento</label>
@@ -1196,7 +1263,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                                   </div>
                                 )}
                                 <button
-                                  onClick={() => confirmUtilityPay(item)}
+                                  onClick={() => confirmPay(item)}
                                   disabled={isPending}
                                   className="px-3 py-2 rounded-lg text-[10px] font-extrabold text-white bg-emerald-600 hover:bg-emerald-500 transition-all disabled:opacity-50"
                                 >

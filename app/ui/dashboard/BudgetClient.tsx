@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useTransition, useMemo, Fragment } from "react";
-import { type Budget, type BudgetOverride, type ExpenseCategory, type Supplier } from "@/lib/types/database";
-import { createBudget, updateBudget, deleteBudget, upsertBudgetOverride, deleteBudgetOverride, confirmBudgetExpense } from "@/app/actions/budget";
+import { useState, useTransition, useMemo } from "react";
+import { type Budget, type BudgetOverride, type ExpenseCategory } from "@/lib/types/database";
 import { updateCategoryBudget, updateCategoryBudgetPercent, updateCategoryBudgetType } from "@/app/actions/categories";
-import { formatCurrency, formatDate } from "@/lib/format";
-import { getMonthlyEquivalent as getMonthlyEquivalentBase, isBudgetEnded as isBudgetEndedBase, getEffectiveAmount as getEffectiveAmountBase, BUDGET_PERIODS as PERIODS } from "@/lib/budgetCalc";
-import { DeleteIcon } from "./icons";
+import { formatCurrency } from "@/lib/format";
+import { getEffectiveAmount as getEffectiveAmountBase } from "@/lib/budgetCalc";
 import BudgetForecast from "./BudgetForecast";
+import BudgetAllocationDonut from "./BudgetAllocationDonut";
 import { getCategoryBadgeStyle } from "@/lib/categoryColors";
 
 interface BudgetWithRelations extends Omit<Budget, "amount"> {
@@ -26,7 +25,6 @@ interface BudgetClientProps {
   categories: ExpenseCategory[];
   initialExpenses: any[];
   initialOverrides: BudgetOverride[];
-  suppliers: Supplier[];
   initialSchedules: any[];
 }
 
@@ -35,13 +33,13 @@ const MONTH_LABELS = [
   "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
 ];
 
-export default function BudgetClient({ initialBudgets, categories: initialCategories, initialExpenses, initialOverrides, suppliers, initialSchedules }: BudgetClientProps) {
-  const [budgets, setBudgets] = useState<BudgetWithRelations[]>(initialBudgets);
-  const [overrides, setOverrides] = useState<BudgetOverride[]>(initialOverrides);
-  const [expenses, setExpenses] = useState<any[]>(initialExpenses);
+export default function BudgetClient({ initialBudgets, categories: initialCategories, initialExpenses, initialOverrides, initialSchedules }: BudgetClientProps) {
+  const [budgets] = useState<BudgetWithRelations[]>(initialBudgets);
+  const [overrides] = useState<BudgetOverride[]>(initialOverrides);
+  const [expenses] = useState<any[]>(initialExpenses);
   const [categories, setCategories] = useState<ExpenseCategory[]>(initialCategories);
-  const [schedules, setSchedules] = useState<any[]>(initialSchedules);
-  const [isPending, startTransition] = useTransition();
+  const [schedules] = useState<any[]>(initialSchedules);
+  const [, startTransition] = useTransition();
 
   // Editing inline del budget mensile per categoria (€ fisso oppure % delle entrate previste)
   const [editingCategoryBudgetId, setEditingCategoryBudgetId] = useState<string | null>(null);
@@ -75,243 +73,11 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
   const isCurrentMonth = selectedYear === now.getFullYear() && selectedMonth === now.getMonth() + 1;
 
-  // Stati del form (modifica di una previsione di Entrata gia' esistente: le uscite si
-  // creano/modificano ora solo da Scadenze, qui restano solo le entrate ricorrenti previste,
-  // es. lo stipendio mensile - vedi "Entrate Previste" piu' sotto).
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [amount, setAmount] = useState("");
-  const [label, setLabel] = useState("");
-  const [periodicity, setPeriodicity] = useState<"weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "annual">("monthly");
-  const [isEstimated, setIsEstimated] = useState(false);
-  const [hasDuration, setHasDuration] = useState(false);
-  const [endMonthInput, setEndMonthInput] = useState(now.getMonth() + 1);
-  const [endYearInput, setEndYearInput] = useState(now.getFullYear());
-  const [dayOfMonth, setDayOfMonth] = useState("");
-
-  // Editing inline dell'importo effettivo (override mensile)
-  const [editingOverrideBudgetId, setEditingOverrideBudgetId] = useState<string | null>(null);
-  const [overrideDraft, setOverrideDraft] = useState("");
-
-  // Conferma di una previsione come spesa/entrata reale del mese selezionato
-  const [confirmingBudgetId, setConfirmingBudgetId] = useState<string | null>(null);
-  const [confirmAmount, setConfirmAmount] = useState("");
-  const [confirmDate, setConfirmDate] = useState("");
-
-  const resetForm = () => {
-    setEditingId(null);
-    setAmount("");
-    setLabel("");
-    setPeriodicity("monthly");
-    setIsEstimated(false);
-    setHasDuration(false);
-    setEndMonthInput(now.getMonth() + 1);
-    setEndYearInput(now.getFullYear());
-    setDayOfMonth("");
-  };
-
-  const startEditBudget = (b: BudgetWithRelations) => {
-    setEditingId(b.id);
-    setAmount(String(b.amount));
-    setLabel(b.label);
-    setPeriodicity(b.periodicity);
-    setIsEstimated(b.is_estimated);
-    setDayOfMonth(b.day_of_month ? String(b.day_of_month) : "");
-    if (b.end_year && b.end_month) {
-      setHasDuration(true);
-      setEndMonthInput(b.end_month);
-      setEndYearInput(b.end_year);
-    } else {
-      setHasDuration(false);
-      setEndMonthInput(now.getMonth() + 1);
-      setEndYearInput(now.getFullYear());
-    }
-  };
-
-  const getMonthlyEquivalent = getMonthlyEquivalentBase;
-
-  // Trova l'eventuale override per una voce di budget in un mese/anno specifico
-  const findOverride = (budgetId: string, year: number, month: number) =>
-    overrides.find(o => o.budget_id === budgetId && o.year === year && o.month === month);
-
-  // Una voce con scadenza (es. mutuo/finanziamento) e' conclusa se il mese richiesto e' oltre end_year/end_month
-  const isBudgetEnded = (b: BudgetWithRelations, year: number, month: number) => isBudgetEndedBase(b, year, month);
-
-  // Importo effettivo previsto per una voce in un mese specifico: usa l'override se presente,
-  // altrimenti la stima di base (0 se la voce ha gia' una scadenza superata quel mese)
+  // Importo effettivo previsto per una voce di budget in un mese specifico: usa l'override se
+  // presente, altrimenti la stima di base (0 se la voce ha gia' una scadenza superata quel
+  // mese). Restano solo eventuali vecchie voci non ancora migrate a Scadenze; non c'e' piu'
+  // un'interfaccia per crearne di nuove.
   const getEffectiveAmount = (b: BudgetWithRelations, year: number, month: number) => getEffectiveAmountBase(b, overrides, year, month);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-      alert("Inserisci un importo valido");
-      return;
-    }
-    if (!label.trim()) {
-      alert("Inserisci una descrizione");
-      return;
-    }
-
-    let endMonth: number | null = null;
-    let endYear: number | null = null;
-    if (hasDuration) {
-      if (endYearInput < now.getFullYear() || (endYearInput === now.getFullYear() && endMonthInput < now.getMonth() + 1)) {
-        alert("La data di fine non può essere nel passato");
-        return;
-      }
-      endMonth = endMonthInput;
-      endYear = endYearInput;
-    }
-
-    let dayOfMonthValue: number | null = null;
-    if (dayOfMonth.trim()) {
-      const d = parseInt(dayOfMonth, 10);
-      if (!d || d < 1 || d > 31) {
-        alert("Inserisci un giorno del mese valido (1-31)");
-        return;
-      }
-      dayOfMonthValue = d;
-    }
-
-    startTransition(async () => {
-      try {
-        const payload = {
-          amount: Number(amount),
-          category_id: null,
-          supplier_id: null,
-          type: "income" as const,
-          label: label.trim(),
-          periodicity,
-          is_estimated: isEstimated,
-          end_month: endMonth,
-          end_year: endYear,
-          day_of_month: dayOfMonthValue,
-        };
-
-        if (editingId) {
-          const res = await updateBudget(editingId, payload);
-          if (!res.success || !res.data) {
-            alert(res.error || "Errore durante il salvataggio");
-            return;
-          }
-          setBudgets(prev => prev.map(b => b.id === editingId ? res.data : b));
-        } else {
-          const res = await createBudget(payload);
-          if (!res.success || !res.data) {
-            alert(res.error || "Errore durante il salvataggio");
-            return;
-          }
-          setBudgets(prev => [res.data, ...prev]);
-        }
-
-        resetForm();
-      } catch (err: any) {
-        alert(err.message || "Si è verificato un errore");
-      }
-    });
-  };
-
-  const startEditOverride = (b: BudgetWithRelations) => {
-    setEditingOverrideBudgetId(b.id);
-    setOverrideDraft(String(getEffectiveAmount(b, selectedYear, selectedMonth)));
-  };
-
-  const saveOverride = (b: BudgetWithRelations) => {
-    const value = Number(overrideDraft);
-    if (isNaN(value) || value < 0) {
-      alert("Inserisci un importo valido");
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const res = await upsertBudgetOverride({
-          budget_id: b.id,
-          year: selectedYear,
-          month: selectedMonth,
-          amount: value,
-        });
-        if (!res.success || !res.data) {
-          alert(res.error || "Errore durante il salvataggio della correzione mensile");
-          return;
-        }
-        setOverrides(prev => {
-          const withoutOld = prev.filter(o => !(o.budget_id === b.id && o.year === selectedYear && o.month === selectedMonth));
-          return [...withoutOld, res.data];
-        });
-        setEditingOverrideBudgetId(null);
-      } catch (err: any) {
-        alert(err.message || "Errore durante il salvataggio della correzione mensile");
-      }
-    });
-  };
-
-  const resetOverride = (b: BudgetWithRelations) => {
-    const ov = findOverride(b.id, selectedYear, selectedMonth);
-    if (!ov) return;
-    if (!confirm(`Ripristinare la stima di base per "${b.label}" in questo mese?`)) return;
-
-    startTransition(async () => {
-      try {
-        const res = await deleteBudgetOverride(ov.id);
-        if (!res.success) {
-          alert(res.error || "Errore durante il ripristino");
-          return;
-        }
-        setOverrides(prev => prev.filter(o => o.id !== ov.id));
-      } catch (err: any) {
-        alert(err.message || "Errore durante il ripristino");
-      }
-    });
-  };
-
-  // Trova l'eventuale spesa/entrata reale gia' collegata a questa voce di budget per il mese indicato
-  const findLinkedExpense = (budgetId: string, year: number, month: number) =>
-    expenses.find((e: any) => {
-      if (e.budget_id !== budgetId) return false;
-      const eDate = new Date(e.date);
-      return eDate.getFullYear() === year && eDate.getMonth() + 1 === month;
-    });
-
-  const startConfirmExpense = (b: BudgetWithRelations) => {
-    setConfirmingBudgetId(b.id);
-    setConfirmAmount(String(getEffectiveAmount(b, selectedYear, selectedMonth)));
-    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
-    const day = Math.min(b.day_of_month || Math.min(now.getDate(), daysInMonth), daysInMonth);
-    setConfirmDate(`${selectedYear}-${String(selectedMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
-  };
-
-  const cancelConfirmExpense = () => {
-    setConfirmingBudgetId(null);
-    setConfirmAmount("");
-    setConfirmDate("");
-  };
-
-  const saveConfirmExpense = (b: BudgetWithRelations) => {
-    const value = Number(confirmAmount);
-    if (isNaN(value) || value <= 0) {
-      alert("Inserisci un importo valido");
-      return;
-    }
-    if (!confirmDate) {
-      alert("Inserisci una data valida");
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        const res = await confirmBudgetExpense(b.id, { amount: value, date: confirmDate });
-        if (!res.success || !res.data) {
-          alert(res.error || "Errore durante la conferma");
-          return;
-        }
-        setExpenses(prev => [res.data, ...prev]);
-        cancelConfirmExpense();
-      } catch (err: any) {
-        alert(err.message || "Errore durante la conferma");
-      }
-    });
-  };
-
 
   const startEditCategoryBudget = (cat: ExpenseCategory) => {
     setEditingCategoryBudgetId(cat.id);
@@ -391,24 +157,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     });
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm("Sei sicuro di voler eliminare questa voce di budget?")) return;
-
-    startTransition(async () => {
-      try {
-        const res = await deleteBudget(id);
-        if (!res.success) {
-          alert(res.error || "Errore durante l'eliminazione");
-          return;
-        }
-        setBudgets(prev => prev.filter(b => b.id !== id));
-        if (editingId === id) resetForm();
-      } catch (err: any) {
-        alert(err.message || "Errore durante l'eliminazione");
-      }
-    });
-  };
-
   // Spese ed Entrate reali del mese selezionato
   const currentMonthTransactions = useMemo(() => {
     return expenses.filter(e => {
@@ -453,6 +201,21 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     });
 
     return { need, want, emergency, unclassified };
+  }, [currentMonthTransactions, categories]);
+
+  // Stessa classificazione di realSpendingByType, ma raggruppata per categoria: alimenta il
+  // dettaglio "Reale" del grafico ad allocazione (quali categorie compongono ogni fetta).
+  const realSpendingBreakdown = useMemo(() => {
+    const buckets: Record<"need" | "want" | "emergency", Record<string, number>> = { need: {}, want: {}, emergency: {} };
+    currentMonthTransactions.filter(t => !t.is_income).forEach((e: any) => {
+      const type = e.is_emergency ? "emergency" : (categories.find(c => c.id === e.category_id)?.budget_type || null);
+      if (!type) return;
+      const catName = categories.find(c => c.id === e.category_id)?.name || "Generica / Altro";
+      buckets[type as "need" | "want" | "emergency"][catName] = (buckets[type as "need" | "want" | "emergency"][catName] || 0) + Number(e.amount);
+    });
+    const toList = (rec: Record<string, number>) =>
+      Object.entries(rec).map(([label, amount]) => ({ label, amount })).sort((a, b) => b.amount - a.amount);
+    return { need: toList(buckets.need), want: toList(buckets.want), emergency: toList(buckets.emergency) };
   }, [currentMonthTransactions, categories]);
 
   // Scadenze (Scadenze & Pagamenti) del mese selezionato: sono l'unica fonte del previsto in
@@ -513,6 +276,20 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
       else need += data.amount;
     });
     return { need, want, emergency };
+  }, [scheduledByCategory, categories]);
+
+  // Stessa classificazione di scheduledByType, ma raggruppata per categoria: alimenta il
+  // dettaglio "Previsto" del grafico ad allocazione (quali scadenze compongono ogni fetta).
+  const scheduledSpendingBreakdown = useMemo(() => {
+    const buckets: Record<"need" | "want" | "emergency", Record<string, number>> = { need: {}, want: {}, emergency: {} };
+    Object.entries(scheduledByCategory).forEach(([catId, data]) => {
+      const type = (categories.find(c => c.id === catId)?.budget_type || "need") as "need" | "want" | "emergency";
+      const catName = categories.find(c => c.id === catId)?.name || "Generica / Altro";
+      buckets[type][catName] = (buckets[type][catName] || 0) + data.amount;
+    });
+    const toList = (rec: Record<string, number>) =>
+      Object.entries(rec).map(([label, amount]) => ({ label, amount })).sort((a, b) => b.amount - a.amount);
+    return { need: toList(buckets.need), want: toList(buckets.want), emergency: toList(buckets.emergency) };
   }, [scheduledByCategory, categories]);
 
   // Calcoli Totali per il mese selezionato: le entrate vengono dalle Scadenze di tipo entrata
@@ -689,6 +466,18 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
   // Percentuale realizzazione entrate
   const incomePercent = totals.income > 0 ? (realIncomeTotal / totals.income) * 100 : 0;
 
+  // Uscite reali del mese (tutte le spese registrate, a prescindere dalla classificazione),
+  // per il confronto Previsto/Reale simmetrico a quello delle entrate.
+  const realOutgoingsTotal = useMemo(
+    () => currentMonthTransactions.filter(t => !t.is_income).reduce((sum, t: any) => sum + Number(t.amount), 0),
+    [currentMonthTransactions]
+  );
+  const outgoingsPercent = totals.totalOutgoings > 0 ? (realOutgoingsTotal / totals.totalOutgoings) * 100 : 0;
+
+  // Base per le percentuali reali del grafico ad allocazione: se non ci sono ancora entrate
+  // registrate questo mese si usa la stima come base, come gia' fa ruleAnalysis.realBase.
+  const realIncomeBase = realIncomeTotal > 0 ? realIncomeTotal : totals.income;
+
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
       {/* Header */}
@@ -813,455 +602,115 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
       </div>
 
-      {/* Riquadro di Confronto delle Entrate Reali vs Stimate */}
+      {/* Ripartizione 50/30/20: grafico ad allocazione, a piena larghezza per lasciare spazio
+          all'interazione (fette che si sollevano al passaggio del mouse/tocco, con il dettaglio
+          delle voci che le compongono). */}
       <div
         className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
         style={{
-          background: "linear-gradient(135deg, hsla(150, 60%, 12%, 0.05), hsla(240, 10%, 10%, 0.8))",
-          borderColor: "hsla(150, 60%, 50%, 0.15)",
+          background: "linear-gradient(135deg, hsla(270, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
+          borderColor: "hsla(270, 60%, 50%, 0.15)",
         }}
       >
-        <div className="absolute top-[-30%] right-[-20%] w-60 h-60 rounded-full bg-emerald-500/5 blur-[80px] pointer-events-none" />
+        <div className="absolute top-[-30%] left-[-20%] w-40 h-40 rounded-full bg-purple-500/5 blur-[50px] pointer-events-none" />
 
-        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 relative z-10">
-          <div>
-            <h3 className="text-sm font-extrabold text-white tracking-wide">
-              💰 Entrate Mensili Realizzate contro Previsione
-            </h3>
-            <p className="text-[10px] text-zinc-500 mt-1">Confronta le entrate previste a budget con quelle reali registrate nel mese selezionato.</p>
-          </div>
-          <div className="text-right">
-            <span className="text-xs font-semibold text-zinc-400">Reale: </span>
-            <span className="text-sm font-black text-emerald-400">{formatCurrency(realIncomeTotal)}</span>
-            <span className="text-[10px] text-zinc-600"> / Previsto: {formatCurrency(totals.income)}</span>
-          </div>
-        </div>
+        <h3 className="text-sm font-extrabold text-white tracking-wide mb-4">
+          💡 Ripartizione 50/30/20
+        </h3>
 
-        <div className="mt-4 relative z-10 space-y-2">
-          <div className="relative h-2.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
-            <div
-              className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(incomePercent, 100)}%` }}
+        {ruleAnalysis ? (
+          <div className="space-y-4 text-xs z-10 relative">
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              Anello esterno = previsto, anello interno = reale. Bisogni max 50%, Desideri max 30%, Risparmio min 20%.
+            </p>
+
+            <BudgetAllocationDonut
+              previsto={{ need: totals.need, want: totals.want, emergency: totals.emergency, income: totals.income, breakdown: scheduledSpendingBreakdown }}
+              reale={{ need: ruleAnalysis.realNeed, want: ruleAnalysis.realWant, emergency: ruleAnalysis.realEmergency, income: realIncomeBase, breakdown: realSpendingBreakdown }}
             />
-          </div>
-          <div className="flex justify-between items-center text-[9px] font-bold text-zinc-500">
-            <span>{Math.round(incomePercent)}% del traguardo entrate raggiunto</span>
-            <span className={realIncomeTotal >= totals.income ? "text-emerald-400" : "text-amber-500"}>
-              {realIncomeTotal >= totals.income 
-                ? `Eccedenza di +${formatCurrency(realIncomeTotal - totals.income)}` 
-                : `Mancano ${formatCurrency(totals.income - realIncomeTotal)}`
-              }
-            </span>
-          </div>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 gap-8">
-
-        {/* Entrate Previste */}
-        <div
-          className="rounded-2xl p-6 border flex flex-col space-y-4 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
-          style={{
-            background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
-            borderColor: "hsla(240, 5%, 18%, 0.7)",
-          }}
-        >
-          <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
-
-          <div className="flex items-center justify-between flex-wrap gap-y-1">
-            <h3 className="text-sm font-extrabold text-white tracking-wide">
-              💰 Entrate Previste
-            </h3>
-            <span className="text-[9px] font-bold text-zinc-500">
-              Previsto per {MONTH_LABELS[selectedMonth - 1]} {selectedYear}
-            </span>
-          </div>
-          <p className="text-[10px] text-zinc-500 -mt-2">
-            Uscite ed entrate ricorrenti (es. stipendio) si gestiscono ora da Scadenze & Pagamenti: qui vedi solo il riepilogo di quanto e' previsto. Le righe sotto sono le eventuali vecchie voci create prima di questo cambiamento.
-          </p>
-
-          <div className="space-y-1.5 relative z-10">
-            {scheduledIncomeItemsList.length === 0 ? (
-              <p className="text-xs text-slate-500 py-4 text-center">
-                Nessuna entrata da Scadenze per {MONTH_LABELS[selectedMonth - 1]}.{" "}
-                <a href="/dashboard/schedules" className="text-emerald-400 hover:underline">Aggiungine una in Scadenze</a>.
-              </p>
-            ) : (
-              <div className="rounded-xl border border-emerald-500/15 divide-y divide-emerald-500/10 overflow-hidden">
-                {scheduledIncomeItemsList.map((s: any) => (
-                  <div key={s.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-emerald-500/[0.03]">
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold text-white truncate">{s.description || s.category}</div>
-                      <div className="text-[9px] text-zinc-500">
-                        {formatDate(s.due_date)}
-                        {s.recurrence !== "one-time" && " · 🔁 ricorrente"}
-                        {s.is_paid && " · già incassata"}
-                      </div>
-                    </div>
-                    <span className="text-sm font-black text-emerald-400 whitespace-nowrap">+{formatCurrency(s.amount)}</span>
-                  </div>
-                ))}
+            {ruleAnalysis.unclassified > 0 && (
+              <div className="text-[9px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 leading-relaxed">
+                ⚠️ {formatCurrency(ruleAnalysis.unclassified)} di spese reali non classificate (categoria senza un tipo impostato). Assegna Bisogno/Desiderio/Imprevisto alla categoria dal "Confronto Uscite per Categoria" qui sotto per includerle nel confronto.
               </div>
             )}
-            <a href="/dashboard/schedules" className="inline-block text-[9px] font-bold text-zinc-500 hover:text-emerald-400 transition-colors">
-              Gestisci le entrate ricorrenti in Scadenze & Pagamenti →
-            </a>
+
+            <div className="pt-3 border-t border-zinc-800 text-[10px] text-slate-400 leading-relaxed">
+              {ruleAnalysis.needPercent > 50 ? (
+                <span className="text-rose-400 font-semibold">⚠️ I tuoi bisogni essenziali superano il 50% pianificato. Valuta se ottimizzare spese fisse (bollette, affitti) o ridurre uscite variabili essenziali.</span>
+              ) : ruleAnalysis.savingsPercent < 20 ? (
+                <span className="text-amber-400 font-semibold">⚠️ Stai accantonando meno del 20% raccomandato. Prova a tagliare leggermente le spese voluttuarie (Desideri).</span>
+              ) : (
+                <span className="text-emerald-400 font-semibold">✨ Allocazione ottimale! Il tuo bilancio preventivo rispetta appieno i parametri di stabilità finanziaria.</span>
+              )}
+            </div>
           </div>
-
-          <div className="flex-1 overflow-x-auto pr-1 relative z-10 overflow-y-auto">
-            {budgets.length === 0 ? null : (
-              <table className="w-full text-left text-xs border-collapse">
-                <caption className="text-left text-[9px] font-bold text-zinc-600 uppercase tracking-wider pb-2 caption-top">
-                  Voci create prima del passaggio a Scadenze
-                </caption>
-                <thead>
-                  <tr className="border-b" style={{ borderColor: "hsl(240 5% 18% / 0.7)" }}>
-                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Descrizione</th>
-                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Stima</th>
-                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Frequenza</th>
-                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Stima Base</th>
-                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Previsto Mese</th>
-                    <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-center">Azioni</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y" style={{ borderColor: "hsl(240 5% 18% / 0.3)" }}>
-                  {budgets.map((b) => {
-                    const override = findOverride(b.id, selectedYear, selectedMonth);
-                    const ended = isBudgetEnded(b, selectedYear, selectedMonth);
-                    const effectiveAmount = getEffectiveAmount(b, selectedYear, selectedMonth);
-                    const isEditingOverride = editingOverrideBudgetId === b.id;
-                    const linkedExpense = findLinkedExpense(b.id, selectedYear, selectedMonth);
-                    const isConfirming = confirmingBudgetId === b.id;
-                    const isEditingBudget = editingId === b.id;
-
-                    return (
-                      <Fragment key={b.id}>
-                      <tr className="hover:bg-white/2 transition-colors duration-150 group animate-fade-in">
-                        <td className="py-3 pr-2">
-                          <div className="font-bold text-white break-words">{b.label}</div>
-                          <div className="flex flex-wrap gap-1 mt-0.5">
-                            {b.end_year && b.end_month && (
-                              <span
-                                className={`inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border ${
-                                  ended
-                                    ? "bg-zinc-800 text-zinc-500 border-zinc-700"
-                                    : "bg-indigo-500/10 text-indigo-300 border-indigo-500/20"
-                                }`}
-                                title="Ultimo mese in cui questa voce e' attiva"
-                              >
-                                🏁 {ended ? "Concluso" : `fino a ${MONTH_LABELS[b.end_month - 1].slice(0, 3)} ${b.end_year}`}
-                              </span>
-                            )}
-                            {b.day_of_month && (
-                              <span
-                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border bg-zinc-800/50 text-zinc-400 border-zinc-700"
-                                title="Giorno del mese in cui questa voce e' fissata"
-                              >
-                                📅 il {b.day_of_month}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-3">
-                          <span className={`text-[7px] uppercase font-extrabold tracking-widest ${b.is_estimated ? "text-amber-500" : "text-zinc-500"}`}>
-                            {b.is_estimated ? "Stimato" : "Certo"}
-                          </span>
-                        </td>
-                        <td className="py-3 text-slate-400 font-semibold uppercase tracking-wider text-[8px]">
-                          {PERIODS.find(p => p.value === b.periodicity)?.label}
-                        </td>
-                        <td className="py-3 text-right font-black text-xs text-emerald-400">
-                          +{formatCurrency(b.amount)}
-                        </td>
-                        <td className="py-3 text-right">
-                          {isEditingOverride ? (
-                            <div className="flex items-center justify-end gap-1">
-                              <input
-                                type="number"
-                                step="0.01"
-                                autoFocus
-                                value={overrideDraft}
-                                onChange={(e) => setOverrideDraft(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") saveOverride(b); if (e.key === "Escape") setEditingOverrideBudgetId(null); }}
-                                className="w-20 px-1.5 py-1 rounded text-right text-xs text-white bg-zinc-950 border border-indigo-500/50 focus:outline-none"
-                              />
-                              <button onClick={() => saveOverride(b)} className="text-emerald-400 hover:text-emerald-300 text-[10px] font-bold px-1" title="Salva">✓</button>
-                              <button onClick={() => setEditingOverrideBudgetId(null)} className="text-zinc-500 hover:text-white text-[10px] font-bold px-1" title="Annulla">✕</button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => startEditOverride(b)}
-                              className="group/ov inline-flex flex-col items-end"
-                              title="Modifica l'importo previsto per questo mese"
-                            >
-                              <span className={`font-black text-xs group-hover/ov:underline ${ended && !override ? "text-zinc-600" : "text-emerald-400"}`}>
-                                {ended && !override ? "—" : `+${formatCurrency(effectiveAmount)}`}
-                              </span>
-                              {override ? (
-                                <span className="text-[7px] uppercase font-extrabold tracking-widest text-amber-500">
-                                  Modificato
-                                </span>
-                              ) : ended ? (
-                                <span className="text-[7px] uppercase font-extrabold tracking-widest text-zinc-600">
-                                  Concluso
-                                </span>
-                              ) : null}
-                              {linkedExpense && (
-                                <span
-                                  className="text-[7px] uppercase font-extrabold tracking-widest text-emerald-500"
-                                  title={`Già registrata in Spese & Entrate il ${new Date(linkedExpense.date).toLocaleDateString("it-IT")}`}
-                                >
-                                  🔗 Registrata
-                                </span>
-                              )}
-                            </button>
-                          )}
-                        </td>
-                        <td className="py-3 text-center">
-                          {isConfirming ? (
-                            <div className="flex flex-col gap-1 items-end animate-fade-in">
-                              <input
-                                type="number"
-                                step="0.01"
-                                autoFocus
-                                value={confirmAmount}
-                                onChange={(e) => setConfirmAmount(e.target.value)}
-                                placeholder="Importo"
-                                className="w-24 px-1.5 py-1 rounded text-right text-[10px] text-white bg-zinc-950 border border-emerald-500/50 focus:outline-none"
-                              />
-                              <input
-                                type="date"
-                                value={confirmDate}
-                                onChange={(e) => setConfirmDate(e.target.value)}
-                                className="w-32 px-1.5 py-1 rounded text-[10px] text-white bg-zinc-950 border border-emerald-500/50 focus:outline-none"
-                              />
-                              <div className="flex gap-1">
-                                <button onClick={() => saveConfirmExpense(b)} className="text-emerald-400 hover:text-emerald-300 text-[9px] font-bold px-1" title="Registra in Spese & Entrate">✓ Registra</button>
-                                <button onClick={cancelConfirmExpense} className="text-zinc-500 hover:text-white text-[9px] font-bold px-1" title="Annulla">✕</button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center gap-1">
-                              {!linkedExpense && (
-                                <button
-                                  onClick={() => startConfirmExpense(b)}
-                                  className="p-1 rounded text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all text-[10px]"
-                                  title="Conferma come entrata reale in Spese & Entrate"
-                                >
-                                  ✅
-                                </button>
-                              )}
-                              {override && !isEditingOverride && (
-                                <button
-                                  onClick={() => resetOverride(b)}
-                                  className="p-1 rounded text-slate-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all text-[10px]"
-                                  title="Ripristina stima di base per questo mese"
-                                >
-                                  ↺
-                                </button>
-                              )}
-                              <button
-                                onClick={() => isEditingBudget ? resetForm() : startEditBudget(b)}
-                                className={`p-1 rounded transition-all text-[10px] ${isEditingBudget ? "text-sky-400 bg-sky-500/10" : "text-slate-500 hover:text-sky-400 hover:bg-sky-500/10"}`}
-                                title="Modifica voce"
-                              >
-                                ✎
-                              </button>
-                              <button
-                                onClick={() => handleDelete(b.id)}
-                                className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
-                                title="Elimina"
-                              >
-                                <DeleteIcon size={12} />
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                      {isEditingBudget && (
-                        <tr className="bg-white/[0.02]">
-                          <td colSpan={6} className="py-4 px-1">
-                            <form onSubmit={handleSubmit} className="rounded-xl border border-sky-500/20 bg-sky-500/[0.03] p-4 space-y-3 animate-fade-in">
-                              <div className="flex items-center justify-between">
-                                <h4 className="text-[11px] font-extrabold text-sky-300">✎ Modifica "{b.label}"</h4>
-                                <button type="button" onClick={resetForm} className="text-[9px] font-bold text-zinc-500 hover:text-white">Chiudi</button>
-                              </div>
-
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <div className="space-y-1">
-                                  <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Stima Importo</label>
-                                  <div className="flex gap-1 p-0.5 bg-zinc-950/60 border border-white/5 rounded-lg text-[9px] font-bold">
-                                    <button type="button" onClick={() => setIsEstimated(false)} className="flex-1 py-1 rounded transition-all" style={{ background: !isEstimated ? "hsl(240 10% 15%)" : "transparent", color: !isEstimated ? "white" : "hsl(240 5% 55%)" }}>Certo</button>
-                                    <button type="button" onClick={() => setIsEstimated(true)} className="flex-1 py-1 rounded transition-all" style={{ background: isEstimated ? "hsla(38, 90%, 50%, 0.12)" : "transparent", color: isEstimated ? "hsl(38 90% 60%)" : "hsl(240 5% 55%)" }}>Stimato</button>
-                                  </div>
-                                </div>
-
-                                <div className="space-y-1">
-                                  <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Frequenza</label>
-                                  <select value={periodicity} onChange={(e) => setPeriodicity(e.target.value as any)} className="w-full px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none select-custom">
-                                    {PERIODS.map((p) => (
-                                      <option key={p.value} value={p.value} style={{ background: "hsl(240 10% 10%)" }}>{p.label}</option>
-                                    ))}
-                                  </select>
-                                </div>
-
-                                <div className="space-y-1">
-                                  <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Giorno del mese</label>
-                                  <input type="number" min="1" max="31" step="1" value={dayOfMonth} onChange={(e) => setDayOfMonth(e.target.value)} placeholder="opzionale" className="w-full px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none" />
-                                </div>
-
-                                <div className="space-y-1 col-span-2">
-                                  <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">Descrizione / Nome</label>
-                                  <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} required className="w-full px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none" />
-                                </div>
-
-                                <div className="space-y-1">
-                                  <label className="block text-[8px] font-bold text-zinc-500 uppercase tracking-wider">
-                                    Importo {PERIODS.find(p => p.value === periodicity)?.label.toLowerCase()} (€)
-                                  </label>
-                                  <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required className="w-full px-2 py-1.5 rounded-lg text-right text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none" />
-                                </div>
-                              </div>
-
-                              <div className="space-y-1.5">
-                                <label className="flex items-center gap-2 text-[8px] font-bold text-zinc-500 uppercase tracking-wider cursor-pointer">
-                                  <input type="checkbox" checked={hasDuration} onChange={(e) => setHasDuration(e.target.checked)} className="accent-sky-500" />
-                                  Ha una scadenza (es. entrata temporanea)
-                                </label>
-                                {hasDuration && (
-                                  <div className="grid grid-cols-2 gap-2 animate-fade-in">
-                                    <select value={endMonthInput} onChange={(e) => setEndMonthInput(Number(e.target.value))} className="w-full px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none select-custom">
-                                      {MONTH_LABELS.map((m, i) => (
-                                        <option key={m} value={i + 1} style={{ background: "hsl(240 10% 10%)" }}>{m}</option>
-                                      ))}
-                                    </select>
-                                    <input type="number" min={now.getFullYear()} step="1" value={endYearInput} onChange={(e) => setEndYearInput(Number(e.target.value))} placeholder="Anno" className="w-full px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none" />
-                                  </div>
-                                )}
-                              </div>
-
-                              <button
-                                type="submit"
-                                disabled={isPending}
-                                className="w-full py-2 rounded-lg text-[10px] font-extrabold text-white transition-all disabled:opacity-50"
-                                style={{ background: "linear-gradient(135deg, hsl(200 85% 50%), hsl(210 80% 45%))", cursor: isPending ? "not-allowed" : "pointer" }}
-                              >
-                                {isPending ? "Salvataggio..." : "Salva Modifiche"}
-                              </button>
-                            </form>
-                          </td>
-                        </tr>
-                      )}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-
+        ) : (
+          <p className="text-xs text-slate-500 py-6 text-center">Inserisci prima un'entrata mensile per calcolare la ripartizione consigliata.</p>
+        )}
       </div>
 
-      {/* Ripartizione Consigliata & Elenco Voci */}
+      {/* Confronto Reale/Previsto (Entrate & Uscite) + Elenco per Categoria */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        {/* Regola 50/30/20 */}
+        {/* Entrate & Uscite: Reale contro Previsione */}
         <div
           className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
-            background: "linear-gradient(135deg, hsla(270, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
-            borderColor: "hsla(270, 60%, 50%, 0.15)",
+            background: "linear-gradient(135deg, hsla(150, 60%, 12%, 0.05), hsla(240, 10%, 10%, 0.8))",
+            borderColor: "hsla(150, 60%, 50%, 0.15)",
           }}
         >
-          <div className="absolute top-[-30%] left-[-20%] w-40 h-40 rounded-full bg-purple-500/5 blur-[50px] pointer-events-none" />
+          <div className="absolute top-[-30%] right-[-20%] w-60 h-60 rounded-full bg-emerald-500/5 blur-[80px] pointer-events-none" />
 
-          <h3 className="text-sm font-extrabold text-white tracking-wide mb-4">
-            💡 Ripartizione 50/30/20
+          <h3 className="text-sm font-extrabold text-white tracking-wide relative z-10">
+            💰 Reale contro Previsione
           </h3>
+          <p className="text-[10px] text-zinc-500 mt-1 relative z-10">Entrate e uscite del mese selezionato, previste contro effettivamente registrate.</p>
 
-          {ruleAnalysis ? (
-            <div className="space-y-4 text-xs z-10 relative">
-              <p className="text-[10px] text-slate-400 leading-relaxed">
-                In base a {formatCurrency(totals.income)} di entrate stimate, questi sono gli importi massimi consigliati: usali per decidere se una nuova voce va segnata come Bisogno o Desiderio prima di crearla, poi confronta col reale del mese.
-              </p>
-
-              {/* Bisogni */}
-              <div className="space-y-1">
-                <div className="flex justify-between items-baseline text-[10px] font-bold">
-                  <span className="text-rose-400">Bisogni — max 50%</span>
-                  <span className="text-white">Target {formatCurrency(ruleAnalysis.needTarget)}</span>
-                </div>
-                <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
-                  <div className="h-full bg-rose-500 rounded-full" style={{ width: `${Math.min(ruleAnalysis.needPercent, 100)}%` }} />
-                </div>
-                <div className="flex justify-between text-[9px] text-zinc-500">
-                  <span>Pianificato {formatCurrency(totals.need)} ({ruleAnalysis.needPercent}%)</span>
-                  <span className={`font-bold ${ruleAnalysis.realNeed > ruleAnalysis.needTarget ? "text-rose-400" : "text-emerald-400"}`}>
-                    Reale {formatCurrency(ruleAnalysis.realNeed)} ({ruleAnalysis.realNeedPercent}%)
-                  </span>
-                </div>
-              </div>
-
-              {/* Desideri */}
-              <div className="space-y-1">
-                <div className="flex justify-between items-baseline text-[10px] font-bold">
-                  <span className="text-sky-400">Desideri — max 30%</span>
-                  <span className="text-white">Target {formatCurrency(ruleAnalysis.wantTarget)}</span>
-                </div>
-                <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
-                  <div className="h-full bg-sky-500 rounded-full" style={{ width: `${Math.min(ruleAnalysis.wantPercent, 100)}%` }} />
-                </div>
-                <div className="flex justify-between text-[9px] text-zinc-500">
-                  <span>Pianificato {formatCurrency(totals.want)} ({ruleAnalysis.wantPercent}%)</span>
-                  <span className={`font-bold ${ruleAnalysis.realWant > ruleAnalysis.wantTarget ? "text-rose-400" : "text-emerald-400"}`}>
-                    Reale {formatCurrency(ruleAnalysis.realWant)} ({ruleAnalysis.realWantPercent}%)
-                  </span>
-                </div>
-              </div>
-
-              {/* Risparmio & Imprevisti */}
-              <div className="space-y-1">
-                <div className="flex justify-between items-baseline text-[10px] font-bold">
-                  <span className="text-emerald-400">Risparmio & Imprevisti — min 20%</span>
-                  <span className="text-white">Target {formatCurrency(ruleAnalysis.savingsTarget)}</span>
-                </div>
-                <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
-                  <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.max(0, Math.min(ruleAnalysis.savingsPercent, 100))}%` }} />
-                </div>
-                <div className="flex justify-between text-[9px] text-zinc-500">
-                  <span>Pianificato {formatCurrency(totals.income - totals.need - totals.want - totals.emergency)} ({ruleAnalysis.savingsPercent}%)</span>
-                  <span className={`font-bold ${ruleAnalysis.realSavingsPercent < 20 ? "text-rose-400" : "text-emerald-400"}`}>
-                    Reale {formatCurrency(ruleAnalysis.realSavings)} ({ruleAnalysis.realSavingsPercent}%)
-                  </span>
-                </div>
-                {(totals.emergency > 0 || ruleAnalysis.realEmergency > 0) && (
-                  <div className="flex justify-between text-[9px] text-zinc-600 pt-0.5">
-                    <span>di cui Imprevisti pianificato: {formatCurrency(totals.emergency)}</span>
-                    <span className="font-bold text-amber-400">Imprevisti reale: {formatCurrency(ruleAnalysis.realEmergency)}</span>
-                  </div>
-                )}
-              </div>
-
-              {ruleAnalysis.unclassified > 0 && (
-                <div className="text-[9px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 leading-relaxed">
-                  ⚠️ {formatCurrency(ruleAnalysis.unclassified)} di spese reali non classificate (categoria senza un tipo impostato). Assegna Bisogno/Desiderio/Imprevisto alla categoria dal "Confronto Uscite per Categoria" qui sotto per includerle nel confronto.
-                </div>
-              )}
-
-              <div className="pt-3 border-t border-zinc-800 text-[10px] text-slate-400 leading-relaxed">
-                {ruleAnalysis.needPercent > 50 ? (
-                  <span className="text-rose-400 font-semibold">⚠️ I tuoi bisogni essenziali superano il 50% pianificato. Valuta se ottimizzare spese fisse (bollette, affitti) o ridurre uscite variabili essenziali.</span>
-                ) : ruleAnalysis.savingsPercent < 20 ? (
-                  <span className="text-amber-400 font-semibold">⚠️ Stai accantonando meno del 20% raccomandato. Prova a tagliare leggermente le spese voluttuarie (Desideri).</span>
-                ) : (
-                  <span className="text-emerald-400 font-semibold">✨ Allocazione ottimale! Il tuo bilancio preventivo rispetta appieno i parametri di stabilità finanziaria.</span>
-                )}
-              </div>
+          <div className="mt-4 relative z-10 space-y-1.5">
+            <div className="flex justify-between items-baseline text-[10px] font-bold">
+              <span className="text-emerald-400">Entrate</span>
+              <span className="text-zinc-500">{formatCurrency(realIncomeTotal)} <span className="text-zinc-700">/</span> {formatCurrency(totals.income)}</span>
             </div>
-          ) : (
-            <p className="text-xs text-slate-500 py-6 text-center">Inserisci prima un'entrata mensile per calcolare la ripartizione consigliata.</p>
-          )}
+            <div className="relative h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+              <div
+                className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(incomePercent, 100)}%` }}
+              />
+            </div>
+            <div className="flex justify-between items-center text-[9px] font-bold text-zinc-500">
+              <span>{Math.round(incomePercent)}% raggiunto</span>
+              <span className={realIncomeTotal >= totals.income ? "text-emerald-400" : "text-amber-500"}>
+                {realIncomeTotal >= totals.income
+                  ? `+${formatCurrency(realIncomeTotal - totals.income)}`
+                  : `Mancano ${formatCurrency(totals.income - realIncomeTotal)}`
+                }
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-4 relative z-10 space-y-1.5">
+            <div className="flex justify-between items-baseline text-[10px] font-bold">
+              <span className="text-rose-400">Uscite</span>
+              <span className="text-zinc-500">{formatCurrency(realOutgoingsTotal)} <span className="text-zinc-700">/</span> {formatCurrency(totals.totalOutgoings)}</span>
+            </div>
+            <div className="relative h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+              <div
+                className="h-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)] rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(outgoingsPercent, 100)}%` }}
+              />
+            </div>
+            <div className="flex justify-between items-center text-[9px] font-bold text-zinc-500">
+              <span>{Math.round(outgoingsPercent)}% del previsto speso</span>
+              <span className={realOutgoingsTotal <= totals.totalOutgoings ? "text-emerald-400" : "text-rose-400"}>
+                {realOutgoingsTotal <= totals.totalOutgoings
+                  ? `Restano ${formatCurrency(totals.totalOutgoings - realOutgoingsTotal)}`
+                  : `Sforato di ${formatCurrency(realOutgoingsTotal - totals.totalOutgoings)}`
+                }
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Confronto Budget vs Spese Reali (2 Colonne) */}

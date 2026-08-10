@@ -89,6 +89,7 @@ export interface PaymentSchedule {
   end_year: number | null;
   is_estimated: boolean; // true se l'importo e' una stima e non un valore certo
   is_income: boolean; // true per un impegno ricorrente di entrata (es. stipendio), invece di un'uscita
+  generated_from_schedule_id: string | null; // FK -> payment_schedules.id, se creata automaticamente saldando quella scadenza ricorrente
   created_at: string;
   updated_at: string;
 }
@@ -349,6 +350,7 @@ export interface Database {
           end_year?: number | null;
           is_estimated?: boolean;
           is_income?: boolean;
+          generated_from_schedule_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -370,6 +372,7 @@ export interface Database {
           end_year?: number | null;
           is_estimated?: boolean;
           is_income?: boolean;
+          generated_from_schedule_id?: string | null;
           created_at?: string;
           updated_at?: string;
         };
