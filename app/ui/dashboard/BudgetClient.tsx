@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo } from "react";
-import { type Budget, type BudgetOverride, type ExpenseCategory, type Supplier } from "@/lib/types/database";
+import { type Budget, type BudgetOverride, type ExpenseCategory } from "@/lib/types/database";
 import { updateCategoryBudget, updateCategoryBudgetPercent, updateCategoryBudgetType } from "@/app/actions/categories";
 import { formatCurrency } from "@/lib/format";
 import { getEffectiveAmount as getEffectiveAmountBase } from "@/lib/budgetCalc";
@@ -25,7 +25,6 @@ interface BudgetClientProps {
   categories: ExpenseCategory[];
   initialExpenses: any[];
   initialOverrides: BudgetOverride[];
-  suppliers: Supplier[];
   initialSchedules: any[];
 }
 
@@ -34,7 +33,7 @@ const MONTH_LABELS = [
   "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
 ];
 
-export default function BudgetClient({ initialBudgets, categories: initialCategories, initialExpenses, initialOverrides, suppliers, initialSchedules }: BudgetClientProps) {
+export default function BudgetClient({ initialBudgets, categories: initialCategories, initialExpenses, initialOverrides, initialSchedules }: BudgetClientProps) {
   const [budgets] = useState<BudgetWithRelations[]>(initialBudgets);
   const [overrides] = useState<BudgetOverride[]>(initialOverrides);
   const [expenses] = useState<any[]>(initialExpenses);
@@ -204,6 +203,21 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     return { need, want, emergency, unclassified };
   }, [currentMonthTransactions, categories]);
 
+  // Stessa classificazione di realSpendingByType, ma raggruppata per categoria: alimenta il
+  // dettaglio "Reale" del grafico ad allocazione (quali categorie compongono ogni fetta).
+  const realSpendingBreakdown = useMemo(() => {
+    const buckets: Record<"need" | "want" | "emergency", Record<string, number>> = { need: {}, want: {}, emergency: {} };
+    currentMonthTransactions.filter(t => !t.is_income).forEach((e: any) => {
+      const type = e.is_emergency ? "emergency" : (categories.find(c => c.id === e.category_id)?.budget_type || null);
+      if (!type) return;
+      const catName = categories.find(c => c.id === e.category_id)?.name || "Generica / Altro";
+      buckets[type as "need" | "want" | "emergency"][catName] = (buckets[type as "need" | "want" | "emergency"][catName] || 0) + Number(e.amount);
+    });
+    const toList = (rec: Record<string, number>) =>
+      Object.entries(rec).map(([label, amount]) => ({ label, amount })).sort((a, b) => b.amount - a.amount);
+    return { need: toList(buckets.need), want: toList(buckets.want), emergency: toList(buckets.emergency) };
+  }, [currentMonthTransactions, categories]);
+
   // Scadenze (Scadenze & Pagamenti) del mese selezionato: sono l'unica fonte del previsto in
   // uscita (Bisogno/Desiderio/Imprevisto), dato che le voci di budget non gestiscono piu' le
   // uscite. Una scadenza conta solo per il mese della sua data di scadenza: se e' scaduta e non
@@ -262,6 +276,20 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
       else need += data.amount;
     });
     return { need, want, emergency };
+  }, [scheduledByCategory, categories]);
+
+  // Stessa classificazione di scheduledByType, ma raggruppata per categoria: alimenta il
+  // dettaglio "Previsto" del grafico ad allocazione (quali scadenze compongono ogni fetta).
+  const scheduledSpendingBreakdown = useMemo(() => {
+    const buckets: Record<"need" | "want" | "emergency", Record<string, number>> = { need: {}, want: {}, emergency: {} };
+    Object.entries(scheduledByCategory).forEach(([catId, data]) => {
+      const type = (categories.find(c => c.id === catId)?.budget_type || "need") as "need" | "want" | "emergency";
+      const catName = categories.find(c => c.id === catId)?.name || "Generica / Altro";
+      buckets[type][catName] = (buckets[type][catName] || 0) + data.amount;
+    });
+    const toList = (rec: Record<string, number>) =>
+      Object.entries(rec).map(([label, amount]) => ({ label, amount })).sort((a, b) => b.amount - a.amount);
+    return { need: toList(buckets.need), want: toList(buckets.want), emergency: toList(buckets.emergency) };
   }, [scheduledByCategory, categories]);
 
   // Calcoli Totali per il mese selezionato: le entrate vengono dalle Scadenze di tipo entrata
@@ -438,6 +466,14 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
   // Percentuale realizzazione entrate
   const incomePercent = totals.income > 0 ? (realIncomeTotal / totals.income) * 100 : 0;
 
+  // Uscite reali del mese (tutte le spese registrate, a prescindere dalla classificazione),
+  // per il confronto Previsto/Reale simmetrico a quello delle entrate.
+  const realOutgoingsTotal = useMemo(
+    () => currentMonthTransactions.filter(t => !t.is_income).reduce((sum, t: any) => sum + Number(t.amount), 0),
+    [currentMonthTransactions]
+  );
+  const outgoingsPercent = totals.totalOutgoings > 0 ? (realOutgoingsTotal / totals.totalOutgoings) * 100 : 0;
+
   // Base per le percentuali reali del grafico ad allocazione: se non ci sono ancora entrate
   // registrate questo mese si usa la stima come base, come gia' fa ruleAnalysis.realBase.
   const realIncomeBase = realIncomeTotal > 0 ? realIncomeTotal : totals.income;
@@ -566,96 +602,115 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
       </div>
 
-      {/* Riquadro di Confronto delle Entrate Reali vs Stimate */}
+      {/* Ripartizione 50/30/20: grafico ad allocazione, a piena larghezza per lasciare spazio
+          all'interazione (fette che si sollevano al passaggio del mouse/tocco, con il dettaglio
+          delle voci che le compongono). */}
       <div
         className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
         style={{
-          background: "linear-gradient(135deg, hsla(150, 60%, 12%, 0.05), hsla(240, 10%, 10%, 0.8))",
-          borderColor: "hsla(150, 60%, 50%, 0.15)",
+          background: "linear-gradient(135deg, hsla(270, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
+          borderColor: "hsla(270, 60%, 50%, 0.15)",
         }}
       >
-        <div className="absolute top-[-30%] right-[-20%] w-60 h-60 rounded-full bg-emerald-500/5 blur-[80px] pointer-events-none" />
+        <div className="absolute top-[-30%] left-[-20%] w-40 h-40 rounded-full bg-purple-500/5 blur-[50px] pointer-events-none" />
 
-        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 relative z-10">
-          <div>
-            <h3 className="text-sm font-extrabold text-white tracking-wide">
-              💰 Entrate Mensili Realizzate contro Previsione
-            </h3>
-            <p className="text-[10px] text-zinc-500 mt-1">Confronta le entrate previste a budget con quelle reali registrate nel mese selezionato.</p>
-          </div>
-          <div className="text-right">
-            <span className="text-xs font-semibold text-zinc-400">Reale: </span>
-            <span className="text-sm font-black text-emerald-400">{formatCurrency(realIncomeTotal)}</span>
-            <span className="text-[10px] text-zinc-600"> / Previsto: {formatCurrency(totals.income)}</span>
-          </div>
-        </div>
+        <h3 className="text-sm font-extrabold text-white tracking-wide mb-4">
+          💡 Ripartizione 50/30/20
+        </h3>
 
-        <div className="mt-4 relative z-10 space-y-2">
-          <div className="relative h-2.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
-            <div
-              className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(incomePercent, 100)}%` }}
+        {ruleAnalysis ? (
+          <div className="space-y-4 text-xs z-10 relative">
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              Anello esterno = previsto, anello interno = reale. Bisogni max 50%, Desideri max 30%, Risparmio min 20%.
+            </p>
+
+            <BudgetAllocationDonut
+              previsto={{ need: totals.need, want: totals.want, emergency: totals.emergency, income: totals.income, breakdown: scheduledSpendingBreakdown }}
+              reale={{ need: ruleAnalysis.realNeed, want: ruleAnalysis.realWant, emergency: ruleAnalysis.realEmergency, income: realIncomeBase, breakdown: realSpendingBreakdown }}
             />
+
+            {ruleAnalysis.unclassified > 0 && (
+              <div className="text-[9px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 leading-relaxed">
+                ⚠️ {formatCurrency(ruleAnalysis.unclassified)} di spese reali non classificate (categoria senza un tipo impostato). Assegna Bisogno/Desiderio/Imprevisto alla categoria dal "Confronto Uscite per Categoria" qui sotto per includerle nel confronto.
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-zinc-800 text-[10px] text-slate-400 leading-relaxed">
+              {ruleAnalysis.needPercent > 50 ? (
+                <span className="text-rose-400 font-semibold">⚠️ I tuoi bisogni essenziali superano il 50% pianificato. Valuta se ottimizzare spese fisse (bollette, affitti) o ridurre uscite variabili essenziali.</span>
+              ) : ruleAnalysis.savingsPercent < 20 ? (
+                <span className="text-amber-400 font-semibold">⚠️ Stai accantonando meno del 20% raccomandato. Prova a tagliare leggermente le spese voluttuarie (Desideri).</span>
+              ) : (
+                <span className="text-emerald-400 font-semibold">✨ Allocazione ottimale! Il tuo bilancio preventivo rispetta appieno i parametri di stabilità finanziaria.</span>
+              )}
+            </div>
           </div>
-          <div className="flex justify-between items-center text-[9px] font-bold text-zinc-500">
-            <span>{Math.round(incomePercent)}% del traguardo entrate raggiunto</span>
-            <span className={realIncomeTotal >= totals.income ? "text-emerald-400" : "text-amber-500"}>
-              {realIncomeTotal >= totals.income 
-                ? `Eccedenza di +${formatCurrency(realIncomeTotal - totals.income)}` 
-                : `Mancano ${formatCurrency(totals.income - realIncomeTotal)}`
-              }
-            </span>
-          </div>
-        </div>
+        ) : (
+          <p className="text-xs text-slate-500 py-6 text-center">Inserisci prima un'entrata mensile per calcolare la ripartizione consigliata.</p>
+        )}
       </div>
 
-      {/* Ripartizione Consigliata & Elenco Voci */}
+      {/* Confronto Reale/Previsto (Entrate & Uscite) + Elenco per Categoria */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-        {/* Regola 50/30/20 */}
+        {/* Entrate & Uscite: Reale contro Previsione */}
         <div
           className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
           style={{
-            background: "linear-gradient(135deg, hsla(270, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
-            borderColor: "hsla(270, 60%, 50%, 0.15)",
+            background: "linear-gradient(135deg, hsla(150, 60%, 12%, 0.05), hsla(240, 10%, 10%, 0.8))",
+            borderColor: "hsla(150, 60%, 50%, 0.15)",
           }}
         >
-          <div className="absolute top-[-30%] left-[-20%] w-40 h-40 rounded-full bg-purple-500/5 blur-[50px] pointer-events-none" />
+          <div className="absolute top-[-30%] right-[-20%] w-60 h-60 rounded-full bg-emerald-500/5 blur-[80px] pointer-events-none" />
 
-          <h3 className="text-sm font-extrabold text-white tracking-wide mb-4">
-            💡 Ripartizione 50/30/20
+          <h3 className="text-sm font-extrabold text-white tracking-wide relative z-10">
+            💰 Reale contro Previsione
           </h3>
+          <p className="text-[10px] text-zinc-500 mt-1 relative z-10">Entrate e uscite del mese selezionato, previste contro effettivamente registrate.</p>
 
-          {ruleAnalysis ? (
-            <div className="space-y-4 text-xs z-10 relative">
-              <p className="text-[10px] text-slate-400 leading-relaxed">
-                Anello esterno = previsto, anello interno = reale. Bisogni max 50%, Desideri max 30%, Risparmio min 20%.
-              </p>
-
-              <BudgetAllocationDonut
-                previsto={{ need: totals.need, want: totals.want, emergency: totals.emergency, income: totals.income }}
-                reale={{ need: ruleAnalysis.realNeed, want: ruleAnalysis.realWant, emergency: ruleAnalysis.realEmergency, income: realIncomeBase }}
-              />
-
-              {ruleAnalysis.unclassified > 0 && (
-                <div className="text-[9px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 leading-relaxed">
-                  ⚠️ {formatCurrency(ruleAnalysis.unclassified)} di spese reali non classificate (categoria senza un tipo impostato). Assegna Bisogno/Desiderio/Imprevisto alla categoria dal "Confronto Uscite per Categoria" qui sotto per includerle nel confronto.
-                </div>
-              )}
-
-              <div className="pt-3 border-t border-zinc-800 text-[10px] text-slate-400 leading-relaxed">
-                {ruleAnalysis.needPercent > 50 ? (
-                  <span className="text-rose-400 font-semibold">⚠️ I tuoi bisogni essenziali superano il 50% pianificato. Valuta se ottimizzare spese fisse (bollette, affitti) o ridurre uscite variabili essenziali.</span>
-                ) : ruleAnalysis.savingsPercent < 20 ? (
-                  <span className="text-amber-400 font-semibold">⚠️ Stai accantonando meno del 20% raccomandato. Prova a tagliare leggermente le spese voluttuarie (Desideri).</span>
-                ) : (
-                  <span className="text-emerald-400 font-semibold">✨ Allocazione ottimale! Il tuo bilancio preventivo rispetta appieno i parametri di stabilità finanziaria.</span>
-                )}
-              </div>
+          <div className="mt-4 relative z-10 space-y-1.5">
+            <div className="flex justify-between items-baseline text-[10px] font-bold">
+              <span className="text-emerald-400">Entrate</span>
+              <span className="text-zinc-500">{formatCurrency(realIncomeTotal)} <span className="text-zinc-700">/</span> {formatCurrency(totals.income)}</span>
             </div>
-          ) : (
-            <p className="text-xs text-slate-500 py-6 text-center">Inserisci prima un'entrata mensile per calcolare la ripartizione consigliata.</p>
-          )}
+            <div className="relative h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+              <div
+                className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)] rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(incomePercent, 100)}%` }}
+              />
+            </div>
+            <div className="flex justify-between items-center text-[9px] font-bold text-zinc-500">
+              <span>{Math.round(incomePercent)}% raggiunto</span>
+              <span className={realIncomeTotal >= totals.income ? "text-emerald-400" : "text-amber-500"}>
+                {realIncomeTotal >= totals.income
+                  ? `+${formatCurrency(realIncomeTotal - totals.income)}`
+                  : `Mancano ${formatCurrency(totals.income - realIncomeTotal)}`
+                }
+              </span>
+            </div>
+          </div>
+
+          <div className="mt-4 relative z-10 space-y-1.5">
+            <div className="flex justify-between items-baseline text-[10px] font-bold">
+              <span className="text-rose-400">Uscite</span>
+              <span className="text-zinc-500">{formatCurrency(realOutgoingsTotal)} <span className="text-zinc-700">/</span> {formatCurrency(totals.totalOutgoings)}</span>
+            </div>
+            <div className="relative h-2 w-full bg-zinc-950 rounded-full overflow-hidden border border-white/5">
+              <div
+                className="h-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)] rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(outgoingsPercent, 100)}%` }}
+              />
+            </div>
+            <div className="flex justify-between items-center text-[9px] font-bold text-zinc-500">
+              <span>{Math.round(outgoingsPercent)}% del previsto speso</span>
+              <span className={realOutgoingsTotal <= totals.totalOutgoings ? "text-emerald-400" : "text-rose-400"}>
+                {realOutgoingsTotal <= totals.totalOutgoings
+                  ? `Restano ${formatCurrency(totals.totalOutgoings - realOutgoingsTotal)}`
+                  : `Sforato di ${formatCurrency(realOutgoingsTotal - totals.totalOutgoings)}`
+                }
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Confronto Budget vs Spese Reali (2 Colonne) */}
