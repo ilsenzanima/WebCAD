@@ -72,14 +72,29 @@ export default function BudgetForecast({
   // Solo le scadenze non ancora saldate: quella pagata ha gia' generato la successiva occorrenza
   // (se ricorrente), quindi usarle entrambe come base di proiezione conterebbe gli stessi mesi due volte.
   const activeSchedules = useMemo(() => schedules.filter((s: any) => !s.is_paid), [schedules]);
+  const activeExpenseSchedules = useMemo(() => activeSchedules.filter((s: any) => !s.is_income), [activeSchedules]);
+  const activeIncomeSchedules = useMemo(() => activeSchedules.filter((s: any) => s.is_income), [activeSchedules]);
 
   const monthsData = useMemo(() => {
     return months.map(({ year, month }) => {
-      const income = budgets
+      // Vecchie voci di budget di tipo entrata (create prima che le Scadenze assorbissero
+      // anche le entrate ricorrenti): sommate per non perdere le previsioni gia' impostate.
+      const legacyIncome = budgets
         .filter(b => b.type === "income")
         .reduce((sum, b) => sum + getEffectiveAmount(b, overrides, year, month), 0);
 
-      const outgoingItems = activeSchedules
+      const incomeItems = activeIncomeSchedules
+        .map((s: any) => {
+          const amount = amountForMonth(s, year, month);
+          if (amount === null) return null;
+          return { key: `inc-${s.id}`, label: s.description || s.category, amount };
+        })
+        .filter((x): x is { key: string; label: string; amount: number } => x !== null)
+        .sort((a, b) => b.amount - a.amount);
+
+      const income = legacyIncome + incomeItems.reduce((s, x) => s + x.amount, 0);
+
+      const outgoingItems = activeExpenseSchedules
         .map((s: any) => {
           const amount = amountForMonth(s, year, month);
           if (amount === null) return null;
@@ -90,9 +105,9 @@ export default function BudgetForecast({
 
       const outgoings = outgoingItems.reduce((s, x) => s + x.amount, 0);
 
-      return { year, month, income, outgoings, saldo: income - outgoings, outgoingItems };
+      return { year, month, income, outgoings, saldo: income - outgoings, outgoingItems, incomeItems };
     });
-  }, [months, budgets, overrides, activeSchedules]);
+  }, [months, budgets, overrides, activeExpenseSchedules, activeIncomeSchedules]);
 
   return (
     <div
@@ -112,7 +127,7 @@ export default function BudgetForecast({
       </div>
 
       <div className="flex gap-3 overflow-x-auto pb-2 relative z-10 snap-x">
-        {monthsData.map(({ year, month, income, outgoings, saldo, outgoingItems }) => {
+        {monthsData.map(({ year, month, income, outgoings, saldo, outgoingItems, incomeItems }) => {
           const isSelected = year === selectedYear && month === selectedMonth;
           const isBase = year === baseYear && month === baseMonth;
 
@@ -155,8 +170,16 @@ export default function BudgetForecast({
                 </div>
               </button>
 
-              {outgoingItems.length > 0 && (
+              {(incomeItems.length > 0 || outgoingItems.length > 0) && (
                 <div className="pt-1 border-t border-zinc-800/40 space-y-1 max-h-28 overflow-y-auto">
+                  {incomeItems.map((item) => (
+                    <div key={item.key} className="flex items-center justify-between gap-1">
+                      <span className="text-[8px] text-zinc-400 truncate flex-1" title={item.label}>
+                        💰 {item.label}
+                      </span>
+                      <span className="text-[8px] text-emerald-400 font-semibold whitespace-nowrap">{formatCurrency(item.amount)}</span>
+                    </div>
+                  ))}
                   {outgoingItems.map((item) => (
                     <div key={item.key} className="flex items-center justify-between gap-1">
                       <span className="text-[8px] text-zinc-400 truncate flex-1" title={item.label}>

@@ -137,6 +137,9 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   // fine nota, importo certo o stimato), cosi' non serve piu' un doppio inserimento.
   const [isEstimated, setIsEstimated] = useState(false);
   const [hasDuration, setHasDuration] = useState(false);
+  // Entrata ricorrente (es. stipendio) invece di un'uscita: categoria e fornitore non sono
+  // obbligatori in questo caso, dato che servono solo a classificare le spese.
+  const [isIncome, setIsIncome] = useState(false);
   const now = new Date();
   const [endMonthInput, setEndMonthInput] = useState(now.getMonth() + 1);
   const [endYearInput, setEndYearInput] = useState(now.getFullYear());
@@ -153,6 +156,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     setHasDuration(false);
     setEndMonthInput(now.getMonth() + 1);
     setEndYearInput(now.getFullYear());
+    setIsIncome(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -163,7 +167,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     }
 
     const selectedCat = categories.find(c => c.id === categoryId);
-    if (!selectedCat) {
+    if (!isIncome && !selectedCat) {
       alert("Seleziona una categoria valida");
       return;
     }
@@ -183,15 +187,16 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
       try {
         const payload = {
           amount: Number(amount),
-          category_id: categoryId,
-          supplier_id: supplierId || null,
-          category_name: selectedCat.name,
+          category_id: isIncome ? (categoryId || null) : categoryId,
+          supplier_id: isIncome ? null : (supplierId || null),
+          category_name: selectedCat ? selectedCat.name : (description.trim() || "Entrata"),
           description,
           due_date: dueDate,
           recurrence,
           is_estimated: isEstimated,
           end_month: endMonth,
           end_year: endYear,
+          is_income: isIncome,
         };
 
         if (editingId) {
@@ -228,6 +233,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     setDueDate(item.due_date);
     setRecurrence(item.recurrence);
     setIsEstimated(item.is_estimated || false);
+    setIsIncome(item.is_income || false);
     if (item.end_year && item.end_month) {
       setHasDuration(true);
       setEndMonthInput(item.end_month);
@@ -588,6 +594,35 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
+            {/* Tipo: Uscita o Entrata ricorrente (es. stipendio) */}
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Tipo</label>
+              <div className="flex gap-2 p-1 bg-zinc-950/60 border border-white/5 rounded-xl text-[10px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setIsIncome(false)}
+                  className="flex-1 py-2 rounded-lg transition-all"
+                  style={{
+                    background: !isIncome ? "hsl(240 10% 15%)" : "transparent",
+                    color: !isIncome ? "white" : "hsl(240 5% 55%)",
+                  }}
+                >
+                  📅 Uscita
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsIncome(true)}
+                  className="flex-1 py-2 rounded-lg transition-all"
+                  style={{
+                    background: isIncome ? "hsla(150, 80%, 45%, 0.12)" : "transparent",
+                    color: isIncome ? "hsl(150 80% 55%)" : "hsl(240 5% 55%)",
+                  }}
+                >
+                  💰 Entrata
+                </button>
+              </div>
+            </div>
+
             {/* Importo */}
             <div className="space-y-1.5">
               <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Importo (€)</label>
@@ -615,19 +650,22 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
               />
             </div>
 
-            {/* Categoria */}
+            {/* Categoria (facoltativa per un'entrata: serve solo a classificare le uscite) */}
             <div className="space-y-1.5">
               <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Categoria</label>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                required
+                required={!isIncome}
                 className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
                 style={{
                   background: "hsl(240 10% 4% / 0.8)",
                   borderColor: "hsl(240 5% 18%)",
                 }}
               >
+                {isIncome && (
+                  <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessuna</option>
+                )}
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id} style={{ background: "hsl(240 10% 10%)" }}>
                     {cat.name}
@@ -636,7 +674,8 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
               </select>
             </div>
 
-            {/* Fornitore */}
+            {/* Fornitore (non si applica a un'entrata) */}
+            {!isIncome && (
             <div className="space-y-1.5">
               <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Fornitore / Gestore</label>
               {!isAddingSupplier ? (
@@ -716,6 +755,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                 </div>
               )}
             </div>
+            )}
 
             {/* Data Scadenza */}
             <div className="space-y-1.5">
@@ -939,6 +979,11 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                             </div>
                           )}
                           <div className="flex flex-wrap gap-1 mt-1">
+                            {item.is_income && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border bg-emerald-500/10 text-emerald-300 border-emerald-500/20">
+                                💰 Entrata
+                              </span>
+                            )}
                             {item.recurrence !== "one-time" && (
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[7px] font-bold border bg-zinc-800/50 text-zinc-400 border-zinc-700">
                                 🔁 {RECURRENCES.find(r => r.value === item.recurrence)?.label}
@@ -971,8 +1016,8 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                             {catName}
                           </span>
                         </td>
-                        <td className={`py-4 text-right font-black text-sm whitespace-nowrap ${item.is_paid ? "text-emerald-400" : "text-amber-400"}`}>
-                          {formatCurrency(item.amount)}
+                        <td className={`py-4 text-right font-black text-sm whitespace-nowrap ${item.is_income ? "text-emerald-400" : item.is_paid ? "text-emerald-400" : "text-amber-400"}`}>
+                          {item.is_income ? "+" : ""}{formatCurrency(item.amount)}
                         </td>
                         <td className="py-4 text-center">
                           {reschedulingId === item.id ? (
