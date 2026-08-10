@@ -5,6 +5,7 @@ import { getCategories } from "@/app/actions/categories";
 import { getGoogleConnectionStatus } from "@/app/actions/google";
 import { DEFAULT_FONT_ID, isValidFontId } from "@/lib/fonts";
 import SettingsClient from "@/app/ui/dashboard/SettingsClient";
+import appVersion from "@/public/version.json";
 
 export const metadata = {
   title: "Impostazioni - Finanza Privata",
@@ -30,6 +31,7 @@ export default async function SettingsPage() {
       categories={categories}
       googleConnected={googleConnected}
       currentFontId={currentFontId}
+      appVersion={appVersion}
     />
   );
 }

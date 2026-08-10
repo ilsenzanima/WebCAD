@@ -15,6 +15,7 @@ interface SettingsClientProps {
   categories: ExpenseCategory[];
   googleConnected: boolean;
   currentFontId: string;
+  appVersion: { version: string; buildTime: string; notes: string };
 }
 
 // Ampia selezione di emoji pronte all'uso per le icone delle categorie,
@@ -35,8 +36,8 @@ const CATEGORY_EMOJIS = [
 // da poterlo sostituire con un click invece di accumularne diversi in fila.
 const LEADING_EMOJI_REGEX = /^(\p{Extended_Pictographic}(️|‍\p{Extended_Pictographic})*\s*)/u;
 
-export default function SettingsClient({ categories: initialCategories, googleConnected: initialGoogleConnected, currentFontId }: SettingsClientProps) {
-  const [activeTab, setActiveTab] = useState<"security" | "categories" | "connections" | "appearance">("categories");
+export default function SettingsClient({ categories: initialCategories, googleConnected: initialGoogleConnected, currentFontId, appVersion }: SettingsClientProps) {
+  const [activeTab, setActiveTab] = useState<"security" | "categories" | "connections" | "appearance" | "app">("categories");
   const [isPending, startTransition] = useTransition();
   const [googleConnected, setGoogleConnected] = useState(initialGoogleConnected);
   const [selectedFontId, setSelectedFontId] = useState(currentFontId);
@@ -251,6 +252,15 @@ export default function SettingsClient({ categories: initialCategories, googleCo
             }`}
           >
             🎨 Aspetto
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("app")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "app" ? "bg-white/10 text-white shadow-lg" : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            📱 App Mobile
           </button>
         </div>
       </div>
@@ -561,6 +571,54 @@ export default function SettingsClient({ categories: initialCategories, googleCo
                   <p className="text-[9px] text-slate-500 mt-1.5">{font.description}</p>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Content Tab App Mobile */}
+      {activeTab === "app" && (
+        <div className="max-w-md mx-auto animate-fade-in">
+          <div
+            className="rounded-2xl p-6 border shadow-2xl backdrop-blur-xl"
+            style={{
+              background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+              borderColor: "hsla(240, 5%, 18%, 0.7)",
+            }}
+          >
+            <h2 className="text-base font-extrabold text-white mb-1">Scarica l'app Android</h2>
+            <p className="text-[11px] text-slate-400 mb-5 leading-relaxed">
+              Versione installabile per il telefono, generata automaticamente ad ogni aggiornamento del sito.
+            </p>
+
+            <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800 text-[11px] text-slate-300 mb-4 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500">Versione</span>
+                <span className="font-bold text-white">{appVersion.version}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500">Ultimo aggiornamento</span>
+                <span className="font-semibold">
+                  {new Date(appVersion.buildTime).toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" })}
+                </span>
+              </div>
+            </div>
+
+            <a
+              href="/downloads/webcad-alpha.apk"
+              download
+              className="block text-center w-full py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all"
+            >
+              ⬇️ Scarica APK
+            </a>
+
+            <div className="mt-5 space-y-2 text-[11px] text-slate-400 leading-relaxed">
+              <p className="font-bold text-zinc-300">Come installarla:</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Apri il link dal telefono (o scarica il file e aprilo dai Download).</li>
+                <li>Se compare un avviso, consenti l'installazione da questa origine quando richiesto.</li>
+                <li>Conferma l'installazione: essendo una build di test, Android potrebbe segnalarla come app sconosciuta.</li>
+              </ol>
             </div>
           </div>
         </div>
