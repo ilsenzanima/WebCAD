@@ -56,7 +56,7 @@ export function computeAccountBalances(
     let balance = latest ? Number(latest.balance) : Number(acc.initial_balance);
     expenses.forEach((e) => {
       if (e.account_id !== acc.id) return;
-      if (latest && e.date <= latest.date) return;
+      if (latest && e.date < latest.date) return;
       balance += e.is_income ? Number(e.amount) : -Number(e.amount);
     });
     map[acc.id] = balance;

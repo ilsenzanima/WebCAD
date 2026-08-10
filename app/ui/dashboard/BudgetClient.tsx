@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo, Fragment } from "react";
 import { type Budget, type BudgetOverride, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createBudget, updateBudget, deleteBudget, upsertBudgetOverride, deleteBudgetOverride, confirmBudgetExpense } from "@/app/actions/budget";
 import { updateCategoryBudget, updateCategoryBudgetPercent, updateCategoryBudgetType } from "@/app/actions/categories";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { getMonthlyEquivalent as getMonthlyEquivalentBase, isBudgetEnded as isBudgetEndedBase, getEffectiveAmount as getEffectiveAmountBase, BUDGET_PERIODS as PERIODS } from "@/lib/budgetCalc";
 import { DeleteIcon } from "./icons";
 import BudgetForecast from "./BudgetForecast";
@@ -460,14 +460,35 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
   // uscite. Una scadenza conta solo per il mese della sua data di scadenza: se e' scaduta e non
   // ancora saldata NON viene trascinata nel mese corrente (niente doppio conteggio) finche'
   // l'utente non la salda o la ripianifica (pulsante "Ripianifica" in Scadenze) a una nuova data.
+  // Le scadenze di tipo entrata (es. stipendio) sono escluse: contribuiscono a totals.income,
+  // non alle uscite Bisogno/Desiderio/Imprevisto.
   const scheduledItemsList = useMemo(() => {
     return schedules
       .filter((s: any) => {
+        if (s.is_income) return false;
         const sDate = new Date(s.due_date);
         return sDate.getFullYear() === selectedYear && sDate.getMonth() + 1 === selectedMonth;
       })
       .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
   }, [schedules, selectedYear, selectedMonth]);
+
+  // Entrate ricorrenti previste dalle Scadenze (es. stipendio) per il mese selezionato: stessa
+  // logica delle uscite, cosi' un'entrata inserita una volta sola in Scadenze si proietta da
+  // sola nel Previsto senza doverla reinserire anche qui come voce di budget separata.
+  const scheduledIncomeItemsList = useMemo(() => {
+    return schedules
+      .filter((s: any) => {
+        if (!s.is_income) return false;
+        const sDate = new Date(s.due_date);
+        return sDate.getFullYear() === selectedYear && sDate.getMonth() + 1 === selectedMonth;
+      })
+      .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+  }, [schedules, selectedYear, selectedMonth]);
+
+  const scheduledIncomeTotal = useMemo(
+    () => scheduledIncomeItemsList.reduce((sum, s: any) => sum + Number(s.amount), 0),
+    [scheduledIncomeItemsList]
+  );
 
   const scheduledByCategory = useMemo(() => {
     const map: Record<string, { amount: number; items: { label: string; amount: number }[] }> = {};
@@ -494,11 +515,12 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     return { need, want, emergency };
   }, [scheduledByCategory, categories]);
 
-  // Calcoli Totali per il mese selezionato: le entrate vengono dalle previsioni di Entrata
-  // (uniche voci di budget rimaste), le uscite (Bisogno/Desiderio/Imprevisto) dalle Scadenze
-  // del mese classificate per tipo di categoria.
+  // Calcoli Totali per il mese selezionato: le entrate vengono dalle Scadenze di tipo entrata
+  // (es. stipendio) piu' le eventuali vecchie voci di budget di tipo entrata non ancora
+  // migrate, le uscite (Bisogno/Desiderio/Imprevisto) dalle Scadenze del mese classificate per
+  // tipo di categoria.
   const totals = useMemo(() => {
-    let income = 0;
+    let income = scheduledIncomeTotal;
     budgets.forEach(b => {
       if (b.type === "income") income += getEffectiveAmount(b, selectedYear, selectedMonth);
     });
@@ -509,7 +531,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     const remainingBudget = income - totalOutgoings;
 
     return { income, need, want, emergency, totalOutgoings, powerOfSpending, remainingBudget };
-  }, [budgets, overrides, selectedYear, selectedMonth, scheduledByType]);
+  }, [budgets, overrides, selectedYear, selectedMonth, scheduledByType, scheduledIncomeTotal]);
 
   // Analisi Regola 50/30/20 (Bisogni, Desideri, Risparmio/Imprevisti)
   const ruleAnalysis = useMemo(() => {
@@ -855,14 +877,43 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
             </span>
           </div>
           <p className="text-[10px] text-zinc-500 -mt-2">
-            Le uscite (Bisogni/Desideri/Imprevisti) si gestiscono ora da Scadenze & Pagamenti; qui restano solo le entrate ricorrenti previste (es. stipendio), che spunti aggiungendo un'entrata in Spese & Entrate.
+            Uscite ed entrate ricorrenti (es. stipendio) si gestiscono ora da Scadenze & Pagamenti: qui vedi solo il riepilogo di quanto e' previsto. Le righe sotto sono le eventuali vecchie voci create prima di questo cambiamento.
           </p>
 
-          <div className="flex-1 overflow-x-auto pr-1 relative z-10 overflow-y-auto">
-            {budgets.length === 0 ? (
-              <p className="text-xs text-slate-500 py-12 text-center">Nessuna entrata prevista ancora registrata.</p>
+          <div className="space-y-1.5 relative z-10">
+            {scheduledIncomeItemsList.length === 0 ? (
+              <p className="text-xs text-slate-500 py-4 text-center">
+                Nessuna entrata da Scadenze per {MONTH_LABELS[selectedMonth - 1]}.{" "}
+                <a href="/dashboard/schedules" className="text-emerald-400 hover:underline">Aggiungine una in Scadenze</a>.
+              </p>
             ) : (
+              <div className="rounded-xl border border-emerald-500/15 divide-y divide-emerald-500/10 overflow-hidden">
+                {scheduledIncomeItemsList.map((s: any) => (
+                  <div key={s.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-emerald-500/[0.03]">
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-white truncate">{s.description || s.category}</div>
+                      <div className="text-[9px] text-zinc-500">
+                        {formatDate(s.due_date)}
+                        {s.recurrence !== "one-time" && " · 🔁 ricorrente"}
+                        {s.is_paid && " · già incassata"}
+                      </div>
+                    </div>
+                    <span className="text-sm font-black text-emerald-400 whitespace-nowrap">+{formatCurrency(s.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <a href="/dashboard/schedules" className="inline-block text-[9px] font-bold text-zinc-500 hover:text-emerald-400 transition-colors">
+              Gestisci le entrate ricorrenti in Scadenze & Pagamenti →
+            </a>
+          </div>
+
+          <div className="flex-1 overflow-x-auto pr-1 relative z-10 overflow-y-auto">
+            {budgets.length === 0 ? null : (
               <table className="w-full text-left text-xs border-collapse">
+                <caption className="text-left text-[9px] font-bold text-zinc-600 uppercase tracking-wider pb-2 caption-top">
+                  Voci create prima del passaggio a Scadenze
+                </caption>
                 <thead>
                   <tr className="border-b" style={{ borderColor: "hsl(240 5% 18% / 0.7)" }}>
                     <th className="pb-3 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Descrizione</th>

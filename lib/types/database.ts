@@ -88,6 +88,7 @@ export interface PaymentSchedule {
   end_month: number | null; // 1-12, ultimo mese in cui questa scadenza ricorrente e' attiva (es. fine finanziamento)
   end_year: number | null;
   is_estimated: boolean; // true se l'importo e' una stima e non un valore certo
+  is_income: boolean; // true per un impegno ricorrente di entrata (es. stipendio), invece di un'uscita
   created_at: string;
   updated_at: string;
 }
@@ -347,6 +348,7 @@ export interface Database {
           end_month?: number | null;
           end_year?: number | null;
           is_estimated?: boolean;
+          is_income?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -367,6 +369,7 @@ export interface Database {
           end_month?: number | null;
           end_year?: number | null;
           is_estimated?: boolean;
+          is_income?: boolean;
           created_at?: string;
           updated_at?: string;
         };

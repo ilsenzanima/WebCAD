@@ -38,6 +38,7 @@ export async function createSchedule(formData: {
   end_month?: number | null;
   end_year?: number | null;
   budget_id?: string | null;
+  is_income?: boolean;
 }) {
   try {
     const supabase = (await createClient()) as any;
@@ -57,6 +58,7 @@ export async function createSchedule(formData: {
       end_month: formData.end_month || null,
       end_year: formData.end_year || null,
       budget_id: formData.budget_id || null,
+      is_income: formData.is_income ?? false,
       is_paid: false,
     }).select("*, expense_categories(name, color), suppliers(name)").single();
 
@@ -83,6 +85,7 @@ export async function updateSchedule(id: string, formData: {
   is_estimated?: boolean;
   end_month?: number | null;
   end_year?: number | null;
+  is_income?: boolean;
 }) {
   try {
     const supabase = (await createClient()) as any;
@@ -102,6 +105,7 @@ export async function updateSchedule(id: string, formData: {
         is_estimated: formData.is_estimated ?? false,
         end_month: formData.end_month || null,
         end_year: formData.end_year || null,
+        is_income: formData.is_income ?? false,
       })
       .eq("id", id)
       .eq("user_id", user.id)
@@ -212,7 +216,10 @@ export async function paySchedule(
       consumption_value: consumptionValue ?? null,
       period_start: periodStart ?? null,
       period_end: periodEnd ?? null,
-      description: `Pagamento programmato: ${schedule.description || "Nessuna descrizione"}`,
+      is_income: schedule.is_income ?? false,
+      description: schedule.is_income
+        ? `Entrata programmata: ${schedule.description || "Nessuna descrizione"}`
+        : `Pagamento programmato: ${schedule.description || "Nessuna descrizione"}`,
       date: today,
     }).select().single();
 
@@ -244,6 +251,7 @@ export async function paySchedule(
           is_estimated: schedule.is_estimated,
           end_month: schedule.end_month,
           end_year: schedule.end_year,
+          is_income: schedule.is_income,
           is_paid: false,
         });
 
@@ -314,6 +322,7 @@ export async function splitScheduleIntoInstallments(id: string, installments: { 
       category_id: original.category_id,
       supplier_id: original.supplier_id,
       budget_id: original.budget_id,
+      is_income: original.is_income,
       description: `${baseDescription} (Rata ${idx + 2}/${total})`,
       due_date: inst.due_date,
       recurrence: "one-time",
