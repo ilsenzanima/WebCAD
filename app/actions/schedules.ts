@@ -178,7 +178,7 @@ export async function deleteSchedule(id: string) {
   }
 }
 
-export async function paySchedule(id: string, consumptionValue?: number | null) {
+export async function paySchedule(id: string, amountOverride?: number | null, consumptionValue?: number | null) {
   try {
     const supabase = (await createClient()) as any;
     const { data: { user } } = await supabase.auth.getUser();
@@ -197,12 +197,15 @@ export async function paySchedule(id: string, consumptionValue?: number | null) 
     }
 
     // 2. Crea la spesa corrispondente (ereditando category_id, supplier_id e budget_id;
-    // consumption_value solo se fornito, tipicamente per i fornitori-utenza).
-    // Restituiamo la riga creata cosi' chi chiama puo' collegarci un documento (expense_id reale).
+    // consumption_value solo se fornito, tipicamente per i fornitori-utenza). L'importo e'
+    // quello confermato dall'utente al momento del saldo (puo' differire dalla stima della
+    // scadenza, che resta invariata per le occorrenze future). Restituiamo la riga creata
+    // cosi' chi chiama puo' collegarci un documento (expense_id reale).
     const today = new Date().toISOString().split("T")[0];
+    const finalAmount = amountOverride != null ? amountOverride : schedule.amount;
     const { data: newExpense, error: expenseError } = await supabase.from("expenses").insert({
       user_id: user.id,
-      amount: schedule.amount,
+      amount: finalAmount,
       category: schedule.category,
       category_id: schedule.category_id,
       supplier_id: schedule.supplier_id,
@@ -245,6 +248,7 @@ export async function paySchedule(id: string, consumptionValue?: number | null) 
           end_month: schedule.end_month,
           end_year: schedule.end_year,
           is_income: schedule.is_income,
+          generated_from_schedule_id: schedule.id,
           is_paid: false,
         });
 
@@ -257,6 +261,80 @@ export async function paySchedule(id: string, consumptionValue?: number | null) 
     revalidatePath("/dashboard/schedules");
     revalidatePath("/dashboard/calendar");
     return { success: true, data: newExpense };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// Annulla il saldo di una scadenza cliccata "Salda" per errore: elimina la spesa generata,
+// rimuove l'occorrenza successiva che il saldo aveva creato automaticamente (solo se ancora
+// non saldata, per non toccare una catena gia' andata avanti) e riporta la scadenza a non saldata.
+export async function unpaySchedule(id: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data: schedule, error: fetchError } = await supabase
+      .from("payment_schedules")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .single();
+
+    if (fetchError || !schedule) throw new Error(fetchError?.message || "Scadenza non trovata");
+    if (!schedule.is_paid) throw new Error("Questa scadenza non risulta saldata");
+
+    // 1. Elimina la spesa generata dal saldo (l'eventuale documento allegato resta,
+    // semplicemente perde il collegamento alla spesa: expenses.schedule_id -> ON DELETE SET NULL
+    // su supplier_documents.expense_id).
+    const { data: deletedExpenses, error: deleteExpenseError } = await supabase
+      .from("expenses")
+      .delete()
+      .eq("schedule_id", id)
+      .eq("user_id", user.id)
+      .select("id");
+    if (deleteExpenseError) throw new Error(deleteExpenseError.message);
+
+    // 2. Se il saldo aveva generato l'occorrenza successiva e nessuno l'ha ancora saldata,
+    // rimuovila: altrimenti resterebbe un doppione dopo aver riaperto questa.
+    const { data: nextOccurrence } = await supabase
+      .from("payment_schedules")
+      .select("id, is_paid")
+      .eq("generated_from_schedule_id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (nextOccurrence && !nextOccurrence.is_paid) {
+      const { error: deleteNextError } = await supabase
+        .from("payment_schedules")
+        .delete()
+        .eq("id", nextOccurrence.id)
+        .eq("user_id", user.id);
+      if (deleteNextError) throw new Error(deleteNextError.message);
+    }
+
+    // 3. Riporta la scadenza a non saldata
+    const { data, error: updateError } = await supabase
+      .from("payment_schedules")
+      .update({ is_paid: false })
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select("*, expense_categories(name, color), suppliers(name)")
+      .single();
+    if (updateError) throw new Error(updateError.message);
+
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/expenses");
+    revalidatePath("/dashboard/schedules");
+    revalidatePath("/dashboard/budget");
+    revalidatePath("/dashboard/calendar");
+    return {
+      success: true,
+      data,
+      deletedNextOccurrenceId: nextOccurrence && !nextOccurrence.is_paid ? nextOccurrence.id : null,
+      deletedExpenseIds: (deletedExpenses || []).map((e: any) => e.id),
+    };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

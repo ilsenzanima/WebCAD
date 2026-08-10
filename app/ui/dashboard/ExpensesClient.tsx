@@ -474,6 +474,7 @@ export default function ExpensesClient({
           suppliers={suppliersList}
           googleConnected={googleConnected}
           onExpenseCreated={(exp) => setExpenses(prev => [exp, ...prev])}
+          onExpenseDeleted={(ids) => setExpenses(prev => prev.filter(e => !ids.includes(e.id)))}
           onSupplierCreated={(sup) => setSuppliersList(prev => [...prev, sup].sort((a, b) => a.name.localeCompare(b.name)))}
         />
       ) : (
