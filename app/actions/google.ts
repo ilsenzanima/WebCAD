@@ -169,6 +169,8 @@ export async function assignScansioneDocument({
   categoryId,
   categoryName,
   consumptionValue,
+  periodStart,
+  periodEnd,
   isPaid,
   date,
 }: {
@@ -183,6 +185,8 @@ export async function assignScansioneDocument({
   categoryId?: string | null;
   categoryName?: string;
   consumptionValue?: number | null;
+  periodStart?: string | null;
+  periodEnd?: string | null;
   isPaid?: boolean;
   date?: string | null;
 }) {
@@ -219,6 +223,8 @@ export async function assignScansioneDocument({
       category_id: categoryId,
       category_name: categoryName,
       consumption_value: consumptionValue,
+      period_start: periodStart,
+      period_end: periodEnd,
       is_paid: isPaid,
       date,
     });

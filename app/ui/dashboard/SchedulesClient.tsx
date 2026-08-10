@@ -8,6 +8,7 @@ import { createSupplier } from "@/app/actions/suppliers";
 import { syncSchedulesToCalendar } from "@/app/actions/google";
 import { DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
 import { uploadAndLinkDocument } from "@/lib/uploadDocument";
+import { monthInputToDate, syncPeriodEnd } from "@/lib/period";
 import { formatCurrency, formatDate, toLocalDateStr } from "@/lib/format";
 import { getNextDueDate } from "@/lib/recurrence";
 import { DeleteIcon, EditIcon, CheckIcon, SchedulesIcon } from "./icons";
@@ -90,8 +91,15 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   // cosi' restano tracciati sulla spesa generata.
   const [payingId, setPayingId] = useState<string | null>(null);
   const [payConsumptionValue, setPayConsumptionValue] = useState("");
+  const [payPeriodStart, setPayPeriodStart] = useState("");
+  const [payPeriodEnd, setPayPeriodEnd] = useState("");
   const [payDocFile, setPayDocFile] = useState<File | null>(null);
   const [payDocType, setPayDocType] = useState<"contratto" | "bolletta" | "altro">("bolletta");
+
+  const handlePayPeriodStartChange = (value: string) => {
+    setPayPeriodEnd(prev => syncPeriodEnd(value, payPeriodStart, prev));
+    setPayPeriodStart(value);
+  };
 
   // Aggiunta rapida di un nuovo fornitore dal form
   const [isAddingSupplier, setIsAddingSupplier] = useState(false);
@@ -243,11 +251,13 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     scheduleId: string,
     consumptionValue: number | null = null,
     docFile: File | null = null,
-    docType: "contratto" | "bolletta" | "altro" = "bolletta"
+    docType: "contratto" | "bolletta" | "altro" = "bolletta",
+    periodStart: string | null = null,
+    periodEnd: string | null = null
   ) => {
     startTransition(async () => {
       try {
-        const res = await paySchedule(scheduleId, consumptionValue);
+        const res = await paySchedule(scheduleId, consumptionValue, periodStart, periodEnd);
         if (!res.success || !res.data) {
           alert(res.error || "Errore nel contrassegnare come pagato");
           return;
@@ -303,6 +313,8 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const startPay = (item: ScheduleWithRelations) => {
     setPayingId(item.id);
     setPayConsumptionValue("");
+    setPayPeriodStart("");
+    setPayPeriodEnd("");
     setPayDocFile(null);
     setPayDocType("bolletta");
   };
@@ -310,6 +322,8 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const cancelPay = () => {
     setPayingId(null);
     setPayConsumptionValue("");
+    setPayPeriodStart("");
+    setPayPeriodEnd("");
     setPayDocFile(null);
     setPayDocType("bolletta");
   };
@@ -343,7 +357,14 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
       alert("Inserisci un consumo valido");
       return;
     }
-    handlePay(item.id, value, payDocFile, payDocType);
+    handlePay(
+      item.id,
+      value,
+      payDocFile,
+      payDocType,
+      monthInputToDate(payPeriodStart),
+      monthInputToDate(payPeriodEnd || payPeriodStart)
+    );
   };
 
   const handleDelete = (id: string) => {
@@ -1075,6 +1096,26 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                                     placeholder={`es. 320 ${supplierOf(item)?.consumption_unit || ""}`}
                                     className="w-40 px-3 py-2 rounded-lg text-xs text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
                                   />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Periodo di copertura</label>
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="month"
+                                      value={payPeriodStart}
+                                      onChange={(e) => handlePayPeriodStartChange(e.target.value)}
+                                      className="w-32 px-2 py-2 rounded-lg text-xs text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                                    />
+                                    <span className="text-[9px] text-zinc-500">al</span>
+                                    <input
+                                      type="month"
+                                      value={payPeriodEnd}
+                                      min={payPeriodStart || undefined}
+                                      disabled={!payPeriodStart}
+                                      onChange={(e) => setPayPeriodEnd(e.target.value)}
+                                      className="w-32 px-2 py-2 rounded-lg text-xs text-white bg-zinc-950 border border-zinc-800 focus:outline-none disabled:opacity-40"
+                                    />
+                                  </div>
                                 </div>
                                 <div className="space-y-1">
                                   <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Allega documento (facoltativo)</label>

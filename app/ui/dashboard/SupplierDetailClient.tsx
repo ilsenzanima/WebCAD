@@ -8,6 +8,7 @@ import { createDocumentWithFinancials, deleteSupplierDocument } from "@/app/acti
 import { updateSupplier } from "@/app/actions/suppliers";
 import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
 import { formatCurrency, formatFileSize, formatDate, toLocalDateStr } from "@/lib/format";
+import { monthInputToDate, syncPeriodEnd } from "@/lib/period";
 import { DeleteIcon, ExpensesIcon, SchedulesIcon } from "./icons";
 
 interface SupplierDetailClientProps {
@@ -79,8 +80,15 @@ export default function SupplierDetailClient({
   const [docAmount, setDocAmount] = useState("");
   const [docCategoryId, setDocCategoryId] = useState(categories[0]?.id || "");
   const [docConsumptionValue, setDocConsumptionValue] = useState("");
+  const [docPeriodStart, setDocPeriodStart] = useState("");
+  const [docPeriodEnd, setDocPeriodEnd] = useState("");
   const [docIsPaid, setDocIsPaid] = useState(true);
   const [docDate, setDocDate] = useState(toLocalDateStr());
+
+  const handleDocPeriodStartChange = (value: string) => {
+    setDocPeriodEnd(prev => syncPeriodEnd(value, docPeriodStart, prev));
+    setDocPeriodStart(value);
+  };
 
   const resetDocForm = () => {
     setDocTitle("");
@@ -91,6 +99,8 @@ export default function SupplierDetailClient({
     setDocAmount("");
     setDocCategoryId(categories[0]?.id || "");
     setDocConsumptionValue("");
+    setDocPeriodStart("");
+    setDocPeriodEnd("");
     setDocIsPaid(true);
     setDocDate(toLocalDateStr());
   };
@@ -166,6 +176,8 @@ export default function SupplierDetailClient({
           category_id: amountNum ? docCategoryId || null : null,
           category_name: category?.name || "Generica",
           consumption_value: consumptionNum,
+          period_start: monthInputToDate(docPeriodStart),
+          period_end: monthInputToDate(docPeriodEnd || docPeriodStart),
           is_paid: docIsPaid,
           date: amountNum ? docDate : null,
         });
@@ -601,6 +613,29 @@ export default function SupplierDetailClient({
                     placeholder={`es. 320 ${supplierState.consumption_unit || ""}`}
                     className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
                   />
+                </div>
+              )}
+
+              {supplierState.is_utility && (
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Periodo di copertura (mese singolo o più mesi)</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="month"
+                      value={docPeriodStart}
+                      onChange={(e) => handleDocPeriodStartChange(e.target.value)}
+                      className="flex-1 px-2.5 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
+                    />
+                    <span className="text-[9px] text-zinc-500">al</span>
+                    <input
+                      type="month"
+                      value={docPeriodEnd}
+                      min={docPeriodStart || undefined}
+                      disabled={!docPeriodStart}
+                      onChange={(e) => setDocPeriodEnd(e.target.value)}
+                      className="flex-1 px-2.5 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80 disabled:opacity-40"
+                    />
+                  </div>
                 </div>
               )}
 

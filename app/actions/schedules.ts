@@ -174,7 +174,12 @@ export async function deleteSchedule(id: string) {
   }
 }
 
-export async function paySchedule(id: string, consumptionValue?: number | null) {
+export async function paySchedule(
+  id: string,
+  consumptionValue?: number | null,
+  periodStart?: string | null,
+  periodEnd?: string | null
+) {
   try {
     const supabase = (await createClient()) as any;
     const { data: { user } } = await supabase.auth.getUser();
@@ -205,6 +210,8 @@ export async function paySchedule(id: string, consumptionValue?: number | null) 
       schedule_id: schedule.id,
       budget_id: schedule.budget_id,
       consumption_value: consumptionValue ?? null,
+      period_start: periodStart ?? null,
+      period_end: periodEnd ?? null,
       description: `Pagamento programmato: ${schedule.description || "Nessuna descrizione"}`,
       date: today,
     }).select().single();

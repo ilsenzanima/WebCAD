@@ -68,6 +68,8 @@ export async function createDocumentWithFinancials(formData: {
   category_id?: string | null;
   category_name?: string;
   consumption_value?: number | null;
+  period_start?: string | null;
+  period_end?: string | null;
   is_paid?: boolean;
   date?: string | null;
 }) {
@@ -90,6 +92,8 @@ export async function createDocumentWithFinancials(formData: {
           category_id: formData.category_id || null,
           supplier_id: formData.supplier_id,
           consumption_value: formData.consumption_value ?? null,
+          period_start: formData.period_start ?? null,
+          period_end: formData.period_end ?? null,
           description: formData.title,
           date: formData.date,
         }).select().single();

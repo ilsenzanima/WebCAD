@@ -63,6 +63,8 @@ export interface Expense {
   budget_id: string | null; // FK -> budgets.id (se generata confermando una voce di budget)
   account_id: string | null; // FK -> accounts.id
   consumption_value: number | null; // consumo del periodo (unita' definita da suppliers.consumption_unit)
+  period_start: string | null; // primo giorno del mese di inizio del periodo di copertura della bolletta
+  period_end: string | null; // primo giorno del mese di fine (= period_start per un singolo mese)
   is_income: boolean;
   is_emergency: boolean; // segnata come imprevisto al momento della registrazione, a prescindere dal tipo della categoria
   created_at: string;
@@ -205,6 +207,8 @@ export interface Database {
           budget_id?: string | null;
           account_id?: string | null;
           consumption_value?: number | null;
+          period_start?: string | null;
+          period_end?: string | null;
           is_income?: boolean;
           is_emergency?: boolean;
           created_at?: string;
@@ -223,6 +227,8 @@ export interface Database {
           budget_id?: string | null;
           account_id?: string | null;
           consumption_value?: number | null;
+          period_start?: string | null;
+          period_end?: string | null;
           is_income?: boolean;
           is_emergency?: boolean;
           created_at?: string;

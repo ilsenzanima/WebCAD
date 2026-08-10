@@ -5,6 +5,7 @@ import { type Supplier, type ExpenseCategory } from "@/lib/types/database";
 import { assignScansioneDocument } from "@/app/actions/google";
 import { createSupplier } from "@/app/actions/suppliers";
 import { formatFileSize, toLocalDateStr } from "@/lib/format";
+import { monthInputToDate, syncPeriodEnd } from "@/lib/period";
 import { InboxIcon } from "./icons";
 
 interface ScanDocument {
@@ -57,8 +58,15 @@ export default function ScansioniClient({
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
   const [consumptionValue, setConsumptionValue] = useState("");
+  const [periodStartInput, setPeriodStartInput] = useState("");
+  const [periodEndInput, setPeriodEndInput] = useState("");
   const [isPaid, setIsPaid] = useState(true);
   const [date, setDate] = useState(toLocalDateStr());
+
+  const handlePeriodStartChange = (value: string) => {
+    setPeriodEndInput(prev => syncPeriodEnd(value, periodStartInput, prev));
+    setPeriodStartInput(value);
+  };
 
   const [showNewSupplier, setShowNewSupplier] = useState(false);
   const [newSupplierName, setNewSupplierName] = useState("");
@@ -76,6 +84,8 @@ export default function ScansioniClient({
     setAmount("");
     setCategoryId(categories[0]?.id || "");
     setConsumptionValue("");
+    setPeriodStartInput("");
+    setPeriodEndInput("");
     setIsPaid(true);
     setDate(toLocalDateStr());
     setShowNewSupplier(false);
@@ -158,6 +168,8 @@ export default function ScansioniClient({
         categoryId: amountNum ? categoryId || null : null,
         categoryName: category?.name || "Generica",
         consumptionValue: consumptionNum,
+        periodStart: monthInputToDate(periodStartInput),
+        periodEnd: monthInputToDate(periodEndInput || periodStartInput),
         isPaid,
         date: amountNum ? date : null,
       });
@@ -414,6 +426,29 @@ export default function ScansioniClient({
                     placeholder={`es. 320 ${selectedSupplier.consumption_unit || ""}`}
                     className="w-full px-3 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-900"
                   />
+                </div>
+              )}
+
+              {selectedSupplier?.is_utility && (
+                <div className="space-y-1">
+                  <label className="block text-[9px] font-bold text-zinc-400 uppercase tracking-wider">Periodo di copertura (mese singolo o più mesi)</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="month"
+                      value={periodStartInput}
+                      onChange={(e) => handlePeriodStartChange(e.target.value)}
+                      className="flex-1 px-2.5 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-900"
+                    />
+                    <span className="text-[9px] text-zinc-500">al</span>
+                    <input
+                      type="month"
+                      value={periodEndInput}
+                      min={periodStartInput || undefined}
+                      disabled={!periodStartInput}
+                      onChange={(e) => setPeriodEndInput(e.target.value)}
+                      className="flex-1 px-2.5 py-2 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-900 disabled:opacity-40"
+                    />
+                  </div>
                 </div>
               )}
 

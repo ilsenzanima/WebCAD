@@ -5,6 +5,7 @@ import { type Expense, type PaymentSchedule, type Supplier, type SupplierDocumen
 import { deleteExpense } from "@/app/actions/expenses";
 import { deleteSchedule, paySchedule } from "@/app/actions/schedules";
 import { uploadAndLinkDocument, utilityMissingTags } from "@/lib/uploadDocument";
+import { monthInputToDate, syncPeriodEnd } from "@/lib/period";
 import { formatCurrency, toLocalDateStr } from "@/lib/format";
 import { getNextDueDate } from "@/lib/recurrence";
 import { ArrowLeftIcon, ArrowRightIcon, DeleteIcon, CheckIcon, SchedulesIcon, ExpensesIcon } from "./icons";
@@ -52,8 +53,15 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
   // Conferma pagamento di una scadenza-utenza: chiede consumo e documento, come in Scadenze
   const [payingId, setPayingId] = useState<string | null>(null);
   const [payConsumptionValue, setPayConsumptionValue] = useState("");
+  const [payPeriodStart, setPayPeriodStart] = useState("");
+  const [payPeriodEnd, setPayPeriodEnd] = useState("");
   const [payDocFile, setPayDocFile] = useState<File | null>(null);
   const [payDocType, setPayDocType] = useState<"contratto" | "bolletta" | "altro">("bolletta");
+
+  const handlePayPeriodStartChange = (value: string) => {
+    setPayPeriodEnd(prev => syncPeriodEnd(value, payPeriodStart, prev));
+    setPayPeriodStart(value);
+  };
 
   const docsByExpense = useMemo(() => {
     const map: Record<string, SupplierDocument[]> = {};
@@ -142,11 +150,13 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
     id: string,
     consumptionValue: number | null = null,
     docFile: File | null = null,
-    docType: "contratto" | "bolletta" | "altro" = "bolletta"
+    docType: "contratto" | "bolletta" | "altro" = "bolletta",
+    periodStart: string | null = null,
+    periodEnd: string | null = null
   ) => {
     startTransition(async () => {
       try {
-        const res = await paySchedule(id, consumptionValue);
+        const res = await paySchedule(id, consumptionValue, periodStart, periodEnd);
         if (!res.success || !res.data) {
           alert(res.error || "Errore durante la registrazione del pagamento");
           return;
@@ -208,6 +218,8 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
   const startPay = (item: ScheduleWithRelations) => {
     setPayingId(item.id);
     setPayConsumptionValue("");
+    setPayPeriodStart("");
+    setPayPeriodEnd("");
     setPayDocFile(null);
     setPayDocType("bolletta");
   };
@@ -215,6 +227,8 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
   const cancelPay = () => {
     setPayingId(null);
     setPayConsumptionValue("");
+    setPayPeriodStart("");
+    setPayPeriodEnd("");
     setPayDocFile(null);
     setPayDocType("bolletta");
   };
@@ -244,7 +258,14 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
       alert("Inserisci un consumo valido");
       return;
     }
-    handlePaySchedule(item.id, value, payDocFile, payDocType);
+    handlePaySchedule(
+      item.id,
+      value,
+      payDocFile,
+      payDocType,
+      monthInputToDate(payPeriodStart),
+      monthInputToDate(payPeriodEnd || payPeriodStart)
+    );
   };
 
   const handleDeleteExpense = (id: string) => {
@@ -603,6 +624,26 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                               placeholder={`es. 320 ${schedSupplier?.consumption_unit || ""}`}
                               className="w-full px-2.5 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
                             />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Periodo di copertura</label>
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="month"
+                                value={payPeriodStart}
+                                onChange={(e) => handlePayPeriodStartChange(e.target.value)}
+                                className="flex-1 px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+                              />
+                              <span className="text-[8px] text-zinc-500">al</span>
+                              <input
+                                type="month"
+                                value={payPeriodEnd}
+                                min={payPeriodStart || undefined}
+                                disabled={!payPeriodStart}
+                                onChange={(e) => setPayPeriodEnd(e.target.value)}
+                                className="flex-1 px-2 py-1.5 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none disabled:opacity-40"
+                              />
+                            </div>
                           </div>
                           <div className="space-y-1">
                             <label className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Allega documento (facoltativo)</label>

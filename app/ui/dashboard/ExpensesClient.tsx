@@ -9,6 +9,7 @@ import { BUDGET_PERIODS } from "@/lib/budgetCalc";
 import { deleteSupplierDocument } from "@/app/actions/documents";
 import { createSupplier } from "@/app/actions/suppliers";
 import { uploadAndLinkDocument as uploadAndLinkDocumentShared, utilityMissingTags } from "@/lib/uploadDocument";
+import { monthInputToDate, dateToMonthInput, syncPeriodEnd } from "@/lib/period";
 import { formatCurrency, formatFileSize, formatDate, toLocalDateStr } from "@/lib/format";
 import SchedulesClient from "./SchedulesClient";
 import { EditIcon, DeleteIcon, ExpensesIcon } from "./icons";
@@ -79,8 +80,15 @@ export default function ExpensesClient({
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(toLocalDateStr());
   const [consumptionValue, setConsumptionValue] = useState("");
+  const [periodStartInput, setPeriodStartInput] = useState("");
+  const [periodEndInput, setPeriodEndInput] = useState("");
   const [accountId, setAccountId] = useState("");
   const [isEmergency, setIsEmergency] = useState(false);
+
+  const handlePeriodStartChange = (value: string) => {
+    setPeriodEndInput(prev => syncPeriodEnd(value, periodStartInput, prev));
+    setPeriodStartInput(value);
+  };
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -130,6 +138,8 @@ export default function ExpensesClient({
     setDescription("");
     setDate(toLocalDateStr());
     setConsumptionValue("");
+    setPeriodStartInput("");
+    setPeriodEndInput("");
     setAccountId("");
     setIsEmergency(false);
     setEditingId(null);
@@ -252,6 +262,8 @@ export default function ExpensesClient({
           consumption_value: (!isIncomeMode && selectedSupplier?.is_utility && consumptionValue)
             ? Number(consumptionValue)
             : null,
+          period_start: (!isIncomeMode && selectedSupplier?.is_utility) ? monthInputToDate(periodStartInput) : null,
+          period_end: (!isIncomeMode && selectedSupplier?.is_utility) ? monthInputToDate(periodEndInput || periodStartInput) : null,
           account_id: accountId || null,
           ...(linkedBudgetId ? { budget_id: linkedBudgetId } : {}),
         };
@@ -308,6 +320,8 @@ export default function ExpensesClient({
     setDescription(exp.description || "");
     setDate(exp.date);
     setConsumptionValue(exp.consumption_value != null ? String(exp.consumption_value) : "");
+    setPeriodStartInput(dateToMonthInput((exp as any).period_start));
+    setPeriodEndInput(dateToMonthInput((exp as any).period_end));
     setAccountId(exp.account_id || "");
     setIsEmergency((exp as any).is_emergency || false);
     setNewDocFile(null);
@@ -696,6 +710,34 @@ export default function ExpensesClient({
                         borderColor: "hsl(240 5% 18%)",
                       }}
                     />
+                  </div>
+                )}
+
+                {/* Periodo di copertura della bolletta (solo se il fornitore selezionato e' un'utenza) */}
+                {!isIncomeMode && selectedSupplier?.is_utility && (
+                  <div className="space-y-1.5 animate-fade-in">
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                      Periodo di copertura (mese singolo o più mesi)
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="month"
+                        value={periodStartInput}
+                        onChange={(e) => handlePeriodStartChange(e.target.value)}
+                        className="w-full px-3 py-2.5 rounded-xl text-xs text-white focus:outline-none border transition-all"
+                        style={{ background: "hsl(240 10% 4% / 0.8)", borderColor: "hsl(240 5% 18%)" }}
+                      />
+                      <input
+                        type="month"
+                        value={periodEndInput}
+                        min={periodStartInput || undefined}
+                        onChange={(e) => setPeriodEndInput(e.target.value)}
+                        disabled={!periodStartInput}
+                        className="w-full px-3 py-2.5 rounded-xl text-xs text-white focus:outline-none border transition-all disabled:opacity-40"
+                        style={{ background: "hsl(240 10% 4% / 0.8)", borderColor: "hsl(240 5% 18%)" }}
+                      />
+                    </div>
+                    <p className="text-[8px] text-zinc-600">Dal — al (lascia "al" uguale a "dal" per un solo mese)</p>
                   </div>
                 )}
 

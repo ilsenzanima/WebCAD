@@ -33,6 +33,8 @@ export async function createExpense(formData: {
   is_income?: boolean;
   is_emergency?: boolean;
   consumption_value?: number | null;
+  period_start?: string | null;
+  period_end?: string | null;
   account_id?: string | null;
   budget_id?: string | null;
 }) {
@@ -52,6 +54,8 @@ export async function createExpense(formData: {
       is_income: formData.is_income ?? false,
       is_emergency: formData.is_emergency ?? false,
       consumption_value: formData.consumption_value ?? null,
+      period_start: formData.period_start || null,
+      period_end: formData.period_end || null,
       account_id: formData.account_id || null,
       budget_id: formData.budget_id || null,
     }).select("*, expense_categories(name, color), suppliers(name)").single();
@@ -79,6 +83,8 @@ export async function updateExpense(
     is_income?: boolean;
     is_emergency?: boolean;
     consumption_value?: number | null;
+    period_start?: string | null;
+    period_end?: string | null;
     account_id?: string | null;
   }
 ) {
@@ -99,6 +105,8 @@ export async function updateExpense(
         is_income: formData.is_income ?? false,
         is_emergency: formData.is_emergency ?? false,
         consumption_value: formData.consumption_value ?? null,
+        period_start: formData.period_start || null,
+        period_end: formData.period_end || null,
         account_id: formData.account_id || null,
       })
       .eq("id", id)
