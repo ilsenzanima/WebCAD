@@ -11,7 +11,8 @@ import {
   deleteProductBrand,
   lookupProductInfo,
 } from "@/app/actions/shopping";
-import { GROCERY_CATEGORIES } from "@/lib/shoppingCategories";
+import { GROCERY_CATEGORIES, PERISHABLE_CATEGORIES } from "@/lib/shoppingCategories";
+import { suggestShelfLifeDays } from "@/lib/shelfLifeSuggestions";
 import { DeleteIcon, EditIcon, ArrowLeftIcon } from "./icons";
 import { useRouter } from "next/navigation";
 import BarcodeScannerModal from "./BarcodeScannerModal";
@@ -456,11 +457,19 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
             <input value={prodUnit} onChange={(e) => setProdUnit(e.target.value)} placeholder="es. kg"
               className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
           </div>
-          <div className="space-y-1">
-            <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Dura (giorni da acquisto)</label>
-            <input type="number" value={prodShelfLife} onChange={(e) => setProdShelfLife(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
-          </div>
+          {PERISHABLE_CATEGORIES.includes(prodCategory) && (
+            <div className="space-y-1 animate-fade-in">
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Dura (giorni da acquisto)</label>
+              <input type="number" value={prodShelfLife} onChange={(e) => setProdShelfLife(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+              {!prodShelfLife && suggestShelfLifeDays(prodName) && (
+                <button type="button" onClick={() => setProdShelfLife(suggestShelfLifeDays(prodName)!.toString())}
+                  className="text-[9px] font-bold text-indigo-300 hover:text-indigo-200 transition-all">
+                  💡 Suggerimento generico: {suggestShelfLifeDays(prodName)} giorni
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <button onClick={handleSaveProduct} disabled={isPending}
