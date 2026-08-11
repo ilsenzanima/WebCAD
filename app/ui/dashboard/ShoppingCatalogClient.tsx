@@ -222,10 +222,10 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
                   {shelfLifeSuggestion && !prodShelfLife && (
                     <button type="button" onClick={() => setProdShelfLife(shelfLifeSuggestion.toString())}
                       className="text-[10px] font-bold text-indigo-300 hover:text-indigo-200 transition-all">
-                      💡 Suggerimento generico: {shelfLifeSuggestion} giorni — usa questo valore
+                      💡 Suggerimento USDA FoodKeeper: {shelfLifeSuggestion} giorni — usa questo valore
                     </button>
                   )}
-                  <p className="text-[9px] text-zinc-500">Solo per le categorie deperibili (Frutta e Verdura, Latticini e Uova, Carne e Pesce, Panetteria). Il suggerimento è generico: modificalo pure in base alla tua esperienza.</p>
+                  <p className="text-[9px] text-zinc-500">Solo per le categorie deperibili (Frutta e Verdura, Latticini e Uova, Carne e Pesce, Panetteria). Il suggerimento si basa sul dataset USDA FoodKeeper: modificalo pure in base alla tua esperienza.</p>
                 </div>
               )}
 
