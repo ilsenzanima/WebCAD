@@ -238,29 +238,35 @@ export async function paySchedule(
 
     // 4. Se è ricorrente e non ha superato la sua eventuale data di fine (es. ultima rata di
     // un finanziamento), crea una nuova scadenza per il ciclo successivo con is_paid = false
+    let nextSchedule = null;
     if (schedule.recurrence !== "one-time") {
       const nextDueDateStr = getNextDueDate(schedule.due_date, schedule.recurrence);
 
       if (!isRecurrenceEnded(nextDueDateStr, schedule.end_month, schedule.end_year)) {
-        const { error: insertNextError } = await supabase.from("payment_schedules").insert({
-          user_id: user.id,
-          amount: schedule.amount,
-          category: schedule.category,
-          category_id: schedule.category_id,
-          supplier_id: schedule.supplier_id,
-          budget_id: schedule.budget_id,
-          description: schedule.description,
-          due_date: nextDueDateStr,
-          recurrence: schedule.recurrence,
-          is_estimated: schedule.is_estimated,
-          end_month: schedule.end_month,
-          end_year: schedule.end_year,
-          is_income: schedule.is_income,
-          generated_from_schedule_id: schedule.id,
-          is_paid: false,
-        });
+        const { data: insertedNext, error: insertNextError } = await supabase
+          .from("payment_schedules")
+          .insert({
+            user_id: user.id,
+            amount: schedule.amount,
+            category: schedule.category,
+            category_id: schedule.category_id,
+            supplier_id: schedule.supplier_id,
+            budget_id: schedule.budget_id,
+            description: schedule.description,
+            due_date: nextDueDateStr,
+            recurrence: schedule.recurrence,
+            is_estimated: schedule.is_estimated,
+            end_month: schedule.end_month,
+            end_year: schedule.end_year,
+            is_income: schedule.is_income,
+            generated_from_schedule_id: schedule.id,
+            is_paid: false,
+          })
+          .select("*, expense_categories(name, color), suppliers(name)")
+          .single();
 
         if (insertNextError) throw new Error(insertNextError.message);
+        nextSchedule = insertedNext;
       }
     }
 
@@ -268,7 +274,7 @@ export async function paySchedule(
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/schedules");
     revalidatePath("/dashboard/calendar");
-    return { success: true, data: newExpense };
+    return { success: true, data: newExpense, nextSchedule };
   } catch (err: any) {
     return { success: false, error: err.message };
   }

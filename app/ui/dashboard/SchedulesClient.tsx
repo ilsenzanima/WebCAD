@@ -10,7 +10,6 @@ import { DEDICATED_CALENDAR_NAME } from "@/lib/gcalendar";
 import { uploadAndLinkDocument } from "@/lib/uploadDocument";
 import { monthInputToDate, syncPeriodEnd } from "@/lib/period";
 import { formatCurrency, formatDate, toLocalDateStr } from "@/lib/format";
-import { getNextDueDate } from "@/lib/recurrence";
 import { DeleteIcon, EditIcon, CheckIcon, SchedulesIcon } from "./icons";
 import { getCategoryBadgeStyle } from "@/lib/categoryColors";
 
@@ -278,16 +277,8 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
         setSchedules(prev => {
           const updated = prev.map(s => s.id === scheduleId ? { ...s, is_paid: true } : s);
-          if (target && target.recurrence !== "one-time") {
-            const nextDueDateStr = getNextDueDate(target.due_date, target.recurrence);
-            const nextSched: ScheduleWithRelations = {
-              ...target,
-              id: Math.random().toString(),
-              due_date: nextDueDateStr,
-              is_paid: false,
-              generated_from_schedule_id: target.id,
-            };
-            return [...updated, nextSched].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+          if (res.nextSchedule) {
+            return [...updated, res.nextSchedule as ScheduleWithRelations].sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
           }
           return updated;
         });

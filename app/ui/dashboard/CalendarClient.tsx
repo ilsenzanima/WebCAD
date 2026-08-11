@@ -7,7 +7,6 @@ import { deleteSchedule, paySchedule, unpaySchedule } from "@/app/actions/schedu
 import { uploadAndLinkDocument, utilityMissingTags } from "@/lib/uploadDocument";
 import { monthInputToDate, syncPeriodEnd } from "@/lib/period";
 import { formatCurrency, toLocalDateStr } from "@/lib/format";
-import { getNextDueDate } from "@/lib/recurrence";
 import { ArrowLeftIcon, ArrowRightIcon, DeleteIcon, CheckIcon, SchedulesIcon, ExpensesIcon } from "./icons";
 import { getCategoryBadgeStyle } from "@/lib/categoryColors";
 
@@ -169,24 +168,14 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
         const target = schedules.find(s => s.id === id);
         if (!target) return;
 
-        if (target.recurrence === "one-time") {
+        if (res.nextSchedule) {
           setSchedules(prev =>
             prev.map(sched => sched.id === id ? { ...sched, is_paid: true } : sched)
+                .concat(res.nextSchedule as ScheduleWithRelations)
           );
         } else {
-          // Ricorrente: segna la corrente come pagata, e crea quella futura
-          const nextDueDateStr = getNextDueDate(target.due_date, target.recurrence);
-
-          const nextSched: ScheduleWithRelations = {
-            ...target,
-            id: Math.random().toString(),
-            due_date: nextDueDateStr,
-            is_paid: false,
-          };
-
           setSchedules(prev =>
             prev.map(sched => sched.id === id ? { ...sched, is_paid: true } : sched)
-                .concat(nextSched)
           );
         }
 
