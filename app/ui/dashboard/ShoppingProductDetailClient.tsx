@@ -465,7 +465,7 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
               {!prodShelfLife && suggestShelfLifeDays(prodName) && (
                 <button type="button" onClick={() => setProdShelfLife(suggestShelfLifeDays(prodName)!.toString())}
                   className="text-[9px] font-bold text-indigo-300 hover:text-indigo-200 transition-all">
-                  💡 Suggerimento generico: {suggestShelfLifeDays(prodName)} giorni
+                  💡 Suggerimento USDA FoodKeeper: {suggestShelfLifeDays(prodName)} giorni
                 </button>
               )}
             </div>
