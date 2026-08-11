@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { getMyRole } from "@/app/actions/family";
 import { toLocalDateStr } from "@/lib/format";
-import type { ShoppingProduct, ShoppingList, ShoppingListItem, ShoppingProductBrand } from "@/lib/types/database";
+import type { ShoppingProduct, ShoppingList, ShoppingListItem, ShoppingProductBrand, NutrimentsSummary } from "@/lib/types/database";
 
 const ITEM_SELECT = "*, shopping_products(*)";
 
@@ -168,6 +168,13 @@ interface ProductBrandFields {
   image_url?: string | null;
   ingredients_text?: string | null;
   allergens?: string | null;
+  nutriments?: NutrimentsSummary | null;
+  additives?: string | null;
+  traces?: string | null;
+  labels?: string | null;
+  package_quantity?: string | null;
+  off_categories?: string | null;
+  image_packaging_url?: string | null;
   notes?: string | null;
 }
 
@@ -190,6 +197,13 @@ export async function createProductBrand(productId: string, formData: ProductBra
         image_url: formData.image_url || null,
         ingredients_text: formData.ingredients_text || null,
         allergens: formData.allergens || null,
+        nutriments: formData.nutriments || null,
+        additives: formData.additives || null,
+        traces: formData.traces || null,
+        labels: formData.labels || null,
+        package_quantity: formData.package_quantity || null,
+        off_categories: formData.off_categories || null,
+        image_packaging_url: formData.image_packaging_url || null,
         notes: formData.notes || null,
         created_by: user.id,
       })
@@ -218,6 +232,13 @@ export async function updateProductBrand(id: string, formData: Partial<ProductBr
     if (formData.image_url !== undefined) update.image_url = formData.image_url || null;
     if (formData.ingredients_text !== undefined) update.ingredients_text = formData.ingredients_text || null;
     if (formData.allergens !== undefined) update.allergens = formData.allergens || null;
+    if (formData.nutriments !== undefined) update.nutriments = formData.nutriments || null;
+    if (formData.additives !== undefined) update.additives = formData.additives || null;
+    if (formData.traces !== undefined) update.traces = formData.traces || null;
+    if (formData.labels !== undefined) update.labels = formData.labels || null;
+    if (formData.package_quantity !== undefined) update.package_quantity = formData.package_quantity || null;
+    if (formData.off_categories !== undefined) update.off_categories = formData.off_categories || null;
+    if (formData.image_packaging_url !== undefined) update.image_packaging_url = formData.image_packaging_url || null;
     if (formData.notes !== undefined) update.notes = formData.notes || null;
 
     const { data, error } = await supabase
@@ -619,8 +640,15 @@ export interface OpenFactsResult {
   nova_group: 1 | 2 | 3 | 4 | null;
   eco_score: "A" | "B" | "C" | "D" | "E" | null;
   image_url: string | null;
+  image_packaging_url: string | null;
   ingredients_text: string | null;
   allergens: string | null;
+  traces: string | null;
+  labels: string | null;
+  additives: string | null;
+  package_quantity: string | null;
+  off_categories: string | null;
+  nutriments: NutrimentsSummary | null;
 }
 
 // Stesso software (Product Opener) e stessa API dietro domini diversi per
@@ -641,15 +669,68 @@ function normalizeGrade(value: unknown): "A" | "B" | "C" | "D" | "E" | null {
   return (GRADE_LETTERS.includes(upper) ? upper : null) as "A" | "B" | "C" | "D" | "E" | null;
 }
 
+// Le liste (allergeni, tracce, etichette) arrivano come "en:milk,en:gluten":
+// ripulisce il prefisso di lingua e le riunisce in un testo leggibile.
+function cleanTagList(value: unknown): string | null {
+  if (typeof value !== "string" || !value) return null;
+  return value.split(",").map((tag) => tag.trim().replace(/^\w{2}:/, "")).filter(Boolean).join(", ");
+}
+
+// Gli additivi arrivano come tag ["en:e322","en:e500"]: li trasforma in "E322, E500".
+function cleanAdditives(value: unknown): string | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  return value
+    .map((tag) => String(tag).replace(/^\w{2}:/, "").toUpperCase())
+    .filter(Boolean)
+    .join(", ");
+}
+
+// I valori nutrizionali di Open Facts usano chiavi eterogenee (es.
+// "saturated-fat_100g"): estrae solo quelli comparabili che mostriamo.
+function extractNutriments(raw: unknown, servingSize: string | null): NutrimentsSummary | null {
+  if (!raw || typeof raw !== "object") return null;
+  const dict = raw as Record<string, unknown>;
+  const num = (key: string): number | null => (typeof dict[key] === "number" ? (dict[key] as number) : null);
+
+  const summary: NutrimentsSummary = {
+    serving_size: servingSize,
+    energy_kcal_100g: num("energy-kcal_100g"),
+    fat_100g: num("fat_100g"),
+    saturated_fat_100g: num("saturated-fat_100g"),
+    carbohydrates_100g: num("carbohydrates_100g"),
+    sugars_100g: num("sugars_100g"),
+    fiber_100g: num("fiber_100g"),
+    proteins_100g: num("proteins_100g"),
+    salt_100g: num("salt_100g"),
+    energy_kcal_serving: num("energy-kcal_serving"),
+    fat_serving: num("fat_serving"),
+    saturated_fat_serving: num("saturated-fat_serving"),
+    carbohydrates_serving: num("carbohydrates_serving"),
+    sugars_serving: num("sugars_serving"),
+    fiber_serving: num("fiber_serving"),
+    proteins_serving: num("proteins_serving"),
+    salt_serving: num("salt_serving"),
+  };
+
+  const hasAnyValue = Object.entries(summary).some(([key, val]) => key !== "serving_size" && val != null);
+  return hasAnyValue ? summary : null;
+}
+
 // Interroga i database pubblici Open Food/Beauty/Products Facts per
-// pre-compilare marca, Nutri-Score, NOVA, Eco-Score, foto, ingredienti e
-// allergeni a partire dal codice a barre, cosi' non vanno ricopiati a mano
-// quando il prodotto e' gia' censito.
+// pre-compilare marca, Nutri-Score, NOVA, Eco-Score, foto, ingredienti,
+// allergeni, tracce, etichette, additivi, formato confezione e valori
+// nutrizionali a partire dal codice a barre, cosi' non vanno ricopiati a
+// mano quando il prodotto e' gia' censito.
 export async function lookupProductInfo(barcode: string): Promise<OpenFactsResult | null> {
   const trimmed = barcode.trim();
   if (!trimmed) return null;
 
-  const fields = "product_name,brands,nutriscore_grade,nova_group,ecoscore_grade,image_front_small_url,ingredients_text,allergens";
+  const fields = [
+    "product_name", "brands", "nutriscore_grade", "nova_group", "ecoscore_grade",
+    "image_front_small_url", "image_packaging_small_url", "ingredients_text",
+    "allergens", "traces", "labels", "additives_tags", "quantity", "categories",
+    "nutriments", "serving_size",
+  ].join(",");
 
   for (const src of OPEN_FACTS_SOURCES) {
     try {
@@ -664,9 +745,7 @@ export async function lookupProductInfo(barcode: string): Promise<OpenFactsResul
 
       const p = json.product;
       const novaGroup = typeof p.nova_group === "number" ? p.nova_group : null;
-      const allergens = typeof p.allergens === "string" && p.allergens
-        ? p.allergens.split(",").map((a: string) => a.trim().replace(/^en:/, "")).join(", ")
-        : null;
+      const servingSize = typeof p.serving_size === "string" && p.serving_size ? p.serving_size : null;
 
       return {
         source: src.label,
@@ -676,8 +755,15 @@ export async function lookupProductInfo(barcode: string): Promise<OpenFactsResul
         nova_group: (novaGroup && [1, 2, 3, 4].includes(novaGroup) ? novaGroup : null) as OpenFactsResult["nova_group"],
         eco_score: normalizeGrade(p.ecoscore_grade),
         image_url: p.image_front_small_url || null,
+        image_packaging_url: p.image_packaging_small_url || null,
         ingredients_text: p.ingredients_text || null,
-        allergens,
+        allergens: cleanTagList(p.allergens),
+        traces: cleanTagList(p.traces),
+        labels: cleanTagList(p.labels),
+        additives: cleanAdditives(p.additives_tags),
+        package_quantity: p.quantity || null,
+        off_categories: typeof p.categories === "string" && p.categories ? p.categories : null,
+        nutriments: extractNutriments(p.nutriments, servingSize),
       };
     } catch (err: any) {
       console.error(`Errore lookupProductInfo (${src.label}):`, err.message);
