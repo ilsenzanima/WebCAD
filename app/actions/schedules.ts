@@ -64,7 +64,7 @@ export async function createSchedule(formData: {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/schedules");
     revalidatePath("/dashboard/budget");
     revalidatePath("/dashboard/calendar");
@@ -114,7 +114,7 @@ export async function updateSchedule(id: string, formData: {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/schedules");
     revalidatePath("/dashboard/budget");
@@ -144,7 +144,7 @@ export async function rescheduleSchedule(id: string, newDueDate: string) {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/schedules");
     revalidatePath("/dashboard/budget");
@@ -169,7 +169,7 @@ export async function deleteSchedule(id: string) {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/schedules");
     revalidatePath("/dashboard/calendar");
     return { success: true };
@@ -270,7 +270,7 @@ export async function paySchedule(
       }
     }
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/schedules");
     revalidatePath("/dashboard/calendar");
@@ -338,7 +338,7 @@ export async function unpaySchedule(id: string) {
       .single();
     if (updateError) throw new Error(updateError.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/schedules");
     revalidatePath("/dashboard/budget");
@@ -421,7 +421,7 @@ export async function splitScheduleIntoInstallments(id: string, installments: { 
 
     if (insertError) throw new Error(insertError.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/schedules");
     revalidatePath("/dashboard/budget");

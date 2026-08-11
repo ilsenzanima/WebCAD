@@ -2,11 +2,12 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type ExpenseCategory } from "@/lib/types/database";
+import { type ExpenseCategory, type FamilyMember } from "@/lib/types/database";
 import { createCategory, updateCategory, deleteCategory } from "@/app/actions/categories";
 import { changePassword } from "@/app/actions/auth";
 import { disconnectGoogleDrive } from "@/app/actions/google";
 import { setFontPreference } from "@/app/actions/preferences";
+import { createFamilyMember, removeFamilyMember } from "@/app/actions/family";
 import { FONT_OPTIONS } from "@/lib/fonts";
 import { EditIcon, DeleteIcon } from "./icons";
 import { CATEGORY_COLOR_TONES, getCategoryBadgeStyle } from "@/lib/categoryColors";
@@ -15,6 +16,9 @@ interface SettingsClientProps {
   categories: ExpenseCategory[];
   googleConnected: boolean;
   currentFontId: string;
+  appVersion: { version: string; buildTime: string; notes: string };
+  isAdmin: boolean;
+  familyMembers: FamilyMember[];
 }
 
 // Ampia selezione di emoji pronte all'uso per le icone delle categorie,
@@ -35,8 +39,8 @@ const CATEGORY_EMOJIS = [
 // da poterlo sostituire con un click invece di accumularne diversi in fila.
 const LEADING_EMOJI_REGEX = /^(\p{Extended_Pictographic}(️|‍\p{Extended_Pictographic})*\s*)/u;
 
-export default function SettingsClient({ categories: initialCategories, googleConnected: initialGoogleConnected, currentFontId }: SettingsClientProps) {
-  const [activeTab, setActiveTab] = useState<"security" | "categories" | "connections" | "appearance">("categories");
+export default function SettingsClient({ categories: initialCategories, googleConnected: initialGoogleConnected, currentFontId, appVersion, isAdmin, familyMembers: initialFamilyMembers }: SettingsClientProps) {
+  const [activeTab, setActiveTab] = useState<"security" | "categories" | "connections" | "appearance" | "app" | "family">("categories");
   const [isPending, startTransition] = useTransition();
   const [googleConnected, setGoogleConnected] = useState(initialGoogleConnected);
   const [selectedFontId, setSelectedFontId] = useState(currentFontId);
@@ -93,6 +97,69 @@ export default function SettingsClient({ categories: initialCategories, googleCo
   // Password state
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  // Famiglia state
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>(initialFamilyMembers);
+  const [memberName, setMemberName] = useState("");
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberPassword, setMemberPassword] = useState("");
+  const [memberRole, setMemberRole] = useState<"admin" | "member">("member");
+
+  const resetMemberForm = () => {
+    setMemberName("");
+    setMemberEmail("");
+    setMemberPassword("");
+    setMemberRole("member");
+  };
+
+  const handleAddMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!memberName.trim() || !memberEmail.trim() || memberPassword.length < 6) {
+      alert("Compila nome, email e una password di almeno 6 caratteri.");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await createFamilyMember({
+          full_name: memberName.trim(),
+          email: memberEmail.trim(),
+          password: memberPassword,
+          role: memberRole,
+        });
+        if (!res.success) {
+          alert(res.error || "Errore durante la creazione dell'account");
+          return;
+        }
+        alert(
+          res.needsConfirmation
+            ? "Account creato. Dovrà confermare l'email ricevuta prima di poter accedere."
+            : "Account creato: comunica email e password inserite al familiare."
+        );
+        router.refresh();
+        resetMemberForm();
+      } catch (err: any) {
+        alert(err.message || "Errore durante la creazione dell'account");
+      }
+    });
+  };
+
+  const handleRemoveMember = (member: FamilyMember) => {
+    if (!confirm(`Rimuovere ${member.display_name} dalla famiglia? Non vedrà più gli strumenti condivisi.`)) return;
+
+    startTransition(async () => {
+      try {
+        const res = await removeFamilyMember(member.user_id);
+        if (!res.success) {
+          alert(res.error || "Errore durante la rimozione");
+          return;
+        }
+        setFamilyMembers((prev) => prev.filter((m) => m.user_id !== member.user_id));
+      } catch (err: any) {
+        alert(err.message || "Errore durante la rimozione");
+      }
+    });
+  };
 
   // Categories state
   const [categories, setCategories] = useState<ExpenseCategory[]>(initialCategories);
@@ -252,6 +319,26 @@ export default function SettingsClient({ categories: initialCategories, googleCo
           >
             🎨 Aspetto
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("app")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              activeTab === "app" ? "bg-white/10 text-white shadow-lg" : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            📱 App Mobile
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("family")}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeTab === "family" ? "bg-white/10 text-white shadow-lg" : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              👪 Famiglia
+            </button>
+          )}
         </div>
       </div>
 
@@ -563,6 +650,190 @@ export default function SettingsClient({ categories: initialCategories, googleCo
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Content Tab App Mobile */}
+      {activeTab === "app" && (
+        <div className="max-w-md mx-auto animate-fade-in">
+          <div
+            className="rounded-2xl p-6 border shadow-2xl backdrop-blur-xl"
+            style={{
+              background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+              borderColor: "hsla(240, 5%, 18%, 0.7)",
+            }}
+          >
+            <h2 className="text-base font-extrabold text-white mb-1">Scarica l'app Android</h2>
+            <p className="text-[11px] text-slate-400 mb-5 leading-relaxed">
+              Versione installabile per il telefono, generata automaticamente ad ogni aggiornamento del sito.
+            </p>
+
+            <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800 text-[11px] text-slate-300 mb-4 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500">Versione</span>
+                <span className="font-bold text-white">{appVersion.version}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-500">Ultimo aggiornamento</span>
+                <span className="font-semibold">
+                  {new Date(appVersion.buildTime).toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" })}
+                </span>
+              </div>
+            </div>
+
+            <a
+              href="/downloads/webcad-alpha.apk"
+              download
+              className="block text-center w-full py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all"
+            >
+              ⬇️ Scarica APK
+            </a>
+
+            <div className="mt-5 space-y-2 text-[11px] text-slate-400 leading-relaxed">
+              <p className="font-bold text-zinc-300">Come installarla:</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Apri il link dal telefono (o scarica il file e aprilo dai Download).</li>
+                <li>Se compare un avviso, consenti l'installazione da questa origine quando richiesto.</li>
+                <li>Conferma l'installazione: essendo una build di test, Android potrebbe segnalarla come app sconosciuta.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Content Tab Famiglia */}
+      {isAdmin && activeTab === "family" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
+
+          {/* Form Nuovo Membro */}
+          <div
+            className="rounded-2xl p-6 border relative overflow-hidden shadow-2xl backdrop-blur-xl h-fit"
+            style={{
+              background: "linear-gradient(135deg, hsla(245, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
+              borderColor: "hsla(245, 60%, 50%, 0.15)",
+            }}
+          >
+            <h2 className="text-base font-extrabold text-white mb-1">Aggiungi un familiare</h2>
+            <p className="text-[11px] text-slate-400 mb-4 leading-relaxed">
+              Scegli tu email e password: comunicale poi al familiare. Un "membro" non vede la sezione Finanze, un "admin" sì.
+            </p>
+
+            <form onSubmit={handleAddMember} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nome</label>
+                <input
+                  type="text"
+                  value={memberName}
+                  onChange={(e) => setMemberName(e.target.value)}
+                  placeholder="es. Giulia"
+                  required
+                  className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Email</label>
+                <input
+                  type="email"
+                  value={memberEmail}
+                  onChange={(e) => setMemberEmail(e.target.value)}
+                  placeholder="familiare@esempio.com"
+                  required
+                  className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Password provvisoria</label>
+                <input
+                  type="text"
+                  value={memberPassword}
+                  onChange={(e) => setMemberPassword(e.target.value)}
+                  placeholder="Almeno 6 caratteri"
+                  required
+                  className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border border-zinc-800 bg-zinc-950/80"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Ruolo</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMemberRole("member")}
+                    className={`py-2.5 rounded-xl text-[11px] font-bold border transition-all ${
+                      memberRole === "member" ? "ring-2 ring-indigo-500 border-transparent bg-indigo-500/10 text-white" : "border-zinc-800 text-zinc-400"
+                    }`}
+                  >
+                    Membro
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMemberRole("admin")}
+                    className={`py-2.5 rounded-xl text-[11px] font-bold border transition-all ${
+                      memberRole === "admin" ? "ring-2 ring-indigo-500 border-transparent bg-indigo-500/10 text-white" : "border-zinc-800 text-zinc-400"
+                    }`}
+                  >
+                    Admin
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isPending}
+                className="w-full py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all mt-2"
+              >
+                {isPending ? "Creazione..." : "Crea account"}
+              </button>
+            </form>
+          </div>
+
+          {/* Elenco Famiglia */}
+          <div
+            className="lg:col-span-2 rounded-2xl p-6 border shadow-2xl backdrop-blur-xl"
+            style={{
+              background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+              borderColor: "hsla(240, 5%, 18%, 0.7)",
+            }}
+          >
+            <h3 className="text-sm font-extrabold text-white mb-4">Membri della famiglia</h3>
+            <div className="space-y-3">
+              {familyMembers.map((member) => (
+                <div
+                  key={member.user_id}
+                  className="p-3.5 rounded-xl border border-zinc-800/80 bg-zinc-950/40 flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0"
+                      style={{ background: "linear-gradient(135deg, hsl(220 90% 56%), hsl(215 85% 48%))" }}
+                    >
+                      {member.display_name.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-white">{member.display_name}</div>
+                      <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+                        {member.role === "admin" ? "Admin" : "Membro"}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveMember(member)}
+                    disabled={isPending}
+                    className="p-1.5 rounded text-slate-500 hover:text-rose-400 transition-all opacity-0 group-hover:opacity-100"
+                    title="Rimuovi dalla famiglia"
+                  >
+                    <DeleteIcon size={13} />
+                  </button>
+                </div>
+              ))}
+              {familyMembers.length === 0 && (
+                <p className="text-[11px] text-zinc-500">Nessun familiare ancora aggiunto.</p>
+              )}
+            </div>
+          </div>
+
         </div>
       )}
 

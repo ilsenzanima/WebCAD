@@ -44,7 +44,7 @@ export async function createAccount(formData: {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/accounts");
     revalidatePath("/dashboard/expenses");
     return { success: true, data };
@@ -81,7 +81,7 @@ export async function updateAccount(id: string, formData: {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/accounts");
     revalidatePath("/dashboard/expenses");
     return { success: true, data };
@@ -134,7 +134,7 @@ export async function createAccountAdjustment(formData: {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/accounts");
     return { success: true, data };
   } catch (err: any) {
@@ -156,7 +156,7 @@ export async function deleteAccountAdjustment(id: string) {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/accounts");
     return { success: true };
   } catch (err: any) {
@@ -178,7 +178,7 @@ export async function deleteAccount(id: string) {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/accounts");
     revalidatePath("/dashboard/expenses");
     return { success: true };

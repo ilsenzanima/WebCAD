@@ -4,23 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import MobileHeaderMenu from "@/app/ui/dashboard/MobileHeaderMenu";
 import SidebarProfile from "@/app/ui/dashboard/SidebarProfile";
 import SidebarNav from "@/app/ui/dashboard/SidebarNav";
-import { OverviewIcon, ExpensesIcon, SettingsIcon, CalendarIcon, TagIcon, SupplierIcon, WalletIcon, InboxIcon } from "@/app/ui/dashboard/icons";
+import { navItems as allNavItems, bottomNavItems } from "@/app/ui/dashboard/navConfig";
+import { getMyRole } from "@/app/actions/family";
 import type { ReactNode } from "react";
-
-// Navigazione principale comprensiva di Calendario e Fornitori dedicati
-const navItems = [
-  { href: "/dashboard", icon: <OverviewIcon size={15} />, label: "Panoramica" },
-  { href: "/dashboard/accounts", icon: <WalletIcon size={15} />, label: "Conti" },
-  { href: "/dashboard/expenses", icon: <ExpensesIcon size={15} />, label: "Spese, Entrate e Scadenze" },
-  { href: "/dashboard/calendar", icon: <CalendarIcon size={15} />, label: "Calendario" },
-  { href: "/dashboard/budget", icon: <TagIcon size={15} />, label: "Budget" },
-  { href: "/dashboard/suppliers", icon: <SupplierIcon size={15} />, label: "Fornitori" },
-  { href: "/dashboard/scansioni", icon: <InboxIcon size={15} />, label: "Smistamento Scansioni" },
-];
-
-const bottomNavItems = [
-  { href: "/dashboard/settings", icon: <SettingsIcon size={15} />, label: "Impostazioni" },
-];
 
 export default async function DashboardLayout({
   children,
@@ -31,6 +17,14 @@ export default async function DashboardLayout({
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 
   if (!user || authError) redirect("/login");
+
+  // Il gruppo "Finanze" e' visibile solo agli admin: i membri della famiglia
+  // non-admin non lo vedono in menu (i dati restano comunque protetti dalle
+  // policy RLS su user_id, indipendentemente da questo filtro di interfaccia).
+  const role = await getMyRole();
+  const navItems = role === "admin"
+    ? allNavItems
+    : allNavItems.filter((item) => !(item.type === "group" && item.label === "Finanze"));
 
   const userName =
     user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Utente";
@@ -101,10 +95,11 @@ export default async function DashboardLayout({
       <div className="flex-1 flex flex-col overflow-hidden relative">
         <div className="absolute top-0 right-0 w-[400px] h-[400px] rounded-full bg-zinc-500/5 blur-[120px] pointer-events-none z-0" />
 
-        <MobileHeaderMenu 
-          initials={initials} 
-          userName={userName} 
-          userEmail={user.email} 
+        <MobileHeaderMenu
+          initials={initials}
+          userName={userName}
+          userEmail={user.email}
+          navItems={navItems}
         />
 
         {/* Contenuto pagina */}

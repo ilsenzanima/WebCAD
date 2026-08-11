@@ -5,6 +5,66 @@
  * ============================================
  */
 
+export interface FamilyMember {
+  user_id: string;
+  display_name: string;
+  role: "admin" | "member";
+  created_at: string;
+}
+
+export interface ShoppingProduct {
+  id: string;
+  name: string;
+  category: string | null;
+  default_store: string | null;
+  aisle: string | null;
+  default_unit: string | null;
+  shelf_life_days: number | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ShoppingList {
+  id: string;
+  name: string;
+  status: "open" | "completed";
+  shopping_date: string | null;
+  store: string | null;
+  total_amount: number | null;
+  expense_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface ShoppingListItem {
+  id: string;
+  shopping_list_id: string;
+  product_id: string;
+  quantity: number | null;
+  unit: string | null;
+  price: number | null;
+  is_checked: boolean;
+  checked_at: string | null;
+  expiry_date: string | null;
+  notes: string | null;
+  created_at: string;
+  shopping_products?: ShoppingProduct;
+}
+
+export interface ShoppingProductBrand {
+  id: string;
+  product_id: string;
+  brand_name: string;
+  barcode: string | null;
+  rating: number | null;
+  nutri_score: "A" | "B" | "C" | "D" | "E" | null;
+  nova_group: 1 | 2 | 3 | 4 | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface ExpenseCategory {
   id: string;
   user_id: string;

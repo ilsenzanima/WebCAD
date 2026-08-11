@@ -62,7 +62,7 @@ export async function createExpense(formData: {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/budget");
     return { success: true, data };
@@ -114,7 +114,7 @@ export async function updateExpense(
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/budget");
     return { success: true };
@@ -137,7 +137,7 @@ export async function deleteExpense(id: string) {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/budget");
     return { success: true };

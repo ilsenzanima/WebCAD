@@ -56,7 +56,7 @@ export async function createBudget(formData: {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/budget");
     return { success: true, data };
   } catch (err: any) {
@@ -102,7 +102,7 @@ export async function updateBudget(id: string, formData: {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/budget");
     return { success: true, data };
   } catch (err: any) {
@@ -124,7 +124,7 @@ export async function deleteBudget(id: string) {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/budget");
     return { success: true };
   } catch (err: any) {
@@ -179,7 +179,7 @@ export async function upsertBudgetOverride(formData: {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/budget");
     return { success: true, data };
   } catch (err: any) {
@@ -225,7 +225,7 @@ export async function confirmBudgetExpense(budgetId: string, formData: {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/budget");
     return { success: true, data };
@@ -248,7 +248,7 @@ export async function deleteBudgetOverride(id: string) {
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/budget");
     return { success: true };
   } catch (err: any) {
