@@ -52,6 +52,26 @@ export interface ShoppingListItem {
   shopping_products?: ShoppingProduct;
 }
 
+export interface NutrimentsSummary {
+  serving_size: string | null;
+  energy_kcal_100g: number | null;
+  fat_100g: number | null;
+  saturated_fat_100g: number | null;
+  carbohydrates_100g: number | null;
+  sugars_100g: number | null;
+  fiber_100g: number | null;
+  proteins_100g: number | null;
+  salt_100g: number | null;
+  energy_kcal_serving: number | null;
+  fat_serving: number | null;
+  saturated_fat_serving: number | null;
+  carbohydrates_serving: number | null;
+  sugars_serving: number | null;
+  fiber_serving: number | null;
+  proteins_serving: number | null;
+  salt_serving: number | null;
+}
+
 export interface ShoppingProductBrand {
   id: string;
   product_id: string;
@@ -64,6 +84,13 @@ export interface ShoppingProductBrand {
   image_url: string | null;
   ingredients_text: string | null;
   allergens: string | null;
+  nutriments: NutrimentsSummary | null;
+  additives: string | null;
+  traces: string | null;
+  labels: string | null;
+  package_quantity: string | null;
+  off_categories: string | null;
+  image_packaging_url: string | null;
   notes: string | null;
   created_by: string | null;
   created_at: string;

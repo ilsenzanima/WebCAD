@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import type { ShoppingProduct, ShoppingProductBrand } from "@/lib/types/database";
+import type { ShoppingProduct, ShoppingProductBrand, NutrimentsSummary } from "@/lib/types/database";
 import {
   updateShoppingProduct,
   deleteShoppingProduct,
@@ -32,6 +32,98 @@ const NOVA_LABELS: Record<number, string> = {
   4: "Ultra-processato",
 };
 
+interface BrandExtras {
+  nutriments: NutrimentsSummary | null;
+  additives: string | null;
+  traces: string | null;
+  labels: string | null;
+  package_quantity: string | null;
+  off_categories: string | null;
+  image_packaging_url: string | null;
+}
+
+const EMPTY_EXTRAS: BrandExtras = {
+  nutriments: null, additives: null, traces: null, labels: null,
+  package_quantity: null, off_categories: null, image_packaging_url: null,
+};
+
+function hasExtras(e: BrandExtras): boolean {
+  return Object.values(e).some((v) => v != null);
+}
+
+const NUTRIENT_ROWS: { key: keyof NutrimentsSummary; label: string; unit: string }[] = [
+  { key: "energy_kcal_100g", label: "Energia", unit: "kcal" },
+  { key: "fat_100g", label: "Grassi", unit: "g" },
+  { key: "saturated_fat_100g", label: "di cui saturi", unit: "g" },
+  { key: "carbohydrates_100g", label: "Carboidrati", unit: "g" },
+  { key: "sugars_100g", label: "di cui zuccheri", unit: "g" },
+  { key: "fiber_100g", label: "Fibre", unit: "g" },
+  { key: "proteins_100g", label: "Proteine", unit: "g" },
+  { key: "salt_100g", label: "Sale", unit: "g" },
+];
+
+function NutritionTable({ n }: { n: NutrimentsSummary }) {
+  const rows = NUTRIENT_ROWS.filter((r) => n[r.key] != null);
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-zinc-800 overflow-hidden">
+      <div className="px-2.5 py-1.5 bg-zinc-900 text-[9px] font-bold uppercase tracking-wider text-zinc-400 flex justify-between">
+        <span>Valori nutrizionali</span>
+        <span>per 100g{n.serving_size ? ` · porzione ${n.serving_size}` : ""}</span>
+      </div>
+      <div className="divide-y divide-zinc-800">
+        {rows.map((r) => {
+          const servingKey = (r.key.replace("_100g", "_serving")) as keyof NutrimentsSummary;
+          const servingValue = n[servingKey];
+          return (
+            <div key={r.key} className="px-2.5 py-1 flex items-center justify-between text-[10px]">
+              <span className="text-zinc-400">{r.label}</span>
+              <span className="text-zinc-200 font-semibold">
+                {n[r.key]}{r.unit}
+                {servingValue != null && <span className="text-zinc-500 font-normal"> · {servingValue}{r.unit}/porz.</span>}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BrandExtrasPreview({ e }: { e: BrandExtras }) {
+  if (!hasExtras(e)) return null;
+
+  return (
+    <div className="space-y-2 p-3 rounded-lg border border-zinc-800 bg-zinc-950/40">
+      <div className="flex items-center justify-between">
+        <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Dati trovati (verranno salvati con la marca)</p>
+        {e.image_packaging_url && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={e.image_packaging_url} alt="Confezione" className="w-10 h-10 object-cover rounded-lg border border-zinc-800" />
+        )}
+      </div>
+      {(e.package_quantity || e.off_categories) && (
+        <p className="text-[10px] text-zinc-400">
+          {e.package_quantity && <>Formato: <span className="text-zinc-200 font-semibold">{e.package_quantity}</span></>}
+          {e.package_quantity && e.off_categories && " · "}
+          {e.off_categories && <>Categoria: <span className="text-zinc-200 font-semibold">{e.off_categories}</span></>}
+        </p>
+      )}
+      {e.labels && (
+        <div className="flex flex-wrap gap-1">
+          {e.labels.split(",").map((l) => l.trim()).filter(Boolean).map((l) => (
+            <span key={l} className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">{l}</span>
+          ))}
+        </div>
+      )}
+      {e.traces && <p className="text-[10px] text-amber-400">⚠️ Può contenere tracce di: {e.traces}</p>}
+      {e.additives && <p className="text-[10px] text-zinc-400">Additivi: <span className="text-zinc-200">{e.additives}</span></p>}
+      {e.nutriments && <NutritionTable n={e.nutriments} />}
+    </div>
+  );
+}
+
 function StarRating({ value, onChange }: { value: number | null; onChange: (v: number | null) => void }) {
   return (
     <div className="flex items-center gap-0.5">
@@ -46,6 +138,100 @@ function StarRating({ value, onChange }: { value: number | null; onChange: (v: n
           <span style={{ color: value != null && n <= value ? "#fbbf24" : "hsl(240 5% 30%)" }}>★</span>
         </button>
       ))}
+    </div>
+  );
+}
+
+function BrandCard({ brand: b, onEdit, onDelete, onQuickRating }: {
+  brand: ShoppingProductBrand;
+  onEdit: (b: ShoppingProductBrand) => void;
+  onDelete: (id: string) => void;
+  onQuickRating: (b: ShoppingProductBrand, value: number | null) => void;
+}) {
+  const [showDetails, setShowDetails] = useState(false);
+  const extras: BrandExtras = {
+    nutriments: b.nutriments, additives: b.additives, traces: b.traces, labels: b.labels,
+    package_quantity: b.package_quantity, off_categories: b.off_categories, image_packaging_url: b.image_packaging_url,
+  };
+
+  return (
+    <div className="p-3.5 rounded-xl border border-zinc-800/80 bg-zinc-950/40">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-start gap-3">
+          {b.image_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={b.image_url} alt={b.brand_name} className="w-10 h-10 object-cover rounded-lg border border-zinc-800 flex-shrink-0" />
+          )}
+          <div>
+            <div className="text-xs font-bold text-white">
+              {b.brand_name}
+              {b.package_quantity && <span className="text-zinc-500 font-normal"> · {b.package_quantity}</span>}
+            </div>
+            {b.barcode && <div className="text-[10px] text-zinc-500 font-mono">{b.barcode}</div>}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {b.nutri_score && (
+            <span className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-extrabold text-white"
+              style={{ background: GRADE_COLORS[b.nutri_score] }} title="Nutri-Score">
+              {b.nutri_score}
+            </span>
+          )}
+          {b.eco_score && (
+            <span className="w-5 h-5 rounded flex items-center justify-center text-[9px] font-extrabold text-white"
+              style={{ background: GRADE_COLORS[b.eco_score] }} title="Eco-Score">
+              🌱
+            </span>
+          )}
+          {b.nova_group && (
+            <span className="px-1.5 h-5 rounded flex items-center justify-center text-[9px] font-extrabold text-zinc-300 bg-zinc-800 border border-zinc-700" title={NOVA_LABELS[b.nova_group]}>
+              NOVA {b.nova_group}
+            </span>
+          )}
+          <button onClick={() => onEdit(b)} className="p-1 rounded text-slate-400 hover:text-white transition-all">
+            <EditIcon size={12} />
+          </button>
+          <button onClick={() => onDelete(b.id)} className="p-1 rounded text-slate-400 hover:text-rose-400 transition-all">
+            <DeleteIcon size={12} />
+          </button>
+        </div>
+      </div>
+      <div className="mt-2 flex items-center justify-between flex-wrap gap-2">
+        <StarRating value={b.rating} onChange={(v) => onQuickRating(b, v)} />
+        {b.notes && <p className="text-[10px] text-zinc-500 italic">{b.notes}</p>}
+      </div>
+      {b.allergens && (
+        <p className="mt-1.5 text-[10px] text-amber-400">⚠️ Allergeni: {b.allergens}</p>
+      )}
+      {b.ingredients_text && (
+        <p className="mt-1 text-[10px] text-zinc-500 line-clamp-2">{b.ingredients_text}</p>
+      )}
+      {b.labels && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {b.labels.split(",").map((l) => l.trim()).filter(Boolean).slice(0, 6).map((l) => (
+            <span key={l} className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">{l}</span>
+          ))}
+        </div>
+      )}
+      {hasExtras(extras) && (
+        <div className="mt-2">
+          <button onClick={() => setShowDetails((v) => !v)} className="text-[9px] font-bold text-indigo-300 hover:text-indigo-200 transition-all">
+            {showDetails ? "▾ Nascondi info nutrizionali" : "▸ Info nutrizionali"}
+          </button>
+          {showDetails && (
+            <div className="mt-2 space-y-2">
+              {b.traces && <p className="text-[10px] text-amber-400">⚠️ Può contenere tracce di: {b.traces}</p>}
+              {b.additives && <p className="text-[10px] text-zinc-400">Additivi: <span className="text-zinc-200">{b.additives}</span></p>}
+              {b.off_categories && <p className="text-[10px] text-zinc-500">Categoria (Open Facts): {b.off_categories}</p>}
+              {b.image_packaging_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={b.image_packaging_url} alt="Confezione" className="w-14 h-14 object-cover rounded-lg border border-zinc-800" />
+              )}
+              {b.nutriments && <NutritionTable n={b.nutriments} />}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -79,6 +265,7 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
   const [brandIngredients, setBrandIngredients] = useState("");
   const [brandAllergens, setBrandAllergens] = useState("");
   const [brandNotes, setBrandNotes] = useState("");
+  const [brandExtras, setBrandExtras] = useState<BrandExtras>(EMPTY_EXTRAS);
   const [showScanner, setShowScanner] = useState(false);
   const [lookingUpOff, setLookingUpOff] = useState(false);
   const [lookupSource, setLookupSource] = useState<string | null>(null);
@@ -112,7 +299,7 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
     setBrandName(""); setBrandBarcode(""); setBrandRating(null);
     setBrandNutriScore(""); setBrandNova(""); setBrandEcoScore("");
     setBrandImageUrl(""); setBrandIngredients(""); setBrandAllergens("");
-    setBrandNotes(""); setLookupSource(null);
+    setBrandNotes(""); setBrandExtras(EMPTY_EXTRAS); setLookupSource(null);
     setShowBrandForm(false);
   };
 
@@ -128,6 +315,15 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
     setBrandIngredients(b.ingredients_text || "");
     setBrandAllergens(b.allergens || "");
     setBrandNotes(b.notes || "");
+    setBrandExtras({
+      nutriments: b.nutriments,
+      additives: b.additives,
+      traces: b.traces,
+      labels: b.labels,
+      package_quantity: b.package_quantity,
+      off_categories: b.off_categories,
+      image_packaging_url: b.image_packaging_url,
+    });
     setLookupSource(null);
     setShowBrandForm(true);
   };
@@ -147,6 +343,7 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
       ingredients_text: brandIngredients.trim() || null,
       allergens: brandAllergens.trim() || null,
       notes: brandNotes.trim() || null,
+      ...brandExtras,
     };
 
     startTransition(async () => {
@@ -197,6 +394,15 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
       if (result.image_url) setBrandImageUrl(result.image_url);
       if (result.ingredients_text) setBrandIngredients(result.ingredients_text);
       if (result.allergens) setBrandAllergens(result.allergens);
+      setBrandExtras({
+        nutriments: result.nutriments,
+        additives: result.additives,
+        traces: result.traces,
+        labels: result.labels,
+        package_quantity: result.package_quantity,
+        off_categories: result.off_categories,
+        image_packaging_url: result.image_packaging_url,
+      });
       setLookupSource(result.source);
     });
   };
@@ -335,6 +541,16 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
             <input value={brandNotes} onChange={(e) => setBrandNotes(e.target.value)} placeholder="Note (opzionale)"
               className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
             <p className="text-[9px] text-zinc-500">Nutri-Score, Eco-Score e NOVA si copiano dall'etichetta della confezione, non vengono calcolati automaticamente.</p>
+
+            {hasExtras(brandExtras) && (
+              <div className="space-y-1.5">
+                <BrandExtrasPreview e={brandExtras} />
+                <button type="button" onClick={() => setBrandExtras(EMPTY_EXTRAS)} className="text-[9px] font-bold text-zinc-500 hover:text-rose-400 transition-all">
+                  ✕ Rimuovi i dati trovati
+                </button>
+              </div>
+            )}
+
             <div className="flex gap-2">
               <button type="button" onClick={resetBrandForm} className="flex-1 py-2.5 rounded-xl text-xs font-bold text-slate-300 bg-zinc-800 hover:bg-zinc-700 transition-all">
                 Annulla
@@ -348,55 +564,7 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
 
         <div className="space-y-2">
           {brands.map((b) => (
-            <div key={b.id} className="p-3.5 rounded-xl border border-zinc-800/80 bg-zinc-950/40">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div className="flex items-start gap-3">
-                  {b.image_url && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={b.image_url} alt={b.brand_name} className="w-10 h-10 object-cover rounded-lg border border-zinc-800 flex-shrink-0" />
-                  )}
-                  <div>
-                    <div className="text-xs font-bold text-white">{b.brand_name}</div>
-                    {b.barcode && <div className="text-[10px] text-zinc-500 font-mono">{b.barcode}</div>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {b.nutri_score && (
-                    <span className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-extrabold text-white"
-                      style={{ background: GRADE_COLORS[b.nutri_score] }} title="Nutri-Score">
-                      {b.nutri_score}
-                    </span>
-                  )}
-                  {b.eco_score && (
-                    <span className="w-5 h-5 rounded flex items-center justify-center text-[9px] font-extrabold text-white"
-                      style={{ background: GRADE_COLORS[b.eco_score] }} title="Eco-Score">
-                      🌱
-                    </span>
-                  )}
-                  {b.nova_group && (
-                    <span className="px-1.5 h-5 rounded flex items-center justify-center text-[9px] font-extrabold text-zinc-300 bg-zinc-800 border border-zinc-700" title={NOVA_LABELS[b.nova_group]}>
-                      NOVA {b.nova_group}
-                    </span>
-                  )}
-                  <button onClick={() => handleEditBrand(b)} className="p-1 rounded text-slate-400 hover:text-white transition-all">
-                    <EditIcon size={12} />
-                  </button>
-                  <button onClick={() => handleDeleteBrand(b.id)} className="p-1 rounded text-slate-400 hover:text-rose-400 transition-all">
-                    <DeleteIcon size={12} />
-                  </button>
-                </div>
-              </div>
-              <div className="mt-2 flex items-center justify-between flex-wrap gap-2">
-                <StarRating value={b.rating} onChange={(v) => handleQuickRating(b, v)} />
-                {b.notes && <p className="text-[10px] text-zinc-500 italic">{b.notes}</p>}
-              </div>
-              {b.allergens && (
-                <p className="mt-1.5 text-[10px] text-amber-400">⚠️ Allergeni: {b.allergens}</p>
-              )}
-              {b.ingredients_text && (
-                <p className="mt-1 text-[10px] text-zinc-500 line-clamp-2">{b.ingredients_text}</p>
-              )}
-            </div>
+            <BrandCard key={b.id} brand={b} onEdit={handleEditBrand} onDelete={handleDeleteBrand} onQuickRating={handleQuickRating} />
           ))}
           {brands.length === 0 && !showBrandForm && (
             <p className="text-[11px] text-zinc-500">Nessuna marca ancora registrata per questo prodotto.</p>
