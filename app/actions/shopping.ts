@@ -158,14 +158,20 @@ export async function getProductBrands(productId: string): Promise<ShoppingProdu
   }
 }
 
-export async function createProductBrand(productId: string, formData: {
+interface ProductBrandFields {
   brand_name: string;
   barcode?: string | null;
   rating?: number | null;
   nutri_score?: "A" | "B" | "C" | "D" | "E" | null;
   nova_group?: 1 | 2 | 3 | 4 | null;
+  eco_score?: "A" | "B" | "C" | "D" | "E" | null;
+  image_url?: string | null;
+  ingredients_text?: string | null;
+  allergens?: string | null;
   notes?: string | null;
-}) {
+}
+
+export async function createProductBrand(productId: string, formData: ProductBrandFields) {
   try {
     const supabase = (await createClient()) as any;
     const { data: { user } } = await supabase.auth.getUser();
@@ -180,6 +186,10 @@ export async function createProductBrand(productId: string, formData: {
         rating: formData.rating ?? null,
         nutri_score: formData.nutri_score || null,
         nova_group: formData.nova_group ?? null,
+        eco_score: formData.eco_score || null,
+        image_url: formData.image_url || null,
+        ingredients_text: formData.ingredients_text || null,
+        allergens: formData.allergens || null,
         notes: formData.notes || null,
         created_by: user.id,
       })
@@ -195,14 +205,7 @@ export async function createProductBrand(productId: string, formData: {
   }
 }
 
-export async function updateProductBrand(id: string, formData: {
-  brand_name?: string;
-  barcode?: string | null;
-  rating?: number | null;
-  nutri_score?: "A" | "B" | "C" | "D" | "E" | null;
-  nova_group?: 1 | 2 | 3 | 4 | null;
-  notes?: string | null;
-}) {
+export async function updateProductBrand(id: string, formData: Partial<ProductBrandFields>) {
   try {
     const supabase = (await createClient()) as any;
     const update: Record<string, any> = {};
@@ -211,6 +214,10 @@ export async function updateProductBrand(id: string, formData: {
     if (formData.rating !== undefined) update.rating = formData.rating;
     if (formData.nutri_score !== undefined) update.nutri_score = formData.nutri_score;
     if (formData.nova_group !== undefined) update.nova_group = formData.nova_group;
+    if (formData.eco_score !== undefined) update.eco_score = formData.eco_score;
+    if (formData.image_url !== undefined) update.image_url = formData.image_url || null;
+    if (formData.ingredients_text !== undefined) update.ingredients_text = formData.ingredients_text || null;
+    if (formData.allergens !== undefined) update.allergens = formData.allergens || null;
     if (formData.notes !== undefined) update.notes = formData.notes || null;
 
     const { data, error } = await supabase
@@ -601,45 +608,82 @@ export async function removeShoppingListItem(itemId: string) {
 }
 
 // ============================================
-// Open Food Facts (dati pubblici, gratuiti, senza chiave)
+// Open Food/Beauty/Products Facts (dati pubblici, gratuiti, senza chiave)
 // ============================================
 
-export interface OpenFoodFactsResult {
+export interface OpenFactsResult {
+  source: string;
   product_name: string | null;
   brand_name: string | null;
   nutri_score: "A" | "B" | "C" | "D" | "E" | null;
   nova_group: 1 | 2 | 3 | 4 | null;
+  eco_score: "A" | "B" | "C" | "D" | "E" | null;
+  image_url: string | null;
+  ingredients_text: string | null;
+  allergens: string | null;
 }
 
-// Interroga il database pubblico Open Food Facts per pre-compilare marca,
-// Nutri-Score e gruppo NOVA a partire dal codice a barre, cosi' non vanno
-// ricopiati a mano quando sono gia' censiti.
-export async function lookupOpenFoodFacts(barcode: string): Promise<OpenFoodFactsResult | null> {
-  try {
-    const trimmed = barcode.trim();
-    if (!trimmed) return null;
+// Stesso software (Product Opener) e stessa API dietro domini diversi per
+// tipo di prodotto: proviamo prima quello alimentare (il piu' popolato),
+// poi cosmesi/igiene, poi il contenitore generico per tutto il resto
+// (es. detersivi), fermandoci al primo che conosce il codice a barre.
+const OPEN_FACTS_SOURCES = [
+  { domain: "world.openfoodfacts.org", label: "Open Food Facts" },
+  { domain: "world.openbeautyfacts.org", label: "Open Beauty Facts" },
+  { domain: "world.openproductsfacts.org", label: "Open Products Facts" },
+];
 
-    const res = await fetch(
-      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(trimmed)}.json?fields=product_name,brands,nutriscore_grade,nova_group`,
-      { headers: { "User-Agent": "WebCAD-FamilyApp/1.0 (gestionale famiglia privato)" } }
-    );
-    if (!res.ok) return null;
+const GRADE_LETTERS = ["A", "B", "C", "D", "E"];
 
-    const json: any = await res.json();
-    if (!json || json.status !== 1 || !json.product) return null;
+function normalizeGrade(value: unknown): "A" | "B" | "C" | "D" | "E" | null {
+  if (typeof value !== "string") return null;
+  const upper = value.toUpperCase();
+  return (GRADE_LETTERS.includes(upper) ? upper : null) as "A" | "B" | "C" | "D" | "E" | null;
+}
 
-    const p = json.product;
-    const nutriScore = typeof p.nutriscore_grade === "string" ? p.nutriscore_grade.toUpperCase() : null;
-    const novaGroup = typeof p.nova_group === "number" ? p.nova_group : null;
+// Interroga i database pubblici Open Food/Beauty/Products Facts per
+// pre-compilare marca, Nutri-Score, NOVA, Eco-Score, foto, ingredienti e
+// allergeni a partire dal codice a barre, cosi' non vanno ricopiati a mano
+// quando il prodotto e' gia' censito.
+export async function lookupProductInfo(barcode: string): Promise<OpenFactsResult | null> {
+  const trimmed = barcode.trim();
+  if (!trimmed) return null;
 
-    return {
-      product_name: p.product_name || null,
-      brand_name: typeof p.brands === "string" && p.brands ? p.brands.split(",")[0].trim() : null,
-      nutri_score: (nutriScore && ["A", "B", "C", "D", "E"].includes(nutriScore) ? nutriScore : null) as OpenFoodFactsResult["nutri_score"],
-      nova_group: (novaGroup && [1, 2, 3, 4].includes(novaGroup) ? novaGroup : null) as OpenFoodFactsResult["nova_group"],
-    };
-  } catch (err: any) {
-    console.error("Errore lookupOpenFoodFacts:", err.message);
-    return null;
+  const fields = "product_name,brands,nutriscore_grade,nova_group,ecoscore_grade,image_front_small_url,ingredients_text,allergens";
+
+  for (const src of OPEN_FACTS_SOURCES) {
+    try {
+      const res = await fetch(
+        `https://${src.domain}/api/v2/product/${encodeURIComponent(trimmed)}.json?fields=${fields}`,
+        { headers: { "User-Agent": "WebCAD-FamilyApp/1.0 (gestionale famiglia privato)" } }
+      );
+      if (!res.ok) continue;
+
+      const json: any = await res.json();
+      if (!json || json.status !== 1 || !json.product) continue;
+
+      const p = json.product;
+      const novaGroup = typeof p.nova_group === "number" ? p.nova_group : null;
+      const allergens = typeof p.allergens === "string" && p.allergens
+        ? p.allergens.split(",").map((a: string) => a.trim().replace(/^en:/, "")).join(", ")
+        : null;
+
+      return {
+        source: src.label,
+        product_name: p.product_name || null,
+        brand_name: typeof p.brands === "string" && p.brands ? p.brands.split(",")[0].trim() : null,
+        nutri_score: normalizeGrade(p.nutriscore_grade),
+        nova_group: (novaGroup && [1, 2, 3, 4].includes(novaGroup) ? novaGroup : null) as OpenFactsResult["nova_group"],
+        eco_score: normalizeGrade(p.ecoscore_grade),
+        image_url: p.image_front_small_url || null,
+        ingredients_text: p.ingredients_text || null,
+        allergens,
+      };
+    } catch (err: any) {
+      console.error(`Errore lookupProductInfo (${src.label}):`, err.message);
+      // prova il prossimo database della lista
+    }
   }
+
+  return null;
 }
