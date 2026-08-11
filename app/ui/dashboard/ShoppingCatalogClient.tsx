@@ -7,6 +7,7 @@ import type { ShoppingProduct } from "@/lib/types/database";
 import { createShoppingProduct, deleteShoppingProduct, findProductBrandByBarcode } from "@/app/actions/shopping";
 import { GROCERY_CATEGORIES } from "@/lib/shoppingCategories";
 import { DeleteIcon, ArrowRightIcon } from "./icons";
+import BarcodeScannerModal from "./BarcodeScannerModal";
 
 interface ShoppingCatalogClientProps {
   initialProducts: ShoppingProduct[];
@@ -26,6 +27,7 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
 
   const [barcodeQuery, setBarcodeQuery] = useState("");
   const [searchingBarcode, setSearchingBarcode] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
 
   const resetProductForm = () => {
     setProdName(""); setProdCategory(""); setProdStore(""); setProdAisle(""); setProdUnit(""); setProdShelfLife("");
@@ -59,16 +61,26 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
     });
   };
 
-  const handleBarcodeSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!barcodeQuery.trim()) return;
+  const runBarcodeSearch = (code: string) => {
+    if (!code.trim()) return;
     setSearchingBarcode(true);
     startTransition(async () => {
-      const result = await findProductBrandByBarcode(barcodeQuery.trim());
+      const result = await findProductBrandByBarcode(code.trim());
       setSearchingBarcode(false);
       if (!result) { alert("Nessun prodotto trovato con questo codice a barre."); return; }
       router.push(`/dashboard/shopping-catalog/${result.product_id}`);
     });
+  };
+
+  const handleBarcodeSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    runBarcodeSearch(barcodeQuery);
+  };
+
+  const handleScanDetected = (code: string) => {
+    setShowScanner(false);
+    setBarcodeQuery(code);
+    runBarcodeSearch(code);
   };
 
   const productsByCategory = products.reduce<Record<string, ShoppingProduct[]>>((acc, p) => {
@@ -91,12 +103,18 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
         <form onSubmit={handleBarcodeSearch} className="flex gap-2">
           <input value={barcodeQuery} onChange={(e) => setBarcodeQuery(e.target.value)} placeholder="Cerca per codice a barre"
             className="px-3 py-2.5 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80 w-48" />
+          <button type="button" onClick={() => setShowScanner(true)}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 transition-all" title="Scansiona con la fotocamera">
+            📷
+          </button>
           <button type="submit" disabled={searchingBarcode}
             className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 transition-all">
             🔍
           </button>
         </form>
       </div>
+
+      {showScanner && <BarcodeScannerModal onDetected={handleScanDetected} onClose={() => setShowScanner(false)} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
         {/* Form Nuovo Prodotto */}

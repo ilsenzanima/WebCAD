@@ -9,10 +9,12 @@ import {
   createProductBrand,
   updateProductBrand,
   deleteProductBrand,
+  lookupOpenFoodFacts,
 } from "@/app/actions/shopping";
 import { GROCERY_CATEGORIES } from "@/lib/shoppingCategories";
 import { DeleteIcon, EditIcon, ArrowLeftIcon } from "./icons";
 import { useRouter } from "next/navigation";
+import BarcodeScannerModal from "./BarcodeScannerModal";
 
 const NUTRI_SCORE_COLORS: Record<string, string> = {
   A: "#038141",
@@ -72,6 +74,8 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
   const [brandNutriScore, setBrandNutriScore] = useState("");
   const [brandNova, setBrandNova] = useState("");
   const [brandNotes, setBrandNotes] = useState("");
+  const [showScanner, setShowScanner] = useState(false);
+  const [lookingUpOff, setLookingUpOff] = useState(false);
 
   const handleSaveProduct = () => {
     if (!prodName.trim()) { alert("Il nome non può essere vuoto"); return; }
@@ -156,6 +160,24 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
     });
   };
 
+  const handleScanDetected = (code: string) => {
+    setShowScanner(false);
+    setBrandBarcode(code);
+  };
+
+  const handleLookupOpenFoodFacts = () => {
+    if (!brandBarcode.trim()) { alert("Inserisci prima un codice a barre"); return; }
+    setLookingUpOff(true);
+    startTransition(async () => {
+      const result = await lookupOpenFoodFacts(brandBarcode);
+      setLookingUpOff(false);
+      if (!result) { alert("Nessuna scheda trovata su Open Food Facts per questo codice."); return; }
+      if (!brandName.trim() && result.brand_name) setBrandName(result.brand_name);
+      if (result.nutri_score) setBrandNutriScore(result.nutri_score);
+      if (result.nova_group) setBrandNova(result.nova_group.toString());
+    });
+  };
+
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-4xl mx-auto">
       <Link href="/dashboard/shopping-catalog" className="inline-flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors animate-fade-in">
@@ -231,8 +253,20 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <input value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="Nome marca (es. Granarolo)" required
                 className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
-              <input value={brandBarcode} onChange={(e) => setBrandBarcode(e.target.value)} placeholder="Codice a barre (opzionale)"
-                className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+              <div className="space-y-1.5">
+                <div className="flex gap-2">
+                  <input value={brandBarcode} onChange={(e) => setBrandBarcode(e.target.value)} placeholder="Codice a barre (opzionale)"
+                    className="flex-1 min-w-0 px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+                  <button type="button" onClick={() => setShowScanner(true)} title="Scansiona con la fotocamera"
+                    className="px-3 py-2.5 rounded-lg text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 transition-all flex-shrink-0">
+                    📷
+                  </button>
+                </div>
+                <button type="button" onClick={handleLookupOpenFoodFacts} disabled={lookingUpOff || !brandBarcode.trim()}
+                  className="text-[10px] font-bold text-indigo-300 hover:text-indigo-200 transition-all disabled:opacity-40 disabled:hover:text-indigo-300">
+                  {lookingUpOff ? "Ricerca in corso..." : "🔎 Cerca su Open Food Facts"}
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
               <div>
@@ -309,6 +343,8 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
           )}
         </div>
       </div>
+
+      {showScanner && <BarcodeScannerModal onDetected={handleScanDetected} onClose={() => setShowScanner(false)} />}
     </div>
   );
 }

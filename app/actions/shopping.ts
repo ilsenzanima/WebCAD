@@ -599,3 +599,47 @@ export async function removeShoppingListItem(itemId: string) {
     return { success: false, error: err.message };
   }
 }
+
+// ============================================
+// Open Food Facts (dati pubblici, gratuiti, senza chiave)
+// ============================================
+
+export interface OpenFoodFactsResult {
+  product_name: string | null;
+  brand_name: string | null;
+  nutri_score: "A" | "B" | "C" | "D" | "E" | null;
+  nova_group: 1 | 2 | 3 | 4 | null;
+}
+
+// Interroga il database pubblico Open Food Facts per pre-compilare marca,
+// Nutri-Score e gruppo NOVA a partire dal codice a barre, cosi' non vanno
+// ricopiati a mano quando sono gia' censiti.
+export async function lookupOpenFoodFacts(barcode: string): Promise<OpenFoodFactsResult | null> {
+  try {
+    const trimmed = barcode.trim();
+    if (!trimmed) return null;
+
+    const res = await fetch(
+      `https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(trimmed)}.json?fields=product_name,brands,nutriscore_grade,nova_group`,
+      { headers: { "User-Agent": "WebCAD-FamilyApp/1.0 (gestionale famiglia privato)" } }
+    );
+    if (!res.ok) return null;
+
+    const json: any = await res.json();
+    if (!json || json.status !== 1 || !json.product) return null;
+
+    const p = json.product;
+    const nutriScore = typeof p.nutriscore_grade === "string" ? p.nutriscore_grade.toUpperCase() : null;
+    const novaGroup = typeof p.nova_group === "number" ? p.nova_group : null;
+
+    return {
+      product_name: p.product_name || null,
+      brand_name: typeof p.brands === "string" && p.brands ? p.brands.split(",")[0].trim() : null,
+      nutri_score: (nutriScore && ["A", "B", "C", "D", "E"].includes(nutriScore) ? nutriScore : null) as OpenFoodFactsResult["nutri_score"],
+      nova_group: (novaGroup && [1, 2, 3, 4].includes(novaGroup) ? novaGroup : null) as OpenFoodFactsResult["nova_group"],
+    };
+  } catch (err: any) {
+    console.error("Errore lookupOpenFoodFacts:", err.message);
+    return null;
+  }
+}
