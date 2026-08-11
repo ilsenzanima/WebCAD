@@ -51,8 +51,9 @@ export default async function DashboardPage() {
           </p>
         </Link>
 
-        <div
-          className="rounded-2xl p-6 border shadow-2xl backdrop-blur-xl opacity-60"
+        <Link
+          href="/dashboard/shopping-list"
+          className="group rounded-2xl p-6 border shadow-2xl backdrop-blur-xl transition-all hover:border-zinc-600"
           style={{
             background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
             borderColor: "hsla(240, 5%, 18%, 0.7)",
@@ -62,13 +63,10 @@ export default async function DashboardPage() {
             🛒
           </div>
           <h3 className="text-sm font-extrabold text-white mb-1">Lista della spesa</h3>
-          <p className="text-[11px] text-slate-400 leading-relaxed mb-2">
-            Catalogo prodotti, lista condivisa e controllo scadenze. In arrivo.
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            Catalogo prodotti, lista condivisa con la famiglia e controllo scadenze.
           </p>
-          <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-white/5 text-zinc-400 border border-white/10">
-            Presto disponibile
-          </span>
-        </div>
+        </Link>
 
         <div
           className="rounded-2xl p-6 border shadow-2xl backdrop-blur-xl opacity-60"

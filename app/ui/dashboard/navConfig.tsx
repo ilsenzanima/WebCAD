@@ -32,6 +32,7 @@ export type NavEntry = NavLink | NavGroup;
 // in futuro si potra' nascondere l'intero gruppo ai membri non admin.
 export const navItems: NavEntry[] = [
   { type: "link", href: "/dashboard", icon: <OverviewIcon size={15} />, label: "Dashboard" },
+  { type: "link", href: "/dashboard/shopping-list", icon: <span style={{ fontSize: 14 }}>🛒</span>, label: "Lista della spesa" },
   { type: "link", href: "/dashboard/calendar", icon: <CalendarIcon size={15} />, label: "Calendario" },
   {
     type: "group",
