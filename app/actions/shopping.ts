@@ -4,13 +4,18 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { getMyRole } from "@/app/actions/family";
 import { toLocalDateStr } from "@/lib/format";
-import type { ShoppingProduct, ShoppingList, ShoppingListItem } from "@/lib/types/database";
+import type { ShoppingProduct, ShoppingList, ShoppingListItem, ShoppingProductBrand } from "@/lib/types/database";
 
 const ITEM_SELECT = "*, shopping_products(*)";
 
 function revalidateShoppingList() {
   revalidatePath("/dashboard/shopping-list");
   revalidatePath("/dashboard");
+}
+
+function revalidateCatalog() {
+  revalidatePath("/dashboard/shopping-catalog", "layout");
+  revalidatePath("/dashboard/shopping-list");
 }
 
 // ============================================
@@ -64,6 +69,7 @@ export async function createShoppingProduct(formData: {
     if (error) throw new Error(error.message);
 
     revalidateShoppingList();
+    revalidateCatalog();
     return { success: true, data };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -97,6 +103,7 @@ export async function updateShoppingProduct(id: string, formData: {
     if (error) throw new Error(error.message);
 
     revalidateShoppingList();
+    revalidateCatalog();
     return { success: true, data };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -110,9 +117,150 @@ export async function deleteShoppingProduct(id: string) {
     if (error) throw new Error(error.message);
 
     revalidateShoppingList();
+    revalidateCatalog();
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
+  }
+}
+
+export async function getShoppingProduct(id: string): Promise<ShoppingProduct | null> {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data, error } = await supabase.from("shopping_products").select("*").eq("id", id).maybeSingle();
+    if (error) throw new Error(error.message);
+    return data;
+  } catch (err: any) {
+    console.error("Errore getShoppingProduct:", err.message);
+    return null;
+  }
+}
+
+// ============================================
+// Marche di un prodotto
+// ============================================
+
+export async function getProductBrands(productId: string): Promise<ShoppingProductBrand[]> {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data, error } = await supabase
+      .from("shopping_product_brands")
+      .select("*")
+      .eq("product_id", productId)
+      .order("rating", { ascending: false, nullsFirst: false })
+      .order("brand_name", { ascending: true });
+
+    if (error) throw new Error(error.message);
+    return data || [];
+  } catch (err: any) {
+    console.error("Errore getProductBrands:", err.message);
+    return [];
+  }
+}
+
+export async function createProductBrand(productId: string, formData: {
+  brand_name: string;
+  barcode?: string | null;
+  rating?: number | null;
+  nutri_score?: "A" | "B" | "C" | "D" | "E" | null;
+  nova_group?: 1 | 2 | 3 | 4 | null;
+  notes?: string | null;
+}) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase
+      .from("shopping_product_brands")
+      .insert({
+        product_id: productId,
+        brand_name: formData.brand_name.trim(),
+        barcode: formData.barcode || null,
+        rating: formData.rating ?? null,
+        nutri_score: formData.nutri_score || null,
+        nova_group: formData.nova_group ?? null,
+        notes: formData.notes || null,
+        created_by: user.id,
+      })
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidateCatalog();
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function updateProductBrand(id: string, formData: {
+  brand_name?: string;
+  barcode?: string | null;
+  rating?: number | null;
+  nutri_score?: "A" | "B" | "C" | "D" | "E" | null;
+  nova_group?: 1 | 2 | 3 | 4 | null;
+  notes?: string | null;
+}) {
+  try {
+    const supabase = (await createClient()) as any;
+    const update: Record<string, any> = {};
+    if (formData.brand_name !== undefined) update.brand_name = formData.brand_name.trim();
+    if (formData.barcode !== undefined) update.barcode = formData.barcode || null;
+    if (formData.rating !== undefined) update.rating = formData.rating;
+    if (formData.nutri_score !== undefined) update.nutri_score = formData.nutri_score;
+    if (formData.nova_group !== undefined) update.nova_group = formData.nova_group;
+    if (formData.notes !== undefined) update.notes = formData.notes || null;
+
+    const { data, error } = await supabase
+      .from("shopping_product_brands")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidateCatalog();
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteProductBrand(id: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { error } = await supabase.from("shopping_product_brands").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+
+    revalidateCatalog();
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// Ricerca rapida per codice a barre: usata nella vetrina per saltare
+// direttamente alla scheda del prodotto corrispondente.
+export async function findProductBrandByBarcode(barcode: string): Promise<{ product_id: string; brand_name: string } | null> {
+  try {
+    const trimmed = barcode.trim();
+    if (!trimmed) return null;
+
+    const supabase = (await createClient()) as any;
+    const { data, error } = await supabase
+      .from("shopping_product_brands")
+      .select("product_id, brand_name")
+      .eq("barcode", trimmed)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    return data;
+  } catch (err: any) {
+    console.error("Errore findProductBrandByBarcode:", err.message);
+    return null;
   }
 }
 

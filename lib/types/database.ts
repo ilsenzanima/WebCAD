@@ -52,6 +52,19 @@ export interface ShoppingListItem {
   shopping_products?: ShoppingProduct;
 }
 
+export interface ShoppingProductBrand {
+  id: string;
+  product_id: string;
+  brand_name: string;
+  barcode: string | null;
+  rating: number | null;
+  nutri_score: "A" | "B" | "C" | "D" | "E" | null;
+  nova_group: 1 | 2 | 3 | 4 | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface ExpenseCategory {
   id: string;
   user_id: string;
