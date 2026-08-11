@@ -4,23 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import MobileHeaderMenu from "@/app/ui/dashboard/MobileHeaderMenu";
 import SidebarProfile from "@/app/ui/dashboard/SidebarProfile";
 import SidebarNav from "@/app/ui/dashboard/SidebarNav";
-import { OverviewIcon, ExpensesIcon, SettingsIcon, CalendarIcon, TagIcon, SupplierIcon, WalletIcon, InboxIcon } from "@/app/ui/dashboard/icons";
+import { navItems, bottomNavItems } from "@/app/ui/dashboard/navConfig";
 import type { ReactNode } from "react";
-
-// Navigazione principale comprensiva di Calendario e Fornitori dedicati
-const navItems = [
-  { href: "/dashboard", icon: <OverviewIcon size={15} />, label: "Panoramica" },
-  { href: "/dashboard/accounts", icon: <WalletIcon size={15} />, label: "Conti" },
-  { href: "/dashboard/expenses", icon: <ExpensesIcon size={15} />, label: "Spese, Entrate e Scadenze" },
-  { href: "/dashboard/calendar", icon: <CalendarIcon size={15} />, label: "Calendario" },
-  { href: "/dashboard/budget", icon: <TagIcon size={15} />, label: "Budget" },
-  { href: "/dashboard/suppliers", icon: <SupplierIcon size={15} />, label: "Fornitori" },
-  { href: "/dashboard/scansioni", icon: <InboxIcon size={15} />, label: "Smistamento Scansioni" },
-];
-
-const bottomNavItems = [
-  { href: "/dashboard/settings", icon: <SettingsIcon size={15} />, label: "Impostazioni" },
-];
 
 export default async function DashboardLayout({
   children,

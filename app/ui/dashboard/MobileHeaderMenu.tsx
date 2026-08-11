@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
-import { OverviewIcon, ExpensesIcon, SettingsIcon, CalendarIcon, TagIcon, SupplierIcon, WalletIcon, InboxIcon } from "./icons";
+import { navItems as navConfigItems, bottomNavItems, isNavLinkActive, type NavLink } from "./navConfig";
 
 interface MobileHeaderMenuProps {
   initials: string;
@@ -12,20 +12,16 @@ interface MobileHeaderMenuProps {
   userEmail?: string;
 }
 
+// Appiattisce la configurazione condivisa (gruppi inclusi) in una lista unica,
+// visto che il drawer mobile mostra sempre tutte le voci senza collassare nulla.
+const flatNavItems: NavLink[] = [
+  ...navConfigItems.flatMap((entry) => (entry.type === "group" ? entry.items : [entry])),
+  ...bottomNavItems,
+];
+
 export default function MobileHeaderMenu({ initials, userName, userEmail }: MobileHeaderMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-
-  const navItems = [
-    { href: "/dashboard", icon: <OverviewIcon size={14} />, label: "Panoramica" },
-    { href: "/dashboard/accounts", icon: <WalletIcon size={14} />, label: "Conti" },
-    { href: "/dashboard/expenses", icon: <ExpensesIcon size={14} />, label: "Spese, Entrate e Scadenze" },
-    { href: "/dashboard/calendar", icon: <CalendarIcon size={14} />, label: "Calendario" },
-    { href: "/dashboard/budget", icon: <TagIcon size={14} />, label: "Budget" },
-    { href: "/dashboard/suppliers", icon: <SupplierIcon size={14} />, label: "Fornitori" },
-    { href: "/dashboard/scansioni", icon: <InboxIcon size={14} />, label: "Smistamento Scansioni" },
-    { href: "/dashboard/settings", icon: <SettingsIcon size={14} />, label: "Impostazioni" },
-  ];
 
   return (
     <>
@@ -106,8 +102,8 @@ export default function MobileHeaderMenu({ initials, userName, userEmail }: Mobi
 
             {/* Navigazione */}
             <nav className="flex-1 space-y-1">
-              {navItems.map((item) => {
-                const active = pathname === item.href;
+              {flatNavItems.map((item) => {
+                const active = isNavLinkActive(pathname, item.href);
                 return (
                   <Link
                     key={item.href}

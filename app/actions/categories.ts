@@ -125,7 +125,7 @@ export async function updateCategoryBudget(id: string, monthlyBudget: number | n
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/budget");
     return { success: true, data };
   } catch (err: any) {
@@ -149,7 +149,7 @@ export async function updateCategoryBudgetPercent(id: string, budgetPercent: num
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/budget");
     return { success: true, data };
   } catch (err: any) {
@@ -173,7 +173,7 @@ export async function updateCategoryBudgetType(id: string, budgetType: "need" | 
 
     if (error) throw new Error(error.message);
 
-    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/budget");
     revalidatePath("/dashboard/settings");
     return { success: true, data };
