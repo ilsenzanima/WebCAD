@@ -9,14 +9,15 @@ import {
   createProductBrand,
   updateProductBrand,
   deleteProductBrand,
-  lookupOpenFoodFacts,
+  lookupProductInfo,
 } from "@/app/actions/shopping";
 import { GROCERY_CATEGORIES } from "@/lib/shoppingCategories";
 import { DeleteIcon, EditIcon, ArrowLeftIcon } from "./icons";
 import { useRouter } from "next/navigation";
 import BarcodeScannerModal from "./BarcodeScannerModal";
 
-const NUTRI_SCORE_COLORS: Record<string, string> = {
+// Nutri-Score ed Eco-Score usano la stessa scala A-E con gli stessi colori ufficiali.
+const GRADE_COLORS: Record<string, string> = {
   A: "#038141",
   B: "#85BB2F",
   C: "#FECB02",
@@ -73,9 +74,14 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
   const [brandRating, setBrandRating] = useState<number | null>(null);
   const [brandNutriScore, setBrandNutriScore] = useState("");
   const [brandNova, setBrandNova] = useState("");
+  const [brandEcoScore, setBrandEcoScore] = useState("");
+  const [brandImageUrl, setBrandImageUrl] = useState("");
+  const [brandIngredients, setBrandIngredients] = useState("");
+  const [brandAllergens, setBrandAllergens] = useState("");
   const [brandNotes, setBrandNotes] = useState("");
   const [showScanner, setShowScanner] = useState(false);
   const [lookingUpOff, setLookingUpOff] = useState(false);
+  const [lookupSource, setLookupSource] = useState<string | null>(null);
 
   const handleSaveProduct = () => {
     if (!prodName.trim()) { alert("Il nome non può essere vuoto"); return; }
@@ -104,7 +110,9 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
   const resetBrandForm = () => {
     setEditingBrandId(null);
     setBrandName(""); setBrandBarcode(""); setBrandRating(null);
-    setBrandNutriScore(""); setBrandNova(""); setBrandNotes("");
+    setBrandNutriScore(""); setBrandNova(""); setBrandEcoScore("");
+    setBrandImageUrl(""); setBrandIngredients(""); setBrandAllergens("");
+    setBrandNotes(""); setLookupSource(null);
     setShowBrandForm(false);
   };
 
@@ -115,7 +123,12 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
     setBrandRating(b.rating);
     setBrandNutriScore(b.nutri_score || "");
     setBrandNova(b.nova_group?.toString() || "");
+    setBrandEcoScore(b.eco_score || "");
+    setBrandImageUrl(b.image_url || "");
+    setBrandIngredients(b.ingredients_text || "");
+    setBrandAllergens(b.allergens || "");
     setBrandNotes(b.notes || "");
+    setLookupSource(null);
     setShowBrandForm(true);
   };
 
@@ -129,6 +142,10 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
       rating: brandRating,
       nutri_score: (brandNutriScore || null) as any,
       nova_group: (brandNova ? Number(brandNova) : null) as any,
+      eco_score: (brandEcoScore || null) as any,
+      image_url: brandImageUrl.trim() || null,
+      ingredients_text: brandIngredients.trim() || null,
+      allergens: brandAllergens.trim() || null,
       notes: brandNotes.trim() || null,
     };
 
@@ -165,16 +182,22 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
     setBrandBarcode(code);
   };
 
-  const handleLookupOpenFoodFacts = () => {
+  const handleLookupProductInfo = () => {
     if (!brandBarcode.trim()) { alert("Inserisci prima un codice a barre"); return; }
     setLookingUpOff(true);
+    setLookupSource(null);
     startTransition(async () => {
-      const result = await lookupOpenFoodFacts(brandBarcode);
+      const result = await lookupProductInfo(brandBarcode);
       setLookingUpOff(false);
-      if (!result) { alert("Nessuna scheda trovata su Open Food Facts per questo codice."); return; }
+      if (!result) { alert("Nessuna scheda trovata (provati Open Food/Beauty/Products Facts) per questo codice."); return; }
       if (!brandName.trim() && result.brand_name) setBrandName(result.brand_name);
       if (result.nutri_score) setBrandNutriScore(result.nutri_score);
       if (result.nova_group) setBrandNova(result.nova_group.toString());
+      if (result.eco_score) setBrandEcoScore(result.eco_score);
+      if (result.image_url) setBrandImageUrl(result.image_url);
+      if (result.ingredients_text) setBrandIngredients(result.ingredients_text);
+      if (result.allergens) setBrandAllergens(result.allergens);
+      setLookupSource(result.source);
     });
   };
 
@@ -262,13 +285,20 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
                     📷
                   </button>
                 </div>
-                <button type="button" onClick={handleLookupOpenFoodFacts} disabled={lookingUpOff || !brandBarcode.trim()}
+                <button type="button" onClick={handleLookupProductInfo} disabled={lookingUpOff || !brandBarcode.trim()}
                   className="text-[10px] font-bold text-indigo-300 hover:text-indigo-200 transition-all disabled:opacity-40 disabled:hover:text-indigo-300">
-                  {lookingUpOff ? "Ricerca in corso..." : "🔎 Cerca su Open Food Facts"}
+                  {lookingUpOff ? "Ricerca in corso..." : "🔎 Cerca su Open Food/Beauty/Products Facts"}
                 </button>
+                {lookupSource && (
+                  <p className="text-[10px] font-semibold text-emerald-400">✓ Trovato su {lookupSource}</p>
+                )}
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+            {brandImageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={brandImageUrl} alt={brandName || "Prodotto"} className="w-16 h-16 object-cover rounded-lg border border-zinc-800" />
+            )}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-center">
               <div>
                 <label className="block text-[9px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Valutazione famiglia</label>
                 <StarRating value={brandRating} onChange={setBrandRating} />
@@ -276,6 +306,14 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
               <div>
                 <label className="block text-[9px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Nutri-Score</label>
                 <select value={brandNutriScore} onChange={(e) => setBrandNutriScore(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80">
+                  <option value="">—</option>
+                  {["A", "B", "C", "D", "E"].map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[9px] font-bold text-zinc-500 uppercase tracking-wider mb-1">Eco-Score</label>
+                <select value={brandEcoScore} onChange={(e) => setBrandEcoScore(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80">
                   <option value="">—</option>
                   {["A", "B", "C", "D", "E"].map((s) => <option key={s} value={s}>{s}</option>)}
@@ -290,9 +328,13 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
                 </select>
               </div>
             </div>
+            <input value={brandAllergens} onChange={(e) => setBrandAllergens(e.target.value)} placeholder="Allergeni (opzionale)"
+              className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+            <textarea value={brandIngredients} onChange={(e) => setBrandIngredients(e.target.value)} placeholder="Ingredienti (opzionale)" rows={2}
+              className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80 resize-none" />
             <input value={brandNotes} onChange={(e) => setBrandNotes(e.target.value)} placeholder="Note (opzionale)"
               className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
-            <p className="text-[9px] text-zinc-500">Nutri-Score e NOVA si copiano dall'etichetta della confezione, non vengono calcolati automaticamente.</p>
+            <p className="text-[9px] text-zinc-500">Nutri-Score, Eco-Score e NOVA si copiano dall'etichetta della confezione, non vengono calcolati automaticamente.</p>
             <div className="flex gap-2">
               <button type="button" onClick={resetBrandForm} className="flex-1 py-2.5 rounded-xl text-xs font-bold text-slate-300 bg-zinc-800 hover:bg-zinc-700 transition-all">
                 Annulla
@@ -308,15 +350,27 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
           {brands.map((b) => (
             <div key={b.id} className="p-3.5 rounded-xl border border-zinc-800/80 bg-zinc-950/40">
               <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div>
-                  <div className="text-xs font-bold text-white">{b.brand_name}</div>
-                  {b.barcode && <div className="text-[10px] text-zinc-500 font-mono">{b.barcode}</div>}
+                <div className="flex items-start gap-3">
+                  {b.image_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={b.image_url} alt={b.brand_name} className="w-10 h-10 object-cover rounded-lg border border-zinc-800 flex-shrink-0" />
+                  )}
+                  <div>
+                    <div className="text-xs font-bold text-white">{b.brand_name}</div>
+                    {b.barcode && <div className="text-[10px] text-zinc-500 font-mono">{b.barcode}</div>}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {b.nutri_score && (
                     <span className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-extrabold text-white"
-                      style={{ background: NUTRI_SCORE_COLORS[b.nutri_score] }} title="Nutri-Score">
+                      style={{ background: GRADE_COLORS[b.nutri_score] }} title="Nutri-Score">
                       {b.nutri_score}
+                    </span>
+                  )}
+                  {b.eco_score && (
+                    <span className="w-5 h-5 rounded flex items-center justify-center text-[9px] font-extrabold text-white"
+                      style={{ background: GRADE_COLORS[b.eco_score] }} title="Eco-Score">
+                      🌱
                     </span>
                   )}
                   {b.nova_group && (
@@ -336,6 +390,12 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
                 <StarRating value={b.rating} onChange={(v) => handleQuickRating(b, v)} />
                 {b.notes && <p className="text-[10px] text-zinc-500 italic">{b.notes}</p>}
               </div>
+              {b.allergens && (
+                <p className="mt-1.5 text-[10px] text-amber-400">⚠️ Allergeni: {b.allergens}</p>
+              )}
+              {b.ingredients_text && (
+                <p className="mt-1 text-[10px] text-zinc-500 line-clamp-2">{b.ingredients_text}</p>
+              )}
             </div>
           ))}
           {brands.length === 0 && !showBrandForm && (

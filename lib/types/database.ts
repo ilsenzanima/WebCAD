@@ -60,6 +60,10 @@ export interface ShoppingProductBrand {
   rating: number | null;
   nutri_score: "A" | "B" | "C" | "D" | "E" | null;
   nova_group: 1 | 2 | 3 | 4 | null;
+  eco_score: "A" | "B" | "C" | "D" | "E" | null;
+  image_url: string | null;
+  ingredients_text: string | null;
+  allergens: string | null;
   notes: string | null;
   created_by: string | null;
   created_at: string;
