@@ -72,6 +72,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [dueDate, setDueDate] = useState(toLocalDateStr());
   const [recurrence, setRecurrence] = useState<"one-time" | "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "yearly">("one-time");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
   const [filterPaid, setFilterPaid] = useState<"all" | "pending" | "paid">("pending");
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
@@ -167,6 +168,12 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     setEndMonthInput(now.getMonth() + 1);
     setEndYearInput(now.getFullYear());
     setIsIncome(false);
+    setIsFormOpen(false);
+  };
+
+  const openNewForm = () => {
+    resetForm();
+    setIsFormOpen(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -235,6 +242,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   };
 
   const handleEdit = (item: ScheduleWithRelations) => {
+    setIsFormOpen(true);
     setEditingId(item.id);
     setAmount(String(item.amount));
     setCategoryId(item.category_id || categories[0]?.id || "");
@@ -614,32 +622,33 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Form Nuova Scadenza (1 Colonna) */}
+      {isFormOpen && (
         <div
-          className="rounded-2xl p-6 border relative overflow-hidden group shadow-2xl backdrop-blur-xl animate-fade-in h-fit"
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 animate-fade-in overflow-y-auto"
+          onClick={resetForm}
+        >
+        <div
+          className="relative w-full max-w-lg my-8 rounded-2xl p-6 border shadow-2xl backdrop-blur-xl animate-fade-in max-h-[90vh] overflow-y-auto"
           style={{
-            background: "linear-gradient(135deg, hsla(38, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
+            background: "linear-gradient(135deg, hsla(38, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.97))",
             borderColor: "hsla(38, 60%, 50%, 0.15)",
           }}
+          onClick={(e) => e.stopPropagation()}
         >
           <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-amber-500/5 blur-[50px] pointer-events-none" />
 
-          <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2 justify-between">
-            <span className="flex items-center gap-2">
-              <span className="text-amber-400"><SchedulesIcon size={16} /></span>
-              {editingId ? "Modifica Scadenza" : "Programma Scadenza"}
-            </span>
-            {editingId && (
-              <button
-                type="button"
-                onClick={resetForm}
-                className="text-[9px] font-bold text-zinc-500 hover:text-white normal-case tracking-normal"
-              >
-                Annulla
-              </button>
-            )}
+          <button
+            type="button"
+            onClick={resetForm}
+            className="absolute top-4 right-4 text-zinc-400 hover:text-white text-lg leading-none z-20"
+            aria-label="Chiudi"
+          >
+            ✕
+          </button>
+
+          <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2">
+            <span className="text-amber-400"><SchedulesIcon size={16} /></span>
+            {editingId ? "Modifica Scadenza" : "Programma Scadenza"}
           </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
@@ -944,20 +953,23 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
             </button>
           </form>
         </div>
+        </div>
+      )}
 
-        {/* Registro Tabellare Scadenze (2 Colonne) */}
-        <div
-          className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-5 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
-          style={{
-            background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
-            borderColor: "hsla(240, 5%, 18%, 0.7)",
-          }}
-        >
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10">
-            <h3 className="text-sm font-extrabold text-white tracking-wide">
-              📋 Registro Scadenze & Pagamenti
-            </h3>
+      {/* Registro Tabellare Scadenze (larghezza piena) */}
+      <div
+        className="rounded-2xl p-6 border flex flex-col space-y-5 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
+        style={{
+          background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+          borderColor: "hsla(240, 5%, 18%, 0.7)",
+        }}
+      >
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10">
+          <h3 className="text-sm font-extrabold text-white tracking-wide">
+            📋 Registro Scadenze & Pagamenti
+          </h3>
 
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             {/* Filtro Stato */}
             <div className="flex gap-2 p-1 bg-zinc-950/80 border border-white/10 rounded-xl text-[10px] font-bold">
               <button
@@ -988,7 +1000,19 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                 Tutte
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={openNewForm}
+              className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white transition-all shadow-lg active:scale-98 flex items-center justify-center gap-2"
+              style={{
+                background: "linear-gradient(135deg, hsl(38 90% 50%), hsl(30 80% 45%))",
+              }}
+            >
+              <span>＋</span> Nuova Scadenza
+            </button>
           </div>
+        </div>
 
           <div className="flex-1 overflow-x-auto pr-1 relative z-10 max-h-[450px] overflow-y-auto">
             {filteredSchedules.length === 0 ? (
@@ -1007,14 +1031,18 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                   </tr>
                 </thead>
                 <tbody className="divide-y" style={{ borderColor: "hsl(240 5% 18% / 0.3)" }}>
-                  {filteredSchedules.map((item) => {
+                  {filteredSchedules.map((item, index) => {
                     const catName = item.expense_categories?.name || item.category;
                     const catColor = item.expense_categories?.color || "slate";
                     const badge = getCategoryBadgeStyle(catColor);
+                    const isMonthBoundary = index > 0 && item.due_date?.slice(0, 7) !== filteredSchedules[index - 1].due_date?.slice(0, 7);
 
                     return (
                       <Fragment key={item.id}>
-                      <tr className="hover:bg-white/2 transition-all duration-150 group">
+                      <tr
+                        className="hover:bg-white/2 transition-all duration-150 group"
+                        style={isMonthBoundary ? { borderTopWidth: "2px", borderTopColor: "hsl(38 90% 50% / 0.5)" } : undefined}
+                      >
                         <td className="py-4 text-slate-300 font-semibold whitespace-nowrap">
                           {formatDate(item.due_date)}
                         </td>
@@ -1376,8 +1404,6 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
             )}
           </div>
         </div>
-
-      </div>
     </div>
   );
 }
