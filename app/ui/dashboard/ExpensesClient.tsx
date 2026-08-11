@@ -91,6 +91,7 @@ export default function ExpensesClient({
   };
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
   // Documento allegato al momento della registrazione (spesa/entrata)
   const [newDocFile, setNewDocFile] = useState<File | null>(null);
@@ -152,6 +153,12 @@ export default function ExpensesClient({
     setAddToBudget(false);
     setBudgetPeriodicity("monthly");
     setBudgetIsEstimated(false);
+    setIsFormOpen(false);
+  };
+
+  const openNewForm = () => {
+    resetForm();
+    setIsFormOpen(true);
   };
 
   // Carica su Google Drive e collega il documento a una spesa/entrata (ed eventualmente al fornitore)
@@ -313,6 +320,7 @@ export default function ExpensesClient({
 
   const handleEdit = (exp: ExpenseWithRelations) => {
     setMainTab(exp.is_income ? "entrate" : "uscite");
+    setIsFormOpen(true);
     setEditingId(exp.id);
     setAmount(exp.amount.toString());
     setCategoryId(exp.category_id || categories[0]?.id || "");
@@ -520,21 +528,33 @@ export default function ExpensesClient({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-            {/* Form di Inserimento */}
+          {isFormOpen && (
             <div
-              className="rounded-2xl p-6 border relative overflow-hidden group shadow-2xl backdrop-blur-xl animate-fade-in h-fit"
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 animate-fade-in overflow-y-auto"
+              onClick={resetForm}
+            >
+            <div
+              className="relative w-full max-w-lg my-8 rounded-2xl p-6 border shadow-2xl backdrop-blur-xl animate-fade-in max-h-[90vh] overflow-y-auto"
               style={{
                 background: isIncomeMode
-                  ? "linear-gradient(135deg, hsla(150, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))"
-                  : "linear-gradient(135deg, hsla(350, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
+                  ? "linear-gradient(135deg, hsla(150, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.97))"
+                  : "linear-gradient(135deg, hsla(350, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.97))",
                 borderColor: isIncomeMode
                   ? "hsla(150, 60%, 50%, 0.15)"
                   : "hsla(350, 60%, 50%, 0.15)",
               }}
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-rose-500/5 blur-[50px] pointer-events-none" />
+
+              <button
+                type="button"
+                onClick={resetForm}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white text-lg leading-none z-20"
+                aria-label="Chiudi"
+              >
+                ✕
+              </button>
 
               <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2">
                 <span className={isIncomeMode ? "text-emerald-400" : "text-rose-400"}><ExpensesIcon size={16} /></span>
@@ -942,16 +962,37 @@ export default function ExpensesClient({
                 </div>
               </form>
             </div>
+            </div>
+          )}
 
-            {/* Tabella Registro (2 Colonne) */}
-            <div
-              className="lg:col-span-2 rounded-2xl p-6 border flex flex-col space-y-5 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
-              style={{
-                background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
-                borderColor: "hsla(240, 5%, 18%, 0.7)",
-              }}
-            >
-              <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
+          {/* Tabella Registro (larghezza piena) */}
+          <div
+            className="rounded-2xl p-6 border flex flex-col space-y-5 shadow-2xl relative overflow-hidden group backdrop-blur-xl animate-fade-in"
+            style={{
+              background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+              borderColor: "hsla(240, 5%, 18%, 0.7)",
+            }}
+          >
+            <div className="absolute top-[-30%] left-[-20%] w-60 h-60 rounded-full bg-zinc-500/5 blur-[80px] pointer-events-none" />
+
+            {/* Titolo + Nuova registrazione */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10">
+              <h3 className="text-sm font-extrabold text-white tracking-wide">
+                {isIncomeMode ? "📋 Registro Entrate" : "📋 Registro Spese"}
+              </h3>
+              <button
+                type="button"
+                onClick={openNewForm}
+                className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white transition-all shadow-lg active:scale-98 flex items-center gap-2"
+                style={{
+                  background: isIncomeMode
+                    ? "linear-gradient(135deg, hsl(142 70% 45%), hsl(150 60% 35%))"
+                    : "linear-gradient(135deg, hsl(350 85% 55%), hsl(340 75% 45%))",
+                }}
+              >
+                <span>＋</span> {isIncomeMode ? "Nuova Entrata" : "Nuova Spesa"}
+              </button>
+            </div>
 
               {/* Filtri */}
               <div className="flex flex-col sm:flex-row gap-3 relative z-10">
@@ -1022,10 +1063,19 @@ export default function ExpensesClient({
                         const isExpanded = expandedExpenseId === exp.id;
                         const expSupplier = exp.supplier_id ? suppliersList.find(s => s.id === exp.supplier_id) : null;
                         const { missingConsumption, missingDocument } = utilityMissingTags(expSupplier, exp.consumption_value, attachments.length);
+                        const isMonthBoundary = index > 0 && exp.date?.slice(0, 7) !== filteredList[index - 1].date?.slice(0, 7);
 
                         return (
                           <Fragment key={exp.id}>
-                            <tr className="hover:bg-white/2 transition-all duration-150 group animate-fade-in" style={{ animationDelay: `${index * 15}ms` }}>
+                            <tr
+                              className="hover:bg-white/2 transition-all duration-150 group animate-fade-in"
+                              style={{
+                                animationDelay: `${index * 15}ms`,
+                                ...(isMonthBoundary
+                                  ? { borderTopWidth: "2px", borderTopColor: isIncomeMode ? "hsl(142 70% 45% / 0.5)" : "hsl(350 85% 55% / 0.5)" }
+                                  : {}),
+                              }}
+                            >
                               <td className="py-4 text-slate-300 font-semibold whitespace-nowrap align-top">
                                 {formatDate(exp.date)}
                               </td>
@@ -1197,8 +1247,6 @@ export default function ExpensesClient({
                 )}
               </div>
             </div>
-
-          </div>
         </>
       )}
     </div>
