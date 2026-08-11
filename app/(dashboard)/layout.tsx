@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import MobileHeaderMenu from "@/app/ui/dashboard/MobileHeaderMenu";
 import SidebarProfile from "@/app/ui/dashboard/SidebarProfile";
 import SidebarNav from "@/app/ui/dashboard/SidebarNav";
-import { navItems, bottomNavItems } from "@/app/ui/dashboard/navConfig";
+import { navItems as allNavItems, bottomNavItems } from "@/app/ui/dashboard/navConfig";
+import { getMyRole } from "@/app/actions/family";
 import type { ReactNode } from "react";
 
 export default async function DashboardLayout({
@@ -16,6 +17,14 @@ export default async function DashboardLayout({
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 
   if (!user || authError) redirect("/login");
+
+  // Il gruppo "Finanze" e' visibile solo agli admin: i membri della famiglia
+  // non-admin non lo vedono in menu (i dati restano comunque protetti dalle
+  // policy RLS su user_id, indipendentemente da questo filtro di interfaccia).
+  const role = await getMyRole();
+  const navItems = role === "admin"
+    ? allNavItems
+    : allNavItems.filter((item) => !(item.type === "group" && item.label === "Finanze"));
 
   const userName =
     user?.user_metadata?.full_name || user?.email?.split("@")[0] || "Utente";
@@ -86,10 +95,11 @@ export default async function DashboardLayout({
       <div className="flex-1 flex flex-col overflow-hidden relative">
         <div className="absolute top-0 right-0 w-[400px] h-[400px] rounded-full bg-zinc-500/5 blur-[120px] pointer-events-none z-0" />
 
-        <MobileHeaderMenu 
-          initials={initials} 
-          userName={userName} 
-          userEmail={user.email} 
+        <MobileHeaderMenu
+          initials={initials}
+          userName={userName}
+          userEmail={user.email}
+          navItems={navItems}
         />
 
         {/* Contenuto pagina */}

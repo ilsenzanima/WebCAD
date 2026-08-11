@@ -5,6 +5,13 @@
  * ============================================
  */
 
+export interface FamilyMember {
+  user_id: string;
+  display_name: string;
+  role: "admin" | "member";
+  created_at: string;
+}
+
 export interface ExpenseCategory {
   id: string;
   user_id: string;

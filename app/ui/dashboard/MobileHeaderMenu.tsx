@@ -4,24 +4,26 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import LogoutButton from "./LogoutButton";
-import { navItems as navConfigItems, bottomNavItems, isNavLinkActive, type NavLink } from "./navConfig";
+import { bottomNavItems, isNavLinkActive, type NavEntry, type NavLink } from "./navConfig";
 
 interface MobileHeaderMenuProps {
   initials: string;
   userName?: string;
   userEmail?: string;
+  navItems: NavEntry[];
 }
 
-// Appiattisce la configurazione condivisa (gruppi inclusi) in una lista unica,
-// visto che il drawer mobile mostra sempre tutte le voci senza collassare nulla.
-const flatNavItems: NavLink[] = [
-  ...navConfigItems.flatMap((entry) => (entry.type === "group" ? entry.items : [entry])),
-  ...bottomNavItems,
-];
-
-export default function MobileHeaderMenu({ initials, userName, userEmail }: MobileHeaderMenuProps) {
+export default function MobileHeaderMenu({ initials, userName, userEmail, navItems }: MobileHeaderMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+
+  // Appiattisce la configurazione (gia' filtrata per ruolo dal layout, gruppi
+  // inclusi) in una lista unica, visto che il drawer mobile mostra sempre
+  // tutte le voci senza collassare nulla.
+  const flatNavItems: NavLink[] = [
+    ...navItems.flatMap((entry) => (entry.type === "group" ? entry.items : [entry])),
+    ...bottomNavItems,
+  ];
 
   return (
     <>
