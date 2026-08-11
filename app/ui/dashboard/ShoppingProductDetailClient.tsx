@@ -15,6 +15,7 @@ import { GROCERY_CATEGORIES } from "@/lib/shoppingCategories";
 import { DeleteIcon, EditIcon, ArrowLeftIcon } from "./icons";
 import { useRouter } from "next/navigation";
 import BarcodeScannerModal from "./BarcodeScannerModal";
+import { isValidBarcodeChecksum } from "@/lib/barcodeChecksum";
 
 // Nutri-Score ed Eco-Score usano la stessa scala A-E con gli stessi colori ufficiali.
 const GRADE_COLORS: Record<string, string> = {
@@ -407,6 +408,9 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
     });
   };
 
+  const trimmedBarcode = brandBarcode.trim();
+  const barcodeChecksumInvalid = trimmedBarcode.length > 0 && !isValidBarcodeChecksum(trimmedBarcode);
+
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-4xl mx-auto">
       <Link href="/dashboard/shopping-catalog" className="inline-flex items-center gap-2 text-xs font-bold text-zinc-400 hover:text-white transition-colors animate-fade-in">
@@ -491,6 +495,9 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
                     📷
                   </button>
                 </div>
+                {barcodeChecksumInvalid && (
+                  <p className="text-[10px] font-semibold text-amber-400">⚠️ Il codice non sembra valido: controlla le cifre (spesso in Italia iniziano con 8).</p>
+                )}
                 <button type="button" onClick={handleLookupProductInfo} disabled={lookingUpOff || !brandBarcode.trim()}
                   className="text-[10px] font-bold text-indigo-300 hover:text-indigo-200 transition-all disabled:opacity-40 disabled:hover:text-indigo-300">
                   {lookingUpOff ? "Ricerca in corso..." : "🔎 Cerca su Open Food/Beauty/Products Facts"}

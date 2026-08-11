@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
+import { isValidBarcodeChecksum } from "@/lib/barcodeChecksum";
 
 interface BarcodeScannerModalProps {
   onDetected: (code: string) => void;
@@ -13,22 +14,33 @@ export default function BarcodeScannerModal({ onDetected, onClose }: BarcodeScan
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rejectedHint, setRejectedHint] = useState(false);
 
   useEffect(() => {
     const reader = new BrowserMultiFormatReader();
     let cancelled = false;
+    let hintTimeout: ReturnType<typeof setTimeout> | undefined;
 
     reader
       .decodeFromConstraints(
         { video: { facingMode: "environment" } },
         videoRef.current!,
         (result, _err, controls) => {
-          if (cancelled) return;
+          if (cancelled || !result) return;
           controlsRef.current = controls;
-          if (result) {
-            controls.stop();
-            onDetected(result.getText());
+
+          const text = result.getText();
+          if (!isValidBarcodeChecksum(text)) {
+            // Lettura fotocamera imprecisa su una cifra: la scartiamo e continuiamo
+            // a inquadrare invece di restituire un codice quasi certamente sbagliato.
+            setRejectedHint(true);
+            clearTimeout(hintTimeout);
+            hintTimeout = setTimeout(() => setRejectedHint(false), 1500);
+            return;
           }
+
+          controls.stop();
+          onDetected(text);
         }
       )
       .catch(() => {
@@ -37,6 +49,7 @@ export default function BarcodeScannerModal({ onDetected, onClose }: BarcodeScan
 
     return () => {
       cancelled = true;
+      clearTimeout(hintTimeout);
       controlsRef.current?.stop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

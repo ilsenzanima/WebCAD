@@ -8,6 +8,7 @@ import { createShoppingProduct, deleteShoppingProduct, findProductBrandByBarcode
 import { GROCERY_CATEGORIES } from "@/lib/shoppingCategories";
 import { DeleteIcon, ArrowRightIcon } from "./icons";
 import BarcodeScannerModal from "./BarcodeScannerModal";
+import { isValidBarcodeChecksum } from "@/lib/barcodeChecksum";
 
 interface ShoppingCatalogClientProps {
   initialProducts: ShoppingProduct[];
@@ -100,18 +101,24 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
           <p className="text-sm text-slate-400 mt-1">Ogni prodotto ha una scheda con le marche e la loro valutazione.</p>
         </div>
 
-        <form onSubmit={handleBarcodeSearch} className="flex gap-2">
-          <input value={barcodeQuery} onChange={(e) => setBarcodeQuery(e.target.value)} placeholder="Cerca per codice a barre"
-            className="px-3 py-2.5 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80 w-48" />
-          <button type="button" onClick={() => setShowScanner(true)}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 transition-all" title="Scansiona con la fotocamera">
-            📷
-          </button>
-          <button type="submit" disabled={searchingBarcode}
-            className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 transition-all">
-            🔍
-          </button>
-        </form>
+        <div className="flex flex-col items-end gap-1">
+          <form onSubmit={handleBarcodeSearch} className="flex gap-2">
+            <input value={barcodeQuery} onChange={(e) => setBarcodeQuery(e.target.value)} placeholder="Cerca per codice a barre"
+              className="px-3 py-2.5 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80 w-48"
+              style={barcodeQuery.trim() && !isValidBarcodeChecksum(barcodeQuery.trim()) ? { borderColor: "rgba(245,158,11,0.5)" } : undefined} />
+            <button type="button" onClick={() => setShowScanner(true)}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 transition-all" title="Scansiona con la fotocamera">
+              📷
+            </button>
+            <button type="submit" disabled={searchingBarcode}
+              className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 transition-all">
+              🔍
+            </button>
+          </form>
+          {barcodeQuery.trim() && !isValidBarcodeChecksum(barcodeQuery.trim()) && (
+            <p className="text-[9px] font-semibold text-amber-400">⚠️ Codice non valido: controlla le cifre</p>
+          )}
+        </div>
       </div>
 
       {showScanner && <BarcodeScannerModal onDetected={handleScanDetected} onClose={() => setShowScanner(false)} />}
