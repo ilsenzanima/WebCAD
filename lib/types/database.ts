@@ -18,6 +18,7 @@ export interface Store {
   category: string | null;
   address: string | null;
   loyalty_card_number: string | null;
+  loyalty_card_format: string | null; // formato ZXing (es. "QR_CODE", "CODE_128", "EAN_13"), per rigenerare la tessera a schermo
   notes: string | null;
   created_by: string | null;
   created_at: string;

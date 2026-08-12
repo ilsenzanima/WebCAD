@@ -18,6 +18,7 @@ export default function SuppliersClient({ initialSuppliers, expenses, stores }: 
   const [isPending, startTransition] = useTransition();
   const storeName = (id: string | null) => stores.find((s) => s.id === id)?.name || null;
 
+  const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
   const [isUtility, setIsUtility] = useState(false);
@@ -37,6 +38,7 @@ export default function SuppliersClient({ initialSuppliers, expenses, stores }: 
     setContractClosedAt("");
     setStoreId("");
     setEditingId(null);
+    setShowModal(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -105,6 +107,7 @@ export default function SuppliersClient({ initialSuppliers, expenses, stores }: 
     setIsActive(sup.is_active);
     setContractClosedAt(sup.contract_closed_at || "");
     setStoreId(sup.store_id || "");
+    setShowModal(true);
   };
 
   const handleToggleActive = (sup: Supplier, e: React.MouseEvent) => {
@@ -199,7 +202,7 @@ export default function SuppliersClient({ initialSuppliers, expenses, stores }: 
   );
 
   return (
-    <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="animate-fade-in flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -208,165 +211,257 @@ export default function SuppliersClient({ initialSuppliers, expenses, stores }: 
           </h1>
           <p className="text-sm text-slate-400 mt-1">Monitora i tuoi gestori, l'arrivo delle bollette e le loro schede dedicate.</p>
         </div>
+        <button
+          type="button"
+          onClick={() => setShowModal(true)}
+          className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white transition-all shadow-lg active:scale-98 flex items-center gap-2 flex-shrink-0"
+          style={{ background: "linear-gradient(135deg, hsl(200 85% 55%), hsl(210 75% 45%))" }}
+        >
+          <span>＋</span> Nuovo Fornitore
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Form Creazione / Modifica */}
-        <div
-          className="rounded-2xl p-6 border relative overflow-hidden group shadow-2xl backdrop-blur-xl animate-fade-in h-fit"
+      {/* Campo di ricerca */}
+      <div className="relative animate-fade-in">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Cerca fornitore per nome o codice..."
+          className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
           style={{
-            background: "linear-gradient(135deg, hsla(200, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
-            borderColor: "hsla(200, 60%, 50%, 0.15)",
+            background: "hsl(240 10% 4% / 0.6)",
+            borderColor: "hsl(240 5% 15% / 0.8)",
           }}
+          onFocus={(e) => e.target.style.borderColor = "hsl(240 5% 35%)"}
+          onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 15% / 0.8)"}
+        />
+      </div>
+
+      {filteredSuppliers.length === 0 ? (
+        <div className="rounded-2xl p-12 border text-center text-slate-500 bg-zinc-950/40 border-zinc-800/60">
+          <span className="text-3xl block mb-2">🏢</span>
+          <p className="text-xs">Nessun fornitore registrato. Aggiungilo con il pulsante "Nuovo Fornitore".</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
+          {filteredSuppliers.map((sup) => {
+            const stats = supplierStats[sup.id] || { totalAmount: 0, count: 0, lastDate: null, dates: [] };
+            const freqLabel = getFrequencyLabel(stats.dates);
+
+            return (
+              <div
+                key={sup.id}
+                className="rounded-2xl p-5 border flex flex-col justify-between space-y-4 shadow-xl relative overflow-hidden group backdrop-blur-xl transition-all duration-300 hover:border-sky-500/30 hover:shadow-[0_0_25px_rgba(14,165,233,0.1)]"
+                style={{
+                  background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.6), hsla(240, 10%, 10%, 0.8))",
+                  borderColor: "hsla(240, 5%, 18%, 0.7)",
+                }}
+              >
+                <div>
+                  {/* Top Header Card */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-sm font-extrabold text-white group-hover:text-sky-300 transition-colors">
+                        {sup.name}
+                      </h3>
+                      {sup.description && (
+                        <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{sup.description}</p>
+                      )}
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {sup.is_utility && (
+                          <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                            ⚡ Utenza {sup.consumption_unit ? `(${sup.consumption_unit})` : ""}
+                          </span>
+                        )}
+                        {storeName(sup.store_id) && (
+                          <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-violet-500/10 text-violet-300 border border-violet-500/20">
+                            🏬 {storeName(sup.store_id)}
+                          </span>
+                        )}
+                        <button
+                          onClick={(e) => handleToggleActive(sup, e)}
+                          className={`px-1.5 py-0.5 rounded text-[8px] font-bold border transition-all ${
+                            sup.is_active
+                              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                              : "bg-zinc-800 text-zinc-500 border-zinc-700 hover:bg-zinc-700"
+                          }`}
+                          title="Clicca per cambiare stato contratto"
+                        >
+                          {sup.is_active ? "✅ Attivo" : `⛔ Chiuso${sup.contract_closed_at ? ` (${new Date(sup.contract_closed_at).toLocaleDateString("it-IT")})` : ""}`}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Azioni rapide Modifica/Elimina */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => handleEdit(sup, e)}
+                        className="p-1 rounded text-slate-400 hover:text-sky-300 hover:bg-sky-500/10 transition-all"
+                        title="Modifica"
+                      >
+                        <EditIcon size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => handleDelete(sup.id, e)}
+                        className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                        title="Elimina"
+                      >
+                        <DeleteIcon size={12} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Statistiche Sintetiche */}
+                  <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-zinc-800/60">
+                    <div>
+                      <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block">Spesa Storica</span>
+                      <span className="text-xs font-black text-white">{formatCurrency(stats.totalAmount)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block">Freq. Bollette</span>
+                      <span className="text-[10px] font-bold text-sky-400">{freqLabel}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bottone Scheda Dettagliata */}
+                <Link
+                  href={`/dashboard/suppliers/${sup.id}`}
+                  className="w-full py-2.5 rounded-xl text-[10px] font-extrabold text-center text-white bg-zinc-900 border border-zinc-800 hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-300 transition-all flex items-center justify-center gap-2 mt-2"
+                >
+                  <span>📊 Scheda & Bollette</span>
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modale Nuovo/Modifica Fornitore */}
+      {showModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 animate-fade-in overflow-y-auto"
+          onClick={resetForm}
         >
-          <div className="absolute top-[-30%] right-[-20%] w-40 h-40 rounded-full bg-sky-500/5 blur-[50px] pointer-events-none" />
+          <div
+            className="relative w-full max-w-lg my-8 rounded-2xl p-6 border shadow-2xl backdrop-blur-xl animate-fade-in max-h-[90vh] overflow-y-auto"
+            style={{ background: "linear-gradient(135deg, hsla(200, 60%, 15%, 0.1), hsla(240, 10%, 10%, 0.97))", borderColor: "hsla(200, 60%, 50%, 0.15)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={resetForm}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-white text-lg leading-none z-20"
+              aria-label="Chiudi"
+            >
+              ✕
+            </button>
 
-          <h2 className="text-base font-extrabold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent mb-5 tracking-tight flex items-center gap-2">
-            <span>⚡</span> {editingId ? "Modifica Fornitore" : "Nuovo Fornitore"}
-          </h2>
+            <h2 className="text-base font-extrabold text-white mb-4 flex items-center gap-2">
+              <span>⚡</span> {editingId ? "Modifica Fornitore" : "Nuovo Fornitore"}
+            </h2>
 
-          <form onSubmit={handleSubmit} className="space-y-4 relative z-10">
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Nome Fornitore / Servizio</label>
+            <form onSubmit={handleSubmit} className="space-y-3">
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="es. Enel Energia, Fastweb, Netflix, Assicurazione Auto"
+                placeholder="Nome Fornitore / Servizio (es. Enel Energia, Netflix...)"
                 required
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none transition-all duration-200 border"
-                style={{
-                  background: "hsl(240 10% 4% / 0.8)",
-                  borderColor: "hsl(240 5% 18%)",
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = "hsl(200 85% 55%)";
-                  e.target.style.boxShadow = "0 0 15px rgba(14,165,233,0.15)";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "hsl(240 5% 18%)";
-                  e.target.style.boxShadow = "none";
-                }}
+                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80"
               />
-            </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Note / Dettagli opzionali</label>
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="es. Codice cliente, POD/PDR, o note di contratto"
-                className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none transition-all duration-200 border"
-                style={{
-                  background: "hsl(240 10% 4% / 0.8)",
-                  borderColor: "hsl(240 5% 18%)",
-                }}
-                onFocus={(e) => {
-                  e.target.style.borderColor = "hsl(200 85% 55%)";
-                  e.target.style.boxShadow = "0 0 15px rgba(14,165,233,0.15)";
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = "hsl(240 5% 18%)";
-                  e.target.style.boxShadow = "none";
-                }}
+                placeholder="Note / Dettagli opzionali (es. Codice cliente, POD/PDR)"
+                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80"
               />
-            </div>
 
-            {/* Negozio collegato */}
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Negozio collegato (opzionale)</label>
-              <select
-                value={storeId}
-                onChange={(e) => setStoreId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
-              >
-                <option value="">Nessuno</option>
-                {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-              <p className="text-[9px] text-zinc-500">Collegando un Negozio (dalla vetrina/lista della spesa) vedrai qui il totale speso e potrai registrarci direttamente le spese fatte con la lista della spesa.</p>
-            </div>
-
-            {/* Utenza / consumi */}
-            <div className="space-y-1.5">
-              <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isUtility}
-                  onChange={(e) => setIsUtility(e.target.checked)}
-                  className="accent-sky-500"
-                />
-                È un'utenza (luce, gas, acqua...)
-              </label>
-              {isUtility && (
+              {/* Negozio collegato */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Negozio collegato (opzionale)</label>
                 <select
-                  value={consumptionUnit}
-                  onChange={(e) => setConsumptionUnit(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none animate-fade-in"
+                  value={storeId}
+                  onChange={(e) => setStoreId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
                 >
-                  <option value="kWh">kWh (luce)</option>
-                  <option value="m³">m³ (gas/acqua)</option>
-                  <option value="L">Litri</option>
-                  <option value="GB">GB (dati)</option>
+                  <option value="">Nessuno</option>
+                  {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
-              )}
-            </div>
+                <p className="text-[9px] text-zinc-500">Collegando un Negozio vedrai qui il totale speso e potrai registrarci direttamente le spese fatte con la lista della spesa.</p>
+              </div>
 
-            {/* Stato contratto (solo in modifica) */}
-            {editingId && (
-              <div className="space-y-1.5 animate-fade-in">
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Stato Contratto</label>
-                <div className="flex gap-2 p-1 bg-zinc-950/60 border border-white/5 rounded-xl text-[10px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => { setIsActive(true); setContractClosedAt(""); }}
-                    className="flex-1 py-2 rounded-lg transition-all"
-                    style={{
-                      background: isActive ? "hsla(150, 70%, 45%, 0.15)" : "transparent",
-                      color: isActive ? "hsl(150 70% 60%)" : "hsl(240 5% 55%)",
-                    }}
-                  >
-                    ✅ Attivo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setIsActive(false); if (!contractClosedAt) setContractClosedAt(toLocalDateStr()); }}
-                    className="flex-1 py-2 rounded-lg transition-all"
-                    style={{
-                      background: !isActive ? "hsla(0, 70%, 55%, 0.12)" : "transparent",
-                      color: !isActive ? "hsl(0 70% 65%)" : "hsl(240 5% 55%)",
-                    }}
-                  >
-                    ⛔ Chiuso
-                  </button>
-                </div>
-                {!isActive && (
+              {/* Utenza / consumi */}
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider cursor-pointer">
                   <input
-                    type="date"
-                    value={contractClosedAt}
-                    onChange={(e) => setContractClosedAt(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none animate-fade-in"
+                    type="checkbox"
+                    checked={isUtility}
+                    onChange={(e) => setIsUtility(e.target.checked)}
+                    className="accent-sky-500"
                   />
+                  È un'utenza (luce, gas, acqua...)
+                </label>
+                {isUtility && (
+                  <select
+                    value={consumptionUnit}
+                    onChange={(e) => setConsumptionUnit(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none animate-fade-in"
+                  >
+                    <option value="kWh">kWh (luce)</option>
+                    <option value="m³">m³ (gas/acqua)</option>
+                    <option value="L">Litri</option>
+                    <option value="GB">GB (dati)</option>
+                  </select>
                 )}
               </div>
-            )}
 
-            <div className="flex gap-3 pt-2">
+              {/* Stato contratto (solo in modifica) */}
               {editingId && (
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="flex-1 py-3 rounded-xl text-xs font-bold text-slate-300 hover:text-white transition-all border border-zinc-800"
-                  style={{ background: "hsl(240 10% 15%)" }}
-                >
-                  Annulla
-                </button>
+                <div className="space-y-1.5 animate-fade-in">
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Stato Contratto</label>
+                  <div className="flex gap-2 p-1 bg-zinc-950/60 border border-white/5 rounded-xl text-[10px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => { setIsActive(true); setContractClosedAt(""); }}
+                      className="flex-1 py-2 rounded-lg transition-all"
+                      style={{
+                        background: isActive ? "hsla(150, 70%, 45%, 0.15)" : "transparent",
+                        color: isActive ? "hsl(150 70% 60%)" : "hsl(240 5% 55%)",
+                      }}
+                    >
+                      ✅ Attivo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setIsActive(false); if (!contractClosedAt) setContractClosedAt(toLocalDateStr()); }}
+                      className="flex-1 py-2 rounded-lg transition-all"
+                      style={{
+                        background: !isActive ? "hsla(0, 70%, 55%, 0.12)" : "transparent",
+                        color: !isActive ? "hsl(0 70% 65%)" : "hsl(240 5% 55%)",
+                      }}
+                    >
+                      ⛔ Chiuso
+                    </button>
+                  </div>
+                  {!isActive && (
+                    <input
+                      type="date"
+                      value={contractClosedAt}
+                      onChange={(e) => setContractClosedAt(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none animate-fade-in"
+                    />
+                  )}
+                </div>
               )}
+
               <button
                 type="submit"
                 disabled={isPending}
-                className="flex-1 py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-[0_0_20px_rgba(14,165,233,0.15)] hover:shadow-[0_0_30px_rgba(14,165,233,0.3)] active:scale-98"
+                className="w-full py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-[0_0_20px_rgba(14,165,233,0.15)] hover:shadow-[0_0_30px_rgba(14,165,233,0.3)] active:scale-98"
                 style={{
                   background: "linear-gradient(135deg, hsl(200 85% 55%), hsl(210 75% 45%))",
                   cursor: isPending ? "not-allowed" : "pointer",
@@ -374,132 +469,10 @@ export default function SuppliersClient({ initialSuppliers, expenses, stores }: 
               >
                 {isPending ? "Salvataggio..." : editingId ? "Salva Modifiche" : "Crea Fornitore"}
               </button>
-            </div>
-          </form>
-        </div>
-
-        {/* Lista Fornitori in Card Grid (2 Colonne) */}
-        <div className="lg:col-span-2 space-y-4">
-          
-          {/* Campo di ricerca */}
-          <div className="relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cerca fornitore per nome o codice..."
-              className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
-              style={{
-                background: "hsl(240 10% 4% / 0.6)",
-                borderColor: "hsl(240 5% 15% / 0.8)",
-              }}
-              onFocus={(e) => e.target.style.borderColor = "hsl(240 5% 35%)"}
-              onBlur={(e) => e.target.style.borderColor = "hsl(240 5% 15% / 0.8)"}
-            />
+            </form>
           </div>
-
-          {filteredSuppliers.length === 0 ? (
-            <div className="rounded-2xl p-12 border text-center text-slate-500 bg-zinc-950/40 border-zinc-800/60">
-              <span className="text-3xl block mb-2">🏢</span>
-              <p className="text-xs">Nessun fornitore registrato. Aggiungi il tuo primo fornitore dal modulo a sinistra.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {filteredSuppliers.map((sup) => {
-                const stats = supplierStats[sup.id] || { totalAmount: 0, count: 0, lastDate: null, dates: [] };
-                const freqLabel = getFrequencyLabel(stats.dates);
-
-                return (
-                  <div
-                    key={sup.id}
-                    className="rounded-2xl p-5 border flex flex-col justify-between space-y-4 shadow-xl relative overflow-hidden group backdrop-blur-xl transition-all duration-300 hover:border-sky-500/30 hover:shadow-[0_0_25px_rgba(14,165,233,0.1)]"
-                    style={{
-                      background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.6), hsla(240, 10%, 10%, 0.8))",
-                      borderColor: "hsla(240, 5%, 18%, 0.7)",
-                    }}
-                  >
-                    <div>
-                      {/* Top Header Card */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="text-sm font-extrabold text-white group-hover:text-sky-300 transition-colors">
-                            {sup.name}
-                          </h3>
-                          {sup.description && (
-                            <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{sup.description}</p>
-                          )}
-                          <div className="flex flex-wrap gap-1 mt-1.5">
-                            {sup.is_utility && (
-                              <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                                ⚡ Utenza {sup.consumption_unit ? `(${sup.consumption_unit})` : ""}
-                              </span>
-                            )}
-                            {storeName(sup.store_id) && (
-                              <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-violet-500/10 text-violet-300 border border-violet-500/20">
-                                🏬 {storeName(sup.store_id)}
-                              </span>
-                            )}
-                            <button
-                              onClick={(e) => handleToggleActive(sup, e)}
-                              className={`px-1.5 py-0.5 rounded text-[8px] font-bold border transition-all ${
-                                sup.is_active
-                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
-                                  : "bg-zinc-800 text-zinc-500 border-zinc-700 hover:bg-zinc-700"
-                              }`}
-                              title="Clicca per cambiare stato contratto"
-                            >
-                              {sup.is_active ? "✅ Attivo" : `⛔ Chiuso${sup.contract_closed_at ? ` (${new Date(sup.contract_closed_at).toLocaleDateString("it-IT")})` : ""}`}
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Azioni rapide Modifica/Elimina */}
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={(e) => handleEdit(sup, e)}
-                            className="p-1 rounded text-slate-400 hover:text-sky-300 hover:bg-sky-500/10 transition-all"
-                            title="Modifica"
-                          >
-                            <EditIcon size={12} />
-                          </button>
-                          <button
-                            onClick={(e) => handleDelete(sup.id, e)}
-                            className="p-1 rounded text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
-                            title="Elimina"
-                          >
-                            <DeleteIcon size={12} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Statistiche Sintetiche */}
-                      <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-zinc-800/60">
-                        <div>
-                          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block">Spesa Storica</span>
-                          <span className="text-xs font-black text-white">{formatCurrency(stats.totalAmount)}</span>
-                        </div>
-                        <div>
-                          <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block">Freq. Bollette</span>
-                          <span className="text-[10px] font-bold text-sky-400">{freqLabel}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Bottone Scheda Dettagliata */}
-                    <Link
-                      href={`/dashboard/suppliers/${sup.id}`}
-                      className="w-full py-2.5 rounded-xl text-[10px] font-extrabold text-center text-white bg-zinc-900 border border-zinc-800 hover:border-sky-500/40 hover:bg-sky-500/10 hover:text-sky-300 transition-all flex items-center justify-center gap-2 mt-2"
-                    >
-                      <span>📊 Scheda & Bollette</span>
-                    </Link>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
-
-      </div>
+      )}
     </div>
   );
 }
