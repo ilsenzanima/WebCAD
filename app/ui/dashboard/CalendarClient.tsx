@@ -143,8 +143,14 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
     return expenses.filter(e => e.date === dateStr);
   };
 
+  // Una scadenza saldata la cui spesa collegata cade nello stesso giorno e' gia'
+  // rappresentata nella sezione "Spese & Entrate Registrate": evitiamo di mostrarla
+  // due volte (una come spesa e una come scadenza saldata) nello stesso giorno.
+  const isScheduleShownAsExpense = (sched: ScheduleWithRelations, dateStr: string) =>
+    sched.is_paid && expenses.some(e => e.schedule_id === sched.id && e.date === dateStr);
+
   const getSchedulesForDate = (dateStr: string) => {
-    return schedules.filter(s => s.due_date === dateStr);
+    return schedules.filter(s => s.due_date === dateStr && !isScheduleShownAsExpense(s, dateStr));
   };
 
   const handlePaySchedule = (
