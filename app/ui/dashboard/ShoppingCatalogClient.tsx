@@ -33,6 +33,7 @@ export default function ShoppingCatalogClient({ initialProducts, stores }: Shopp
   const [prodAisle, setProdAisle] = useState("");
   const [prodUnit, setProdUnit] = useState("");
   const [prodShelfLife, setProdShelfLife] = useState("");
+  const [prodOffList, setProdOffList] = useState(false);
 
   const [barcodeQuery, setBarcodeQuery] = useState("");
   const [searchingBarcode, setSearchingBarcode] = useState(false);
@@ -55,7 +56,7 @@ export default function ShoppingCatalogClient({ initialProducts, stores }: Shopp
   };
 
   const resetProductForm = () => {
-    setProdName(""); setProdCategory(""); setProdStoreId(""); setProdAisle(""); setProdUnit(""); setProdShelfLife("");
+    setProdName(""); setProdCategory(""); setProdStoreId(""); setProdAisle(""); setProdUnit(""); setProdShelfLife(""); setProdOffList(false);
     setShowProductModal(false);
   };
 
@@ -71,6 +72,7 @@ export default function ShoppingCatalogClient({ initialProducts, stores }: Shopp
         aisle: prodAisle || null,
         default_unit: prodUnit || null,
         shelf_life_days: prodShelfLife ? Number(prodShelfLife) : null,
+        is_off_list: prodOffList,
       });
       if (!res.success || !res.data) { alert(res.error); return; }
       setProducts((prev) => [...prev, res.data as ShoppingProduct]);
@@ -312,6 +314,11 @@ export default function ShoppingCatalogClient({ initialProducts, stores }: Shopp
                   <p className="text-[9px] text-zinc-500">Solo per le categorie deperibili (Frutta e Verdura, Latticini e Uova, Carne e Pesce, Panetteria). Il suggerimento si basa sul dataset USDA FoodKeeper: modificalo pure in base alla tua esperienza.</p>
                 </div>
               )}
+
+              <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 cursor-pointer">
+                <input type="checkbox" checked={prodOffList} onChange={(e) => setProdOffList(e.target.checked)} className="accent-violet-500" />
+                🎁 Articolo da fuori lista (si prende spesso in più, scorciatoia rapida nelle liste)
+              </label>
 
               <p className="text-[9px] text-zinc-500">Marche, valutazioni, allergeni e codici a barre si aggiungono aprendo la scheda del prodotto.</p>
               <button type="submit" disabled={isPending} className="w-full py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all">

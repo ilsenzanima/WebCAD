@@ -46,6 +46,7 @@ export async function createShoppingProduct(formData: {
   aisle?: string | null;
   default_unit?: string | null;
   shelf_life_days?: number | null;
+  is_off_list?: boolean;
 }) {
   try {
     const supabase = (await createClient()) as any;
@@ -61,6 +62,7 @@ export async function createShoppingProduct(formData: {
         aisle: formData.aisle || null,
         default_unit: formData.default_unit || null,
         shelf_life_days: formData.shelf_life_days ?? null,
+        is_off_list: formData.is_off_list ?? false,
         created_by: user.id,
       })
       .select()
@@ -83,6 +85,7 @@ export async function updateShoppingProduct(id: string, formData: {
   aisle?: string | null;
   default_unit?: string | null;
   shelf_life_days?: number | null;
+  is_off_list?: boolean;
 }) {
   try {
     const supabase = (await createClient()) as any;
@@ -95,6 +98,7 @@ export async function updateShoppingProduct(id: string, formData: {
         aisle: formData.aisle || null,
         default_unit: formData.default_unit || null,
         shelf_life_days: formData.shelf_life_days ?? null,
+        is_off_list: formData.is_off_list ?? false,
       })
       .eq("id", id)
       .select()
@@ -650,6 +654,38 @@ export async function removeShoppingListItem(itemId: string) {
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
+  }
+}
+
+// Suggerisce prodotti gia' comprati spesso in passato (spuntati in liste
+// concluse), dando priorita' a chi e' stato preso proprio in quel negozio
+// se e' impostato, cosi' la lista si prepara piu' in fretta.
+export async function getSuggestedProducts(storeId: string | null, excludeProductIds: string[] = []): Promise<{ product: ShoppingProduct; count: number }[]> {
+  try {
+    const supabase = (await createClient()) as any;
+    let query = supabase
+      .from("shopping_list_items")
+      .select("product_id, shopping_products(*), shopping_lists!inner(status, store_id)")
+      .eq("is_checked", true)
+      .eq("shopping_lists.status", "completed");
+
+    if (storeId) query = query.eq("shopping_lists.store_id", storeId);
+
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+
+    const counts = new Map<string, { product: ShoppingProduct; count: number }>();
+    for (const row of data || []) {
+      if (!row.shopping_products || excludeProductIds.includes(row.product_id)) continue;
+      const existing = counts.get(row.product_id);
+      if (existing) existing.count += 1;
+      else counts.set(row.product_id, { product: row.shopping_products, count: 1 });
+    }
+
+    return Array.from(counts.values()).sort((a, b) => b.count - a.count).slice(0, 8);
+  } catch (err: any) {
+    console.error("Errore getSuggestedProducts:", err.message);
+    return [];
   }
 }
 
