@@ -143,6 +143,7 @@ export interface Account {
   initial_balance: number;
   color: string;
   is_active: boolean;
+  is_default: boolean; // usato per precompilare la selezione conto in Spese/Entrate e nel saldo delle Scadenze
   created_at: string;
   updated_at: string;
 }

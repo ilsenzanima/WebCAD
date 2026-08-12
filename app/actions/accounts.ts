@@ -90,6 +90,37 @@ export async function updateAccount(id: string, formData: {
   }
 }
 
+// Imposta un conto come predefinito (uno solo per utente, garantito anche a
+// livello DB da un indice unico parziale): usato per precompilare la
+// selezione conto in Spese/Entrate e nel saldo delle Scadenze.
+export async function setDefaultAccount(id: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { error: clearError } = await supabase
+      .from("accounts")
+      .update({ is_default: false })
+      .eq("user_id", user.id)
+      .neq("id", id);
+    if (clearError) throw new Error(clearError.message);
+
+    const { error: setError } = await supabase
+      .from("accounts")
+      .update({ is_default: true })
+      .eq("id", id)
+      .eq("user_id", user.id);
+    if (setError) throw new Error(setError.message);
+
+    revalidatePath("/dashboard/accounts");
+    revalidatePath("/dashboard/expenses");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function getAccountAdjustments() {
   try {
     const supabase = (await createClient()) as any;

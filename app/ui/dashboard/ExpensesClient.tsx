@@ -82,7 +82,8 @@ export default function ExpensesClient({
   const [consumptionValue, setConsumptionValue] = useState("");
   const [periodStartInput, setPeriodStartInput] = useState("");
   const [periodEndInput, setPeriodEndInput] = useState("");
-  const [accountId, setAccountId] = useState("");
+  const defaultAccountId = initialAccounts.find((a) => a.is_default)?.id || "";
+  const [accountId, setAccountId] = useState(defaultAccountId);
   const [isEmergency, setIsEmergency] = useState(false);
 
   const handlePeriodStartChange = (value: string) => {
@@ -141,7 +142,7 @@ export default function ExpensesClient({
     setConsumptionValue("");
     setPeriodStartInput("");
     setPeriodEndInput("");
-    setAccountId("");
+    setAccountId(defaultAccountId);
     setIsEmergency(false);
     setEditingId(null);
     setNewDocFile(null);
