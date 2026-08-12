@@ -9,6 +9,65 @@ export interface FamilyMember {
   user_id: string;
   display_name: string;
   role: "admin" | "member";
+  avatar_emoji: string;
+  birth_date: string | null;
+  created_at: string;
+}
+
+export interface Chore {
+  id: string;
+  assigned_to: string;
+  title: string;
+  notes: string | null;
+  points: number;
+  due_date: string | null;
+  recurrence: "once" | "daily" | "weekly";
+  status: "pending" | "done" | "approved";
+  done_at: string | null;
+  approved_at: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface Reward {
+  id: string;
+  title: string;
+  cost_points: number;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface RewardRedemption {
+  id: string;
+  reward_id: string;
+  requested_by: string;
+  status: "requested" | "approved" | "denied";
+  requested_at: string;
+  resolved_at: string | null;
+  rewards?: Reward;
+}
+
+export interface GrowthEntry {
+  id: string;
+  family_member: string;
+  date: string;
+  height_cm: number | null;
+  weight_kg: number | null;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface FamilyActivity {
+  id: string;
+  family_member: string | null;
+  title: string;
+  location: string | null;
+  notes: string | null;
+  start_at: string;
+  end_at: string | null;
+  created_by: string | null;
   created_at: string;
 }
 
