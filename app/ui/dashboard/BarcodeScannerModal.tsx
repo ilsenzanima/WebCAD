@@ -1,16 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BrowserMultiFormatReader } from "@zxing/browser";
+import { BrowserMultiFormatReader, BarcodeFormat } from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
 import { isValidBarcodeChecksum } from "@/lib/barcodeChecksum";
 
 interface BarcodeScannerModalProps {
-  onDetected: (code: string) => void;
+  onDetected: (code: string, format: string) => void;
   onClose: () => void;
+  /**
+   * "product": codice a barre di un prodotto (EAN/UPC), con validazione
+   * della cifra di controllo. "loyalty": tessera fedeltà, puo' essere un
+   * QR code o un codice alfanumerico senza cifra di controllo standard,
+   * quindi si accetta qualsiasi lettura valida per ZXing.
+   */
+  mode?: "product" | "loyalty";
 }
 
-export default function BarcodeScannerModal({ onDetected, onClose }: BarcodeScannerModalProps) {
+export default function BarcodeScannerModal({ onDetected, onClose, mode = "product" }: BarcodeScannerModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const controlsRef = useRef<IScannerControls | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +37,7 @@ export default function BarcodeScannerModal({ onDetected, onClose }: BarcodeScan
           controlsRef.current = controls;
 
           const text = result.getText();
-          if (!isValidBarcodeChecksum(text)) {
+          if (mode === "product" && !isValidBarcodeChecksum(text)) {
             // Lettura fotocamera imprecisa su una cifra: la scartiamo e continuiamo
             // a inquadrare invece di restituire un codice quasi certamente sbagliato.
             setRejectedHint(true);
@@ -40,7 +47,7 @@ export default function BarcodeScannerModal({ onDetected, onClose }: BarcodeScan
           }
 
           controls.stop();
-          onDetected(text);
+          onDetected(text, BarcodeFormat[result.getBarcodeFormat()]);
         }
       )
       .catch(() => {
@@ -62,7 +69,7 @@ export default function BarcodeScannerModal({ onDetected, onClose }: BarcodeScan
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
-          <span className="text-xs font-bold text-white">📷 Inquadra il codice a barre</span>
+          <span className="text-xs font-bold text-white">📷 {mode === "loyalty" ? "Inquadra la tessera (barcode o QR)" : "Inquadra il codice a barre"}</span>
           <button onClick={onClose} className="text-zinc-400 hover:text-white text-lg leading-none px-1">✕</button>
         </div>
         {error ? (

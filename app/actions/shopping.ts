@@ -9,7 +9,7 @@ import type { ShoppingProduct, ShoppingList, ShoppingListItem, ShoppingProductBr
 const ITEM_SELECT = "*, shopping_products(*)";
 
 function revalidateShoppingList() {
-  revalidatePath("/dashboard/shopping-list");
+  revalidatePath("/dashboard/shopping-list", "layout");
   revalidatePath("/dashboard");
 }
 
@@ -296,16 +296,43 @@ export async function findProductBrandByBarcode(barcode: string): Promise<{ prod
 // Liste della spesa
 // ============================================
 
-export async function getActiveShoppingList(): Promise<(ShoppingList & { items: ShoppingListItem[] }) | null> {
+// Vetrina: tutte le liste (aperte e concluse), con gli articoli gia'
+// inclusi per mostrare in ogni card il conteggio spuntati/totale senza
+// dover aprire la scheda. Aperte per prime (le piu' recenti), poi
+// concluse (le piu' recenti).
+export async function getShoppingLists(): Promise<(ShoppingList & { items: ShoppingListItem[] })[]> {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data, error } = await supabase
+      .from("shopping_lists")
+      .select(`*, shopping_list_items(${ITEM_SELECT})`)
+      .order("created_at", { ascending: false });
+
+    if (error) throw new Error(error.message);
+
+    const lists = (data || []).map((l: any) => ({ ...l, items: l.shopping_list_items || [] }));
+    lists.sort((a: ShoppingList, b: ShoppingList) => {
+      if (a.status !== b.status) return a.status === "open" ? -1 : 1;
+      const aDate = a.status === "open" ? a.created_at : (a.completed_at || a.created_at);
+      const bDate = b.status === "open" ? b.created_at : (b.completed_at || b.created_at);
+      return bDate.localeCompare(aDate);
+    });
+
+    return lists;
+  } catch (err: any) {
+    console.error("Errore getShoppingLists:", err.message);
+    return [];
+  }
+}
+
+export async function getShoppingList(id: string): Promise<(ShoppingList & { items: ShoppingListItem[] }) | null> {
   try {
     const supabase = (await createClient()) as any;
     const { data: list, error } = await supabase
       .from("shopping_lists")
       .select("*")
-      .eq("status", "open")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .eq("id", id)
+      .single();
 
     if (error) throw new Error(error.message);
     if (!list) return null;
@@ -320,26 +347,8 @@ export async function getActiveShoppingList(): Promise<(ShoppingList & { items: 
 
     return { ...list, items: items || [] };
   } catch (err: any) {
-    console.error("Errore getActiveShoppingList:", err.message);
+    console.error("Errore getShoppingList:", err.message);
     return null;
-  }
-}
-
-export async function getShoppingListHistory(): Promise<ShoppingList[]> {
-  try {
-    const supabase = (await createClient()) as any;
-    const { data, error } = await supabase
-      .from("shopping_lists")
-      .select("*")
-      .eq("status", "completed")
-      .order("completed_at", { ascending: false })
-      .limit(20);
-
-    if (error) throw new Error(error.message);
-    return data || [];
-  } catch (err: any) {
-    console.error("Errore getShoppingListHistory:", err.message);
-    return [];
   }
 }
 

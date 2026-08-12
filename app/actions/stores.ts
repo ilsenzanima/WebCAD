@@ -45,6 +45,7 @@ interface StoreFields {
   category?: string | null;
   address?: string | null;
   loyalty_card_number?: string | null;
+  loyalty_card_format?: string | null;
   notes?: string | null;
 }
 
@@ -61,6 +62,7 @@ export async function createStore(formData: StoreFields) {
         category: formData.category || null,
         address: formData.address || null,
         loyalty_card_number: formData.loyalty_card_number || null,
+        loyalty_card_format: formData.loyalty_card_format || null,
         notes: formData.notes || null,
         created_by: user.id,
       })
@@ -84,6 +86,7 @@ export async function updateStore(id: string, formData: Partial<StoreFields>) {
     if (formData.category !== undefined) update.category = formData.category || null;
     if (formData.address !== undefined) update.address = formData.address || null;
     if (formData.loyalty_card_number !== undefined) update.loyalty_card_number = formData.loyalty_card_number || null;
+    if (formData.loyalty_card_format !== undefined) update.loyalty_card_format = formData.loyalty_card_format || null;
     if (formData.notes !== undefined) update.notes = formData.notes || null;
 
     const { data, error } = await supabase.from("stores").update(update).eq("id", id).select().single();

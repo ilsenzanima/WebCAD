@@ -8,6 +8,8 @@ import { updateStore, deleteStore } from "@/app/actions/stores";
 import { STORE_CATEGORIES } from "@/lib/storeCategories";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { DeleteIcon, ArrowLeftIcon } from "./icons";
+import BarcodeScannerModal from "./BarcodeScannerModal";
+import LoyaltyCardDisplay from "./LoyaltyCardDisplay";
 
 interface SpendingSummary {
   supplierName: string;
@@ -30,7 +32,9 @@ export default function StoreDetailClient({ store, isAdmin, spendingSummary }: S
   const [category, setCategory] = useState(store.category || "");
   const [address, setAddress] = useState(store.address || "");
   const [loyaltyCard, setLoyaltyCard] = useState(store.loyalty_card_number || "");
+  const [loyaltyCardFormat, setLoyaltyCardFormat] = useState(store.loyalty_card_format || null as string | null);
   const [notes, setNotes] = useState(store.notes || "");
+  const [showScanner, setShowScanner] = useState(false);
 
   const handleSave = () => {
     if (!name.trim()) { alert("Il nome non può essere vuoto"); return; }
@@ -40,11 +44,18 @@ export default function StoreDetailClient({ store, isAdmin, spendingSummary }: S
         category: category || null,
         address: address || null,
         loyalty_card_number: loyaltyCard || null,
+        loyalty_card_format: loyaltyCard ? loyaltyCardFormat : null,
         notes: notes || null,
       });
       if (!res.success) { alert(res.error); return; }
       router.refresh();
     });
+  };
+
+  const handleScanLoyaltyCard = (code: string, format: string) => {
+    setShowScanner(false);
+    setLoyaltyCard(code);
+    setLoyaltyCardFormat(format);
   };
 
   const handleDelete = () => {
@@ -70,6 +81,14 @@ export default function StoreDetailClient({ store, isAdmin, spendingSummary }: S
           <DeleteIcon size={16} />
         </button>
       </div>
+
+      {loyaltyCard && (
+        <div className="rounded-2xl p-5 border shadow-2xl backdrop-blur-xl animate-fade-in"
+          style={{ background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))", borderColor: "hsla(240, 5%, 18%, 0.7)" }}>
+          <h3 className="text-sm font-extrabold text-white mb-3">🎫 Tessera fedeltà</h3>
+          <LoyaltyCardDisplay code={loyaltyCard} format={loyaltyCardFormat} />
+        </div>
+      )}
 
       {isAdmin && (
         <div className="rounded-2xl p-5 border shadow-2xl backdrop-blur-xl animate-fade-in"
@@ -117,9 +136,17 @@ export default function StoreDetailClient({ store, isAdmin, spendingSummary }: S
             className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
         </div>
         <div className="space-y-1">
-          <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Numero tessera fedeltà</label>
-          <input value={loyaltyCard} onChange={(e) => setLoyaltyCard(e.target.value)}
-            className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+          <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Tessera fedeltà</label>
+          <div className="flex gap-2">
+            <input value={loyaltyCard} onChange={(e) => { setLoyaltyCard(e.target.value); setLoyaltyCardFormat(null); }}
+              placeholder="Numero o codice tessera"
+              className="flex-1 px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+            <button type="button" onClick={() => setShowScanner(true)}
+              className="px-4 py-2.5 rounded-lg text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 transition-all" title="Scansiona la tessera (barcode o QR)">
+              📷
+            </button>
+          </div>
+          <p className="text-[9px] text-zinc-500">Scansionando con la fotocamera (barcode o QR) la tessera si potrà poi mostrare a schermo nello stesso formato in negozio.</p>
         </div>
         <div className="space-y-1">
           <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Note</label>
@@ -131,6 +158,8 @@ export default function StoreDetailClient({ store, isAdmin, spendingSummary }: S
           Salva modifiche
         </button>
       </div>
+
+      {showScanner && <BarcodeScannerModal mode="loyalty" onDetected={handleScanLoyaltyCard} onClose={() => setShowScanner(false)} />}
     </div>
   );
 }
