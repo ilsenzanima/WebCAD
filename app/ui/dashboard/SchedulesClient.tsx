@@ -74,7 +74,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
 
-  const [filterPaid, setFilterPaid] = useState<"all" | "pending" | "paid">("pending");
+  const [filterPaid, setFilterPaid] = useState<"all" | "pending" | "paid" | "reschedule">("pending");
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
 
   // Ripianificazione rapida (nuova data) per le scadenze non saldate e gia' scadute
@@ -589,8 +589,11 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const filteredSchedules = schedules.filter(s => {
     if (filterPaid === "pending") return !s.is_paid;
     if (filterPaid === "paid") return s.is_paid;
+    if (filterPaid === "reschedule") return isOverdue(s);
     return true;
   });
+
+  const rescheduleCount = schedules.filter(isOverdue).length;
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
@@ -989,6 +992,20 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                 }`}
               >
                 Saldate
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterPaid("reschedule")}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+                  filterPaid === "reschedule" ? "bg-rose-500/20 text-rose-300 border border-rose-500/30" : "text-zinc-500"
+                }`}
+              >
+                Da Ripianificare
+                {rescheduleCount > 0 && (
+                  <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] bg-rose-500/30 text-rose-200">
+                    {rescheduleCount}
+                  </span>
+                )}
               </button>
               <button
                 type="button"
