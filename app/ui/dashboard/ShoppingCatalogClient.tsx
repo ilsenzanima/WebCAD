@@ -36,8 +36,11 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
   const [searchingBarcode, setSearchingBarcode] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
 
-  // Codice non ancora in vetrina ma trovato su Open Food/Beauty/Products
-  // Facts: proponiamo di creare prodotto + marca in un colpo solo.
+  // Codice non ancora in vetrina: proponiamo di creare prodotto + marca in
+  // un colpo solo, precompilati da Open Food/Beauty/Products Facts se il
+  // codice e' li' censito, altrimenti a mano (categoria/nome si possono
+  // sempre completare dopo aprendo la scheda del prodotto).
+  const [showScanCreateModal, setShowScanCreateModal] = useState(false);
   const [scanCreateData, setScanCreateData] = useState<OpenFactsResult | null>(null);
   const [scanBarcode, setScanBarcode] = useState("");
   const [scanProductName, setScanProductName] = useState("");
@@ -45,7 +48,8 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
   const [scanBrandName, setScanBrandName] = useState("");
 
   const resetScanCreateForm = () => {
-    setScanCreateData(null); setScanBarcode(""); setScanProductName(""); setScanCategory(""); setScanBrandName("");
+    setShowScanCreateModal(false); setScanCreateData(null); setScanBarcode("");
+    setScanProductName(""); setScanCategory(""); setScanBrandName("");
   };
 
   const resetProductForm = () => {
@@ -93,21 +97,23 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
         return;
       }
       // Non e' ancora in vetrina: proviamo a recuperarlo da Open Food/Beauty/Products Facts
-      // cosi' non va cercato e ricopiato tutto a mano.
+      // cosi' non va cercato e ricopiato tutto a mano. Se non e' censito nemmeno li',
+      // apriamo comunque il modulo: si crea partendo dal solo codice a barre e si
+      // completa il resto (nome, categoria...) quando si vuole.
       const offResult = await lookupProductInfo(trimmed);
       setSearchingBarcode(false);
-      if (!offResult) { alert("Nessun prodotto trovato con questo codice a barre."); return; }
       setScanBarcode(trimmed);
       setScanCreateData(offResult);
-      setScanProductName(offResult.product_name || "");
-      setScanCategory(guessCategoryFromOffCategories(offResult.off_categories));
-      setScanBrandName(offResult.brand_name || "");
+      setScanProductName(offResult?.product_name || "");
+      setScanCategory(guessCategoryFromOffCategories(offResult?.off_categories ?? null));
+      setScanBrandName(offResult?.brand_name || "");
+      setShowScanCreateModal(true);
     });
   };
 
   const handleScanCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!scanProductName.trim() || !scanBrandName.trim() || !scanCreateData) { alert("Nome prodotto e marca sono obbligatori"); return; }
+    if (!scanProductName.trim() || !scanBrandName.trim()) { alert("Nome prodotto e marca sono obbligatori"); return; }
 
     startTransition(async () => {
       const productRes = await createShoppingProduct({
@@ -124,19 +130,19 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
       const brandRes = await createProductBrand(newProduct.id, {
         brand_name: scanBrandName.trim(),
         barcode: scanBarcode,
-        image_url: scanCreateData.image_url,
-        image_packaging_url: scanCreateData.image_packaging_url,
-        nutri_score: scanCreateData.nutri_score,
-        nova_group: scanCreateData.nova_group,
-        eco_score: scanCreateData.eco_score,
-        ingredients_text: scanCreateData.ingredients_text,
-        allergens: scanCreateData.allergens,
-        traces: scanCreateData.traces,
-        labels: scanCreateData.labels,
-        additives: scanCreateData.additives,
-        package_quantity: scanCreateData.package_quantity,
-        off_categories: scanCreateData.off_categories,
-        nutriments: scanCreateData.nutriments,
+        image_url: scanCreateData?.image_url,
+        image_packaging_url: scanCreateData?.image_packaging_url,
+        nutri_score: scanCreateData?.nutri_score,
+        nova_group: scanCreateData?.nova_group,
+        eco_score: scanCreateData?.eco_score,
+        ingredients_text: scanCreateData?.ingredients_text,
+        allergens: scanCreateData?.allergens,
+        traces: scanCreateData?.traces,
+        labels: scanCreateData?.labels,
+        additives: scanCreateData?.additives,
+        package_quantity: scanCreateData?.package_quantity,
+        off_categories: scanCreateData?.off_categories,
+        nutriments: scanCreateData?.nutriments,
       });
       if (!brandRes.success) { alert(brandRes.error); return; }
 
@@ -311,8 +317,8 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
         </div>
       )}
 
-      {/* Modale: codice scansionato non in vetrina, trovato su Open Facts */}
-      {scanCreateData && (
+      {/* Modale: codice a barre non ancora in vetrina (trovato su Open Facts o inserito a mano) */}
+      {showScanCreateModal && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 animate-fade-in overflow-y-auto"
           onClick={resetScanCreateForm}
@@ -327,32 +333,40 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
               ✕
             </button>
 
-            <h2 className="text-base font-extrabold text-white mb-1">Prodotto trovato su {scanCreateData.source}</h2>
+            <h2 className="text-base font-extrabold text-white mb-1">
+              {scanCreateData ? `Prodotto trovato su ${scanCreateData.source}` : "Nuovo prodotto dal codice a barre"}
+            </h2>
             <p className="text-[10px] text-zinc-500 mb-4 font-mono">{scanBarcode}</p>
 
-            <div className="flex items-center gap-3 mb-4">
-              {scanCreateData.image_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={scanCreateData.image_url} alt="" className="w-14 h-14 object-cover rounded-lg border border-zinc-800 flex-shrink-0" />
-              )}
-              <div className="flex flex-wrap gap-1">
-                {scanCreateData.nutri_score && <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-zinc-800 text-white">Nutri-Score {scanCreateData.nutri_score}</span>}
-                {scanCreateData.eco_score && <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-zinc-800 text-white">Eco-Score {scanCreateData.eco_score}</span>}
-                {scanCreateData.allergens && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">⚠️ {scanCreateData.allergens}</span>}
+            {scanCreateData ? (
+              <div className="flex items-center gap-3 mb-4">
+                {scanCreateData.image_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={scanCreateData.image_url} alt="" className="w-14 h-14 object-cover rounded-lg border border-zinc-800 flex-shrink-0" />
+                )}
+                <div className="flex flex-wrap gap-1">
+                  {scanCreateData.nutri_score && <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-zinc-800 text-white">Nutri-Score {scanCreateData.nutri_score}</span>}
+                  {scanCreateData.eco_score && <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-zinc-800 text-white">Eco-Score {scanCreateData.eco_score}</span>}
+                  {scanCreateData.allergens && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">⚠️ {scanCreateData.allergens}</span>}
+                </div>
               </div>
-            </div>
+            ) : (
+              <p className="text-[10px] text-amber-300/90 mb-4">Non è nei database pubblici (Open Food/Beauty/Products Facts): inserisci nome e marca a mano, il resto lo completi quando vuoi dalla scheda del prodotto.</p>
+            )}
 
             <form onSubmit={handleScanCreateSubmit} className="space-y-3">
               <input value={scanProductName} onChange={(e) => setScanProductName(e.target.value)} placeholder="Nome prodotto generico (es. Bibita gassata)" required
                 className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
               <select value={scanCategory} onChange={(e) => setScanCategory(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80">
-                <option value="">Categoria...</option>
+                <option value="">Categoria (opzionale, la aggiungi anche dopo)</option>
                 {GROCERY_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
               <input value={scanBrandName} onChange={(e) => setScanBrandName(e.target.value)} placeholder="Marca (es. Coca-Cola)" required
                 className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
-              <p className="text-[9px] text-zinc-500">Categoria e nome sono precompilati da Open Facts: correggili pure prima di salvare. Ingredienti, allergeni, valori nutrizionali e foto vengono salvati automaticamente sulla marca.</p>
+              {scanCreateData && (
+                <p className="text-[9px] text-zinc-500">Categoria e nome sono precompilati da Open Facts: correggili pure prima di salvare. Ingredienti, allergeni, valori nutrizionali e foto vengono salvati automaticamente sulla marca.</p>
+              )}
               <button type="submit" disabled={isPending} className="w-full py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all">
                 Crea prodotto e marca
               </button>
