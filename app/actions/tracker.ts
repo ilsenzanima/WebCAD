@@ -18,14 +18,21 @@ async function requireAdminOrThrow() {
 // Compiti/faccende
 // ============================================
 
+// Un ragazzo (membro non admin) vede solo i propri compiti; un genitore (admin) li vede tutti.
 export async function getChores(): Promise<Chore[]> {
   try {
     const supabase = (await createClient()) as any;
-    const { data, error } = await supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    const role = await getMyRole();
+
+    let query = supabase
       .from("chores")
       .select("*")
       .order("status", { ascending: true })
       .order("due_date", { ascending: true, nullsFirst: false });
+    if (role !== "admin" && user) query = query.eq("assigned_to", user.id);
+
+    const { data, error } = await query;
 
     if (error) throw new Error(error.message);
     return data || [];
@@ -200,13 +207,20 @@ export async function deleteReward(id: string) {
   }
 }
 
+// Un ragazzo vede solo le proprie richieste di riscatto; un genitore le vede tutte (per approvarle).
 export async function getRedemptions(): Promise<RewardRedemption[]> {
   try {
     const supabase = (await createClient()) as any;
-    const { data, error } = await supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    const role = await getMyRole();
+
+    let query = supabase
       .from("reward_redemptions")
       .select("*, rewards(*)")
       .order("requested_at", { ascending: false });
+    if (role !== "admin" && user) query = query.eq("requested_by", user.id);
+
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
     return data || [];
   } catch (err: any) {
@@ -259,10 +273,17 @@ export async function resolveRedemption(id: string, approve: boolean) {
 export async function getPointsBalances(): Promise<Record<string, number>> {
   try {
     const supabase = (await createClient()) as any;
-    const [{ data: chores }, { data: redemptions }] = await Promise.all([
-      supabase.from("chores").select("assigned_to, points").eq("status", "approved"),
-      supabase.from("reward_redemptions").select("requested_by, rewards(cost_points)").eq("status", "approved"),
-    ]);
+    const { data: { user } } = await supabase.auth.getUser();
+    const role = await getMyRole();
+
+    let choresQuery = supabase.from("chores").select("assigned_to, points").eq("status", "approved");
+    let redemptionsQuery = supabase.from("reward_redemptions").select("requested_by, rewards(cost_points)").eq("status", "approved");
+    if (role !== "admin" && user) {
+      choresQuery = choresQuery.eq("assigned_to", user.id);
+      redemptionsQuery = redemptionsQuery.eq("requested_by", user.id);
+    }
+
+    const [{ data: chores }, { data: redemptions }] = await Promise.all([choresQuery, redemptionsQuery]);
 
     const balances: Record<string, number> = {};
     (chores || []).forEach((c: any) => { balances[c.assigned_to] = (balances[c.assigned_to] || 0) + c.points; });
@@ -278,10 +299,17 @@ export async function getPointsBalances(): Promise<Record<string, number>> {
 // Crescita/salute
 // ============================================
 
+// Un ragazzo vede solo le proprie rilevazioni di crescita; un genitore le vede tutte.
 export async function getGrowthEntries(): Promise<GrowthEntry[]> {
   try {
     const supabase = (await createClient()) as any;
-    const { data, error } = await supabase.from("growth_entries").select("*").order("date", { ascending: true });
+    const { data: { user } } = await supabase.auth.getUser();
+    const role = await getMyRole();
+
+    let query = supabase.from("growth_entries").select("*").order("date", { ascending: true });
+    if (role !== "admin" && user) query = query.eq("family_member", user.id);
+
+    const { data, error } = await query;
     if (error) throw new Error(error.message);
     return data || [];
   } catch (err: any) {

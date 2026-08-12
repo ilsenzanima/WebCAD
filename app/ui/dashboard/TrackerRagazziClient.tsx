@@ -156,7 +156,7 @@ export default function TrackerRagazziClient({
   };
 
   // ---------------- Crescita/salute ----------------
-  const [growthMemberFilter, setGrowthMemberFilter] = useState<string>(members[0]?.user_id || "");
+  const [growthMemberFilter, setGrowthMemberFilter] = useState<string>(isAdmin ? members[0]?.user_id || "" : myUserId);
   const [showGrowthModal, setShowGrowthModal] = useState(false);
   const [growthDate, setGrowthDate] = useState("");
   const [growthHeight, setGrowthHeight] = useState("");
@@ -257,10 +257,10 @@ export default function TrackerRagazziClient({
         </div>
       </div>
 
-      {/* Saldo punti per membro */}
+      {/* Saldo punti per membro (un ragazzo vede solo il proprio) */}
       {members.length > 0 && (
         <div className="flex flex-wrap gap-2 animate-fade-in">
-          {members.map((m) => (
+          {(isAdmin ? members : members.filter((m) => m.user_id === myUserId)).map((m) => (
             <span key={m.user_id} className="px-3 py-1.5 rounded-full text-[11px] font-bold bg-zinc-900 border border-zinc-800 text-white">
               {m.avatar_emoji} {m.display_name}: <span className="text-amber-300">{balances[m.user_id] || 0} pt</span>
             </span>
@@ -406,16 +406,18 @@ export default function TrackerRagazziClient({
       {activeTab === "growth" && (
         <div className="space-y-5 animate-fade-in">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex gap-1.5 flex-wrap">
-              {members.map((m) => (
-                <button key={m.user_id} type="button" onClick={() => setGrowthMemberFilter(m.user_id)}
-                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${
-                    growthMemberFilter === m.user_id ? "bg-white/10 text-white border-white/20" : "text-zinc-400 border-zinc-800 hover:text-white"
-                  }`}>
-                  {m.avatar_emoji} {m.display_name}
-                </button>
-              ))}
-            </div>
+            {isAdmin && (
+              <div className="flex gap-1.5 flex-wrap">
+                {members.map((m) => (
+                  <button key={m.user_id} type="button" onClick={() => setGrowthMemberFilter(m.user_id)}
+                    className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${
+                      growthMemberFilter === m.user_id ? "bg-white/10 text-white border-white/20" : "text-zinc-400 border-zinc-800 hover:text-white"
+                    }`}>
+                    {m.avatar_emoji} {m.display_name}
+                  </button>
+                ))}
+              </div>
+            )}
             {isAdmin && (
               <button type="button" onClick={() => { setGrowthDate(""); setShowGrowthModal(true); }}
                 className="px-4 py-2 rounded-xl text-xs font-extrabold text-white transition-all shadow-lg active:scale-98 flex items-center gap-2"
