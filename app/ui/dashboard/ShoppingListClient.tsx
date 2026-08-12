@@ -16,6 +16,7 @@ import {
   removeShoppingListItem,
 } from "@/app/actions/shopping";
 import { DeleteIcon, CheckIcon } from "./icons";
+import { GROCERY_UNITS } from "@/lib/shoppingUnits";
 
 interface ActiveList extends ShoppingList {
   items: ShoppingListItem[];
@@ -238,8 +239,11 @@ export default function ShoppingListClient({ initialActiveList, initialHistory, 
               </datalist>
               <input value={newItemQty} onChange={(e) => setNewItemQty(e.target.value)} placeholder="Pezzi"
                 className="w-full sm:w-24 px-3 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
-              <input value={newItemUnit} onChange={(e) => setNewItemUnit(e.target.value)} placeholder="Unità"
-                className="w-full sm:w-24 px-3 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+              <select value={newItemUnit} onChange={(e) => setNewItemUnit(e.target.value)}
+                className="w-full sm:w-24 px-3 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80">
+                <option value="">Unità</option>
+                {GROCERY_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
               <button type="submit" disabled={isPending}
                 className="px-5 py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all">
                 Aggiungi
@@ -274,8 +278,11 @@ export default function ShoppingListClient({ initialActiveList, initialHistory, 
                         {item.expiry_date && expiryBadge(item.expiry_date)}
                         <input defaultValue={item.quantity ?? ""} onBlur={(e) => handleUpdateItemField(item.id, "quantity", e.target.value)}
                           placeholder="Pezzi" className="w-16 px-2 py-1.5 rounded-lg text-[11px] text-white border border-zinc-800 bg-zinc-950/80" />
-                        <input defaultValue={item.unit ?? ""} onBlur={(e) => handleUpdateItemField(item.id, "unit", e.target.value)}
-                          placeholder="Unità" className="w-16 px-2 py-1.5 rounded-lg text-[11px] text-white border border-zinc-800 bg-zinc-950/80" />
+                        <select defaultValue={item.unit ?? ""} onChange={(e) => handleUpdateItemField(item.id, "unit", e.target.value)}
+                          className="w-16 px-2 py-1.5 rounded-lg text-[11px] text-white border border-zinc-800 bg-zinc-950/80">
+                          <option value="">Unità</option>
+                          {GROCERY_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+                        </select>
                         <input defaultValue={item.price ?? ""} onBlur={(e) => handleUpdateItemField(item.id, "price", e.target.value)}
                           placeholder="€" className="w-16 px-2 py-1.5 rounded-lg text-[11px] text-white border border-zinc-800 bg-zinc-950/80" />
                         <button onClick={() => handleRemoveItem(item.id)} className="p-1.5 rounded text-slate-500 hover:text-rose-400 transition-all">

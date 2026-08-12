@@ -12,6 +12,7 @@ import {
   lookupProductInfo,
 } from "@/app/actions/shopping";
 import { GROCERY_CATEGORIES, PERISHABLE_CATEGORIES } from "@/lib/shoppingCategories";
+import { GROCERY_UNITS } from "@/lib/shoppingUnits";
 import { suggestShelfLifeDays } from "@/lib/shelfLifeSuggestions";
 import { DeleteIcon, EditIcon, ArrowLeftIcon } from "./icons";
 import { useRouter } from "next/navigation";
@@ -454,8 +455,11 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
           </div>
           <div className="space-y-1">
             <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Unità</label>
-            <input value={prodUnit} onChange={(e) => setProdUnit(e.target.value)} placeholder="es. kg"
-              className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+            <select value={prodUnit} onChange={(e) => setProdUnit(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80">
+              <option value="">—</option>
+              {GROCERY_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+            </select>
           </div>
           {PERISHABLE_CATEGORIES.includes(prodCategory) && (
             <div className="space-y-1 animate-fade-in">
