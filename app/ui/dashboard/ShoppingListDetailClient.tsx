@@ -10,13 +10,13 @@ import {
   completeShoppingList,
   deleteShoppingList,
   registerListExpense,
-  addShoppingListItemByName,
   toggleShoppingListItemChecked,
   updateShoppingListItem,
   removeShoppingListItem,
 } from "@/app/actions/shopping";
 import { DeleteIcon, CheckIcon, ArrowLeftIcon } from "./icons";
 import { GROCERY_UNITS } from "@/lib/shoppingUnits";
+import AddListItemModal from "./AddListItemModal";
 
 interface ListWithItems extends ShoppingList {
   items: ShoppingListItem[];
@@ -62,10 +62,7 @@ export default function ShoppingListDetailClient({ initialList, initialProducts,
 
   const isOpen = list.status === "open";
 
-  const [newItemName, setNewItemName] = useState("");
-  const [newItemQty, setNewItemQty] = useState("");
-  const [newItemUnit, setNewItemUnit] = useState("");
-
+  const [showAddModal, setShowAddModal] = useState(false);
   const [showCompleteForm, setShowCompleteForm] = useState(false);
   const [totalAmount, setTotalAmount] = useState("");
 
@@ -77,26 +74,15 @@ export default function ShoppingListDetailClient({ initialList, initialProducts,
     });
   };
 
-  const handleAddItem = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newItemName.trim()) return;
+  const handleItemAdded = (newItem: ShoppingListItem) => {
+    setList((prev) => ({ ...prev, items: [...prev.items, newItem] }));
+    if (newItem.shopping_products && !products.some((p) => p.id === newItem.product_id)) {
+      setProducts((prev) => [...prev, newItem.shopping_products as ShoppingProduct]);
+    }
+  };
 
-    startTransition(async () => {
-      const res = await addShoppingListItemByName(list.id, {
-        product_name: newItemName.trim(),
-        quantity: newItemQty ? Number(newItemQty) : null,
-        unit: newItemUnit || null,
-      });
-      if (!res.success || !res.data) { alert(res.error); return; }
-      const newItem = res.data as ShoppingListItem;
-      setList((prev) => ({ ...prev, items: [...prev.items, newItem] }));
-      if (newItem.shopping_products && !products.some((p) => p.id === newItem.product_id)) {
-        setProducts((prev) => [...prev, newItem.shopping_products as ShoppingProduct]);
-      }
-      setNewItemName("");
-      setNewItemQty("");
-      setNewItemUnit("");
-    });
+  const handleProductCreated = (product: ShoppingProduct) => {
+    setProducts((prev) => (prev.some((p) => p.id === product.id) ? prev : [...prev, product]));
   };
 
   const handleToggleItem = (item: ShoppingListItem) => {
@@ -213,27 +199,13 @@ export default function ShoppingListDetailClient({ initialList, initialProducts,
           </div>
         </div>
 
-        {/* Aggiunta rapida */}
+        {/* Aggiunta articolo */}
         {isOpen && (
-          <form onSubmit={handleAddItem} className="flex flex-col sm:flex-row gap-2">
-            <input list="product-suggestions" value={newItemName} onChange={(e) => setNewItemName(e.target.value)}
-              placeholder="Aggiungi un articolo..." required
-              className="flex-1 px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
-            <datalist id="product-suggestions">
-              {products.map((p) => <option key={p.id} value={p.name} />)}
-            </datalist>
-            <input value={newItemQty} onChange={(e) => setNewItemQty(e.target.value)} placeholder="Pezzi"
-              className="w-full sm:w-24 px-3 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
-            <select value={newItemUnit} onChange={(e) => setNewItemUnit(e.target.value)}
-              className="w-full sm:w-24 px-3 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80">
-              <option value="">Unità</option>
-              {GROCERY_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-            </select>
-            <button type="submit" disabled={isPending}
-              className="px-5 py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all">
-              Aggiungi
-            </button>
-          </form>
+          <button type="button" onClick={() => setShowAddModal(true)}
+            className="w-full py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-lg active:scale-98 flex items-center justify-center gap-2"
+            style={{ background: "linear-gradient(135deg, hsl(245 70% 60%), hsl(255 60% 50%))" }}>
+            <span>＋</span> Aggiungi articolo
+          </button>
         )}
 
         {/* Progresso */}
@@ -334,6 +306,18 @@ export default function ShoppingListDetailClient({ initialList, initialProducts,
           </div>
         )}
       </div>
+
+      {showAddModal && (
+        <AddListItemModal
+          listId={list.id}
+          storeId={list.store_id}
+          products={products}
+          existingItems={list.items}
+          onItemAdded={handleItemAdded}
+          onProductCreated={handleProductCreated}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
     </div>
   );
 }

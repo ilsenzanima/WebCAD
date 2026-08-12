@@ -256,6 +256,7 @@ export default function ShoppingProductDetailClient({ product, initialBrands, st
   const [prodAisle, setProdAisle] = useState(product.aisle || "");
   const [prodUnit, setProdUnit] = useState(product.default_unit || "");
   const [prodShelfLife, setProdShelfLife] = useState(product.shelf_life_days?.toString() || "");
+  const [prodOffList, setProdOffList] = useState(product.is_off_list);
 
   const [showBrandForm, setShowBrandForm] = useState(false);
   const [editingBrandId, setEditingBrandId] = useState<string | null>(null);
@@ -284,6 +285,7 @@ export default function ShoppingProductDetailClient({ product, initialBrands, st
         aisle: prodAisle || null,
         default_unit: prodUnit || null,
         shelf_life_days: prodShelfLife ? Number(prodShelfLife) : null,
+        is_off_list: prodOffList,
       });
       if (!res.success) alert(res.error);
     });
@@ -479,6 +481,11 @@ export default function ShoppingProductDetailClient({ product, initialBrands, st
             </div>
           )}
         </div>
+
+        <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 cursor-pointer mt-3">
+          <input type="checkbox" checked={prodOffList} onChange={(e) => setProdOffList(e.target.checked)} className="accent-violet-500" />
+          🎁 Articolo da fuori lista (si prende spesso in più, scorciatoia rapida nelle liste)
+        </label>
 
         <button onClick={handleSaveProduct} disabled={isPending}
           className="mt-4 px-5 py-2.5 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all">

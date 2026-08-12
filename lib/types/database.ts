@@ -32,6 +32,7 @@ export interface ShoppingProduct {
   aisle: string | null;
   default_unit: string | null;
   shelf_life_days: number | null;
+  is_off_list: boolean; // articolo "fuori lista": si prende spesso in più, a prescindere dalla lista attiva
   created_by: string | null;
   created_at: string;
 }
