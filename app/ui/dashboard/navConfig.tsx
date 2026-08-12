@@ -40,6 +40,7 @@ export const navItems: NavEntry[] = [
     items: [
       { type: "link", href: "/dashboard/shopping-list", icon: <span style={{ fontSize: 13 }}>📝</span>, label: "Lista della spesa" },
       { type: "link", href: "/dashboard/shopping-catalog", icon: <span style={{ fontSize: 13 }}>🗂️</span>, label: "Vetrina prodotti" },
+      { type: "link", href: "/dashboard/shopping-stores", icon: <span style={{ fontSize: 13 }}>🏬</span>, label: "Negozi" },
     ],
   },
   {

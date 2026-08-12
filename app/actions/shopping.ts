@@ -42,7 +42,7 @@ export async function getShoppingProducts(): Promise<ShoppingProduct[]> {
 export async function createShoppingProduct(formData: {
   name: string;
   category?: string | null;
-  default_store?: string | null;
+  store_id?: string | null;
   aisle?: string | null;
   default_unit?: string | null;
   shelf_life_days?: number | null;
@@ -57,7 +57,7 @@ export async function createShoppingProduct(formData: {
       .insert({
         name: formData.name.trim(),
         category: formData.category || null,
-        default_store: formData.default_store || null,
+        store_id: formData.store_id || null,
         aisle: formData.aisle || null,
         default_unit: formData.default_unit || null,
         shelf_life_days: formData.shelf_life_days ?? null,
@@ -79,7 +79,7 @@ export async function createShoppingProduct(formData: {
 export async function updateShoppingProduct(id: string, formData: {
   name: string;
   category?: string | null;
-  default_store?: string | null;
+  store_id?: string | null;
   aisle?: string | null;
   default_unit?: string | null;
   shelf_life_days?: number | null;
@@ -91,7 +91,7 @@ export async function updateShoppingProduct(id: string, formData: {
       .update({
         name: formData.name.trim(),
         category: formData.category || null,
-        default_store: formData.default_store || null,
+        store_id: formData.store_id || null,
         aisle: formData.aisle || null,
         default_unit: formData.default_unit || null,
         shelf_life_days: formData.shelf_life_days ?? null,
@@ -367,14 +367,14 @@ export async function createShoppingList(name?: string) {
 export async function updateShoppingListMeta(id: string, formData: {
   name?: string;
   shopping_date?: string | null;
-  store?: string | null;
+  store_id?: string | null;
 }) {
   try {
     const supabase = (await createClient()) as any;
     const update: Record<string, any> = {};
     if (formData.name !== undefined) update.name = formData.name.trim();
     if (formData.shopping_date !== undefined) update.shopping_date = formData.shopping_date || null;
-    if (formData.store !== undefined) update.store = formData.store || null;
+    if (formData.store_id !== undefined) update.store_id = formData.store_id || null;
 
     const { error } = await supabase.from("shopping_lists").update(update).eq("id", id);
     if (error) throw new Error(error.message);
@@ -434,7 +434,7 @@ export async function registerListExpense(listId: string) {
 
     const { data: list, error: listError } = await supabase
       .from("shopping_lists")
-      .select("*")
+      .select("*, stores(name)")
       .eq("id", listId)
       .single();
 
@@ -443,14 +443,30 @@ export async function registerListExpense(listId: string) {
     if (list.expense_id) throw new Error("Questa lista è già collegata a una spesa");
     if (list.total_amount == null) throw new Error("Manca il totale della spesa");
 
+    // Se il negozio della lista e' collegato a un Fornitore (privato,
+    // Finanze), la spesa registrata viene gia' assegnata a quel fornitore:
+    // niente da ricopiare a mano e il totale per negozio in Finanze resta
+    // aggiornato in automatico.
+    let supplierId: string | null = null;
+    if (list.store_id) {
+      const { data: linkedSupplier } = await supabase
+        .from("suppliers")
+        .select("id")
+        .eq("store_id", list.store_id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      supplierId = linkedSupplier?.id || null;
+    }
+
     const { data: expense, error: expenseError } = await supabase
       .from("expenses")
       .insert({
         user_id: user.id,
         amount: list.total_amount,
         category: "🛒 Spesa",
-        description: [list.name, list.store].filter(Boolean).join(" — "),
+        description: [list.name, list.stores?.name].filter(Boolean).join(" — "),
         date: list.shopping_date || list.completed_at?.slice(0, 10) || toLocalDateStr(),
+        supplier_id: supplierId,
       })
       .select()
       .single();

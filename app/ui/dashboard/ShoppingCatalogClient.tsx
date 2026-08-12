@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ShoppingProduct } from "@/lib/types/database";
+import type { ShoppingProduct, Store } from "@/lib/types/database";
 import {
   createShoppingProduct, deleteShoppingProduct, findProductBrandByBarcode,
   createProductBrand, lookupProductInfo, type OpenFactsResult,
@@ -17,17 +17,19 @@ import { isValidBarcodeChecksum } from "@/lib/barcodeChecksum";
 
 interface ShoppingCatalogClientProps {
   initialProducts: ShoppingProduct[];
+  stores: Store[];
 }
 
-export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatalogClientProps) {
+export default function ShoppingCatalogClient({ initialProducts, stores }: ShoppingCatalogClientProps) {
   const [products, setProducts] = useState<ShoppingProduct[]>(initialProducts);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const storeName = (id: string | null) => stores.find((s) => s.id === id)?.name || null;
 
   const [showProductModal, setShowProductModal] = useState(false);
   const [prodName, setProdName] = useState("");
   const [prodCategory, setProdCategory] = useState("");
-  const [prodStore, setProdStore] = useState("");
+  const [prodStoreId, setProdStoreId] = useState("");
   const [prodAisle, setProdAisle] = useState("");
   const [prodUnit, setProdUnit] = useState("");
   const [prodShelfLife, setProdShelfLife] = useState("");
@@ -53,7 +55,7 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
   };
 
   const resetProductForm = () => {
-    setProdName(""); setProdCategory(""); setProdStore(""); setProdAisle(""); setProdUnit(""); setProdShelfLife("");
+    setProdName(""); setProdCategory(""); setProdStoreId(""); setProdAisle(""); setProdUnit(""); setProdShelfLife("");
     setShowProductModal(false);
   };
 
@@ -65,7 +67,7 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
       const res = await createShoppingProduct({
         name: prodName.trim(),
         category: prodCategory || null,
-        default_store: prodStore || null,
+        store_id: prodStoreId || null,
         aisle: prodAisle || null,
         default_unit: prodUnit || null,
         shelf_life_days: prodShelfLife ? Number(prodShelfLife) : null,
@@ -119,7 +121,7 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
       const productRes = await createShoppingProduct({
         name: scanProductName.trim(),
         category: scanCategory || null,
-        default_store: null,
+        store_id: null,
         aisle: null,
         default_unit: null,
         shelf_life_days: null,
@@ -233,7 +235,7 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
                       <div className="min-w-0">
                         <div className="text-xs font-bold text-white truncate">{p.name}</div>
                         <div className="text-[10px] text-zinc-500 truncate">
-                          {[p.default_store, p.aisle, p.shelf_life_days ? `dura ${p.shelf_life_days}g` : null].filter(Boolean).join(" · ") || "Apri la scheda →"}
+                          {[storeName(p.store_id), p.aisle, p.shelf_life_days ? `dura ${p.shelf_life_days}g` : null].filter(Boolean).join(" · ") || "Apri la scheda →"}
                         </div>
                       </div>
                       <ArrowRightIcon size={12} className="text-zinc-600 flex-shrink-0 ml-2" />
@@ -284,8 +286,11 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
                 <option value="">Categoria...</option>
                 {GROCERY_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-              <input value={prodStore} onChange={(e) => setProdStore(e.target.value)} placeholder="Negozio abituale (opzionale)"
-                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+              <select value={prodStoreId} onChange={(e) => setProdStoreId(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80">
+                <option value="">Negozio abituale (opzionale)</option>
+                {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
               <input value={prodAisle} onChange={(e) => setProdAisle(e.target.value)} placeholder="Corsia (opzionale)"
                 className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
               <select value={prodUnit} onChange={(e) => setProdUnit(e.target.value)}
