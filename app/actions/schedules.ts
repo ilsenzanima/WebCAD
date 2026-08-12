@@ -209,6 +209,14 @@ export async function paySchedule(
     // cosi' chi chiama puo' collegarci un documento (expense_id reale).
     const today = new Date().toISOString().split("T")[0];
     const finalAmount = amountOverride != null ? amountOverride : schedule.amount;
+
+    const { data: defaultAccount } = await supabase
+      .from("accounts")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("is_default", true)
+      .maybeSingle();
+
     const { data: newExpense, error: expenseError } = await supabase.from("expenses").insert({
       user_id: user.id,
       amount: finalAmount,
@@ -217,6 +225,7 @@ export async function paySchedule(
       supplier_id: schedule.supplier_id,
       schedule_id: schedule.id,
       budget_id: schedule.budget_id,
+      account_id: defaultAccount?.id ?? null,
       consumption_value: consumptionValue ?? null,
       period_start: periodStart ?? null,
       period_end: periodEnd ?? null,

@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import { type Account, type AccountBalanceAdjustment } from "@/lib/types/database";
-import { createAccount, updateAccount, deleteAccount, createAccountAdjustment, deleteAccountAdjustment } from "@/app/actions/accounts";
+import { createAccount, updateAccount, deleteAccount, createAccountAdjustment, deleteAccountAdjustment, setDefaultAccount } from "@/app/actions/accounts";
 import { formatCurrency, formatDate, toLocalDateStr } from "@/lib/format";
 import { EditIcon, DeleteIcon, WalletIcon } from "./icons";
 import { getCategoryBadgeStyle, CATEGORY_COLOR_TONES } from "@/lib/categoryColors";
@@ -92,6 +92,14 @@ export default function AccountsClient({ initialAccounts, expenses, initialAdjus
     setType(acc.type);
     setInitialBalance(String(acc.initial_balance));
     setColor(acc.color);
+  };
+
+  const handleSetDefault = (id: string) => {
+    setAccounts(prev => prev.map(a => ({ ...a, is_default: a.id === id })));
+    startTransition(async () => {
+      const res = await setDefaultAccount(id);
+      if (!res.success) alert(res.error);
+    });
   };
 
   const handleDelete = (id: string) => {
@@ -364,14 +372,30 @@ export default function AccountsClient({ initialAccounts, expenses, initialAdjus
                           <h3 className="text-sm font-extrabold text-white flex items-center gap-1.5">
                             <span>{TYPE_ICONS[acc.type]}</span> {acc.name}
                           </h3>
-                          <span
-                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold border mt-1"
-                            style={{ backgroundColor: badge.bg, color: badge.text, borderColor: badge.border }}
-                          >
-                            {TYPE_LABELS[acc.type]}
-                          </span>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            <span
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold border"
+                              style={{ backgroundColor: badge.bg, color: badge.text, borderColor: badge.border }}
+                            >
+                              {TYPE_LABELS[acc.type]}
+                            </span>
+                            {acc.is_default && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                                ⭐ Predefinito
+                              </span>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {!acc.is_default && (
+                            <button
+                              onClick={() => handleSetDefault(acc.id)}
+                              className="p-1 rounded text-slate-400 hover:text-amber-300 hover:bg-amber-500/10 transition-all"
+                              title="Imposta come conto predefinito"
+                            >
+                              ⭐
+                            </button>
+                          )}
                           <button
                             onClick={() => (isAdjusting ? cancelAdjust() : startAdjust(acc))}
                             className={`p-1 rounded transition-all ${isAdjusting ? "text-amber-300 bg-amber-500/10" : "text-slate-400 hover:text-amber-300 hover:bg-amber-500/10"}`}
