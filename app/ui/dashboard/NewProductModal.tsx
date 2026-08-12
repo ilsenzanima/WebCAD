@@ -61,21 +61,27 @@ export default function NewProductModal({ products, stores, listId, onProductCre
     setBrandBarcode(""); setBrandName(""); setLookupResult(null);
   };
 
-  const handleScanDetected = (code: string) => {
-    setShowScanner(false);
-    setBrandBarcode(code);
-  };
-
-  const handleLookupInfo = () => {
-    if (!trimmedBarcode) { alert("Inserisci prima un codice a barre"); return; }
+  const handleLookupInfo = (code?: string) => {
+    const barcode = (code ?? brandBarcode).trim();
+    if (!barcode) { alert("Inserisci prima un codice a barre"); return; }
     setLookingUp(true);
     startTransition(async () => {
-      const result = await lookupProductInfo(trimmedBarcode);
+      const result = await lookupProductInfo(barcode);
       setLookingUp(false);
       if (!result) { alert("Nessuna scheda trovata per questo codice."); return; }
       if (!brandName.trim() && result.brand_name) setBrandName(result.brand_name);
       setLookupResult(result);
     });
+  };
+
+  const handleScanDetected = (code: string) => {
+    setShowScanner(false);
+    setBrandBarcode(code);
+    handleLookupInfo(code);
+  };
+
+  const handleBarcodeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") { e.preventDefault(); handleLookupInfo(); }
   };
 
   const brandPayloadFromLookup = () => ({
@@ -225,14 +231,14 @@ export default function NewProductModal({ products, stores, listId, onProductCre
             <div className="pt-2 border-t border-zinc-800/80 space-y-2">
               <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Marca (opzionale)</p>
               <div className="flex gap-2">
-                <input value={brandBarcode} onChange={(e) => setBrandBarcode(e.target.value)} placeholder="Codice a barre"
+                <input value={brandBarcode} onChange={(e) => setBrandBarcode(e.target.value)} onKeyDown={handleBarcodeKeyDown} placeholder="Codice a barre"
                   className="flex-1 px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80"
                   style={barcodeChecksumInvalid ? { borderColor: "rgba(245,158,11,0.5)" } : undefined} />
                 <button type="button" onClick={() => setShowScanner(true)}
                   className="px-3 py-2.5 rounded-lg text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 transition-all" title="Scansiona">
                   📷
                 </button>
-                <button type="button" onClick={handleLookupInfo} disabled={lookingUp || !trimmedBarcode}
+                <button type="button" onClick={() => handleLookupInfo()} disabled={lookingUp || !trimmedBarcode}
                   className="px-3 py-2.5 rounded-lg text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 transition-all">
                   🔍
                 </button>
@@ -280,14 +286,14 @@ export default function NewProductModal({ products, stores, listId, onProductCre
             {selectedProduct && (
               <form onSubmit={handleSubmitExistingBrand} className="space-y-2">
                 <div className="flex gap-2">
-                  <input value={brandBarcode} onChange={(e) => setBrandBarcode(e.target.value)} placeholder="Codice a barre"
+                  <input value={brandBarcode} onChange={(e) => setBrandBarcode(e.target.value)} onKeyDown={handleBarcodeKeyDown} placeholder="Codice a barre"
                     className="flex-1 px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80"
                     style={barcodeChecksumInvalid ? { borderColor: "rgba(245,158,11,0.5)" } : undefined} />
                   <button type="button" onClick={() => setShowScanner(true)}
                     className="px-3 py-2.5 rounded-lg text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 transition-all" title="Scansiona">
                     📷
                   </button>
-                  <button type="button" onClick={handleLookupInfo} disabled={lookingUp || !trimmedBarcode}
+                  <button type="button" onClick={() => handleLookupInfo()} disabled={lookingUp || !trimmedBarcode}
                     className="px-3 py-2.5 rounded-lg text-xs font-bold text-white bg-zinc-800 hover:bg-zinc-700 transition-all">
                     🔍
                   </button>
