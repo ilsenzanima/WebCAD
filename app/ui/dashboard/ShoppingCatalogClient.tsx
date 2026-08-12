@@ -4,8 +4,12 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ShoppingProduct } from "@/lib/types/database";
-import { createShoppingProduct, deleteShoppingProduct, findProductBrandByBarcode } from "@/app/actions/shopping";
-import { GROCERY_CATEGORIES, PERISHABLE_CATEGORIES } from "@/lib/shoppingCategories";
+import {
+  createShoppingProduct, deleteShoppingProduct, findProductBrandByBarcode,
+  createProductBrand, lookupProductInfo, type OpenFactsResult,
+} from "@/app/actions/shopping";
+import { GROCERY_CATEGORIES, PERISHABLE_CATEGORIES, guessCategoryFromOffCategories } from "@/lib/shoppingCategories";
+import { GROCERY_UNITS } from "@/lib/shoppingUnits";
 import { suggestShelfLifeDays } from "@/lib/shelfLifeSuggestions";
 import { DeleteIcon, ArrowRightIcon } from "./icons";
 import BarcodeScannerModal from "./BarcodeScannerModal";
@@ -31,6 +35,18 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
   const [barcodeQuery, setBarcodeQuery] = useState("");
   const [searchingBarcode, setSearchingBarcode] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+
+  // Codice non ancora in vetrina ma trovato su Open Food/Beauty/Products
+  // Facts: proponiamo di creare prodotto + marca in un colpo solo.
+  const [scanCreateData, setScanCreateData] = useState<OpenFactsResult | null>(null);
+  const [scanBarcode, setScanBarcode] = useState("");
+  const [scanProductName, setScanProductName] = useState("");
+  const [scanCategory, setScanCategory] = useState("");
+  const [scanBrandName, setScanBrandName] = useState("");
+
+  const resetScanCreateForm = () => {
+    setScanCreateData(null); setScanBarcode(""); setScanProductName(""); setScanCategory(""); setScanBrandName("");
+  };
 
   const resetProductForm = () => {
     setProdName(""); setProdCategory(""); setProdStore(""); setProdAisle(""); setProdUnit(""); setProdShelfLife("");
@@ -66,13 +82,67 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
   };
 
   const runBarcodeSearch = (code: string) => {
-    if (!code.trim()) return;
+    const trimmed = code.trim();
+    if (!trimmed) return;
     setSearchingBarcode(true);
     startTransition(async () => {
-      const result = await findProductBrandByBarcode(code.trim());
+      const result = await findProductBrandByBarcode(trimmed);
+      if (result) {
+        setSearchingBarcode(false);
+        router.push(`/dashboard/shopping-catalog/${result.product_id}`);
+        return;
+      }
+      // Non e' ancora in vetrina: proviamo a recuperarlo da Open Food/Beauty/Products Facts
+      // cosi' non va cercato e ricopiato tutto a mano.
+      const offResult = await lookupProductInfo(trimmed);
       setSearchingBarcode(false);
-      if (!result) { alert("Nessun prodotto trovato con questo codice a barre."); return; }
-      router.push(`/dashboard/shopping-catalog/${result.product_id}`);
+      if (!offResult) { alert("Nessun prodotto trovato con questo codice a barre."); return; }
+      setScanBarcode(trimmed);
+      setScanCreateData(offResult);
+      setScanProductName(offResult.product_name || "");
+      setScanCategory(guessCategoryFromOffCategories(offResult.off_categories));
+      setScanBrandName(offResult.brand_name || "");
+    });
+  };
+
+  const handleScanCreateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scanProductName.trim() || !scanBrandName.trim() || !scanCreateData) { alert("Nome prodotto e marca sono obbligatori"); return; }
+
+    startTransition(async () => {
+      const productRes = await createShoppingProduct({
+        name: scanProductName.trim(),
+        category: scanCategory || null,
+        default_store: null,
+        aisle: null,
+        default_unit: null,
+        shelf_life_days: null,
+      });
+      if (!productRes.success || !productRes.data) { alert(productRes.error); return; }
+      const newProduct = productRes.data as ShoppingProduct;
+
+      const brandRes = await createProductBrand(newProduct.id, {
+        brand_name: scanBrandName.trim(),
+        barcode: scanBarcode,
+        image_url: scanCreateData.image_url,
+        image_packaging_url: scanCreateData.image_packaging_url,
+        nutri_score: scanCreateData.nutri_score,
+        nova_group: scanCreateData.nova_group,
+        eco_score: scanCreateData.eco_score,
+        ingredients_text: scanCreateData.ingredients_text,
+        allergens: scanCreateData.allergens,
+        traces: scanCreateData.traces,
+        labels: scanCreateData.labels,
+        additives: scanCreateData.additives,
+        package_quantity: scanCreateData.package_quantity,
+        off_categories: scanCreateData.off_categories,
+        nutriments: scanCreateData.nutriments,
+      });
+      if (!brandRes.success) { alert(brandRes.error); return; }
+
+      setProducts((prev) => [...prev, newProduct]);
+      resetScanCreateForm();
+      router.push(`/dashboard/shopping-catalog/${newProduct.id}`);
     });
   };
 
@@ -212,8 +282,11 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
                 className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
               <input value={prodAisle} onChange={(e) => setProdAisle(e.target.value)} placeholder="Corsia (opzionale)"
                 className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
-              <input value={prodUnit} onChange={(e) => setProdUnit(e.target.value)} placeholder="Unità (es. kg)"
-                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+              <select value={prodUnit} onChange={(e) => setProdUnit(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80">
+                <option value="">Unità (opzionale)</option>
+                {GROCERY_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+              </select>
 
               {isPerishable && (
                 <div className="space-y-1.5 animate-fade-in">
@@ -232,6 +305,56 @@ export default function ShoppingCatalogClient({ initialProducts }: ShoppingCatal
               <p className="text-[9px] text-zinc-500">Marche, valutazioni, allergeni e codici a barre si aggiungono aprendo la scheda del prodotto.</p>
               <button type="submit" disabled={isPending} className="w-full py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all">
                 Crea prodotto
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modale: codice scansionato non in vetrina, trovato su Open Facts */}
+      {scanCreateData && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 animate-fade-in overflow-y-auto"
+          onClick={resetScanCreateForm}
+        >
+          <div
+            className="relative w-full max-w-lg my-8 rounded-2xl p-6 border shadow-2xl backdrop-blur-xl animate-fade-in max-h-[90vh] overflow-y-auto"
+            style={{ background: "linear-gradient(135deg, hsla(245, 60%, 15%, 0.1), hsla(240, 10%, 10%, 0.97))", borderColor: "hsla(245, 60%, 50%, 0.15)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button type="button" onClick={resetScanCreateForm}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-white text-lg leading-none z-20" aria-label="Chiudi">
+              ✕
+            </button>
+
+            <h2 className="text-base font-extrabold text-white mb-1">Prodotto trovato su {scanCreateData.source}</h2>
+            <p className="text-[10px] text-zinc-500 mb-4 font-mono">{scanBarcode}</p>
+
+            <div className="flex items-center gap-3 mb-4">
+              {scanCreateData.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={scanCreateData.image_url} alt="" className="w-14 h-14 object-cover rounded-lg border border-zinc-800 flex-shrink-0" />
+              )}
+              <div className="flex flex-wrap gap-1">
+                {scanCreateData.nutri_score && <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-zinc-800 text-white">Nutri-Score {scanCreateData.nutri_score}</span>}
+                {scanCreateData.eco_score && <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-zinc-800 text-white">Eco-Score {scanCreateData.eco_score}</span>}
+                {scanCreateData.allergens && <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">⚠️ {scanCreateData.allergens}</span>}
+              </div>
+            </div>
+
+            <form onSubmit={handleScanCreateSubmit} className="space-y-3">
+              <input value={scanProductName} onChange={(e) => setScanProductName(e.target.value)} placeholder="Nome prodotto generico (es. Bibita gassata)" required
+                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+              <select value={scanCategory} onChange={(e) => setScanCategory(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80">
+                <option value="">Categoria...</option>
+                {GROCERY_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <input value={scanBrandName} onChange={(e) => setScanBrandName(e.target.value)} placeholder="Marca (es. Coca-Cola)" required
+                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+              <p className="text-[9px] text-zinc-500">Categoria e nome sono precompilati da Open Facts: correggili pure prima di salvare. Ingredienti, allergeni, valori nutrizionali e foto vengono salvati automaticamente sulla marca.</p>
+              <button type="submit" disabled={isPending} className="w-full py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all">
+                Crea prodotto e marca
               </button>
             </form>
           </div>
