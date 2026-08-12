@@ -11,6 +11,7 @@ import { createFamilyMember, removeFamilyMember } from "@/app/actions/family";
 import { FONT_OPTIONS } from "@/lib/fonts";
 import { EditIcon, DeleteIcon } from "./icons";
 import { CATEGORY_COLOR_TONES, getCategoryBadgeStyle } from "@/lib/categoryColors";
+import { isNativeApp, getInstalledVersion, isNewerVersion, downloadAndInstallUpdate } from "@/lib/nativeUpdater";
 
 interface SettingsClientProps {
   categories: ExpenseCategory[];
@@ -91,6 +92,35 @@ export default function SettingsClient({ categories: initialCategories, googleCo
       } catch (err: any) {
         alert(err.message || "Errore durante lo scollegamento");
       }
+    });
+  };
+
+  // App update state (aggiornamento APK dall'interno dell'app)
+  const [nativeApp, setNativeApp] = useState(false);
+  const [installedVersion, setInstalledVersion] = useState<string | null>(null);
+  const [updateStatus, setUpdateStatus] = useState<"idle" | "checking" | "up-to-date" | "available" | "downloading" | "error">("idle");
+  const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
+  const [updateError, setUpdateError] = useState("");
+
+  useEffect(() => {
+    if (activeTab !== "app" || !isNativeApp() || updateStatus !== "idle") return;
+    setNativeApp(true);
+    setUpdateStatus("checking");
+    getInstalledVersion()
+      .then((version) => {
+        setInstalledVersion(version);
+        setUpdateStatus(version && isNewerVersion(appVersion.version, version) ? "available" : "up-to-date");
+      })
+      .catch(() => setUpdateStatus("error"));
+  }, [activeTab, appVersion.version, updateStatus]);
+
+  const handleUpdateNow = () => {
+    setUpdateStatus("downloading");
+    setDownloadProgress(null);
+    setUpdateError("");
+    downloadAndInstallUpdate(setDownloadProgress).catch((err: any) => {
+      setUpdateStatus("error");
+      setUpdateError(err?.message || "Errore sconosciuto durante l'aggiornamento");
     });
   };
 
@@ -670,7 +700,7 @@ export default function SettingsClient({ categories: initialCategories, googleCo
 
             <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800 text-[11px] text-slate-300 mb-4 space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-zinc-500">Versione</span>
+                <span className="text-zinc-500">Versione online</span>
                 <span className="font-bold text-white">{appVersion.version}</span>
               </div>
               <div className="flex items-center justify-between">
@@ -679,22 +709,88 @@ export default function SettingsClient({ categories: initialCategories, googleCo
                   {new Date(appVersion.buildTime).toLocaleDateString("it-IT", { day: "2-digit", month: "long", year: "numeric" })}
                 </span>
               </div>
+              {nativeApp && installedVersion && (
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-500">Versione installata</span>
+                  <span className="font-semibold">{installedVersion}</span>
+                </div>
+              )}
             </div>
 
-            <a
-              href="/downloads/webcad-alpha.apk"
-              download
-              className="block text-center w-full py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all"
-            >
-              ⬇️ Scarica APK
-            </a>
+            {nativeApp ? (
+              <div className="space-y-3">
+                {updateStatus === "checking" && (
+                  <p className="text-center text-[11px] text-slate-400 py-3">Controllo aggiornamenti…</p>
+                )}
+                {updateStatus === "up-to-date" && (
+                  <p className="text-center text-[11px] font-semibold text-emerald-400 py-3">✅ Hai già l'ultima versione installata</p>
+                )}
+                {updateStatus === "available" && (
+                  <button
+                    onClick={handleUpdateNow}
+                    className="block text-center w-full py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all"
+                  >
+                    ⬆️ Aggiorna ora
+                  </button>
+                )}
+                {updateStatus === "downloading" && (
+                  <div className="py-1">
+                    <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
+                      <div
+                        className="h-full bg-indigo-500 transition-all"
+                        style={{ width: `${downloadProgress ?? 0}%` }}
+                      />
+                    </div>
+                    <p className="text-center text-[11px] text-slate-400 mt-2">
+                      {downloadProgress !== null ? `Download in corso… ${downloadProgress}%` : "Download in corso…"}
+                    </p>
+                  </div>
+                )}
+                {updateStatus === "error" && (
+                  <div className="space-y-2">
+                    <p className="text-center text-[11px] text-red-400">Aggiornamento non riuscito: {updateError}</p>
+                    <button
+                      onClick={handleUpdateNow}
+                      className="block text-center w-full py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all"
+                    >
+                      Riprova
+                    </button>
+                  </div>
+                )}
+                <a
+                  href="/downloads/webcad-alpha.apk"
+                  download
+                  className="block text-center w-full py-2 rounded-xl text-[11px] font-semibold text-slate-400 hover:text-slate-300 transition-all"
+                >
+                  Oppure scarica il file manualmente
+                </a>
+              </div>
+            ) : (
+              <a
+                href="/downloads/webcad-alpha.apk"
+                download
+                className="block text-center w-full py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all"
+              >
+                ⬇️ Scarica APK
+              </a>
+            )}
 
             <div className="mt-5 space-y-2 text-[11px] text-slate-400 leading-relaxed">
               <p className="font-bold text-zinc-300">Come installarla:</p>
               <ol className="list-decimal list-inside space-y-1">
-                <li>Apri il link dal telefono (o scarica il file e aprilo dai Download).</li>
-                <li>Se compare un avviso, consenti l'installazione da questa origine quando richiesto.</li>
-                <li>Conferma l'installazione: essendo una build di test, Android potrebbe segnalarla come app sconosciuta.</li>
+                {nativeApp ? (
+                  <>
+                    <li>Tocca "Aggiorna ora": il file viene scaricato e si apre automaticamente l'installazione.</li>
+                    <li>Se compare un avviso, consenti l'installazione da questa origine quando richiesto.</li>
+                    <li>Conferma l'installazione: essendo una build di test, Android potrebbe segnalarla come app sconosciuta.</li>
+                  </>
+                ) : (
+                  <>
+                    <li>Apri il link dal telefono (o scarica il file e aprilo dai Download).</li>
+                    <li>Se compare un avviso, consenti l'installazione da questa origine quando richiesto.</li>
+                    <li>Conferma l'installazione: essendo una build di test, Android potrebbe segnalarla come app sconosciuta.</li>
+                  </>
+                )}
               </ol>
             </div>
           </div>
