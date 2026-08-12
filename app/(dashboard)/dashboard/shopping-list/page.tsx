@@ -4,6 +4,7 @@ import {
   getShoppingProducts,
 } from "@/app/actions/shopping";
 import { getMyRole } from "@/app/actions/family";
+import { getStores } from "@/app/actions/stores";
 import ShoppingListClient from "@/app/ui/dashboard/ShoppingListClient";
 
 export const metadata = {
@@ -12,11 +13,12 @@ export const metadata = {
 };
 
 export default async function ShoppingListPage() {
-  const [activeList, history, products, role] = await Promise.all([
+  const [activeList, history, products, role, stores] = await Promise.all([
     getActiveShoppingList(),
     getShoppingListHistory(),
     getShoppingProducts(),
     getMyRole(),
+    getStores(),
   ]);
 
   return (
@@ -24,6 +26,7 @@ export default async function ShoppingListPage() {
       initialActiveList={activeList}
       initialHistory={history}
       initialProducts={products}
+      stores={stores}
       isAdmin={role === "admin"}
     />
   );

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import type { ShoppingProduct, ShoppingProductBrand, NutrimentsSummary } from "@/lib/types/database";
+import type { ShoppingProduct, ShoppingProductBrand, NutrimentsSummary, Store } from "@/lib/types/database";
 import {
   updateShoppingProduct,
   deleteShoppingProduct,
@@ -242,16 +242,17 @@ function BrandCard({ brand: b, onEdit, onDelete, onQuickRating }: {
 interface ShoppingProductDetailClientProps {
   product: ShoppingProduct;
   initialBrands: ShoppingProductBrand[];
+  stores: Store[];
 }
 
-export default function ShoppingProductDetailClient({ product, initialBrands }: ShoppingProductDetailClientProps) {
+export default function ShoppingProductDetailClient({ product, initialBrands, stores }: ShoppingProductDetailClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [brands, setBrands] = useState<ShoppingProductBrand[]>(initialBrands);
 
   const [prodName, setProdName] = useState(product.name);
   const [prodCategory, setProdCategory] = useState(product.category || "");
-  const [prodStore, setProdStore] = useState(product.default_store || "");
+  const [prodStoreId, setProdStoreId] = useState(product.store_id || "");
   const [prodAisle, setProdAisle] = useState(product.aisle || "");
   const [prodUnit, setProdUnit] = useState(product.default_unit || "");
   const [prodShelfLife, setProdShelfLife] = useState(product.shelf_life_days?.toString() || "");
@@ -279,7 +280,7 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
       const res = await updateShoppingProduct(product.id, {
         name: prodName.trim(),
         category: prodCategory || null,
-        default_store: prodStore || null,
+        store_id: prodStoreId || null,
         aisle: prodAisle || null,
         default_unit: prodUnit || null,
         shelf_life_days: prodShelfLife ? Number(prodShelfLife) : null,
@@ -445,8 +446,11 @@ export default function ShoppingProductDetailClient({ product, initialBrands }: 
           </div>
           <div className="space-y-1">
             <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Negozio abituale</label>
-            <input value={prodStore} onChange={(e) => setProdStore(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+            <select value={prodStoreId} onChange={(e) => setProdStoreId(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80">
+              <option value="">—</option>
+              {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
           </div>
           <div className="space-y-1">
             <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Corsia</label>

@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo } from "react";
 import Link from "next/link";
-import { type Supplier } from "@/lib/types/database";
+import { type Supplier, type Store } from "@/lib/types/database";
 import { createSupplier, updateSupplier, deleteSupplier } from "@/app/actions/suppliers";
 import { formatCurrency, toLocalDateStr } from "@/lib/format";
 import { EditIcon, DeleteIcon, SettingsIcon } from "./icons";
@@ -10,11 +10,13 @@ import { EditIcon, DeleteIcon, SettingsIcon } from "./icons";
 interface SuppliersClientProps {
   initialSuppliers: Supplier[];
   expenses: any[];
+  stores: Store[];
 }
 
-export default function SuppliersClient({ initialSuppliers, expenses }: SuppliersClientProps) {
+export default function SuppliersClient({ initialSuppliers, expenses, stores }: SuppliersClientProps) {
   const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
   const [isPending, startTransition] = useTransition();
+  const storeName = (id: string | null) => stores.find((s) => s.id === id)?.name || null;
 
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
@@ -22,6 +24,7 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
   const [consumptionUnit, setConsumptionUnit] = useState("kWh");
   const [isActive, setIsActive] = useState(true);
   const [contractClosedAt, setContractClosedAt] = useState("");
+  const [storeId, setStoreId] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -32,6 +35,7 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
     setConsumptionUnit("kWh");
     setIsActive(true);
     setContractClosedAt("");
+    setStoreId("");
     setEditingId(null);
   };
 
@@ -52,6 +56,7 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
             consumption_unit: consumptionUnit,
             is_active: isActive,
             contract_closed_at: contractClosedAt || null,
+            store_id: storeId || null,
           });
           if (!res.success) {
             alert(res.error || "Errore durante la modifica");
@@ -66,6 +71,7 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
               consumption_unit: isUtility ? consumptionUnit : null,
               is_active: isActive,
               contract_closed_at: isActive ? null : (contractClosedAt || null),
+              store_id: storeId || null,
             } : s))
           );
         } else {
@@ -74,6 +80,7 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
             notes: notes.trim(),
             is_utility: isUtility,
             consumption_unit: consumptionUnit,
+            store_id: storeId || null,
           });
           if (!res.success || !res.data) {
             alert(res.error || "Errore durante la creazione");
@@ -97,6 +104,7 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
     setConsumptionUnit(sup.consumption_unit || "kWh");
     setIsActive(sup.is_active);
     setContractClosedAt(sup.contract_closed_at || "");
+    setStoreId(sup.store_id || "");
   };
 
   const handleToggleActive = (sup: Supplier, e: React.MouseEvent) => {
@@ -113,6 +121,7 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
           consumption_unit: sup.consumption_unit,
           is_active: nextActive,
           contract_closed_at: closedAt,
+          store_id: sup.store_id,
         });
         if (!res.success) {
           alert(res.error || "Errore durante l'aggiornamento");
@@ -265,6 +274,20 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
               />
             </div>
 
+            {/* Negozio collegato */}
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Negozio collegato (opzionale)</label>
+              <select
+                value={storeId}
+                onChange={(e) => setStoreId(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg text-[10px] text-white bg-zinc-950 border border-zinc-800 focus:outline-none"
+              >
+                <option value="">Nessuno</option>
+                {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              <p className="text-[9px] text-zinc-500">Collegando un Negozio (dalla vetrina/lista della spesa) vedrai qui il totale speso e potrai registrarci direttamente le spese fatte con la lista della spesa.</p>
+            </div>
+
             {/* Utenza / consumi */}
             <div className="space-y-1.5">
               <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 uppercase tracking-wider cursor-pointer">
@@ -409,6 +432,11 @@ export default function SuppliersClient({ initialSuppliers, expenses }: Supplier
                             {sup.is_utility && (
                               <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
                                 ⚡ Utenza {sup.consumption_unit ? `(${sup.consumption_unit})` : ""}
+                              </span>
+                            )}
+                            {storeName(sup.store_id) && (
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-violet-500/10 text-violet-300 border border-violet-500/20">
+                                🏬 {storeName(sup.store_id)}
                               </span>
                             )}
                             <button

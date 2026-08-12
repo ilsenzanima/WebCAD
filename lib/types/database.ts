@@ -12,11 +12,22 @@ export interface FamilyMember {
   created_at: string;
 }
 
+export interface Store {
+  id: string;
+  name: string;
+  category: string | null;
+  address: string | null;
+  loyalty_card_number: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 export interface ShoppingProduct {
   id: string;
   name: string;
   category: string | null;
-  default_store: string | null;
+  store_id: string | null;
   aisle: string | null;
   default_unit: string | null;
   shelf_life_days: number | null;
@@ -29,7 +40,7 @@ export interface ShoppingList {
   name: string;
   status: "open" | "completed";
   shopping_date: string | null;
-  store: string | null;
+  store_id: string | null;
   total_amount: number | null;
   expense_id: string | null;
   created_by: string | null;
@@ -116,6 +127,7 @@ export interface Supplier {
   consumption_unit: string | null; // es. "kWh", "m3", "L"
   is_active: boolean; // contratto in corso (false = chiuso/disdetto)
   contract_closed_at: string | null;
+  store_id: string | null; // collegamento opzionale al Negozio condiviso corrispondente (vetrina/lista della spesa)
   created_at: string;
 }
 

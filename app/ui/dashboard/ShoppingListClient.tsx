@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { ShoppingList, ShoppingListItem, ShoppingProduct } from "@/lib/types/database";
+import type { ShoppingList, ShoppingListItem, ShoppingProduct, Store } from "@/lib/types/database";
 import { formatCurrency, formatDate } from "@/lib/format";
 import {
   createShoppingList,
@@ -26,6 +26,7 @@ interface ShoppingListClientProps {
   initialActiveList: ActiveList | null;
   initialHistory: ShoppingList[];
   initialProducts: ShoppingProduct[];
+  stores: Store[];
   isAdmin: boolean;
 }
 
@@ -54,12 +55,13 @@ function expiryBadge(dateStr: string) {
   );
 }
 
-export default function ShoppingListClient({ initialActiveList, initialHistory, initialProducts, isAdmin }: ShoppingListClientProps) {
+export default function ShoppingListClient({ initialActiveList, initialHistory, initialProducts, stores, isAdmin }: ShoppingListClientProps) {
   const [activeList, setActiveList] = useState<ActiveList | null>(initialActiveList);
   const [history, setHistory] = useState<ShoppingList[]>(initialHistory);
   const [products, setProducts] = useState<ShoppingProduct[]>(initialProducts);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const storeName = (id: string | null) => stores.find((s) => s.id === id)?.name || null;
 
   const [newItemName, setNewItemName] = useState("");
   const [newItemQty, setNewItemQty] = useState("");
@@ -76,7 +78,7 @@ export default function ShoppingListClient({ initialActiveList, initialHistory, 
     });
   };
 
-  const handleUpdateMeta = (field: "name" | "shopping_date" | "store", value: string) => {
+  const handleUpdateMeta = (field: "name" | "shopping_date" | "store_id", value: string) => {
     if (!activeList) return;
     setActiveList({ ...activeList, [field]: value || null });
     startTransition(async () => {
@@ -224,8 +226,11 @@ export default function ShoppingListClient({ initialActiveList, initialHistory, 
               </div>
               <div className="space-y-1">
                 <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Negozio</label>
-                <input defaultValue={activeList.store || ""} placeholder="es. Esselunga" onBlur={(e) => handleUpdateMeta("store", e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80" />
+                <select defaultValue={activeList.store_id || ""} onChange={(e) => handleUpdateMeta("store_id", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg text-xs text-white border border-zinc-800 bg-zinc-950/80">
+                  <option value="">—</option>
+                  {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
               </div>
             </div>
 
@@ -334,7 +339,7 @@ export default function ShoppingListClient({ initialActiveList, initialHistory, 
               {history.map((list) => (
                 <div key={list.id} className="p-3.5 rounded-xl border border-zinc-800/80 bg-zinc-950/40 flex items-center justify-between flex-wrap gap-2">
                   <div>
-                    <div className="text-xs font-bold text-white">{list.name}{list.store ? ` — ${list.store}` : ""}</div>
+                    <div className="text-xs font-bold text-white">{list.name}{storeName(list.store_id) ? ` — ${storeName(list.store_id)}` : ""}</div>
                     <div className="text-[10px] text-zinc-500">{list.shopping_date ? formatDate(list.shopping_date) : list.completed_at ? formatDate(list.completed_at) : ""}</div>
                   </div>
                   <div className="flex items-center gap-3">

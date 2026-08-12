@@ -1,4 +1,5 @@
 import { getShoppingProducts } from "@/app/actions/shopping";
+import { getStores } from "@/app/actions/stores";
 import ShoppingCatalogClient from "@/app/ui/dashboard/ShoppingCatalogClient";
 
 export const metadata = {
@@ -7,7 +8,7 @@ export const metadata = {
 };
 
 export default async function ShoppingCatalogPage() {
-  const products = await getShoppingProducts();
+  const [products, stores] = await Promise.all([getShoppingProducts(), getStores()]);
 
-  return <ShoppingCatalogClient initialProducts={products} />;
+  return <ShoppingCatalogClient initialProducts={products} stores={stores} />;
 }
