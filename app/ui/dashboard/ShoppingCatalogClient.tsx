@@ -5,14 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ShoppingProduct, Store } from "@/lib/types/database";
 import {
-  createShoppingProduct, deleteShoppingProduct, findProductBrandByBarcode,
-  createProductBrand, lookupProductInfo, type OpenFactsResult,
+  deleteShoppingProduct, findProductBrandByBarcode,
+  createShoppingProduct, createProductBrand, lookupProductInfo, type OpenFactsResult,
 } from "@/app/actions/shopping";
-import { GROCERY_CATEGORIES, PERISHABLE_CATEGORIES, guessCategoryFromOffCategories } from "@/lib/shoppingCategories";
-import { GROCERY_UNITS } from "@/lib/shoppingUnits";
-import { suggestShelfLifeDays } from "@/lib/shelfLifeSuggestions";
+import { GROCERY_CATEGORIES, guessCategoryFromOffCategories } from "@/lib/shoppingCategories";
 import { DeleteIcon, ArrowRightIcon } from "./icons";
 import BarcodeScannerModal from "./BarcodeScannerModal";
+import NewProductModal from "./NewProductModal";
 import { isValidBarcodeChecksum } from "@/lib/barcodeChecksum";
 
 interface ShoppingCatalogClientProps {
@@ -26,14 +25,7 @@ export default function ShoppingCatalogClient({ initialProducts, stores }: Shopp
   const router = useRouter();
   const storeName = (id: string | null) => stores.find((s) => s.id === id)?.name || null;
 
-  const [showProductModal, setShowProductModal] = useState(false);
-  const [prodName, setProdName] = useState("");
-  const [prodCategory, setProdCategory] = useState("");
-  const [prodStoreId, setProdStoreId] = useState("");
-  const [prodAisle, setProdAisle] = useState("");
-  const [prodUnit, setProdUnit] = useState("");
-  const [prodShelfLife, setProdShelfLife] = useState("");
-  const [prodOffList, setProdOffList] = useState(false);
+  const [showNewProductModal, setShowNewProductModal] = useState(false);
 
   const [barcodeQuery, setBarcodeQuery] = useState("");
   const [searchingBarcode, setSearchingBarcode] = useState(false);
@@ -53,31 +45,6 @@ export default function ShoppingCatalogClient({ initialProducts, stores }: Shopp
   const resetScanCreateForm = () => {
     setShowScanCreateModal(false); setScanCreateData(null); setScanBarcode("");
     setScanProductName(""); setScanCategory(""); setScanBrandName("");
-  };
-
-  const resetProductForm = () => {
-    setProdName(""); setProdCategory(""); setProdStoreId(""); setProdAisle(""); setProdUnit(""); setProdShelfLife(""); setProdOffList(false);
-    setShowProductModal(false);
-  };
-
-  const handleProductSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prodName.trim()) { alert("Inserisci il nome del prodotto"); return; }
-
-    startTransition(async () => {
-      const res = await createShoppingProduct({
-        name: prodName.trim(),
-        category: prodCategory || null,
-        store_id: prodStoreId || null,
-        aisle: prodAisle || null,
-        default_unit: prodUnit || null,
-        shelf_life_days: prodShelfLife ? Number(prodShelfLife) : null,
-        is_off_list: prodOffList,
-      });
-      if (!res.success || !res.data) { alert(res.error); return; }
-      setProducts((prev) => [...prev, res.data as ShoppingProduct]);
-      resetProductForm();
-    });
   };
 
   const handleDeleteProduct = (id: string) => {
@@ -173,9 +140,6 @@ export default function ShoppingCatalogClient({ initialProducts, stores }: Shopp
     return acc;
   }, {});
 
-  const isPerishable = PERISHABLE_CATEGORIES.includes(prodCategory);
-  const shelfLifeSuggestion = isPerishable ? suggestShelfLifeDays(prodName) : null;
-
   return (
     <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
       {/* Header */}
@@ -216,7 +180,7 @@ export default function ShoppingCatalogClient({ initialProducts, stores }: Shopp
           <h3 className="text-sm font-extrabold text-white">Prodotti in vetrina</h3>
           <button
             type="button"
-            onClick={() => setShowProductModal(true)}
+            onClick={() => setShowNewProductModal(true)}
             className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white transition-all shadow-lg active:scale-98 flex items-center gap-2"
             style={{ background: "linear-gradient(135deg, hsl(245 70% 60%), hsl(255 60% 50%))" }}
           >
@@ -258,75 +222,13 @@ export default function ShoppingCatalogClient({ initialProducts, stores }: Shopp
         </div>
       </div>
 
-      {/* Modale Nuovo Prodotto */}
-      {showProductModal && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 animate-fade-in overflow-y-auto"
-          onClick={resetProductForm}
-        >
-          <div
-            className="relative w-full max-w-lg my-8 rounded-2xl p-6 border shadow-2xl backdrop-blur-xl animate-fade-in max-h-[90vh] overflow-y-auto"
-            style={{ background: "linear-gradient(135deg, hsla(245, 60%, 15%, 0.1), hsla(240, 10%, 10%, 0.97))", borderColor: "hsla(245, 60%, 50%, 0.15)" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={resetProductForm}
-              className="absolute top-4 right-4 text-zinc-400 hover:text-white text-lg leading-none z-20"
-              aria-label="Chiudi"
-            >
-              ✕
-            </button>
-
-            <h2 className="text-base font-extrabold text-white mb-4">Nuovo prodotto</h2>
-
-            <form onSubmit={handleProductSubmit} className="space-y-3">
-              <input value={prodName} onChange={(e) => setProdName(e.target.value)} placeholder="Nome (es. Mele)" required
-                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
-              <select value={prodCategory} onChange={(e) => setProdCategory(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80">
-                <option value="">Categoria...</option>
-                {GROCERY_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select value={prodStoreId} onChange={(e) => setProdStoreId(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80">
-                <option value="">Negozio abituale (opzionale)</option>
-                {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-              <input value={prodAisle} onChange={(e) => setProdAisle(e.target.value)} placeholder="Corsia (opzionale)"
-                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
-              <select value={prodUnit} onChange={(e) => setProdUnit(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80">
-                <option value="">Unità (opzionale)</option>
-                {GROCERY_UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
-              </select>
-
-              {isPerishable && (
-                <div className="space-y-1.5 animate-fade-in">
-                  <input type="number" value={prodShelfLife} onChange={(e) => setProdShelfLife(e.target.value)} placeholder="Dura gg (giorni dall'acquisto)"
-                    className="w-full px-4 py-3 rounded-xl text-xs text-white border border-zinc-800 bg-zinc-950/80" />
-                  {shelfLifeSuggestion && !prodShelfLife && (
-                    <button type="button" onClick={() => setProdShelfLife(shelfLifeSuggestion.toString())}
-                      className="text-[10px] font-bold text-indigo-300 hover:text-indigo-200 transition-all">
-                      💡 Suggerimento USDA FoodKeeper: {shelfLifeSuggestion} giorni — usa questo valore
-                    </button>
-                  )}
-                  <p className="text-[9px] text-zinc-500">Solo per le categorie deperibili (Frutta e Verdura, Latticini e Uova, Carne e Pesce, Panetteria). Il suggerimento si basa sul dataset USDA FoodKeeper: modificalo pure in base alla tua esperienza.</p>
-                </div>
-              )}
-
-              <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 cursor-pointer">
-                <input type="checkbox" checked={prodOffList} onChange={(e) => setProdOffList(e.target.checked)} className="accent-violet-500" />
-                🎁 Articolo da fuori lista (si prende spesso in più, scorciatoia rapida nelle liste)
-              </label>
-
-              <p className="text-[9px] text-zinc-500">Marche, valutazioni, allergeni e codici a barre si aggiungono aprendo la scheda del prodotto.</p>
-              <button type="submit" disabled={isPending} className="w-full py-3 rounded-xl text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all">
-                Crea prodotto
-              </button>
-            </form>
-          </div>
-        </div>
+      {showNewProductModal && (
+        <NewProductModal
+          products={products}
+          stores={stores}
+          onProductCreated={(product) => setProducts((prev) => [...prev, product])}
+          onClose={() => setShowNewProductModal(false)}
+        />
       )}
 
       {/* Modale: codice a barre non ancora in vetrina (trovato su Open Facts o inserito a mano) */}
