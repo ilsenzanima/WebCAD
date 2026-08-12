@@ -54,6 +54,7 @@ export interface ShoppingListItem {
   id: string;
   shopping_list_id: string;
   product_id: string;
+  brand_id: string | null; // marca scelta, se il prodotto ne ha piu' di una censita in vetrina
   quantity: number | null;
   unit: string | null;
   price: number | null;
@@ -63,6 +64,7 @@ export interface ShoppingListItem {
   notes: string | null;
   created_at: string;
   shopping_products?: ShoppingProduct;
+  shopping_product_brands?: ShoppingProductBrand | null;
 }
 
 export interface NutrimentsSummary {

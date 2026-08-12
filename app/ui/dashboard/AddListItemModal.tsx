@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import type { ShoppingProduct, ShoppingListItem } from "@/lib/types/database";
+import type { ShoppingProduct, ShoppingListItem, ShoppingProductBrand } from "@/lib/types/database";
 import {
   addShoppingListItemFromProduct,
   createShoppingProduct,
   createProductBrand,
   findProductBrandByBarcode,
+  getProductBrands,
   lookupProductInfo,
   getSuggestedProducts,
   type OpenFactsResult,
@@ -38,6 +39,11 @@ export default function AddListItemModal({
 
   const [suggestions, setSuggestions] = useState<{ product: ShoppingProduct; count: number }[]>([]);
 
+  // Se il prodotto scelto ha piu' marche censite, si chiede quale prima di
+  // aggiungerlo (es. "Bibita gassata" -> Coca-Cola o Pepsi).
+  const [brandPickerProduct, setBrandPickerProduct] = useState<ShoppingProduct | null>(null);
+  const [brandPickerOptions, setBrandPickerOptions] = useState<ShoppingProductBrand[]>([]);
+
   // Codice a barre non ancora in vetrina: proponiamo di creare prodotto +
   // marca (da Open Facts se lo trova, altrimenti a mano) e lo aggiungiamo
   // subito a questa lista, senza dover passare dalla Vetrina.
@@ -60,13 +66,34 @@ export default function AddListItemModal({
     setTimeout(() => setAddedFlash((cur) => (cur === productName ? null : cur)), 1200);
   };
 
-  const handleAddProduct = (product: ShoppingProduct) => {
+  const addToList = (productId: string, brandId: string | null, productName: string) => {
     startTransition(async () => {
-      const res = await addShoppingListItemFromProduct(listId, product.id);
+      const res = await addShoppingListItemFromProduct(listId, productId, { brand_id: brandId });
       if (!res.success || !res.data) { alert(res.error); return; }
       onItemAdded(res.data as ShoppingListItem);
-      flash(product.name);
+      flash(productName);
     });
+  };
+
+  // Se il prodotto ha piu' di una marca censita chiediamo quale prima di
+  // aggiungerlo; con zero o una sola marca si aggiunge subito.
+  const handleAddProduct = (product: ShoppingProduct) => {
+    startTransition(async () => {
+      const brands = await getProductBrands(product.id);
+      if (brands.length > 1) {
+        setBrandPickerProduct(product);
+        setBrandPickerOptions(brands);
+        return;
+      }
+      addToList(product.id, brands[0]?.id ?? null, product.name);
+    });
+  };
+
+  const handlePickBrand = (brandId: string | null) => {
+    if (!brandPickerProduct) return;
+    addToList(brandPickerProduct.id, brandId, brandPickerProduct.name);
+    setBrandPickerProduct(null);
+    setBrandPickerOptions([]);
   };
 
   const handleCreatePlainProduct = (name: string) => {
@@ -93,7 +120,9 @@ export default function AddListItemModal({
       if (result) {
         setSearchingBarcode(false);
         const existing = products.find((p) => p.id === result.product_id);
-        if (existing) handleAddProduct(existing);
+        // Il codice a barre identifica gia' la marca esatta: si aggiunge
+        // direttamente, senza passare dal selettore marca.
+        addToList(result.product_id, result.id, existing?.name || result.brand_name);
         setBarcodeQuery("");
         return;
       }
@@ -149,10 +178,10 @@ export default function AddListItemModal({
         off_categories: scanCreateData?.off_categories,
         nutriments: scanCreateData?.nutriments,
       });
-      if (!brandRes.success) { alert(brandRes.error); return; }
+      if (!brandRes.success || !brandRes.data) { alert(brandRes.error); return; }
 
       onProductCreated(newProduct);
-      const itemRes = await addShoppingListItemFromProduct(listId, newProduct.id);
+      const itemRes = await addShoppingListItemFromProduct(listId, newProduct.id, { brand_id: (brandRes.data as ShoppingProductBrand).id });
       if (!itemRes.success || !itemRes.data) { alert(itemRes.error); return; }
       onItemAdded(itemRes.data as ShoppingListItem);
       flash(newProduct.name);
@@ -189,7 +218,32 @@ export default function AddListItemModal({
 
         <h2 className="text-base font-extrabold text-white mb-4">Aggiungi articolo</h2>
 
-        {showScanCreateForm ? (
+        {brandPickerProduct ? (
+          <>
+            <h3 className="text-sm font-extrabold text-white mb-1">{brandPickerProduct.name}</h3>
+            <p className="text-[10px] text-zinc-500 mb-4">Quale marca vuoi aggiungere?</p>
+            <div className="space-y-1.5">
+              {brandPickerOptions.map((b) => (
+                <button key={b.id} type="button" onClick={() => handlePickBrand(b.id)}
+                  className="w-full p-2.5 rounded-lg border border-zinc-800/80 bg-zinc-950/40 flex items-center gap-2 text-left hover:border-indigo-500/40 transition-all">
+                  {b.image_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={b.image_url} alt="" className="w-7 h-7 object-cover rounded border border-zinc-800 flex-shrink-0" />
+                  )}
+                  <span className="text-xs font-semibold text-white">{b.brand_name}</span>
+                </button>
+              ))}
+              <button type="button" onClick={() => handlePickBrand(null)}
+                className="w-full p-2.5 rounded-lg border border-zinc-800/80 bg-zinc-950/40 text-left text-xs font-semibold text-zinc-400 hover:border-zinc-600 transition-all">
+                Senza marca specifica
+              </button>
+              <button type="button" onClick={() => { setBrandPickerProduct(null); setBrandPickerOptions([]); }}
+                className="w-full py-2.5 rounded-lg text-xs font-bold text-zinc-400 hover:text-white transition-all">
+                ← Torna alla ricerca
+              </button>
+            </div>
+          </>
+        ) : showScanCreateForm ? (
           <>
             <h3 className="text-sm font-extrabold text-white mb-1">
               {scanCreateData ? `Prodotto trovato su ${scanCreateData.source}` : "Nuovo prodotto dal codice a barre"}
@@ -248,7 +302,7 @@ export default function AddListItemModal({
 
             {!lowerSearch && offListProducts.length > 0 && (
               <div className="mb-4">
-                <h3 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">🎁 Fuori lista</h3>
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">🎁 Preferiti</h3>
                 <div className="flex flex-wrap gap-1.5">
                   {offListProducts.map((p) => (
                     <button key={p.id} type="button" onClick={() => handleAddProduct(p)} disabled={existingProductIds.has(p.id)}

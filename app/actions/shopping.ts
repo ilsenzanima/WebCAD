@@ -6,7 +6,7 @@ import { getMyRole } from "@/app/actions/family";
 import { toLocalDateStr } from "@/lib/format";
 import type { ShoppingProduct, ShoppingList, ShoppingListItem, ShoppingProductBrand, NutrimentsSummary } from "@/lib/types/database";
 
-const ITEM_SELECT = "*, shopping_products(*)";
+const ITEM_SELECT = "*, shopping_products(*), shopping_product_brands(*)";
 
 function revalidateShoppingList() {
   revalidatePath("/dashboard/shopping-list", "layout");
@@ -276,7 +276,7 @@ export async function deleteProductBrand(id: string) {
 
 // Ricerca rapida per codice a barre: usata nella vetrina per saltare
 // direttamente alla scheda del prodotto corrispondente.
-export async function findProductBrandByBarcode(barcode: string): Promise<{ product_id: string; brand_name: string } | null> {
+export async function findProductBrandByBarcode(barcode: string): Promise<{ id: string; product_id: string; brand_name: string } | null> {
   try {
     const trimmed = barcode.trim();
     if (!trimmed) return null;
@@ -284,7 +284,7 @@ export async function findProductBrandByBarcode(barcode: string): Promise<{ prod
     const supabase = (await createClient()) as any;
     const { data, error } = await supabase
       .from("shopping_product_brands")
-      .select("product_id, brand_name")
+      .select("id, product_id, brand_name")
       .eq("barcode", trimmed)
       .maybeSingle();
 
@@ -506,47 +506,10 @@ export async function registerListExpense(listId: string) {
 // Voci della lista
 // ============================================
 
-// Aggiunge un articolo per nome: se non esiste ancora in vetrina lo crea al
-// volo (cosi' la vetrina si arricchisce automaticamente mentre si prepara
-// la lista), altrimenti riusa il prodotto gia' presente.
-export async function addShoppingListItemByName(shoppingListId: string, formData: {
-  product_name: string;
-  quantity?: number | null;
-  unit?: string | null;
-}) {
-  try {
-    const supabase = (await createClient()) as any;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Non autenticato");
-
-    const trimmedName = formData.product_name.trim();
-    if (!trimmedName) throw new Error("Inserisci il nome dell'articolo");
-
-    let { data: product } = await supabase
-      .from("shopping_products")
-      .select("*")
-      .ilike("name", trimmedName)
-      .maybeSingle();
-
-    if (!product) {
-      const { data: newProduct, error: createError } = await supabase
-        .from("shopping_products")
-        .insert({ name: trimmedName, created_by: user.id })
-        .select()
-        .single();
-      if (createError) throw new Error(createError.message);
-      product = newProduct;
-    }
-
-    return await addShoppingListItemFromProduct(shoppingListId, product.id, formData);
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
 export async function addShoppingListItemFromProduct(shoppingListId: string, productId: string, formData?: {
   quantity?: number | null;
   unit?: string | null;
+  brand_id?: string | null;
 }) {
   try {
     const supabase = (await createClient()) as any;
@@ -556,6 +519,7 @@ export async function addShoppingListItemFromProduct(shoppingListId: string, pro
       .insert({
         shopping_list_id: shoppingListId,
         product_id: productId,
+        brand_id: formData?.brand_id ?? null,
         quantity: formData?.quantity ?? null,
         unit: formData?.unit ?? null,
       })

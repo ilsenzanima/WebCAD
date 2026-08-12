@@ -484,7 +484,7 @@ export default function ShoppingProductDetailClient({ product, initialBrands, st
 
         <label className="flex items-center gap-2 text-[10px] font-bold text-zinc-400 cursor-pointer mt-3">
           <input type="checkbox" checked={prodOffList} onChange={(e) => setProdOffList(e.target.checked)} className="accent-violet-500" />
-          🎁 Articolo da fuori lista (si prende spesso in più, scorciatoia rapida nelle liste)
+          🎁 Preferito
         </label>
 
         <button onClick={handleSaveProduct} disabled={isPending}

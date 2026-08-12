@@ -17,6 +17,7 @@ import {
 import { DeleteIcon, CheckIcon, ArrowLeftIcon } from "./icons";
 import { GROCERY_UNITS } from "@/lib/shoppingUnits";
 import AddListItemModal from "./AddListItemModal";
+import NewProductModal from "./NewProductModal";
 
 interface ListWithItems extends ShoppingList {
   items: ShoppingListItem[];
@@ -63,6 +64,7 @@ export default function ShoppingListDetailClient({ initialList, initialProducts,
   const isOpen = list.status === "open";
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showNewProductModal, setShowNewProductModal] = useState(false);
   const [showCompleteForm, setShowCompleteForm] = useState(false);
   const [totalAmount, setTotalAmount] = useState("");
 
@@ -201,11 +203,18 @@ export default function ShoppingListDetailClient({ initialList, initialProducts,
 
         {/* Aggiunta articolo */}
         {isOpen && (
-          <button type="button" onClick={() => setShowAddModal(true)}
-            className="w-full py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-lg active:scale-98 flex items-center justify-center gap-2"
-            style={{ background: "linear-gradient(135deg, hsl(245 70% 60%), hsl(255 60% 50%))" }}>
-            <span>＋</span> Aggiungi articolo
-          </button>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setShowAddModal(true)}
+              className="flex-1 py-3 rounded-xl text-xs font-extrabold text-white transition-all shadow-lg active:scale-98 flex items-center justify-center gap-2"
+              style={{ background: "linear-gradient(135deg, hsl(245 70% 60%), hsl(255 60% 50%))" }}>
+              <span>＋</span> Aggiungi articolo
+            </button>
+            <button type="button" onClick={() => setShowNewProductModal(true)}
+              className="px-4 py-3 rounded-xl text-[11px] font-bold text-zinc-300 border border-zinc-800 bg-zinc-900 hover:border-zinc-600 transition-all whitespace-nowrap"
+              title="Crea un nuovo prodotto in vetrina e aggiungilo anche a questa lista">
+              🗂️ Aggiungi a vetrina
+            </button>
+          </div>
         )}
 
         {/* Progresso */}
@@ -232,6 +241,7 @@ export default function ShoppingListDetailClient({ initialList, initialProducts,
                     </button>
                     <span className={`text-xs font-semibold flex-1 min-w-[100px] ${item.is_checked ? "text-zinc-500 line-through" : "text-white"}`}>
                       {item.shopping_products?.name}
+                      {item.shopping_product_brands && <span className="text-zinc-500 font-normal"> · {item.shopping_product_brands.brand_name}</span>}
                     </span>
                     {item.expiry_date && expiryBadge(item.expiry_date)}
                     {isOpen ? (
@@ -316,6 +326,17 @@ export default function ShoppingListDetailClient({ initialList, initialProducts,
           onItemAdded={handleItemAdded}
           onProductCreated={handleProductCreated}
           onClose={() => setShowAddModal(false)}
+        />
+      )}
+
+      {showNewProductModal && (
+        <NewProductModal
+          products={products}
+          stores={stores}
+          listId={list.id}
+          onProductCreated={handleProductCreated}
+          onItemAdded={handleItemAdded}
+          onClose={() => setShowNewProductModal(false)}
         />
       )}
     </div>
