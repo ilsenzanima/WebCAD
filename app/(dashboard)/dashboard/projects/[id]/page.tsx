@@ -1,10 +1,10 @@
 import { notFound } from "next/navigation";
-import { getProject, getProjectNotes } from "@/app/actions/projects";
+import { getProject, getProjectMaterials } from "@/app/actions/projects";
 import ProjectDetailClient from "@/app/ui/dashboard/ProjectDetailClient";
 
 export const metadata = {
   title: "Progetto - Finanza Privata",
-  description: "Dettaglio progetto e note collegate",
+  description: "Dettaglio progetto, note e lista materiali",
 };
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -13,7 +13,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   const project = await getProject(id);
   if (!project) notFound();
 
-  const notes = await getProjectNotes(id);
+  const materials = await getProjectMaterials(id);
 
-  return <ProjectDetailClient project={project} initialNotes={notes} />;
+  return <ProjectDetailClient project={project} initialMaterials={materials} />;
 }

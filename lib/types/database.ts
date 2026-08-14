@@ -17,14 +17,21 @@ export interface Project {
   user_id: string;
   name: string;
   description: string | null;
+  status: "bozza" | "in_corso" | "finito";
+  notes_html: string | null;
   created_at: string;
 }
 
-export interface ProjectNote {
+export interface ProjectMaterial {
   id: string;
   project_id: string;
   user_id: string;
-  content: string;
+  name: string;
+  quantity: number;
+  unit_price: number | null;
+  link: string | null;
+  notes: string | null;
+  purchased: boolean;
   created_at: string;
 }
 

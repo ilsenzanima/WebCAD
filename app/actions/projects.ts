@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { Project, ProjectNote } from "@/lib/types/database";
+import type { Project, ProjectMaterial } from "@/lib/types/database";
 
 function revalidateProjects() {
   revalidatePath("/dashboard/projects", "layout");
@@ -78,6 +78,31 @@ export async function updateProject(id: string, formData: { name?: string; descr
   }
 }
 
+export async function updateProjectStatus(id: string, status: "bozza" | "in_corso" | "finito") {
+  try {
+    const supabase = (await createClient()) as any;
+    const { error } = await supabase.from("projects").update({ status }).eq("id", id);
+    if (error) throw new Error(error.message);
+
+    revalidateProjects();
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function updateProjectNotes(id: string, notesHtml: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { error } = await supabase.from("projects").update({ notes_html: notesHtml }).eq("id", id);
+    if (error) throw new Error(error.message);
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function deleteProject(id: string) {
   try {
     const supabase = (await createClient()) as any;
@@ -92,35 +117,35 @@ export async function deleteProject(id: string) {
 }
 
 // ============================================
-// Note del progetto
+// Lista materiali
 // ============================================
 
-export async function getProjectNotes(projectId: string): Promise<ProjectNote[]> {
+export async function getProjectMaterials(projectId: string): Promise<ProjectMaterial[]> {
   try {
     const supabase = (await createClient()) as any;
     const { data, error } = await supabase
-      .from("project_notes")
+      .from("project_materials")
       .select("*")
       .eq("project_id", projectId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: true });
 
     if (error) throw new Error(error.message);
     return data || [];
   } catch (err: any) {
-    console.error("Errore getProjectNotes:", err.message);
+    console.error("Errore getProjectMaterials:", err.message);
     return [];
   }
 }
 
-export async function createProjectNote(projectId: string, content: string) {
+export async function createProjectMaterial(projectId: string, formData: { name: string }) {
   try {
     const supabase = (await createClient()) as any;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Non autenticato");
 
     const { data, error } = await supabase
-      .from("project_notes")
-      .insert({ project_id: projectId, user_id: user.id, content: content.trim() })
+      .from("project_materials")
+      .insert({ project_id: projectId, user_id: user.id, name: formData.name.trim() || "Nuovo materiale" })
       .select()
       .single();
 
@@ -133,28 +158,40 @@ export async function createProjectNote(projectId: string, content: string) {
   }
 }
 
-export async function updateProjectNote(id: string, content: string) {
+interface ProjectMaterialFields {
+  name: string;
+  quantity: number;
+  unit_price: number | null;
+  link: string | null;
+  notes: string | null;
+  purchased: boolean;
+}
+
+export async function updateProjectMaterial(id: string, formData: Partial<ProjectMaterialFields>) {
   try {
     const supabase = (await createClient()) as any;
-    const { data, error } = await supabase
-      .from("project_notes")
-      .update({ content: content.trim() })
-      .eq("id", id)
-      .select()
-      .single();
+    const update: Record<string, any> = {};
+    if (formData.name !== undefined) update.name = formData.name.trim() || "Materiale";
+    if (formData.quantity !== undefined) update.quantity = formData.quantity;
+    if (formData.unit_price !== undefined) update.unit_price = formData.unit_price;
+    if (formData.link !== undefined) update.link = formData.link || null;
+    if (formData.notes !== undefined) update.notes = formData.notes || null;
+    if (formData.purchased !== undefined) update.purchased = formData.purchased;
+
+    const { error } = await supabase.from("project_materials").update(update).eq("id", id);
     if (error) throw new Error(error.message);
 
     revalidateProjects();
-    return { success: true, data };
+    return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
 }
 
-export async function deleteProjectNote(id: string) {
+export async function deleteProjectMaterial(id: string) {
   try {
     const supabase = (await createClient()) as any;
-    const { error } = await supabase.from("project_notes").delete().eq("id", id);
+    const { error } = await supabase.from("project_materials").delete().eq("id", id);
     if (error) throw new Error(error.message);
 
     revalidateProjects();

@@ -154,3 +154,9 @@ input:-webkit-autofill:active {
 .animate-slide-up       { animation: slideUp 0.25s ease-out forwards; }
 .animate-pulse-subtle   { animation: pulse-ring 3s ease-in-out infinite; }
 
+.rich-text-editor:empty:before {
+  content: attr(data-placeholder);
+  color: #52525b;
+  pointer-events: none;
+}
+
