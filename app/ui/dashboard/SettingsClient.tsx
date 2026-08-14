@@ -811,7 +811,7 @@ export default function SettingsClient({ categories: initialCategories, googleCo
           >
             <h2 className="text-base font-extrabold text-white mb-1">Aggiungi un familiare</h2>
             <p className="text-[11px] text-slate-400 mb-4 leading-relaxed">
-              Scegli tu email e password: comunicale poi al familiare. Un "membro" (ragazzo/a) non vede la sezione Finanze e nel Tracker Ragazzi vede solo i propri compiti, premi e dati di crescita. Un "admin" (genitore) vede tutto e può assegnare compiti e creare ricompense.
+              Scegli tu email e password: comunicale poi al familiare. Un "membro" non vede la sezione Finanze. Un "admin" vede tutto.
             </p>
 
             <form onSubmit={handleAddMember} className="space-y-4">

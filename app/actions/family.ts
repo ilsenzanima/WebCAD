@@ -101,27 +101,6 @@ export async function createFamilyMember(formData: {
   }
 }
 
-// Avatar emoji e data di nascita, usati dal Tracker Ragazzi (crescita/salute
-// calcola l'eta', l'avatar aiuta a distinguere i membri nei selettori rapidi).
-export async function updateFamilyMemberProfile(userId: string, formData: { avatar_emoji?: string; birth_date?: string | null }) {
-  try {
-    const { supabase } = await requireAdmin();
-
-    const update: Record<string, any> = {};
-    if (formData.avatar_emoji !== undefined) update.avatar_emoji = formData.avatar_emoji;
-    if (formData.birth_date !== undefined) update.birth_date = formData.birth_date || null;
-
-    const { error } = await supabase.from("family_members").update(update).eq("user_id", userId);
-    if (error) throw new Error(error.message);
-
-    revalidatePath("/dashboard/settings");
-    revalidatePath("/dashboard/tracker-ragazzi", "layout");
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
 export async function removeFamilyMember(userId: string) {
   try {
     const { supabase } = await requireAdmin();

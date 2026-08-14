@@ -33,7 +33,7 @@ export type NavEntry = NavLink | NavGroup;
 export const navItems: NavEntry[] = [
   { type: "link", href: "/dashboard", icon: <OverviewIcon size={15} />, label: "Dashboard" },
   { type: "link", href: "/dashboard/calendar", icon: <CalendarIcon size={15} />, label: "Calendario" },
-  { type: "link", href: "/dashboard/tracker-ragazzi", icon: <span style={{ fontSize: 14 }}>🧒</span>, label: "Tracker ragazzi" },
+  { type: "link", href: "/dashboard/projects", icon: <span style={{ fontSize: 14 }}>📁</span>, label: "Progetti" },
   {
     type: "group",
     label: "Spesa",

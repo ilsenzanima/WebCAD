@@ -69,7 +69,7 @@ export default async function DashboardPage() {
         </Link>
 
         <Link
-          href="/dashboard/tracker-ragazzi"
+          href="/dashboard/projects"
           className="group rounded-2xl p-6 border shadow-2xl backdrop-blur-xl transition-all hover:border-zinc-600"
           style={{
             background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
@@ -77,11 +77,11 @@ export default async function DashboardPage() {
           }}
         >
           <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4 bg-amber-500/10 text-amber-300 text-lg">
-            🧒
+            📁
           </div>
-          <h3 className="text-sm font-extrabold text-white mb-1">Tracker ragazzi</h3>
+          <h3 className="text-sm font-extrabold text-white mb-1">Progetti</h3>
           <p className="text-[11px] text-slate-400 leading-relaxed">
-            Compiti e ricompense, crescita/salute e attività della famiglia.
+            Vetrina dei tuoi progetti: nome, descrizione e note per ciascuno.
           </p>
         </Link>
 
