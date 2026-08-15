@@ -73,15 +73,15 @@ export default function ProjectsClient({ initialProjects }: ProjectsClientProps)
             <div key={p.id} className="relative group">
               <Link
                 href={`/dashboard/projects/${p.id}`}
-                className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-950/40 flex items-center justify-between hover:border-zinc-600 transition-all"
+                className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-950/40 flex items-start justify-between gap-2 hover:border-zinc-600 transition-all h-full"
               >
                 <div className="min-w-0">
-                  <div className="text-xs font-bold text-white truncate">{p.name}</div>
-                  <div className="text-[10px] text-zinc-500 truncate">
+                  <div className="text-xs font-bold text-white break-words line-clamp-2">{p.name}</div>
+                  <div className="text-[10px] text-zinc-500 break-words line-clamp-3 mt-0.5">
                     {p.description || "Apri la scheda →"}
                   </div>
                 </div>
-                <ArrowRightIcon size={12} className="text-zinc-600 flex-shrink-0 ml-2" />
+                <ArrowRightIcon size={12} className="text-zinc-600 flex-shrink-0 mt-0.5" />
               </Link>
               <button
                 onClick={(e) => { e.preventDefault(); handleDelete(p.id); }}
