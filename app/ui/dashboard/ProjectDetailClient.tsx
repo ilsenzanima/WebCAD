@@ -114,6 +114,13 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
   const totalPrice = materials.reduce((sum, m) => sum + m.quantity * (m.unit_price ?? 0), 0);
   const provisionalPrice = materials.filter((m) => m.purchased).reduce((sum, m) => sum + m.quantity * (m.unit_price ?? 0), 0);
 
+  // Fa crescere in altezza le celle testuali della tabella materiali (nome, note) invece di tagliare il testo su una riga.
+  const autoGrow = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
   const tabClass = (active: boolean) =>
     `px-4 py-2 rounded-xl text-xs font-bold transition-all ${active ? "bg-white/10 text-white shadow-lg" : "text-zinc-400 hover:text-white"}`;
 
@@ -253,7 +260,7 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
                   const rowTotal = m.quantity * (m.unit_price ?? 0);
                   return (
                     <tr key={m.id} className="border-b border-zinc-800/60">
-                      <td className="py-1.5 pr-2">
+                      <td className="py-1.5 pr-2 align-top">
                         <button
                           type="button"
                           onClick={() => handleUpdateMaterial(m.id, { purchased: !m.purchased })}
@@ -265,16 +272,19 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
                           {m.purchased && <CheckIcon size={11} className="text-white" />}
                         </button>
                       </td>
-                      <td className="py-1.5 pr-2">
-                        <input
+                      <td className="py-1.5 pr-2 align-top">
+                        <textarea
+                          rows={1}
                           defaultValue={m.name}
+                          ref={autoGrow}
+                          onInput={(e) => autoGrow(e.currentTarget)}
                           onBlur={(e) => handleUpdateMaterial(m.id, { name: e.target.value })}
-                          className={`w-full px-2 py-1.5 rounded-lg text-xs text-white border border-transparent hover:border-zinc-800 focus:border-zinc-600 bg-transparent focus:bg-zinc-950/80 transition-all ${
+                          className={`w-full px-2 py-1.5 rounded-lg text-xs text-white border border-transparent hover:border-zinc-800 focus:border-zinc-600 bg-transparent focus:bg-zinc-950/80 transition-all resize-none overflow-hidden break-words ${
                             m.purchased ? "line-through text-zinc-500" : ""
                           }`}
                         />
                       </td>
-                      <td className="py-1.5 pr-2">
+                      <td className="py-1.5 pr-2 align-top">
                         <input
                           type="number" step="0.01" min="0"
                           defaultValue={m.quantity}
@@ -282,7 +292,7 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
                           className="w-full px-2 py-1.5 rounded-lg text-xs text-white border border-transparent hover:border-zinc-800 focus:border-zinc-600 bg-transparent focus:bg-zinc-950/80 transition-all"
                         />
                       </td>
-                      <td className="py-1.5 pr-2">
+                      <td className="py-1.5 pr-2 align-top">
                         <input
                           type="number" step="0.01" min="0" placeholder="€"
                           defaultValue={m.unit_price ?? ""}
@@ -290,9 +300,9 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
                           className="w-full px-2 py-1.5 rounded-lg text-xs text-white border border-transparent hover:border-zinc-800 focus:border-zinc-600 bg-transparent focus:bg-zinc-950/80 transition-all"
                         />
                       </td>
-                      <td className="py-1.5 pr-2 text-zinc-300 font-semibold whitespace-nowrap">{formatCurrency(rowTotal)}</td>
-                      <td className="py-1.5 pr-2">
-                        <div className="flex items-center gap-1">
+                      <td className="py-1.5 pr-2 align-top text-zinc-300 font-semibold whitespace-nowrap">{formatCurrency(rowTotal)}</td>
+                      <td className="py-1.5 pr-2 align-top">
+                        <div className="flex items-start gap-1">
                           <input
                             defaultValue={m.link ?? ""}
                             placeholder="https://…"
@@ -300,20 +310,23 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
                             className="w-full px-2 py-1.5 rounded-lg text-xs text-white border border-transparent hover:border-zinc-800 focus:border-zinc-600 bg-transparent focus:bg-zinc-950/80 transition-all"
                           />
                           {m.link && (
-                            <a href={m.link} target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-indigo-300 flex-shrink-0 px-0.5" title="Apri link">
+                            <a href={m.link} target="_blank" rel="noopener noreferrer" className="text-zinc-500 hover:text-indigo-300 flex-shrink-0 px-0.5 py-1.5" title="Apri link">
                               🔗
                             </a>
                           )}
                         </div>
                       </td>
-                      <td className="py-1.5 pr-2">
-                        <input
+                      <td className="py-1.5 pr-2 align-top">
+                        <textarea
+                          rows={1}
                           defaultValue={m.notes ?? ""}
+                          ref={autoGrow}
+                          onInput={(e) => autoGrow(e.currentTarget)}
                           onBlur={(e) => handleUpdateMaterial(m.id, { notes: e.target.value })}
-                          className="w-full px-2 py-1.5 rounded-lg text-xs text-white border border-transparent hover:border-zinc-800 focus:border-zinc-600 bg-transparent focus:bg-zinc-950/80 transition-all"
+                          className="w-full px-2 py-1.5 rounded-lg text-xs text-white border border-transparent hover:border-zinc-800 focus:border-zinc-600 bg-transparent focus:bg-zinc-950/80 transition-all resize-none overflow-hidden break-words"
                         />
                       </td>
-                      <td className="py-1.5 pl-2">
+                      <td className="py-1.5 pl-2 align-top">
                         <button type="button" onClick={() => handleDeleteMaterial(m.id)} className="p-1.5 rounded text-slate-500 hover:text-rose-400 transition-all" title="Elimina materiale">
                           <DeleteIcon size={12} />
                         </button>
