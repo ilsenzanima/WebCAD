@@ -450,7 +450,7 @@ export default function AccountsClient({ initialAccounts, expenses, initialAdjus
                         style={{ background: "hsl(240 10% 4% / 0.6)", borderColor: "hsla(38, 90%, 50%, 0.25)" }}
                       >
                         <p className="text-[9px] text-zinc-400 font-medium leading-relaxed">
-                          Scrivi il saldo reale (es. dall'app della banca) e la data: verra' usato come nuovo punto di partenza, cosi' le spese minori dimenticate non falsano piu' i mesi successivi.
+                          Scrivi il saldo reale (es. dall'app della banca) e la data: verra' usato come nuovo punto di partenza. La differenza verra' anche registrata come movimento "Rettifica saldo" in Spese, cosi' resta visibile nei totali e nei report.
                         </p>
                         <div className="grid grid-cols-2 gap-2">
                           <div className="space-y-1">
@@ -509,6 +509,9 @@ export default function AccountsClient({ initialAccounts, expenses, initialAdjus
                             <div className="min-w-0">
                               <span className="text-zinc-400 font-semibold">{formatDate(adj.date)}</span>
                               <span className="text-white font-bold ml-1.5">{formatCurrency(Number(adj.balance))}</span>
+                              {adj.expense_id && (
+                                <span className="text-amber-500/70 ml-1.5" title="Ha generato un movimento di rettifica in Spese">↳ rettifica</span>
+                              )}
                               {adj.note && <span className="text-zinc-600 ml-1.5 truncate">— {adj.note}</span>}
                             </div>
                             <button

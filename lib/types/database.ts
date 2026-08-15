@@ -178,6 +178,7 @@ export interface AccountBalanceAdjustment {
   date: string;
   balance: number; // saldo reale osservato a questa data (es. letto dall'app della banca)
   note: string | null;
+  expense_id: string | null; // FK -> expenses.id, spesa/entrata correttiva generata per riflettere la differenza
   created_at: string;
 }
 
@@ -440,6 +441,7 @@ export interface Database {
           date: string;
           balance: number;
           note?: string | null;
+          expense_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -449,6 +451,7 @@ export interface Database {
           date?: string;
           balance?: number;
           note?: string | null;
+          expense_id?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -457,6 +460,13 @@ export interface Database {
             columns: ["account_id"];
             isOneToOne: false;
             referencedRelation: "accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "account_balance_adjustments_expense_id_fkey";
+            columns: ["expense_id"];
+            isOneToOne: false;
+            referencedRelation: "expenses";
             referencedColumns: ["id"];
           }
         ];
