@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { Project, ProjectMaterial } from "@/lib/types/database";
+import type { Project, ProjectMaterial, SketchStroke } from "@/lib/types/database";
 
 function revalidateProjects() {
   revalidatePath("/dashboard/projects", "layout");
@@ -95,6 +95,18 @@ export async function updateProjectNotes(id: string, notesHtml: string) {
   try {
     const supabase = (await createClient()) as any;
     const { error } = await supabase.from("projects").update({ notes_html: notesHtml }).eq("id", id);
+    if (error) throw new Error(error.message);
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function updateProjectSketch(id: string, sketchData: SketchStroke[]) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { error } = await supabase.from("projects").update({ sketch_data: sketchData }).eq("id", id);
     if (error) throw new Error(error.message);
 
     return { success: true };

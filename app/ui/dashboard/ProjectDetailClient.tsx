@@ -3,11 +3,12 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Project, ProjectMaterial } from "@/lib/types/database";
+import type { Project, ProjectMaterial, SketchStroke } from "@/lib/types/database";
 import {
   updateProject,
   updateProjectStatus,
   updateProjectNotes,
+  updateProjectSketch,
   deleteProject,
   createProjectMaterial,
   updateProjectMaterial,
@@ -16,6 +17,7 @@ import {
 import { formatCurrency } from "@/lib/format";
 import { DeleteIcon, EditIcon, ArrowLeftIcon, CheckIcon } from "./icons";
 import RichTextEditor from "./RichTextEditor";
+import DrawingCanvas from "./DrawingCanvas";
 
 interface ProjectDetailClientProps {
   project: Project;
@@ -36,7 +38,7 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
 
   const [project, setProject] = useState<Project>(initialProject);
   const [materials, setMaterials] = useState<ProjectMaterial[]>(initialMaterials);
-  const [activeTab, setActiveTab] = useState<"info" | "materials">("info");
+  const [activeTab, setActiveTab] = useState<"info" | "materials" | "sketch">("info");
 
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(project.name);
@@ -74,6 +76,11 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
 
   const handleSaveNotes = async (html: string) => {
     const res = await updateProjectNotes(project.id, html);
+    if (!res.success) console.error(res.error);
+  };
+
+  const handleSaveSketch = async (strokes: SketchStroke[]) => {
+    const res = await updateProjectSketch(project.id, strokes);
     if (!res.success) console.error(res.error);
   };
 
@@ -175,6 +182,9 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
         </button>
         <button type="button" onClick={() => setActiveTab("materials")} className={tabClass(activeTab === "materials")}>
           🧾 Lista materiali
+        </button>
+        <button type="button" onClick={() => setActiveTab("sketch")} className={tabClass(activeTab === "sketch")}>
+          🎨 Disegno
         </button>
       </div>
 
@@ -350,6 +360,14 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
               <span className="text-lg font-black text-emerald-300">{formatCurrency(provisionalPrice)}</span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Tab Disegno */}
+      {activeTab === "sketch" && (
+        <div className="rounded-2xl p-5 border shadow-2xl backdrop-blur-xl animate-fade-in space-y-3" style={cardStyle}>
+          <h3 className="text-sm font-extrabold text-white">🎨 Disegno del progetto</h3>
+          <DrawingCanvas initialStrokes={project.sketch_data || []} onSave={handleSaveSketch} />
         </div>
       )}
     </div>

@@ -12,6 +12,19 @@ export interface FamilyMember {
   created_at: string;
 }
 
+export interface SketchPoint {
+  x: number;
+  y: number;
+  pressure: number;
+}
+
+export interface SketchStroke {
+  color: string;
+  size: number;
+  eraser: boolean;
+  points: SketchPoint[];
+}
+
 export interface Project {
   id: string;
   user_id: string;
@@ -19,6 +32,7 @@ export interface Project {
   description: string | null;
   status: "bozza" | "in_corso" | "finito";
   notes_html: string | null;
+  sketch_data: SketchStroke[] | null;
   created_at: string;
 }
 
