@@ -221,6 +221,64 @@ export async function uploadFileToGoogleDrive({
 }
 
 /**
+ * Trova (creandola se serve) la cartella dei disegni di un progetto:
+ * <rootFolderId>/Progetti/<NomeProgetto>/Disegni.
+ */
+export async function getOrCreateProjectSketchFolderId({
+  projectName,
+  accessToken,
+  rootFolderId = GOOGLE_CONFIG.rootFolderId,
+}: {
+  projectName: string;
+  accessToken: string;
+  rootFolderId?: string;
+}): Promise<string> {
+  const projectsFolderId = await findOrCreateFolder({ name: "Progetti", parentId: rootFolderId, accessToken });
+  const projectFolderId = await findOrCreateFolder({ name: projectName, parentId: projectsFolderId, accessToken });
+  return findOrCreateFolder({ name: "Disegni", parentId: projectFolderId, accessToken });
+}
+
+/**
+ * Sovrascrive il contenuto di un file Drive gia' esistente (stesso id),
+ * cosi' un disegno risalvato aggiorna sempre lo stesso file invece di
+ * accumulare copie ad ogni backup.
+ */
+export async function updateFileContent({
+  fileId,
+  file,
+  accessToken,
+}: {
+  fileId: string;
+  file: File | Blob;
+  accessToken: string;
+}) {
+  const response = await fetch(
+    `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&fields=id,name,webViewLink,webContentLink`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": file.type || "application/octet-stream",
+      },
+      body: file,
+    }
+  );
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Errore durante l'aggiornamento del file su Google Drive: ${errText}`);
+  }
+
+  const result = await response.json();
+  return {
+    id: result.id,
+    name: result.name,
+    webViewLink: result.webViewLink as string | undefined,
+    webContentLink: result.webContentLink as string | undefined,
+  };
+}
+
+/**
  * Utility per aprire la cartella radice su Google Drive
  */
 export function getGoogleDriveFolderUrl(folderId?: string) {

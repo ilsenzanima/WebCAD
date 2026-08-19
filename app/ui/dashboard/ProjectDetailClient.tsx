@@ -396,7 +396,10 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
                   className="block rounded-xl border border-zinc-800/80 bg-zinc-950/40 overflow-hidden hover:border-zinc-600 transition-all">
                   <SketchThumbnail strokes={s.strokes} />
                   <div className="p-2.5">
-                    <div className="text-xs font-bold text-white truncate">{s.name}</div>
+                    <div className="text-xs font-bold text-white truncate flex items-center gap-1">
+                      {s.name}
+                      {s.drive_link && <span title="Salvato su Drive">☁️</span>}
+                    </div>
                     <div className="text-[10px] text-zinc-500">{formatDate(s.updated_at)}</div>
                   </div>
                 </Link>

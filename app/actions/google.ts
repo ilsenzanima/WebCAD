@@ -19,7 +19,7 @@ const EXPIRY_SAFETY_BUFFER_MS = 60 * 1000;
  * Restituisce un access token Google valido per l'utente corrente,
  * rinnovandolo tramite il refresh token se scaduto.
  */
-async function getValidAccessToken(supabase: any, userId: string): Promise<string> {
+export async function getValidAccessToken(supabase: any, userId: string): Promise<string> {
   const { data: tokenRow, error } = await supabase
     .from("user_google_tokens")
     .select("access_token, refresh_token, expires_at")

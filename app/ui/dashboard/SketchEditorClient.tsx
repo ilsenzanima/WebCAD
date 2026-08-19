@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ProjectSketch, SketchStroke } from "@/lib/types/database";
-import { updateProjectSketchStrokes, renameProjectSketch, deleteProjectSketch } from "@/app/actions/projects";
-import DrawingCanvas from "./DrawingCanvas";
+import { updateProjectSketchStrokes, renameProjectSketch, deleteProjectSketch, saveProjectSketchToDrive } from "@/app/actions/projects";
+import DrawingCanvas, { type DrawingCanvasHandle } from "./DrawingCanvas";
 import { ArrowLeftIcon, DeleteIcon } from "./icons";
 
 interface SketchEditorClientProps {
@@ -17,8 +17,10 @@ interface SketchEditorClientProps {
 export default function SketchEditorClient({ sketch: initialSketch }: SketchEditorClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const canvasRef = useRef<DrawingCanvasHandle>(null);
   const [sketch, setSketch] = useState<ProjectSketch>(initialSketch);
   const [nameDraft, setNameDraft] = useState(initialSketch.name);
+  const [driveStatus, setDriveStatus] = useState<"idle" | "saving" | "error">("idle");
 
   const handleSaveStrokes = async (strokes: SketchStroke[]) => {
     const res = await updateProjectSketchStrokes(sketch.id, strokes);
@@ -45,6 +47,22 @@ export default function SketchEditorClient({ sketch: initialSketch }: SketchEdit
     });
   };
 
+  const handleSaveToDrive = () => {
+    setDriveStatus("saving");
+    startTransition(async () => {
+      const blob = await canvasRef.current?.exportPng();
+      if (!blob) { setDriveStatus("error"); alert("Impossibile esportare il disegno"); return; }
+
+      const fd = new FormData();
+      fd.append("file", blob, `${sketch.name || "disegno"}.png`);
+      const res = await saveProjectSketchToDrive(sketch.id, fd);
+      if (!res.success) { setDriveStatus("error"); alert(res.error); return; }
+
+      setSketch((s) => ({ ...s, drive_link: res.data?.driveLink ?? s.drive_link, drive_file_id: res.data?.driveFileId ?? s.drive_file_id }));
+      setDriveStatus("idle");
+    });
+  };
+
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ background: "linear-gradient(135deg, hsl(240 10% 4%), hsl(240 10% 8%))" }}>
       <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800/70 flex-shrink-0">
@@ -58,6 +76,12 @@ export default function SketchEditorClient({ sketch: initialSketch }: SketchEdit
           onBlur={handleRenameBlur}
           className="flex-1 min-w-0 bg-transparent text-sm font-extrabold text-white px-2 py-1.5 rounded-lg border border-transparent hover:border-zinc-800 focus:border-zinc-600 focus:bg-zinc-950/60 transition-all outline-none"
         />
+        {sketch.drive_link && (
+          <a href={sketch.drive_link} target="_blank" rel="noopener noreferrer"
+            className="hidden sm:inline-flex items-center gap-1 text-[10px] font-bold text-sky-300 hover:text-sky-200 transition-all flex-shrink-0">
+            ☁️ Apri su Drive
+          </a>
+        )}
         <button onClick={handleDelete} disabled={isPending}
           className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-rose-300 bg-rose-500/10 border border-rose-500/20 hover:bg-rose-500/20 transition-all flex-shrink-0 flex items-center gap-1.5">
           <DeleteIcon size={12} /> Elimina
@@ -66,7 +90,17 @@ export default function SketchEditorClient({ sketch: initialSketch }: SketchEdit
 
       <div className="flex-1 overflow-auto p-3 md:p-5">
         <div className="w-full max-w-[1600px] mx-auto">
-          <DrawingCanvas initialStrokes={sketch.strokes} onSave={handleSaveStrokes} />
+          <DrawingCanvas
+            ref={canvasRef}
+            initialStrokes={sketch.strokes}
+            onSave={handleSaveStrokes}
+            extraToolbarActions={
+              <button type="button" onClick={handleSaveToDrive} disabled={driveStatus === "saving"}
+                className="px-2.5 h-7 rounded-lg text-[10px] font-bold text-sky-300 hover:bg-sky-500/10 transition-all disabled:opacity-50 flex items-center gap-1">
+                {driveStatus === "saving" ? "☁️ Salvataggio…" : "☁️ Salva su Drive"}
+              </button>
+            }
+          />
         </div>
       </div>
     </div>

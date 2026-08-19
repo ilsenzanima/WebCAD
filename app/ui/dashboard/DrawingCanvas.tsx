@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, forwardRef, type ReactNode } from "react";
 import type { SketchStroke } from "@/lib/types/database";
 import { isNativeApp } from "@/lib/nativeUpdater";
 import { SHEET_WIDTH, SHEET_HEIGHT, drawStroke, renderSketch } from "@/lib/sketchRender";
@@ -8,11 +8,17 @@ import { SHEET_WIDTH, SHEET_HEIGHT, drawStroke, renderSketch } from "@/lib/sketc
 interface DrawingCanvasProps {
   initialStrokes: SketchStroke[];
   onSave: (strokes: SketchStroke[]) => Promise<void>;
+  // Slot per un pulsante aggiuntivo nella toolbar (es. "Salva su Drive"), a cura del chiamante.
+  extraToolbarActions?: ReactNode;
+}
+
+export interface DrawingCanvasHandle {
+  exportPng: () => Promise<Blob | null>;
 }
 
 const COLORS = ["#111827", "#f8fafc", "#f43f5e", "#f97316", "#eab308", "#22c55e", "#0ea5e9", "#8b5cf6"];
 
-export default function DrawingCanvas({ initialStrokes, onSave }: DrawingCanvasProps) {
+function DrawingCanvas({ initialStrokes, onSave, extraToolbarActions }: DrawingCanvasProps, ref: React.Ref<DrawingCanvasHandle>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef<SketchStroke | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -41,6 +47,15 @@ export default function DrawingCanvas({ initialStrokes, onSave }: DrawingCanvasP
     if (!canvas || !ctx) return;
     renderSketch(ctx, allStrokes);
   };
+
+  useImperativeHandle(ref, () => ({
+    exportPng: () =>
+      new Promise<Blob | null>((resolve) => {
+        const canvas = canvasRef.current;
+        if (!canvas) { resolve(null); return; }
+        canvas.toBlob((blob) => resolve(blob), "image/png");
+      }),
+  }));
 
   // Prepara il canvas alla risoluzione del dispositivo (nitido anche su schermi retina/tablet) e disegna lo stato iniziale.
   useEffect(() => {
@@ -168,6 +183,13 @@ export default function DrawingCanvas({ initialStrokes, onSave }: DrawingCanvasP
             🗑️ Cancella tutto
           </button>
 
+          {extraToolbarActions && (
+            <>
+              <div className="w-px h-5 bg-zinc-800 mx-1" />
+              {extraToolbarActions}
+            </>
+          )}
+
           <span className="ml-auto flex items-center gap-2 text-[10px] text-zinc-500 pr-1">
             {lastPointerType === "pen" && <span className="text-emerald-400">🖊️ Tavoletta rilevata (pressione attiva)</span>}
             {saveStatus === "saving" ? "Salvataggio…" : saveStatus === "saved" ? "Salvato ✓" : ""}
@@ -190,3 +212,5 @@ export default function DrawingCanvas({ initialStrokes, onSave }: DrawingCanvasP
     </div>
   );
 }
+
+export default forwardRef(DrawingCanvas);

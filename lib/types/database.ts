@@ -41,6 +41,9 @@ export interface ProjectSketch {
   user_id: string;
   name: string;
   strokes: SketchStroke[];
+  drive_file_id: string | null;
+  drive_link: string | null;
+  drive_synced_at: string | null;
   created_at: string;
   updated_at: string;
 }

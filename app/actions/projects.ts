@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import type { Project, ProjectMaterial, ProjectSketch, SketchStroke } from "@/lib/types/database";
+import { getValidAccessToken } from "@/app/actions/google";
+import { getOrCreateProjectSketchFolderId, uploadFileToGoogleDrive, updateFileContent } from "@/lib/gdrive";
 
 function revalidateProjects() {
   revalidatePath("/dashboard/projects", "layout");
@@ -283,6 +285,59 @@ export async function updateProjectSketchStrokes(id: string, strokes: SketchStro
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
+  }
+}
+
+// Esporta il disegno (PNG) su Google Drive, in Progetti/<Progetto>/Disegni.
+// Se il disegno era gia' stato salvato su Drive in precedenza, sovrascrive
+// lo stesso file invece di crearne uno nuovo ad ogni backup.
+export async function saveProjectSketchToDrive(sketchId: string, formData: FormData) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const file = formData.get("file") as File | null;
+    if (!file) throw new Error("Immagine del disegno mancante");
+
+    const { data: sketch, error: sketchError } = await supabase
+      .from("project_sketches")
+      .select("id, name, project_id, drive_file_id")
+      .eq("id", sketchId)
+      .single();
+    if (sketchError || !sketch) throw new Error("Disegno non trovato");
+
+    const { data: project, error: projectError } = await supabase
+      .from("projects")
+      .select("name")
+      .eq("id", sketch.project_id)
+      .single();
+    if (projectError || !project) throw new Error("Progetto non trovato");
+
+    const accessToken = await getValidAccessToken(supabase, user.id);
+    const fileName = `${sketch.name || "Disegno"}.png`;
+
+    const result = sketch.drive_file_id
+      ? await updateFileContent({ fileId: sketch.drive_file_id, file, accessToken })
+      : await uploadFileToGoogleDrive({
+          file,
+          fileName,
+          accessToken,
+          folderId: await getOrCreateProjectSketchFolderId({ projectName: project.name, accessToken }),
+        });
+
+    const driveLink = result.webViewLink || `https://drive.google.com/file/d/${result.id}/view`;
+
+    const { error: updateError } = await supabase
+      .from("project_sketches")
+      .update({ drive_file_id: result.id, drive_link: driveLink, drive_synced_at: new Date().toISOString() })
+      .eq("id", sketchId);
+    if (updateError) throw new Error(updateError.message);
+
+    revalidateProjects();
+    return { success: true, data: { driveFileId: result.id as string, driveLink } };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Errore durante il salvataggio su Google Drive" };
   }
 }
 
