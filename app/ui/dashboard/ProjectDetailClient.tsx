@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Project, ProjectMaterial, ProjectSketch } from "@/lib/types/database";
+import type { Project, ProjectMaterial, ProjectSketch, ProjectModel } from "@/lib/types/database";
 import {
   updateProject,
   updateProjectStatus,
@@ -14,6 +14,8 @@ import {
   deleteProjectMaterial,
   createProjectSketch,
   deleteProjectSketch,
+  createProjectModel,
+  deleteProjectModel,
 } from "@/app/actions/projects";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { DeleteIcon, EditIcon, ArrowLeftIcon, CheckIcon } from "./icons";
@@ -24,6 +26,7 @@ interface ProjectDetailClientProps {
   project: Project;
   initialMaterials: ProjectMaterial[];
   initialSketches: ProjectSketch[];
+  initialModels: ProjectModel[];
 }
 
 const STATUS_OPTIONS: { value: Project["status"]; label: string; icon: string; badgeClass: string }[] = [
@@ -34,14 +37,15 @@ const STATUS_OPTIONS: { value: Project["status"]; label: string; icon: string; b
 
 const cardStyle = { background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))", borderColor: "hsla(240, 5%, 18%, 0.7)" };
 
-export default function ProjectDetailClient({ project: initialProject, initialMaterials, initialSketches }: ProjectDetailClientProps) {
+export default function ProjectDetailClient({ project: initialProject, initialMaterials, initialSketches, initialModels }: ProjectDetailClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [project, setProject] = useState<Project>(initialProject);
   const [materials, setMaterials] = useState<ProjectMaterial[]>(initialMaterials);
   const [sketches, setSketches] = useState<ProjectSketch[]>(initialSketches);
-  const [activeTab, setActiveTab] = useState<"info" | "materials" | "sketch">("info");
+  const [models, setModels] = useState<ProjectModel[]>(initialModels);
+  const [activeTab, setActiveTab] = useState<"info" | "materials" | "sketch" | "model">("info");
 
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState(project.name);
@@ -95,6 +99,23 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
     setSketches((prev) => prev.filter((s) => s.id !== id));
     startTransition(async () => {
       const res = await deleteProjectSketch(id);
+      if (!res.success) alert(res.error);
+    });
+  };
+
+  const handleCreateModel = () => {
+    startTransition(async () => {
+      const res = await createProjectModel(project.id);
+      if (!res.success || !res.data) { alert(res.error); return; }
+      router.push(`/model/${(res.data as ProjectModel).id}`);
+    });
+  };
+
+  const handleDeleteModel = (id: string) => {
+    if (!confirm("Eliminare questo modello?")) return;
+    setModels((prev) => prev.filter((m) => m.id !== id));
+    startTransition(async () => {
+      const res = await deleteProjectModel(id);
       if (!res.success) alert(res.error);
     });
   };
@@ -200,6 +221,9 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
         </button>
         <button type="button" onClick={() => setActiveTab("sketch")} className={tabClass(activeTab === "sketch")}>
           🎨 Disegno
+        </button>
+        <button type="button" onClick={() => setActiveTab("model")} className={tabClass(activeTab === "model")}>
+          🧊 Modello 3D
         </button>
       </div>
 
@@ -414,6 +438,52 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
             ))}
           </div>
           {sketches.length === 0 && <p className="text-[11px] text-zinc-500">Nessun disegno ancora aggiunto.</p>}
+        </div>
+      )}
+
+      {/* Tab Modello 3D */}
+      {activeTab === "model" && (
+        <div className="rounded-2xl p-5 border shadow-2xl backdrop-blur-xl animate-fade-in space-y-4" style={cardStyle}>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-extrabold text-white">🧊 Modelli 3D</h3>
+              <p className="text-[10px] text-zinc-500 mt-0.5">La modellazione CAD è disponibile solo da PC.</p>
+            </div>
+            <button type="button" onClick={handleCreateModel} disabled={isPending}
+              className="px-3 py-2 rounded-lg text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition-all">
+              ＋ Nuovo modello
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {models.map((m) => (
+              <div key={m.id} className="relative group">
+                <Link href={`/model/${m.id}`}
+                  className="block rounded-xl border border-zinc-800/80 bg-zinc-950/40 overflow-hidden hover:border-zinc-600 transition-all">
+                  {m.thumbnail ? (
+                    <img src={m.thumbnail} alt={m.name} className="w-full aspect-[4/3] object-cover bg-zinc-900" />
+                  ) : (
+                    <div className="w-full aspect-[4/3] flex items-center justify-center text-3xl bg-zinc-900">🧊</div>
+                  )}
+                  <div className="p-2.5">
+                    <div className="text-xs font-bold text-white truncate flex items-center gap-1">
+                      {m.name}
+                      {m.drive_link && <span title="Salvato su Drive">☁️</span>}
+                    </div>
+                    <div className="text-[10px] text-zinc-500">{formatDate(m.updated_at)}</div>
+                  </div>
+                </Link>
+                <button
+                  onClick={(e) => { e.preventDefault(); handleDeleteModel(m.id); }}
+                  className="absolute top-2 right-2 p-1 rounded text-slate-500 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-950/80"
+                  title="Elimina modello"
+                >
+                  <DeleteIcon size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+          {models.length === 0 && <p className="text-[11px] text-zinc-500">Nessun modello ancora aggiunto.</p>}
         </div>
       )}
     </div>

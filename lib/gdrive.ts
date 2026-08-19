@@ -221,21 +221,41 @@ export async function uploadFileToGoogleDrive({
 }
 
 /**
- * Trova (creandola se serve) la cartella dei disegni di un progetto:
- * <rootFolderId>/Progetti/<NomeProgetto>/Disegni.
+ * Trova (creandola se serve) una sottocartella dedicata di un progetto:
+ * <rootFolderId>/Progetti/<NomeProgetto>/<sottocartella>.
  */
-export async function getOrCreateProjectSketchFolderId({
+export async function getOrCreateProjectSubfolderId({
   projectName,
+  subfolderName,
   accessToken,
   rootFolderId = GOOGLE_CONFIG.rootFolderId,
 }: {
   projectName: string;
+  subfolderName: string;
   accessToken: string;
   rootFolderId?: string;
 }): Promise<string> {
   const projectsFolderId = await findOrCreateFolder({ name: "Progetti", parentId: rootFolderId, accessToken });
   const projectFolderId = await findOrCreateFolder({ name: projectName, parentId: projectsFolderId, accessToken });
-  return findOrCreateFolder({ name: "Disegni", parentId: projectFolderId, accessToken });
+  return findOrCreateFolder({ name: subfolderName, parentId: projectFolderId, accessToken });
+}
+
+/** <rootFolderId>/Progetti/<NomeProgetto>/Disegni. */
+export async function getOrCreateProjectSketchFolderId(args: {
+  projectName: string;
+  accessToken: string;
+  rootFolderId?: string;
+}): Promise<string> {
+  return getOrCreateProjectSubfolderId({ ...args, subfolderName: "Disegni" });
+}
+
+/** <rootFolderId>/Progetti/<NomeProgetto>/Modelli 3D. */
+export async function getOrCreateProjectModelFolderId(args: {
+  projectName: string;
+  accessToken: string;
+  rootFolderId?: string;
+}): Promise<string> {
+  return getOrCreateProjectSubfolderId({ ...args, subfolderName: "Modelli 3D" });
 }
 
 /**

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "node scripts/copy-cascade-assets.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",
@@ -22,11 +23,13 @@
     "@tanstack/react-query": "^5.99.0",
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
+    "cascade-core": "^2.0.6",
     "jsbarcode": "^3.12.3",
     "next": "16.2.3",
     "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "three": "^0.185.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -35,6 +38,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.185.4",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
     "tailwindcss": "^4",

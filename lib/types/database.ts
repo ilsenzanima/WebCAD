@@ -48,6 +48,39 @@ export interface ProjectSketch {
   updated_at: string;
 }
 
+export interface ProjectModel {
+  id: string;
+  project_id: string;
+  user_id: string;
+  name: string;
+  code: string;
+  thumbnail: string | null;
+  drive_file_id: string | null;
+  drive_link: string | null;
+  drive_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Mesh restituita da cascade-core dopo l'esecuzione del codice CAD: una lista
+// di facce (triangolate) e di spigoli (polilinee), in coordinate piatte
+// [x0,y0,z0, x1,y1,z1, ...] pronte per una BufferGeometry three.js.
+export interface CascadeMeshFace {
+  vertex_coord: number[];
+  normal_coord: number[];
+  tri_indexes: number[];
+  number_of_triangles: number;
+}
+
+export interface CascadeMeshEdge {
+  vertex_coord: number[];
+}
+
+export interface CascadeMeshData {
+  faces: CascadeMeshFace[];
+  edges: CascadeMeshEdge[];
+}
+
 export interface ProjectMaterial {
   id: string;
   project_id: string;

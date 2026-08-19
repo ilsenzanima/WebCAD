@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# asset del motore CAD 3D copiati da node_modules/cascade-core (postinstall)
+/public/cad/
+
 # production
 /build
 
