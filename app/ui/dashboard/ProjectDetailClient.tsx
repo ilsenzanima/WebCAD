@@ -3,25 +3,27 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Project, ProjectMaterial, SketchStroke } from "@/lib/types/database";
+import type { Project, ProjectMaterial, ProjectSketch } from "@/lib/types/database";
 import {
   updateProject,
   updateProjectStatus,
   updateProjectNotes,
-  updateProjectSketch,
   deleteProject,
   createProjectMaterial,
   updateProjectMaterial,
   deleteProjectMaterial,
+  createProjectSketch,
+  deleteProjectSketch,
 } from "@/app/actions/projects";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { DeleteIcon, EditIcon, ArrowLeftIcon, CheckIcon } from "./icons";
 import RichTextEditor from "./RichTextEditor";
-import DrawingCanvas from "./DrawingCanvas";
+import SketchThumbnail from "./SketchThumbnail";
 
 interface ProjectDetailClientProps {
   project: Project;
   initialMaterials: ProjectMaterial[];
+  initialSketches: ProjectSketch[];
 }
 
 const STATUS_OPTIONS: { value: Project["status"]; label: string; icon: string; badgeClass: string }[] = [
@@ -32,12 +34,13 @@ const STATUS_OPTIONS: { value: Project["status"]; label: string; icon: string; b
 
 const cardStyle = { background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))", borderColor: "hsla(240, 5%, 18%, 0.7)" };
 
-export default function ProjectDetailClient({ project: initialProject, initialMaterials }: ProjectDetailClientProps) {
+export default function ProjectDetailClient({ project: initialProject, initialMaterials, initialSketches }: ProjectDetailClientProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   const [project, setProject] = useState<Project>(initialProject);
   const [materials, setMaterials] = useState<ProjectMaterial[]>(initialMaterials);
+  const [sketches, setSketches] = useState<ProjectSketch[]>(initialSketches);
   const [activeTab, setActiveTab] = useState<"info" | "materials" | "sketch">("info");
 
   const [editing, setEditing] = useState(false);
@@ -79,9 +82,21 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
     if (!res.success) console.error(res.error);
   };
 
-  const handleSaveSketch = async (strokes: SketchStroke[]) => {
-    const res = await updateProjectSketch(project.id, strokes);
-    if (!res.success) console.error(res.error);
+  const handleCreateSketch = () => {
+    startTransition(async () => {
+      const res = await createProjectSketch(project.id);
+      if (!res.success || !res.data) { alert(res.error); return; }
+      router.push(`/sketch/${(res.data as ProjectSketch).id}`);
+    });
+  };
+
+  const handleDeleteSketch = (id: string) => {
+    if (!confirm("Eliminare questo disegno?")) return;
+    setSketches((prev) => prev.filter((s) => s.id !== id));
+    startTransition(async () => {
+      const res = await deleteProjectSketch(id);
+      if (!res.success) alert(res.error);
+    });
   };
 
   const handleDeleteProject = () => {
@@ -365,9 +380,37 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
 
       {/* Tab Disegno */}
       {activeTab === "sketch" && (
-        <div className="rounded-2xl p-5 border shadow-2xl backdrop-blur-xl animate-fade-in space-y-3" style={cardStyle}>
-          <h3 className="text-sm font-extrabold text-white">🎨 Disegno del progetto</h3>
-          <DrawingCanvas initialStrokes={project.sketch_data || []} onSave={handleSaveSketch} />
+        <div className="rounded-2xl p-5 border shadow-2xl backdrop-blur-xl animate-fade-in space-y-4" style={cardStyle}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-extrabold text-white">🎨 Disegni</h3>
+            <button type="button" onClick={handleCreateSketch} disabled={isPending}
+              className="px-3 py-2 rounded-lg text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-500 transition-all">
+              ＋ Nuovo disegno
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {sketches.map((s) => (
+              <div key={s.id} className="relative group">
+                <Link href={`/sketch/${s.id}`}
+                  className="block rounded-xl border border-zinc-800/80 bg-zinc-950/40 overflow-hidden hover:border-zinc-600 transition-all">
+                  <SketchThumbnail strokes={s.strokes} />
+                  <div className="p-2.5">
+                    <div className="text-xs font-bold text-white truncate">{s.name}</div>
+                    <div className="text-[10px] text-zinc-500">{formatDate(s.updated_at)}</div>
+                  </div>
+                </Link>
+                <button
+                  onClick={(e) => { e.preventDefault(); handleDeleteSketch(s.id); }}
+                  className="absolute top-2 right-2 p-1 rounded text-slate-500 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity bg-zinc-950/80"
+                  title="Elimina disegno"
+                >
+                  <DeleteIcon size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+          {sketches.length === 0 && <p className="text-[11px] text-zinc-500">Nessun disegno ancora aggiunto.</p>}
         </div>
       )}
     </div>

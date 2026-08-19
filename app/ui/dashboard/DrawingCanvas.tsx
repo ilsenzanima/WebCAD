@@ -3,16 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { SketchStroke } from "@/lib/types/database";
 import { isNativeApp } from "@/lib/nativeUpdater";
+import { SHEET_WIDTH, SHEET_HEIGHT, drawStroke, renderSketch } from "@/lib/sketchRender";
 
 interface DrawingCanvasProps {
   initialStrokes: SketchStroke[];
   onSave: (strokes: SketchStroke[]) => Promise<void>;
 }
-
-// Foglio logico su cui si disegna: risoluzione fissa indipendente dalla
-// larghezza visualizzata, cosi' il tratto resta coerente su ogni schermo.
-const SHEET_WIDTH = 1400;
-const SHEET_HEIGHT = 900;
 
 const COLORS = ["#111827", "#f8fafc", "#f43f5e", "#f97316", "#eab308", "#22c55e", "#0ea5e9", "#8b5cf6"];
 
@@ -43,46 +39,7 @@ export default function DrawingCanvas({ initialStrokes, onSave }: DrawingCanvasP
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
-
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.restore();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, SHEET_WIDTH, SHEET_HEIGHT);
-
-    for (const stroke of allStrokes) drawStroke(ctx, stroke);
-  };
-
-  const drawStroke = (ctx: CanvasRenderingContext2D, stroke: SketchStroke) => {
-    if (stroke.points.length === 0) return;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = stroke.color;
-
-    if (stroke.points.length === 1) {
-      const p = stroke.points[0];
-      ctx.globalAlpha = 0.5 + p.pressure * 0.5;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, (stroke.size * (0.35 + p.pressure * 1.3)) / 2, 0, Math.PI * 2);
-      ctx.fillStyle = stroke.color;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      return;
-    }
-
-    for (let i = 1; i < stroke.points.length; i++) {
-      const prev = stroke.points[i - 1];
-      const curr = stroke.points[i];
-      ctx.globalAlpha = 0.5 + curr.pressure * 0.5;
-      ctx.lineWidth = stroke.size * (0.35 + curr.pressure * 1.3);
-      ctx.beginPath();
-      ctx.moveTo(prev.x, prev.y);
-      ctx.lineTo(curr.x, curr.y);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
+    renderSketch(ctx, allStrokes);
   };
 
   // Prepara il canvas alla risoluzione del dispositivo (nitido anche su schermi retina/tablet) e disegna lo stato iniziale.

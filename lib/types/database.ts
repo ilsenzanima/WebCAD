@@ -32,8 +32,17 @@ export interface Project {
   description: string | null;
   status: "bozza" | "in_corso" | "finito";
   notes_html: string | null;
-  sketch_data: SketchStroke[] | null;
   created_at: string;
+}
+
+export interface ProjectSketch {
+  id: string;
+  project_id: string;
+  user_id: string;
+  name: string;
+  strokes: SketchStroke[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ProjectMaterial {

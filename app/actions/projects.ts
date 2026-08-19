@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { Project, ProjectMaterial, SketchStroke } from "@/lib/types/database";
+import type { Project, ProjectMaterial, ProjectSketch, SketchStroke } from "@/lib/types/database";
 
 function revalidateProjects() {
   revalidatePath("/dashboard/projects", "layout");
@@ -103,18 +103,6 @@ export async function updateProjectNotes(id: string, notesHtml: string) {
   }
 }
 
-export async function updateProjectSketch(id: string, sketchData: SketchStroke[]) {
-  try {
-    const supabase = (await createClient()) as any;
-    const { error } = await supabase.from("projects").update({ sketch_data: sketchData }).eq("id", id);
-    if (error) throw new Error(error.message);
-
-    return { success: true };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
-}
-
 export async function deleteProject(id: string) {
   try {
     const supabase = (await createClient()) as any;
@@ -204,6 +192,104 @@ export async function deleteProjectMaterial(id: string) {
   try {
     const supabase = (await createClient()) as any;
     const { error } = await supabase.from("project_materials").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+
+    revalidateProjects();
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ============================================
+// Disegni (vetrina)
+// ============================================
+
+export async function getProjectSketches(projectId: string): Promise<ProjectSketch[]> {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data, error } = await supabase
+      .from("project_sketches")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("updated_at", { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return data || [];
+  } catch (err: any) {
+    console.error("Errore getProjectSketches:", err.message);
+    return [];
+  }
+}
+
+export async function getProjectSketch(id: string): Promise<ProjectSketch | null> {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data, error } = await supabase.from("project_sketches").select("*").eq("id", id).single();
+    if (error) throw new Error(error.message);
+    return data;
+  } catch (err: any) {
+    console.error("Errore getProjectSketch:", err.message);
+    return null;
+  }
+}
+
+export async function createProjectSketch(projectId: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data, error } = await supabase
+      .from("project_sketches")
+      .insert({ project_id: projectId, user_id: user.id })
+      .select()
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    revalidateProjects();
+    return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function renameProjectSketch(id: string, name: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { error } = await supabase
+      .from("project_sketches")
+      .update({ name: name.trim() || "Disegno senza titolo", updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+
+    revalidateProjects();
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function updateProjectSketchStrokes(id: string, strokes: SketchStroke[]) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { error } = await supabase
+      .from("project_sketches")
+      .update({ strokes, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteProjectSketch(id: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { error } = await supabase.from("project_sketches").delete().eq("id", id);
     if (error) throw new Error(error.message);
 
     revalidateProjects();
