@@ -7,6 +7,7 @@ import type { ProjectModel, CascadeMeshData } from "@/lib/types/database";
 import type { CascadeEngine } from "cascade-core";
 import { updateProjectModel, renameProjectModel, deleteProjectModel, saveProjectModelToDrive } from "@/app/actions/projects";
 import ModelViewer3D, { type ModelViewer3DHandle } from "./ModelViewer3D";
+import CadSnippetsPanel from "./CadSnippetsPanel";
 import { ArrowLeftIcon, DeleteIcon } from "./icons";
 import { isNativeApp } from "@/lib/nativeUpdater";
 
@@ -23,6 +24,7 @@ export default function ModelEditorClient({ model: initialModel }: ModelEditorCl
   const viewerRef = useRef<ModelViewer3DHandle>(null);
   const engineRef = useRef<CascadeEngine | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [model, setModel] = useState<ProjectModel>(initialModel);
   const [nameDraft, setNameDraft] = useState(initialModel.name);
@@ -33,6 +35,7 @@ export default function ModelEditorClient({ model: initialModel }: ModelEditorCl
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [driveStatus, setDriveStatus] = useState<"idle" | "saving" | "error">("idle");
   const [readOnly, setReadOnly] = useState(true);
+  const [showSnippets, setShowSnippets] = useState(false);
 
   useEffect(() => {
     setReadOnly(isNativeApp() || window.innerWidth < 768);
@@ -113,6 +116,30 @@ export default function ModelEditorClient({ model: initialModel }: ModelEditorCl
       setEngineStatus("error");
       appendLog(`❌ ${err?.message || "Errore durante l'esecuzione del codice"}`);
     }
+  };
+
+  const handleInsertSnippet = (snippetCode: string) => {
+    const textarea = textareaRef.current;
+    setShowSnippets(false);
+
+    if (!textarea) {
+      const next = code ? `${code}\n\n${snippetCode}` : snippetCode;
+      handleCodeChange(next);
+      return;
+    }
+
+    const start = textarea.selectionStart ?? code.length;
+    const end = textarea.selectionEnd ?? code.length;
+    const needsLeadingBreak = start > 0 && code[start - 1] !== "\n";
+    const insertion = `${needsLeadingBreak ? "\n\n" : ""}${snippetCode}\n`;
+    const next = code.slice(0, start) + insertion + code.slice(end);
+
+    handleCodeChange(next);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const cursor = start + insertion.length;
+      textarea.setSelectionRange(cursor, cursor);
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -215,6 +242,10 @@ export default function ModelEditorClient({ model: initialModel }: ModelEditorCl
                 <span className="text-[10px] text-zinc-500">
                   {saveStatus === "saving" ? "Salvataggio…" : saveStatus === "saved" ? "Salvato ✓" : ""}
                 </span>
+                <button type="button" onClick={() => setShowSnippets(true)}
+                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-zinc-300 border border-zinc-800 hover:border-zinc-600 hover:text-white transition-all">
+                  📚 Guida
+                </button>
                 <button type="button" onClick={() => handleRun()} disabled={engineStatus === "loading" || engineStatus === "running"}
                   className="px-3 py-1.5 rounded-lg text-[11px] font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all disabled:opacity-50">
                   {engineStatus === "loading" ? "⏳ Avvio motore…" : engineStatus === "running" ? "⏳ Esecuzione…" : "▶ Esegui"}
@@ -222,6 +253,7 @@ export default function ModelEditorClient({ model: initialModel }: ModelEditorCl
               </div>
             </div>
             <textarea
+              ref={textareaRef}
               value={code}
               onChange={(e) => handleCodeChange(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -251,6 +283,8 @@ export default function ModelEditorClient({ model: initialModel }: ModelEditorCl
           </div>
         </div>
       )}
+
+      {showSnippets && <CadSnippetsPanel onInsert={handleInsertSnippet} onClose={() => setShowSnippets(false)} />}
     </div>
   );
 }
