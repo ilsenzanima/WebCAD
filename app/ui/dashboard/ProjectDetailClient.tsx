@@ -18,6 +18,7 @@ import {
   deleteProjectModel,
 } from "@/app/actions/projects";
 import { formatCurrency, formatDate } from "@/lib/format";
+import { PROJECT_STATUS_OPTIONS, getProjectStatusMeta } from "@/lib/projectStatus";
 import { DeleteIcon, EditIcon, ArrowLeftIcon, CheckIcon } from "./icons";
 import RichTextEditor from "./RichTextEditor";
 import SketchThumbnail from "./SketchThumbnail";
@@ -28,12 +29,6 @@ interface ProjectDetailClientProps {
   initialSketches: ProjectSketch[];
   initialModels: ProjectModel[];
 }
-
-const STATUS_OPTIONS: { value: Project["status"]; label: string; icon: string; badgeClass: string }[] = [
-  { value: "bozza", label: "Bozza", icon: "📝", badgeClass: "bg-zinc-500/15 text-zinc-200 border-zinc-500/30" },
-  { value: "in_corso", label: "In corso", icon: "🔧", badgeClass: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
-  { value: "finito", label: "Finito", icon: "✅", badgeClass: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-];
 
 const cardStyle = { background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))", borderColor: "hsla(240, 5%, 18%, 0.7)" };
 
@@ -51,7 +46,7 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
   const [nameDraft, setNameDraft] = useState(project.name);
   const [descDraft, setDescDraft] = useState(project.description || "");
 
-  const currentStatus = STATUS_OPTIONS.find((s) => s.value === project.status) || STATUS_OPTIONS[0];
+  const currentStatus = getProjectStatusMeta(project.status);
 
   const handleStartEdit = () => {
     setNameDraft(project.name);
@@ -234,7 +229,7 @@ export default function ProjectDetailClient({ project: initialProject, initialMa
           <div className="rounded-2xl p-5 border shadow-2xl backdrop-blur-xl" style={cardStyle}>
             <h3 className="text-sm font-extrabold text-white mb-3">Stato del progetto</h3>
             <div className="flex flex-wrap gap-2">
-              {STATUS_OPTIONS.map((opt) => (
+              {PROJECT_STATUS_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import type { Project } from "@/lib/types/database";
 import { createProject, deleteProject } from "@/app/actions/projects";
+import { getProjectStatusMeta } from "@/lib/projectStatus";
 import { DeleteIcon, ArrowRightIcon } from "./icons";
 
 interface ProjectsClientProps {
@@ -69,14 +70,21 @@ export default function ProjectsClient({ initialProjects }: ProjectsClientProps)
           </button>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {projects.map((p) => (
+          {projects.map((p) => {
+            const status = getProjectStatusMeta(p.status);
+            return (
             <div key={p.id} className="relative group">
               <Link
                 href={`/dashboard/projects/${p.id}`}
                 className="p-3 rounded-xl border border-zinc-800/80 bg-zinc-950/40 flex items-start justify-between gap-2 hover:border-zinc-600 transition-all h-full"
               >
                 <div className="min-w-0">
-                  <div className="text-xs font-bold text-white break-words line-clamp-2">{p.name}</div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-bold text-white break-words line-clamp-2">{p.name}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border flex-shrink-0 ${status.badgeClass}`}>
+                      {status.icon} {status.label}
+                    </span>
+                  </div>
                   <div className="text-[10px] text-zinc-500 break-words line-clamp-3 mt-0.5">
                     {p.description || "Apri la scheda →"}
                   </div>
@@ -91,7 +99,8 @@ export default function ProjectsClient({ initialProjects }: ProjectsClientProps)
                 <DeleteIcon size={12} />
               </button>
             </div>
-          ))}
+            );
+          })}
         </div>
         {projects.length === 0 && <p className="text-[11px] text-zinc-500">Nessun progetto ancora inserito.</p>}
       </div>
