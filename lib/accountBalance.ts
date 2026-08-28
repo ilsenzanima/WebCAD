@@ -8,6 +8,7 @@ import { type Account, type AccountBalanceAdjustment } from "@/lib/types/databas
 import { toLocalDateStr } from "@/lib/format";
 
 interface ExpenseLike {
+  id: string;
   account_id: string | null;
   amount: number | string;
   is_income: boolean;
@@ -41,7 +42,9 @@ export function getLatestAdjustments(
  * Saldo corrente per conto: dall'ultimo aggiornamento manuale del saldo (se presente) o dal
  * saldo iniziale, + entrate collegate - uscite collegate successive alla data dell'aggiornamento
  * (i movimenti precedenti sono gia' compresi nel saldo osservato manualmente, quindi non vanno
- * sommati di nuovo).
+ * sommati di nuovo). Le spese/entrate correttive generate dagli aggiustamenti stessi (vedi
+ * lib/accountBalance.ts -> createAccountAdjustment) sono escluse dalla somma: il loro effetto
+ * e' gia' incorporato nel saldo osservato, sommarle di nuovo le conterebbe due volte.
  */
 export function computeAccountBalances(
   accounts: Account[],
@@ -50,12 +53,16 @@ export function computeAccountBalances(
   asOfDate: string = toLocalDateStr()
 ): Record<string, number> {
   const latestByAccount = getLatestAdjustments(accounts, adjustments, asOfDate);
+  const adjustmentExpenseIds = new Set(
+    adjustments.map((a) => a.expense_id).filter((id): id is string => !!id)
+  );
   const map: Record<string, number> = {};
   accounts.forEach((acc) => {
     const latest = latestByAccount[acc.id];
     let balance = latest ? Number(latest.balance) : Number(acc.initial_balance);
     expenses.forEach((e) => {
       if (e.account_id !== acc.id) return;
+      if (adjustmentExpenseIds.has(e.id)) return;
       if (latest && e.date < latest.date) return;
       balance += e.is_income ? Number(e.amount) : -Number(e.amount);
     });

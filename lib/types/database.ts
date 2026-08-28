@@ -237,6 +237,7 @@ export interface AccountBalanceAdjustment {
   date: string;
   balance: number; // saldo reale osservato a questa data (es. letto dall'app della banca)
   note: string | null;
+  expense_id: string | null; // FK -> expenses.id, spesa/entrata correttiva generata per riflettere la differenza
   created_at: string;
 }
 
@@ -257,6 +258,7 @@ export interface Expense {
   period_end: string | null; // primo giorno del mese di fine (= period_start per un singolo mese)
   is_income: boolean;
   is_emergency: boolean; // segnata come imprevisto al momento della registrazione, a prescindere dal tipo della categoria
+  is_refund: boolean; // entrata che rimborsa una spesa presso il fornitore collegato (supplier_id), per far quadrare i conti del fornitore
   created_at: string;
   updated_at: string;
 }
@@ -403,6 +405,7 @@ export interface Database {
           period_end?: string | null;
           is_income?: boolean;
           is_emergency?: boolean;
+          is_refund?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -423,6 +426,7 @@ export interface Database {
           period_end?: string | null;
           is_income?: boolean;
           is_emergency?: boolean;
+          is_refund?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -499,6 +503,7 @@ export interface Database {
           date: string;
           balance: number;
           note?: string | null;
+          expense_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -508,6 +513,7 @@ export interface Database {
           date?: string;
           balance?: number;
           note?: string | null;
+          expense_id?: string | null;
           created_at?: string;
         };
         Relationships: [
@@ -516,6 +522,13 @@ export interface Database {
             columns: ["account_id"];
             isOneToOne: false;
             referencedRelation: "accounts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "account_balance_adjustments_expense_id_fkey";
+            columns: ["expense_id"];
+            isOneToOne: false;
+            referencedRelation: "expenses";
             referencedColumns: ["id"];
           }
         ];

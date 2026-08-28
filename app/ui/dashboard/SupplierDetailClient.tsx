@@ -212,13 +212,20 @@ export default function SupplierDetailClient({
     });
   };
 
-  // Statistiche fornitore
+  // Statistiche fornitore. Le entrate collegate (rimborsi) vengono tenute separate dalle
+  // spese vere e proprie e sottratte per ottenere il totale netto realmente speso presso
+  // questo fornitore.
   const stats = useMemo(() => {
-    const totalAmount = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
-    const count = expenses.length;
-    const avgAmount = count > 0 ? totalAmount / count : 0;
+    const realExpenses = expenses.filter(e => !e.is_income);
+    const refunds = expenses.filter(e => e.is_income);
 
-    const allDates = [...expenses.map(e => e.date), ...schedules.map(s => s.due_date)].filter(Boolean).sort();
+    const grossAmount = realExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+    const refundedAmount = refunds.reduce((sum, e) => sum + Number(e.amount), 0);
+    const totalAmount = grossAmount - refundedAmount;
+    const count = realExpenses.length;
+    const avgAmount = count > 0 ? grossAmount / count : 0;
+
+    const allDates = [...realExpenses.map(e => e.date), ...schedules.map(s => s.due_date)].filter(Boolean).sort();
     let frequencyLabel = "In attesa di dati";
     let avgDaysBetween = 0;
 
@@ -247,7 +254,7 @@ export default function SupplierDetailClient({
     const nextSchedule = upcomingSchedules[0] || null;
 
     // Consumi (solo se il fornitore e' un'utenza): media/ultimo consumo e costo per unita'
-    const consumptionEntries = expenses
+    const consumptionEntries = realExpenses
       .filter(e => e.consumption_value != null && Number(e.consumption_value) > 0)
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
@@ -258,7 +265,7 @@ export default function SupplierDetailClient({
     const avgConsumption = consumptionEntries.length > 0 ? totalConsumption / consumptionEntries.length : 0;
 
     return {
-      totalAmount, count, avgAmount, frequencyLabel, nextSchedule,
+      totalAmount, grossAmount, refundedAmount, count, avgAmount, frequencyLabel, nextSchedule,
       consumptionEntries, avgCostPerUnit, lastConsumption, avgConsumption,
     };
   }, [expenses, schedules]);
@@ -318,9 +325,12 @@ export default function SupplierDetailClient({
           }}
         >
           <div className="absolute top-[-30%] right-[-20%] w-32 h-32 rounded-full bg-rose-500/5 blur-[40px]" />
-          <h4 className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Totale Speso Storico</h4>
+          <h4 className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Totale Speso Storico (Netto)</h4>
           <p className="text-2xl font-black text-white mt-2">{formatCurrency(stats.totalAmount)}</p>
-          <div className="text-[9px] text-slate-500 mt-1 font-semibold">{stats.count} spese registrate</div>
+          <div className="text-[9px] text-slate-500 mt-1 font-semibold">
+            {stats.count} spese registrate
+            {stats.refundedAmount > 0 && ` · ${formatCurrency(stats.refundedAmount)} rimborsati`}
+          </div>
         </div>
 
         {/* Importo Medio per Bolletta */}
@@ -435,9 +445,15 @@ export default function SupplierDetailClient({
                         {formatDate(e.date)}
                       </td>
                       <td className="py-3">
-                        <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                          Spesa Effettuata
-                        </span>
+                        {e.is_income ? (
+                          <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            ↩️ Rimborso Ricevuto
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[8px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                            Spesa Effettuata
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 text-white font-medium max-w-[180px] truncate">
                         {e.description || "Nessuna nota"}
@@ -447,8 +463,8 @@ export default function SupplierDetailClient({
                           {e.consumption_value != null ? `${e.consumption_value} ${supplierState.consumption_unit || ""}` : "—"}
                         </td>
                       )}
-                      <td className="py-3 text-right font-black text-rose-400">
-                        -{formatCurrency(e.amount)}
+                      <td className={`py-3 text-right font-black ${e.is_income ? "text-emerald-400" : "text-rose-400"}`}>
+                        {e.is_income ? "+" : "-"}{formatCurrency(e.amount)}
                       </td>
                     </tr>
                   ))}

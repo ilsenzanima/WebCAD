@@ -85,6 +85,7 @@ export default function ExpensesClient({
   const defaultAccountId = initialAccounts.find((a) => a.is_default)?.id || "";
   const [accountId, setAccountId] = useState(defaultAccountId);
   const [isEmergency, setIsEmergency] = useState(false);
+  const [isRefund, setIsRefund] = useState(false);
 
   const handlePeriodStartChange = (value: string) => {
     setPeriodEndInput(prev => syncPeriodEnd(value, periodStartInput, prev));
@@ -106,6 +107,19 @@ export default function ExpensesClient({
   const [isCreatingSupplier, setIsCreatingSupplier] = useState(false);
 
   const selectedSupplier = suppliersList.find(s => s.id === supplierId) || null;
+
+  // Nel menu di scelta si mostrano solo i fornitori attivi (i chiusi restano visibili
+  // in Smistamento Scansioni per archiviare vecchi documenti, ma non vanno riproposti
+  // per nuove spese/entrate/scadenze). Se si sta modificando una spesa gia' legata a un
+  // fornitore chiuso, lo si include comunque per non perdere la selezione esistente.
+  const supplierOptions = useMemo(() => {
+    const active = suppliersList.filter(s => s.is_active !== false);
+    if (supplierId && !active.some(s => s.id === supplierId)) {
+      const current = suppliersList.find(s => s.id === supplierId);
+      if (current) return [...active, current];
+    }
+    return active;
+  }, [suppliersList, supplierId]);
 
   // Filtri ricerca
   const [filterCategoryId, setFilterCategoryId] = useState("all");
@@ -144,6 +158,7 @@ export default function ExpensesClient({
     setPeriodEndInput("");
     setAccountId(defaultAccountId);
     setIsEmergency(false);
+    setIsRefund(false);
     setEditingId(null);
     setNewDocFile(null);
     setNewDocType("bolletta");
@@ -258,15 +273,18 @@ export default function ExpensesClient({
           linkedBudgetId = budgetRes.data.id;
         }
 
+        const linksSupplier = !isIncomeMode || isRefund;
+
         const payload = {
           amount: Number(amount),
           category_id: isIncomeMode ? null : categoryId,
-          supplier_id: isIncomeMode ? null : (supplierId || null),
+          supplier_id: linksSupplier ? (supplierId || null) : null,
           category_name: isIncomeMode ? "Entrata" : (selectedCat?.name || "Generica"),
           description,
           date,
           is_income: isIncomeMode,
           is_emergency: !isIncomeMode && isEmergency,
+          is_refund: isIncomeMode && isRefund,
           consumption_value: (!isIncomeMode && selectedSupplier?.is_utility && consumptionValue)
             ? Number(consumptionValue)
             : null,
@@ -293,7 +311,7 @@ export default function ExpensesClient({
                 ...item,
                 ...payload,
                 expense_categories: isIncomeMode ? null : (selectedCat ? { name: selectedCat.name, color: selectedCat.color } : null),
-                suppliers: isIncomeMode ? null : (matchingSupplier ? { name: matchingSupplier.name } : null)
+                suppliers: linksSupplier ? (matchingSupplier ? { name: matchingSupplier.name } : null) : null
               };
             })
           );
@@ -333,6 +351,7 @@ export default function ExpensesClient({
     setPeriodEndInput(dateToMonthInput((exp as any).period_end));
     setAccountId(exp.account_id || "");
     setIsEmergency((exp as any).is_emergency || false);
+    setIsRefund(exp.is_refund || false);
     setNewDocFile(null);
   };
 
@@ -591,6 +610,27 @@ export default function ExpensesClient({
                   />
                 </div>
 
+                {/* Rimborso (Solo se Entrata): collega l'entrata al fornitore rimborsato, cosi'
+                    i conti del fornitore tornano a quadrare */}
+                {isIncomeMode && (
+                  <label
+                    className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider cursor-pointer p-3 rounded-xl border animate-fade-in"
+                    style={{
+                      background: isRefund ? "hsla(142, 70%, 45%, 0.08)" : "hsl(240 10% 4% / 0.8)",
+                      borderColor: isRefund ? "hsla(142, 70%, 45%, 0.4)" : "hsl(240 5% 18%)",
+                      color: isRefund ? "hsl(142 70% 65%)" : "hsl(240 5% 65%)",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isRefund}
+                      onChange={(e) => setIsRefund(e.target.checked)}
+                      className="accent-emerald-500"
+                    />
+                    ↩️ È un rimborso da un fornitore
+                  </label>
+                )}
+
                 {/* Categoria (Solo se Uscita) */}
                 {!isIncomeMode && (
                   <div className="space-y-1.5 animate-fade-in">
@@ -624,10 +664,12 @@ export default function ExpensesClient({
                   </div>
                 )}
 
-                {/* Fornitore (Solo se Uscita) */}
-                {!isIncomeMode && (
+                {/* Fornitore: sempre per le uscite, solo se spuntato "rimborso" per le entrate */}
+                {(!isIncomeMode || isRefund) && (
                   <div className="space-y-1.5 animate-fade-in">
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Fornitore / Servizio</label>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                      {isIncomeMode ? "Fornitore Rimborsato" : "Fornitore / Servizio"}
+                    </label>
                     {!isAddingSupplier ? (
                       <select
                         value={supplierId}
@@ -651,9 +693,9 @@ export default function ExpensesClient({
                         }}
                       >
                         <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun Fornitore</option>
-                        {suppliersList.map((sup) => (
+                        {supplierOptions.map((sup) => (
                           <option key={sup.id} value={sup.id} style={{ background: "hsl(240 10% 10%)" }}>
-                            {sup.name}
+                            {sup.name}{sup.is_active === false ? " (chiuso)" : ""}
                           </option>
                         ))}
                         <option value="__new__" style={{ background: "hsl(240 10% 10%)" }}>+ Aggiungi nuovo fornitore...</option>
@@ -1063,7 +1105,9 @@ export default function ExpensesClient({
                         const attachments = docsByExpense[exp.id] || [];
                         const isExpanded = expandedExpenseId === exp.id;
                         const expSupplier = exp.supplier_id ? suppliersList.find(s => s.id === exp.supplier_id) : null;
-                        const { missingConsumption, missingDocument } = utilityMissingTags(expSupplier, exp.consumption_value, attachments.length);
+                        const { missingConsumption, missingDocument } = exp.is_income
+                          ? { missingConsumption: false, missingDocument: false }
+                          : utilityMissingTags(expSupplier, exp.consumption_value, attachments.length);
                         const isMonthBoundary = index > 0 && exp.date?.slice(0, 7) !== filteredList[index - 1].date?.slice(0, 7);
 
                         return (
@@ -1082,7 +1126,14 @@ export default function ExpensesClient({
                               </td>
                               <td className="py-4 pr-3 align-top">
                                 {isIncomeMode ? (
-                                  <div className="text-white font-bold">{exp.description || "Entrata Senza Descrizione"}</div>
+                                  <>
+                                    <div className="text-white font-bold">{exp.description || "Entrata Senza Descrizione"}</div>
+                                    {exp.is_refund && (
+                                      <div className="text-[10px] text-emerald-400 mt-0.5 max-w-[200px] truncate font-semibold">
+                                        ↩️ Rimborso{exp.suppliers?.name ? ` — ${exp.suppliers.name}` : ""}
+                                      </div>
+                                    )}
+                                  </>
                                 ) : (
                                   <>
                                     <div className="text-white font-bold max-w-[200px] truncate">

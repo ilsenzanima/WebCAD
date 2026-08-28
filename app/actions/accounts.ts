@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { computeAccountBalances } from "@/lib/accountBalance";
 
 export async function getAccounts() {
   try {
@@ -143,7 +144,13 @@ export async function getAccountAdjustments() {
 
 // Aggiornamento manuale del saldo di un conto: l'utente segna il saldo reale osservato
 // (es. dall'app della banca) a una certa data, per assorbire spese minori non registrate
-// senza doverle cercare una per una.
+// senza doverle cercare una per una. La differenza rispetto al saldo che l'app avrebbe
+// calcolato da sola viene registrata anche come spesa/entrata "Rettifica saldo" collegata
+// al conto, cosi' che resti visibile e inclusa nei totali lato Spese/Report/Budget (in
+// precedenza l'aggiustamento allineava solo il saldo del conto, senza lasciare traccia
+// nelle spese). L'aggiustamento resta comunque la fonte di verita' per il saldo: la spesa
+// correttiva viene esclusa dal ricalcolo del saldo per non contarla due volte
+// (vedi lib/accountBalance.ts).
 export async function createAccountAdjustment(formData: {
   account_id: string;
   date: string;
@@ -155,18 +162,51 @@ export async function createAccountAdjustment(formData: {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Non autenticato");
 
+    const [{ data: accounts, error: accountsError }, { data: expenses, error: expensesError }, { data: existingAdjustments, error: adjustmentsError }] = await Promise.all([
+      supabase.from("accounts").select("*").eq("user_id", user.id),
+      supabase.from("expenses").select("*").eq("user_id", user.id).eq("account_id", formData.account_id),
+      supabase.from("account_balance_adjustments").select("*").eq("user_id", user.id).eq("account_id", formData.account_id),
+    ]);
+    if (accountsError) throw new Error(accountsError.message);
+    if (expensesError) throw new Error(expensesError.message);
+    if (adjustmentsError) throw new Error(adjustmentsError.message);
+
+    const account = (accounts || []).find((a: any) => a.id === formData.account_id);
+    if (!account) throw new Error("Conto non trovato");
+
+    const previousBalances = computeAccountBalances([account], expenses || [], existingAdjustments || [], formData.date);
+    const previousBalance = previousBalances[account.id] ?? Number(account.initial_balance);
+    const delta = Math.round((formData.balance - previousBalance) * 100) / 100;
+
+    let expenseId: string | null = null;
+    if (delta !== 0) {
+      const { data: newExpense, error: expenseError } = await supabase.from("expenses").insert({
+        user_id: user.id,
+        amount: Math.abs(delta),
+        category: "Rettifica saldo",
+        description: formData.note ? `Rettifica saldo: ${formData.note}` : "Rettifica saldo conto",
+        date: formData.date,
+        account_id: formData.account_id,
+        is_income: delta > 0,
+      }).select().single();
+      if (expenseError) throw new Error(expenseError.message);
+      expenseId = newExpense.id;
+    }
+
     const { data, error } = await supabase.from("account_balance_adjustments").insert({
       user_id: user.id,
       account_id: formData.account_id,
       date: formData.date,
       balance: formData.balance,
       note: formData.note || null,
+      expense_id: expenseId,
     }).select().single();
 
     if (error) throw new Error(error.message);
 
     revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/accounts");
+    revalidatePath("/dashboard/expenses");
     return { success: true, data };
   } catch (err: any) {
     return { success: false, error: err.message };
@@ -179,6 +219,14 @@ export async function deleteAccountAdjustment(id: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Non autenticato");
 
+    const { data: adjustment, error: fetchError } = await supabase
+      .from("account_balance_adjustments")
+      .select("expense_id")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .single();
+    if (fetchError) throw new Error(fetchError.message);
+
     const { error } = await supabase
       .from("account_balance_adjustments")
       .delete()
@@ -187,8 +235,18 @@ export async function deleteAccountAdjustment(id: string) {
 
     if (error) throw new Error(error.message);
 
+    if (adjustment?.expense_id) {
+      const { error: expenseDeleteError } = await supabase
+        .from("expenses")
+        .delete()
+        .eq("id", adjustment.expense_id)
+        .eq("user_id", user.id);
+      if (expenseDeleteError) throw new Error(expenseDeleteError.message);
+    }
+
     revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/accounts");
+    revalidatePath("/dashboard/expenses");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };

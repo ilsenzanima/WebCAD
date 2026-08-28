@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect, Fragment } from "react";
+import { useState, useTransition, useEffect, useMemo, Fragment } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { type PaymentSchedule, type ExpenseCategory, type Supplier } from "@/lib/types/database";
 import { createSchedule, updateSchedule, deleteSchedule, paySchedule, unpaySchedule, splitScheduleIntoInstallments, rescheduleSchedule } from "@/app/actions/schedules";
@@ -68,6 +68,18 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState(categories[0]?.id || "");
   const [supplierId, setSupplierId] = useState("");
+
+  // Nel menu si mostrano solo i fornitori attivi (i chiusi restano assegnabili solo in
+  // Smistamento Scansioni); se si modifica una scadenza gia' legata a un fornitore chiuso,
+  // lo si include comunque per non perdere la selezione esistente.
+  const supplierOptions = useMemo(() => {
+    const active = suppliersList.filter(s => s.is_active !== false);
+    if (supplierId && !active.some(s => s.id === supplierId)) {
+      const current = suppliersList.find(s => s.id === supplierId);
+      if (current) return [...active, current];
+    }
+    return active;
+  }, [suppliersList, supplierId]);
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState(toLocalDateStr());
   const [recurrence, setRecurrence] = useState<"one-time" | "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "yearly">("one-time");
@@ -756,9 +768,9 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                   }}
                 >
                   <option value="" style={{ background: "hsl(240 10% 10%)" }}>Nessun Fornitore</option>
-                  {suppliersList.map((sup) => (
+                  {supplierOptions.map((sup) => (
                     <option key={sup.id} value={sup.id} style={{ background: "hsl(240 10% 10%)" }}>
-                      {sup.name}
+                      {sup.name}{sup.is_active === false ? " (chiuso)" : ""}
                     </option>
                   ))}
                   <option value="__new__" style={{ background: "hsl(240 10% 10%)" }}>+ Aggiungi nuovo fornitore...</option>

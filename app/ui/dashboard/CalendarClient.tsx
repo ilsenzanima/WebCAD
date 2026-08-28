@@ -497,9 +497,9 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                     const catColor = exp.expense_categories?.color || "slate";
                     const badge = getCategoryBadgeStyle(catColor);
                     const attachments = docsByExpense[exp.id] || [];
-                    const { missingConsumption, missingDocument } = utilityMissingTags(
-                      supplierOf(exp.supplier_id), exp.consumption_value, attachments.length
-                    );
+                    const { missingConsumption, missingDocument } = exp.is_income
+                      ? { missingConsumption: false, missingDocument: false }
+                      : utilityMissingTags(supplierOf(exp.supplier_id), exp.consumption_value, attachments.length);
 
                     return (
                       <div
