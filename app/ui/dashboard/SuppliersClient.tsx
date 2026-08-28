@@ -160,9 +160,15 @@ export default function SuppliersClient({ initialSuppliers, expenses, stores }: 
     const map: Record<string, { totalAmount: number; count: number; lastDate: string | null; dates: string[] }> = {};
 
     expenses.forEach(exp => {
-      if (!exp.supplier_id || exp.is_income) return;
+      if (!exp.supplier_id) return;
       if (!map[exp.supplier_id]) {
         map[exp.supplier_id] = { totalAmount: 0, count: 0, lastDate: null, dates: [] };
+      }
+      // I rimborsi collegati al fornitore (entrate) vengono sottratti dal totale speso,
+      // cosi' il numero mostrato riflette quanto realmente speso al netto dei resi.
+      if (exp.is_income) {
+        map[exp.supplier_id].totalAmount -= Number(exp.amount);
+        return;
       }
       map[exp.supplier_id].totalAmount += Number(exp.amount);
       map[exp.supplier_id].count += 1;

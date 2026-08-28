@@ -199,6 +199,7 @@ export interface Expense {
   period_end: string | null; // primo giorno del mese di fine (= period_start per un singolo mese)
   is_income: boolean;
   is_emergency: boolean; // segnata come imprevisto al momento della registrazione, a prescindere dal tipo della categoria
+  is_refund: boolean; // entrata che rimborsa una spesa presso il fornitore collegato (supplier_id), per far quadrare i conti del fornitore
   created_at: string;
   updated_at: string;
 }
@@ -345,6 +346,7 @@ export interface Database {
           period_end?: string | null;
           is_income?: boolean;
           is_emergency?: boolean;
+          is_refund?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -365,6 +367,7 @@ export interface Database {
           period_end?: string | null;
           is_income?: boolean;
           is_emergency?: boolean;
+          is_refund?: boolean;
           created_at?: string;
           updated_at?: string;
         };
