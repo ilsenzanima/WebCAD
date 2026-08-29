@@ -101,6 +101,17 @@ export function extractDetectedCode(description: string): string | null {
   return null;
 }
 
+// Una pre-autorizzazione (es. "PRE-ADDEBITO POS ...") non e' un movimento
+// reale: e' una trattenuta temporanea che di norma viene sostituita da un
+// addebito vero e proprio in una riga separata. Non ha senso cercarci una
+// spesa corrispondente: viene ignorata gia' in fase di import.
+const PRE_AUTHORIZATION_KEYWORDS = ["pre-addebito", "preaddebito", "pre autorizzazione", "preautorizzazione"];
+
+export function looksLikePreAuthorization(description: string): boolean {
+  const haystack = description.toLowerCase();
+  return PRE_AUTHORIZATION_KEYWORDS.some((k) => haystack.includes(k));
+}
+
 // Nome del commerciante/beneficiario, per suggerire un fornitore gia' noto quando
 // il codice rilevato non e' ancora collegato a nessuno.
 export function extractMerchantName(description: string): string | null {

@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { parseBankStatementCsv } from "@/lib/bankStatementParser";
+import { parseBankStatementCsv, looksLikePreAuthorization } from "@/lib/bankStatementParser";
 import { reconcileStatementLines, type ReconciledLine } from "@/lib/bankReconciliation";
 
 // Ampia abbastanza da coprire il ritardo di contabilizzazione dei pagamenti POS
@@ -101,6 +101,7 @@ export async function importBankStatement(formData: { account_id: string; file_n
           type: r.type,
           description: r.description,
           detected_code: r.detectedCode,
+          is_ignored: looksLikePreAuthorization(r.description),
         }))
       )
       .select();
