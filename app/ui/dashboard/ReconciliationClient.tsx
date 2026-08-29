@@ -18,6 +18,7 @@ import {
   markCodeWithoutSupplier,
   groupMatchLine,
   ungroupLine,
+  addGroupDifferenceAsFee,
   deleteBankStatementImport,
 } from "@/app/actions/bankReconciliation";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -317,9 +318,20 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                             Totale: {formatCurrency(r.groupExpenses.reduce((sum, e) => sum + Number(e.amount), 0))}
                             {r.amountDiff && r.amountDiff >= 0.01 ? ` · differenza di ${formatCurrency(r.amountDiff)}` : ""}
                           </p>
-                          <button type="button" onClick={() => withReload(() => ungroupLine(r.line.id))} className="text-[11px] font-bold text-slate-400 hover:text-white">
-                            Annulla raggruppamento
-                          </button>
+                          <div className="flex gap-2 flex-wrap items-center">
+                            {!!r.amountDiff && r.amountDiff >= 0.01 && (
+                              <button
+                                type="button"
+                                onClick={() => withReload(() => addGroupDifferenceAsFee(r.line.id))}
+                                className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20"
+                              >
+                                È una commissione
+                              </button>
+                            )}
+                            <button type="button" onClick={() => withReload(() => ungroupLine(r.line.id))} className="text-[11px] font-bold text-slate-400 hover:text-white">
+                              Annulla raggruppamento
+                            </button>
+                          </div>
                         </>
                       )}
 

@@ -27,9 +27,13 @@ export interface ReconciledLine {
 }
 
 // Entro questa differenza di importo e di giorni, il match e' considerato sicuro
-// e viene confermato in automatico senza bisogno di un click.
+// e viene confermato in automatico senza bisogno di un click. Il ritardo di
+// contabilizzazione di alcuni metodi di pagamento (es. BancomatPay, Amazon) puo'
+// arrivare regolarmente a una decina di giorni: quando l'importo torna esatto,
+// il solo tempo di addebito non deve bastare a bloccare la conferma automatica,
+// percio' la finestra di data qui coincide con quella di ricerca del candidato.
 const AUTO_CONFIRM_AMOUNT_TOLERANCE = 0.05;
-const AUTO_CONFIRM_DATE_WINDOW_DAYS = 5;
+const AUTO_CONFIRM_DATE_WINDOW_DAYS = 10;
 
 // Finestra entro cui cercare comunque un candidato da proporre come "da verificare".
 const CANDIDATE_DATE_WINDOW_DAYS = 10;

@@ -442,6 +442,74 @@ export async function ungroupLine(lineId: string) {
   }
 }
 
+// Come splitReviewDifferenceAsFee, ma per un movimento raggruppato: la somma
+// delle spese gia' raggruppate non basta a coprire l'importo del movimento
+// (es. la commissione di un R.I.D./S.D.D.), quindi si crea una spesa separata
+// solo per la differenza e la si aggiunge al gruppo, invece di lasciarla come
+// semplice numero mostrato a schermo.
+export async function addGroupDifferenceAsFee(lineId: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data: line, error: lineError } = await supabase
+      .from("bank_statement_lines")
+      .select("amount, value_date, account_id")
+      .eq("id", lineId)
+      .eq("user_id", user.id)
+      .single();
+    if (lineError || !line) throw new Error("Movimento non trovato");
+
+    const { data: groupRows, error: groupError } = await supabase
+      .from("bank_statement_line_expenses")
+      .select("expense_id")
+      .eq("line_id", lineId)
+      .eq("user_id", user.id);
+    if (groupError) throw new Error(groupError.message);
+    const expenseIds = (groupRows || []).map((g: any) => g.expense_id);
+    if (expenseIds.length === 0) throw new Error("Nessun raggruppamento su questo movimento.");
+
+    const { data: groupExpenses, error: expensesError } = await supabase
+      .from("expenses")
+      .select("amount, is_income")
+      .eq("user_id", user.id)
+      .in("id", expenseIds);
+    if (expensesError) throw new Error(expensesError.message);
+
+    const total = (groupExpenses || []).reduce((sum: number, e: any) => sum + Number(e.amount), 0);
+    const diff = Math.abs(Number(line.amount)) - total;
+    if (Math.abs(diff) < 0.005) throw new Error("Gli importi coincidono già: non c'è una differenza da aggiungere.");
+
+    const referenceIsIncome = groupExpenses?.[0]?.is_income ?? false;
+    const { data: feeExpense, error: feeError } = await supabase
+      .from("expenses")
+      .insert({
+        user_id: user.id,
+        amount: Math.abs(diff),
+        category: "Commissioni",
+        description: "Commissione applicata dalla banca",
+        date: line.value_date,
+        account_id: line.account_id,
+        is_income: diff > 0 ? referenceIsIncome : !referenceIsIncome,
+      })
+      .select()
+      .single();
+    if (feeError) throw new Error(feeError.message);
+
+    const { error: linkError } = await supabase
+      .from("bank_statement_line_expenses")
+      .insert({ user_id: user.id, line_id: lineId, expense_id: feeExpense.id });
+    if (linkError) throw new Error(linkError.message);
+
+    revalidatePath("/dashboard/expenses");
+    revalidateReconciliationPaths();
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function unmatchLine(lineId: string) {
   try {
     const supabase = (await createClient()) as any;
