@@ -126,14 +126,20 @@ export function reconcileStatementLines(
     const codeIsKnown = line.detected_code ? codeToSupplier.has(line.detected_code) : false;
     const supplierId = line.detected_code ? codeToSupplier.get(line.detected_code) ?? null : null;
 
-    const pool = expenses.filter(
+    const candidatePool = expenses.filter(
       (e) =>
         e.account_id === line.account_id &&
         e.is_income === isIncome &&
         !usedExpenseIds.has(e.id) &&
-        (supplierId ? e.supplier_id === supplierId : true) &&
         daysBetween(e.date, line.value_date) <= CANDIDATE_DATE_WINDOW_DAYS
     );
+
+    // Il fornitore risolto e' una preferenza, non un filtro rigido: se nessuna
+    // spesa nella finestra ha quel fornitore assegnato (es. l'utente non lo
+    // compila sempre), si cerca comunque su tutte per importo/data invece di
+    // perdere un candidato altrimenti valido.
+    const supplierMatchedPool = supplierId ? candidatePool.filter((e) => e.supplier_id === supplierId) : [];
+    const pool = supplierMatchedPool.length > 0 ? supplierMatchedPool : candidatePool;
 
     let best: Expense | null = null;
     let bestAmountDiff = Infinity;
