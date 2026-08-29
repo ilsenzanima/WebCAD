@@ -26,6 +26,20 @@ function revalidateReconciliationPaths() {
 // collegato un codice a un fornitore, cosa che puo' sbloccare altri movimenti
 // con lo stesso codice), cosi' che il collegamento sia sempre reale e non solo
 // mostrato a schermo.
+// Best-effort: quando un movimento con un codice mai visto viene confermato su
+// una spesa, quella scelta (con o senza fornitore) vale anche per i prossimi
+// movimenti con lo stesso codice (es. la commissione collegata allo stesso
+// bonifico). Un conflitto (codice gia' noto) e' normale e viene ignorato senza
+// far fallire l'azione principale, che a quel punto e' gia' andata a buon fine.
+async function rememberDetectedCode(supabase: any, userId: string, code: string | null | undefined, supplierId: string | null) {
+  if (!code) return;
+  try {
+    await supabase.from("supplier_account_codes").insert({ user_id: userId, supplier_id: supplierId, code });
+  } catch {
+    // ignorato: non e' un'operazione critica
+  }
+}
+
 async function persistAutoConfirmedMatches(supabase: any, userId: string, reconciled: ReconciledLine[]) {
   const toConfirm = reconciled.filter((r) => r.status === "confirmed" && r.candidateExpense && !r.line.matched_expense_id);
   for (const r of toConfirm) {
@@ -204,6 +218,14 @@ export async function confirmLineMatch(lineId: string, expenseId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Non autenticato");
 
+    const { data: line, error: lineError } = await supabase
+      .from("bank_statement_lines")
+      .select("detected_code")
+      .eq("id", lineId)
+      .eq("user_id", user.id)
+      .single();
+    if (lineError || !line) throw new Error("Movimento non trovato");
+
     const { error } = await supabase
       .from("bank_statement_lines")
       .update({ matched_expense_id: expenseId, is_ignored: false })
@@ -213,6 +235,9 @@ export async function confirmLineMatch(lineId: string, expenseId: string) {
       if (error.code === "23505") throw new Error("Questa spesa è già collegata a un altro movimento.");
       throw new Error(error.message);
     }
+
+    const { data: expense } = await supabase.from("expenses").select("supplier_id").eq("id", expenseId).eq("user_id", user.id).single();
+    await rememberDetectedCode(supabase, user.id, line.detected_code, expense?.supplier_id ?? null);
 
     revalidateReconciliationPaths();
     return { success: true };
@@ -232,17 +257,19 @@ export async function correctExpenseAmountAndConfirm(lineId: string, expenseId: 
 
     const { data: line, error: lineError } = await supabase
       .from("bank_statement_lines")
-      .select("amount")
+      .select("amount, detected_code")
       .eq("id", lineId)
       .eq("user_id", user.id)
       .single();
     if (lineError || !line) throw new Error("Movimento non trovato");
 
-    const { error: expenseError } = await supabase
+    const { data: updatedExpense, error: expenseError } = await supabase
       .from("expenses")
       .update({ amount: Math.abs(Number(line.amount)) })
       .eq("id", expenseId)
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .select("supplier_id")
+      .single();
     if (expenseError) throw new Error(expenseError.message);
 
     const { error: matchError } = await supabase
@@ -254,6 +281,8 @@ export async function correctExpenseAmountAndConfirm(lineId: string, expenseId: 
       if (matchError.code === "23505") throw new Error("Questa spesa è già collegata a un altro movimento.");
       throw new Error(matchError.message);
     }
+
+    await rememberDetectedCode(supabase, user.id, line.detected_code, updatedExpense?.supplier_id ?? null);
 
     revalidatePath("/dashboard/expenses");
     revalidateReconciliationPaths();

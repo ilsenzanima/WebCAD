@@ -387,6 +387,49 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                       {r.status === "new_code" && (
                         <>
                           <p className="text-[11px] text-slate-400 font-mono break-all">Codice rilevato: {r.line.detected_code}</p>
+
+                          {r.candidateExpense && (
+                            <>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="rounded-lg p-3 bg-zinc-900/60 border border-zinc-800">
+                                  <div className="text-[9px] font-bold uppercase tracking-wide text-slate-500 mb-1">Nell'estratto</div>
+                                  <div className="text-xs text-white">{formatCurrency(Math.abs(Number(r.line.amount)))}</div>
+                                  <div className="text-[10px] text-slate-500">{formatDate(r.line.value_date)}</div>
+                                </div>
+                                <div className="rounded-lg p-3 bg-zinc-900/60 border border-zinc-800">
+                                  <div className="text-[9px] font-bold uppercase tracking-wide text-slate-500 mb-1">Potrebbe essere</div>
+                                  <div className="text-xs text-white truncate">{r.candidateExpense.description || r.candidateExpense.category}</div>
+                                  <div className={`text-[10px] ${r.amountDiff ? "text-amber-400" : "text-slate-500"}`}>
+                                    {formatCurrency(Math.abs(Number(r.candidateExpense.amount)))} · {formatDate(r.candidateExpense.date)}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex gap-2 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => withReload(() => confirmLineMatch(r.line.id, r.candidateExpense!.id))}
+                                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-sky-600 hover:bg-sky-500"
+                                >
+                                  È questa spesa
+                                </button>
+                                {!!r.amountDiff && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const oldAmount = formatCurrency(Math.abs(Number(r.candidateExpense!.amount)));
+                                      const newAmount = formatCurrency(Math.abs(Number(r.line.amount)));
+                                      if (!confirm(`Correggere l'importo della spesa registrata da ${oldAmount} a ${newAmount} (come nell'estratto conto)?`)) return;
+                                      withReload(() => correctExpenseAmountAndConfirm(r.line.id, r.candidateExpense!.id));
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20"
+                                  >
+                                    È questa, ma correggi importo
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          )}
+
                           {r.suggestedSupplier ? (
                             <div className="rounded-lg p-3 bg-sky-500/10 border border-dashed border-sky-500/40 flex items-center justify-between gap-3 flex-wrap">
                               <span className="text-[11px] text-slate-300">Il nome somiglia a un fornitore già noto.</span>
