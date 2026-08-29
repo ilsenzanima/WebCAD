@@ -16,7 +16,12 @@ export const GOOGLE_CONFIG = {
     // file che l'utente ha aggiunto direttamente su Drive (cartella
     // "Scansioni"), non solo quelli creati dall'app stessa.
     drive: "https://www.googleapis.com/auth/drive",
-    calendar: "https://www.googleapis.com/auth/calendar.events",
+    // Serve lo scope "calendar" completo (non il piu' ristretto "calendar.events")
+    // perche' la sincronizzazione deve poter CREARE il calendario dedicato
+    // "Scadenze & Bollette - Gestionale" se non esiste ancora (Calendars.insert
+    // richiede questo scope, calendar.events permette solo di gestire eventi
+    // su calendari gia' esistenti).
+    calendar: "https://www.googleapis.com/auth/calendar",
     tasks: "https://www.googleapis.com/auth/tasks",
   },
 };
