@@ -13,7 +13,7 @@
 
 import { type BankStatementLine, type Expense, type Supplier, type SupplierAccountCode } from "@/lib/types/database";
 
-export type ReconciliationStatus = "confirmed" | "grouped" | "review" | "missing" | "new_code" | "autobook" | "ignored";
+export type ReconciliationStatus = "confirmed" | "grouped" | "review" | "missing" | "new_code" | "autobook" | "before_baseline" | "ignored";
 
 export interface ReconciledLine {
   line: BankStatementLine;
@@ -85,7 +85,13 @@ export function reconcileStatementLines(
   expenses: Expense[],
   supplierAccountCodes: SupplierAccountCode[],
   suppliers: Supplier[],
-  groupedExpensesByLine: Record<string, Expense[]> = {}
+  groupedExpensesByLine: Record<string, Expense[]> = {},
+  // Data dell'ultimo aggiornamento manuale del saldo del conto (se presente): le spese
+  // precedenti a questa data sono escluse dal calcolo del saldo perche' gia' comprese nel
+  // saldo osservato a mano (vedi lib/accountBalance.ts) - un movimento bancario con la
+  // stessa data andrebbe quindi a duplicare quell'importo se si creasse una nuova spesa
+  // per lui, invece di essere gia' "pagato" dal saldo di partenza.
+  baselineDate: string | null = null
 ): ReconciledLine[] {
   const codeToSupplier = new Map(supplierAccountCodes.map((c) => [c.code, c.supplier_id] as const));
 
@@ -131,6 +137,14 @@ export function reconcileStatementLines(
         amountDiff: matched ? Math.abs(Math.abs(Number(matched.amount)) - Math.abs(Number(line.amount))) : null,
         dateDiffDays: matched ? daysBetween(matched.date, line.value_date) : null,
       });
+      continue;
+    }
+
+    // Movimento antecedente al saldo di partenza impostato a mano: e' gia'
+    // conteggiato in quel numero, non va cercata (ne' proposta di creare) una
+    // spesa corrispondente, altrimenti finirebbe contato due volte.
+    if (baselineDate && line.value_date < baselineDate) {
+      results.push(emptyResult(line, "before_baseline"));
       continue;
     }
 

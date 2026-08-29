@@ -20,6 +20,26 @@ function revalidateReconciliationPaths() {
   revalidatePath("/dashboard/reconciliation");
 }
 
+// Stessa regola usata per il saldo corrente in lib/accountBalance.ts: l'ultimo
+// aggiornamento manuale del saldo (con data non futura) e' il punto in cui
+// l'utente ha "azzerato i conti" a mano: le spese precedenti a quella data sono
+// escluse dal calcolo del saldo perche' gia' comprese in quel numero. Un
+// movimento bancario con la stessa data andrebbe quindi a duplicarlo se si
+// creasse una nuova spesa per lui.
+async function getBaselineDate(supabase: any, userId: string, accountId: string): Promise<string | null> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data } = await supabase
+    .from("account_balance_adjustments")
+    .select("date")
+    .eq("user_id", userId)
+    .eq("account_id", accountId)
+    .lte("date", today)
+    .order("date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data?.date ?? null;
+}
+
 // I match "confermati" dal calcolo puro sono sicuri per definizione (tolleranza
 // stretta su importo e data): li si scrive subito sul movimento, sia al primo
 // import sia ogni volta che la riconciliazione viene ricalcolata (es. dopo aver
@@ -125,7 +145,8 @@ export async function importBankStatement(formData: { account_id: string; file_n
     if (codesError) throw new Error(codesError.message);
     if (suppliersError) throw new Error(suppliersError.message);
 
-    const reconciled = reconcileStatementLines(insertedLines || [], expenses || [], supplierCodes || [], suppliers || []);
+    const baselineDate = await getBaselineDate(supabase, user.id, formData.account_id);
+    const reconciled = reconcileStatementLines(insertedLines || [], expenses || [], supplierCodes || [], suppliers || [], {}, baselineDate);
     await persistAutoConfirmedMatches(supabase, user.id, reconciled);
 
     const summary = reconciled.reduce(
@@ -221,7 +242,8 @@ export async function getReconciliationForImport(importId: string) {
       if (expense) (groupedExpensesByLine[g.line_id] ||= []).push(expense);
     });
 
-    const reconciled = reconcileStatementLines(lines || [], expenses || [], supplierCodes || [], suppliers || [], groupedExpensesByLine);
+    const baselineDate = await getBaselineDate(supabase, user.id, importRow.account_id);
+    const reconciled = reconcileStatementLines(lines || [], expenses || [], supplierCodes || [], suppliers || [], groupedExpensesByLine, baselineDate);
     await persistAutoConfirmedMatches(supabase, user.id, reconciled);
 
     // Il set usa "reconciled" (non le righe grezze) cosi' da includere anche i match

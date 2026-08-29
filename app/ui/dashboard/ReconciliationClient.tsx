@@ -43,6 +43,7 @@ const STATUS_META: Record<ReconciliationStatus, { label: string; badge: string; 
   missing: { label: "Non trovato", badge: "bg-rose-500/10 text-rose-400 border-rose-500/20", dot: "bg-rose-400" },
   new_code: { label: "Nuovo codice", badge: "bg-sky-500/10 text-sky-400 border-sky-500/20", dot: "bg-sky-400" },
   autobook: { label: "Da registrare", badge: "bg-zinc-800 text-zinc-400 border-zinc-700", dot: "bg-zinc-500" },
+  before_baseline: { label: "Coperto dal saldo iniziale", badge: "bg-zinc-800 text-zinc-400 border-zinc-700", dot: "bg-zinc-500" },
   ignored: { label: "Ignorato", badge: "bg-zinc-900 text-zinc-600 border-zinc-800", dot: "bg-zinc-600" },
 };
 
@@ -146,7 +147,7 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
     if (!data) return [];
     if (tab === "all") return data.reconciled;
     if (tab === "confirmed") return data.reconciled.filter((r) => r.status === "confirmed" || r.status === "grouped");
-    return data.reconciled.filter((r) => ["review", "missing", "new_code", "autobook"].includes(r.status));
+    return data.reconciled.filter((r) => ["review", "missing", "new_code", "autobook", "before_baseline"].includes(r.status));
   }, [data, tab]);
 
   if (accounts.length === 0) {
@@ -243,7 +244,7 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
             {[
               { key: "all" as const, label: "Tutti", count: data.reconciled.length },
               { key: "confirmed" as const, label: "Confermati", count: (summary.confirmed || 0) + (summary.grouped || 0) },
-              { key: "attention" as const, label: "Da rivedere", count: (summary.review || 0) + (summary.missing || 0) + (summary.new_code || 0) + (summary.autobook || 0) },
+              { key: "attention" as const, label: "Da rivedere", count: (summary.review || 0) + (summary.missing || 0) + (summary.new_code || 0) + (summary.autobook || 0) + (summary.before_baseline || 0) },
             ].map((t) => (
               <button
                 key={t.key}
@@ -353,6 +354,17 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                               Ignora
                             </button>
                           </div>
+                        </>
+                      )}
+
+                      {r.status === "before_baseline" && (
+                        <>
+                          <p className="text-[11px] text-slate-400">
+                            Questo movimento è precedente all'ultimo aggiornamento manuale del saldo di questo conto: è già compreso in quel saldo, quindi non creare una spesa per lui o la conteggeresti due volte.
+                          </p>
+                          <button type="button" onClick={() => withReload(() => ignoreStatementLine(r.line.id))} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-400 hover:text-white">
+                            Ignora
+                          </button>
                         </>
                       )}
 
