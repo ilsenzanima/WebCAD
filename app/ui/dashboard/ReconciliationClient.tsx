@@ -59,6 +59,7 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expenseFormLineId, setExpenseFormLineId] = useState<string | null>(null);
   const [linkFormLineId, setLinkFormLineId] = useState<string | null>(null);
+  const [confirmSupplierByLine, setConfirmSupplierByLine] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const suppliersById = useMemo(() => new Map(suppliers.map((s) => [s.id, s] as const)), [suppliers]);
@@ -402,10 +403,25 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                                 </div>
                                 <ExpenseCandidateCard label="Potrebbe essere" expense={r.candidateExpense} amountDiff={r.amountDiff} suppliersById={suppliersById} />
                               </div>
+                              {!r.candidateExpense.supplier_id && (
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <label className="text-[10px] text-slate-500">Fornitore da assegnare alla spesa (opzionale):</label>
+                                  <select
+                                    value={confirmSupplierByLine[r.line.id] ?? (r.suggestedSupplier?.id || "")}
+                                    onChange={(e) => setConfirmSupplierByLine((prev) => ({ ...prev, [r.line.id]: e.target.value }))}
+                                    className="px-2 py-1 rounded-lg text-[11px] text-white border select-custom border-zinc-800 bg-zinc-950/80"
+                                  >
+                                    <option value="" style={{ background: "hsl(240 10% 10%)" }}>— nessuno —</option>
+                                    {suppliers.map((s) => (
+                                      <option key={s.id} value={s.id} style={{ background: "hsl(240 10% 10%)" }}>{s.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              )}
                               <div className="flex gap-2 flex-wrap">
                                 <button
                                   type="button"
-                                  onClick={() => withReload(() => confirmLineMatch(r.line.id, r.candidateExpense!.id))}
+                                  onClick={() => withReload(() => confirmLineMatch(r.line.id, r.candidateExpense!.id, confirmSupplierByLine[r.line.id] || null))}
                                   className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-sky-600 hover:bg-sky-500"
                                 >
                                   È questa spesa

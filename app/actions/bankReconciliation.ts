@@ -212,7 +212,11 @@ export async function getReconciliationForImport(importId: string) {
   }
 }
 
-export async function confirmLineMatch(lineId: string, expenseId: string) {
+// "supplierId" e' opzionale: quando la spesa candidata non aveva ancora un
+// fornitore assegnato (es. registrata prima di creare il fornitore, o
+// semplicemente dimenticato), permette di assegnarlo nello stesso momento in
+// cui si conferma il collegamento, invece di dover poi modificarla a mano in Spese.
+export async function confirmLineMatch(lineId: string, expenseId: string, supplierId?: string | null) {
   try {
     const supabase = (await createClient()) as any;
     const { data: { user } } = await supabase.auth.getUser();
@@ -225,6 +229,15 @@ export async function confirmLineMatch(lineId: string, expenseId: string) {
       .eq("user_id", user.id)
       .single();
     if (lineError || !line) throw new Error("Movimento non trovato");
+
+    if (supplierId) {
+      const { error: supplierUpdateError } = await supabase
+        .from("expenses")
+        .update({ supplier_id: supplierId })
+        .eq("id", expenseId)
+        .eq("user_id", user.id);
+      if (supplierUpdateError) throw new Error(supplierUpdateError.message);
+    }
 
     const { error } = await supabase
       .from("bank_statement_lines")
@@ -239,6 +252,7 @@ export async function confirmLineMatch(lineId: string, expenseId: string) {
     const { data: expense } = await supabase.from("expenses").select("supplier_id").eq("id", expenseId).eq("user_id", user.id).single();
     await rememberDetectedCode(supabase, user.id, line.detected_code, expense?.supplier_id ?? null);
 
+    revalidatePath("/dashboard/expenses");
     revalidateReconciliationPaths();
     return { success: true };
   } catch (err: any) {
