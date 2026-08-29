@@ -90,10 +90,23 @@ function parseItalianAmount(raw: string): number | null {
   return negative ? -Math.abs(value) : value;
 }
 
+// Alcuni intermediari di pagamento (es. PayPal) usano lo stesso IBAN/ID mandato
+// per qualunque negozio: il codice identifica l'intermediario, non il singolo
+// servizio dietro il pagamento. Va sempre ignorato come codice fisso, altrimenti
+// collegarlo per errore a un fornitore (es. il primo abbonamento confermato)
+// farebbe suggerire lo stesso fornitore per acquisti completamente diversi.
+const PAYMENT_AGGREGATOR_KEYWORDS = ["paypal"];
+
+function isPaymentAggregator(description: string): boolean {
+  const haystack = description.toLowerCase();
+  return PAYMENT_AGGREGATOR_KEYWORDS.some((k) => haystack.includes(k));
+}
+
 // Codice terminale POS (es. "50000000000580-00000") o IBAN, per risalire al
 // fornitore tramite supplier_account_codes: due movimenti con lo stesso codice
 // sono la stessa cassa/beneficiario anche se il nome nella descrizione cambia leggermente.
 export function extractDetectedCode(description: string): string | null {
+  if (isPaymentAggregator(description)) return null;
   const iban = description.match(/\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/);
   if (iban) return iban[0];
   const pos = description.match(/\b\d{10,}-\d{4,6}\b/);
