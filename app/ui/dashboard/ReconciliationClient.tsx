@@ -8,6 +8,7 @@ import {
   getBankStatementImports,
   getReconciliationForImport,
   confirmLineMatch,
+  correctExpenseAmountAndConfirm,
   unmatchLine,
   ignoreStatementLine,
   restoreStatementLine,
@@ -345,6 +346,18 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                               className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-sky-600 hover:bg-sky-500"
                             >
                               Conferma comunque
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const oldAmount = formatCurrency(Math.abs(Number(r.candidateExpense!.amount)));
+                                const newAmount = formatCurrency(Math.abs(Number(r.line.amount)));
+                                if (!confirm(`Correggere l'importo della spesa registrata da ${oldAmount} a ${newAmount} (come nell'estratto conto)?`)) return;
+                                withReload(() => correctExpenseAmountAndConfirm(r.line.id, r.candidateExpense!.id));
+                              }}
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20"
+                            >
+                              Correggi importo
                             </button>
                             <button type="button" onClick={() => setExpenseFormLineId(r.line.id)} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-300 bg-zinc-800 hover:bg-zinc-700">
                               Crea nuova spesa

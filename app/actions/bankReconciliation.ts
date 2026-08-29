@@ -207,6 +207,48 @@ export async function confirmLineMatch(lineId: string, expenseId: string) {
   }
 }
 
+// Corregge l'importo di una spesa gia' registrata per farlo combaciare col
+// movimento in banca (tipico caso: un errore di battitura al momento della
+// registrazione) e la collega, invece di lasciarla sbagliata o duplicarla.
+export async function correctExpenseAmountAndConfirm(lineId: string, expenseId: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data: line, error: lineError } = await supabase
+      .from("bank_statement_lines")
+      .select("amount")
+      .eq("id", lineId)
+      .eq("user_id", user.id)
+      .single();
+    if (lineError || !line) throw new Error("Movimento non trovato");
+
+    const { error: expenseError } = await supabase
+      .from("expenses")
+      .update({ amount: Math.abs(Number(line.amount)) })
+      .eq("id", expenseId)
+      .eq("user_id", user.id);
+    if (expenseError) throw new Error(expenseError.message);
+
+    const { error: matchError } = await supabase
+      .from("bank_statement_lines")
+      .update({ matched_expense_id: expenseId, is_ignored: false })
+      .eq("id", lineId)
+      .eq("user_id", user.id);
+    if (matchError) {
+      if (matchError.code === "23505") throw new Error("Questa spesa è già collegata a un altro movimento.");
+      throw new Error(matchError.message);
+    }
+
+    revalidatePath("/dashboard/expenses");
+    revalidateReconciliationPaths();
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function unmatchLine(lineId: string) {
   try {
     const supabase = (await createClient()) as any;
