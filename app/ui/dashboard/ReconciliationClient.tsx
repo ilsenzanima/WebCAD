@@ -9,6 +9,7 @@ import {
   getReconciliationForImport,
   confirmLineMatch,
   correctExpenseAmountAndConfirm,
+  splitReviewDifferenceAsFee,
   unmatchLine,
   ignoreStatementLine,
   restoreStatementLine,
@@ -360,6 +361,13 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                             >
                               Correggi importo
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => withReload(() => splitReviewDifferenceAsFee(r.line.id, r.candidateExpense!.id))}
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20"
+                            >
+                              È una commissione
+                            </button>
                             <button type="button" onClick={() => setExpenseFormLineId(r.line.id)} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-300 bg-zinc-800 hover:bg-zinc-700">
                               Crea nuova spesa
                             </button>
@@ -367,6 +375,9 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                               Ignora
                             </button>
                           </div>
+                          <p className="text-[10px] text-slate-500">
+                            "Correggi importo" per un tuo errore di battitura nella spesa · "È una commissione" se è la banca ad aver applicato una maggiorazione (es. Amazon/PayPal): la spesa resta invariata e la differenza diventa una voce separata.
+                          </p>
                         </>
                       )}
 
@@ -424,6 +435,15 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                                     className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20"
                                   >
                                     È questa, ma correggi importo
+                                  </button>
+                                )}
+                                {!!r.amountDiff && (
+                                  <button
+                                    type="button"
+                                    onClick={() => withReload(() => splitReviewDifferenceAsFee(r.line.id, r.candidateExpense!.id))}
+                                    className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-sky-300 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20"
+                                  >
+                                    È questa, ma la differenza è una commissione
                                   </button>
                                 )}
                               </div>

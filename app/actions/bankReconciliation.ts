@@ -292,6 +292,68 @@ export async function correctExpenseAmountAndConfirm(lineId: string, expenseId: 
   }
 }
 
+// Quando la differenza e' una commissione/maggiorazione applicata dalla banca
+// (tipico di Amazon/PayPal con addebiti in valuta estera), la spesa registrata
+// resta corretta cosi' com'e': si crea una spesa separata solo per la
+// differenza, invece di alterare l'importo originale come se fosse un errore
+// di registrazione.
+export async function splitReviewDifferenceAsFee(lineId: string, expenseId: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { data: line, error: lineError } = await supabase
+      .from("bank_statement_lines")
+      .select("amount, value_date, account_id, detected_code")
+      .eq("id", lineId)
+      .eq("user_id", user.id)
+      .single();
+    if (lineError || !line) throw new Error("Movimento non trovato");
+
+    const { data: expense, error: expenseFetchError } = await supabase
+      .from("expenses")
+      .select("amount, is_income, supplier_id")
+      .eq("id", expenseId)
+      .eq("user_id", user.id)
+      .single();
+    if (expenseFetchError || !expense) throw new Error("Spesa non trovata");
+
+    const diff = Math.abs(Number(line.amount)) - Math.abs(Number(expense.amount));
+    if (Math.abs(diff) < 0.005) throw new Error("Gli importi coincidono già: non c'è una differenza da separare.");
+
+    const { error: feeError } = await supabase.from("expenses").insert({
+      user_id: user.id,
+      amount: Math.abs(diff),
+      category: "Commissioni",
+      supplier_id: expense.supplier_id || null,
+      description: "Commissione applicata dalla banca",
+      date: line.value_date,
+      account_id: line.account_id,
+      is_income: diff > 0 ? expense.is_income : !expense.is_income,
+    });
+    if (feeError) throw new Error(feeError.message);
+
+    const { error: matchError } = await supabase
+      .from("bank_statement_lines")
+      .update({ matched_expense_id: expenseId, is_ignored: false })
+      .eq("id", lineId)
+      .eq("user_id", user.id);
+    if (matchError) {
+      if (matchError.code === "23505") throw new Error("Questa spesa è già collegata a un altro movimento.");
+      throw new Error(matchError.message);
+    }
+
+    await rememberDetectedCode(supabase, user.id, line.detected_code, expense.supplier_id ?? null);
+
+    revalidatePath("/dashboard/expenses");
+    revalidateReconciliationPaths();
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function unmatchLine(lineId: string) {
   try {
     const supabase = (await createClient()) as any;
