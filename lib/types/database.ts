@@ -315,6 +315,42 @@ export interface BudgetOverride {
   updated_at: string;
 }
 
+export interface SupplierAccountCode {
+  id: string;
+  user_id: string;
+  supplier_id: string;
+  code: string; // codice terminale POS o IBAN cosi' come compare nella descrizione dell'estratto conto
+  label: string | null; // etichetta opzionale per riconoscerlo (es. "Cassa Via Verdi")
+  created_at: string;
+}
+
+export interface BankStatementImport {
+  id: string;
+  user_id: string;
+  account_id: string;
+  file_name: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  row_count: number;
+  created_at: string;
+}
+
+export interface BankStatementLine {
+  id: string;
+  user_id: string;
+  import_id: string;
+  account_id: string;
+  transaction_date: string; // data di contabilizzazione ("Data")
+  value_date: string; // data valuta ("Valuta"), usata per il confronto con la data della spesa registrata
+  amount: number; // negativo per le uscite, come nell'estratto conto
+  type: string | null; // tipologia indicata dalla banca (es. "Pagamenti", "Commissioni", "Bonifici e trasferimenti")
+  description: string;
+  detected_code: string | null; // codice terminale POS o IBAN estratto dalla descrizione
+  matched_expense_id: string | null; // FK -> expenses.id, spesa abbinata (automaticamente o confermata dall'utente)
+  is_ignored: boolean; // movimento che l'utente ha scelto di non collegare a nessuna spesa
+  created_at: string;
+}
+
 export interface SupplierDocument {
   id: string;
   user_id: string;
