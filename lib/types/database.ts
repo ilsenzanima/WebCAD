@@ -318,7 +318,7 @@ export interface BudgetOverride {
 export interface SupplierAccountCode {
   id: string;
   user_id: string;
-  supplier_id: string;
+  supplier_id: string | null; // null = codice riconosciuto ma volutamente senza fornitore (es. un bonifico personale)
   code: string; // codice terminale POS o IBAN cosi' come compare nella descrizione dell'estratto conto
   label: string | null; // etichetta opzionale per riconoscerlo (es. "Cassa Via Verdi")
   created_at: string;

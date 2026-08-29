@@ -14,6 +14,7 @@ import {
   restoreStatementLine,
   createExpenseFromStatementLine,
   linkSupplierAccountCode,
+  markCodeWithoutSupplier,
   deleteBankStatementImport,
 } from "@/app/actions/bankReconciliation";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -399,13 +400,26 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                             </div>
                           ) : null}
                           <div className="flex gap-2 flex-wrap items-center">
+                            <button type="button" onClick={() => setExpenseFormLineId(r.line.id)} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-sky-600 hover:bg-sky-500">
+                              Crea spesa
+                            </button>
                             <button type="button" onClick={() => setLinkFormLineId(r.line.id)} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-300 bg-zinc-800 hover:bg-zinc-700">
-                              Collega a un altro fornitore
+                              Collega a un fornitore
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => withReload(() => markCodeWithoutSupplier(r.line.detected_code!))}
+                              className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-300 bg-zinc-800 hover:bg-zinc-700"
+                            >
+                              Non è un fornitore, non chiedermelo più
                             </button>
                             <button type="button" onClick={() => withReload(() => ignoreStatementLine(r.line.id))} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-400 hover:text-white">
                               Ignora
                             </button>
                           </div>
+                          <p className="text-[10px] text-slate-500">
+                            "Crea spesa" puoi lasciarla senza fornitore: il codice resta comunque memorizzato per non chiedertelo di nuovo.
+                          </p>
                           {linkFormLineId === r.line.id && (
                             <LinkSupplierForm
                               suppliers={suppliers}

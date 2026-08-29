@@ -119,6 +119,11 @@ export function reconcileStatementLines(
 
     const lineAmount = Number(line.amount);
     const isIncome = lineAmount > 0;
+    // Un codice puo' essere: mai visto (va chiesto), noto e collegato a un fornitore,
+    // o noto ma volutamente senza fornitore (l'utente ha gia' detto "non e' un
+    // fornitore, non chiedermelo piu'") - in quest'ultimo caso si cerca comunque
+    // un abbinamento, solo senza filtrare per fornitore.
+    const codeIsKnown = line.detected_code ? codeToSupplier.has(line.detected_code) : false;
     const supplierId = line.detected_code ? codeToSupplier.get(line.detected_code) ?? null : null;
 
     const pool = expenses.filter(
@@ -146,7 +151,7 @@ export function reconcileStatementLines(
     // Codice mai visto: va collegato a un fornitore prima di poter cercare un match
     // affidabile. Se il nome nella descrizione somiglia a un fornitore gia' censito,
     // lo si suggerisce direttamente invece di lasciare che l'utente lo cerchi a mano.
-    if (line.detected_code && !supplierId) {
+    if (line.detected_code && !codeIsKnown) {
       const suggestedSupplier = suppliers.find((s) => namesOverlap(s.name, line.description)) || null;
       const plausible = best && bestAmountDiff <= candidateAmountTolerance(lineAmount);
       results.push({

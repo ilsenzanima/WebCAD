@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { parseBankStatementCsv } from "@/lib/bankStatementParser";
-import { reconcileStatementLines } from "@/lib/bankReconciliation";
+import { reconcileStatementLines, type ReconciledLine } from "@/lib/bankReconciliation";
 
 // Ampia abbastanza da coprire il ritardo di contabilizzazione dei pagamenti POS
 // e degli addebiti SDD, senza tirare dentro spese di mesi non pertinenti.
@@ -18,6 +18,24 @@ function addDays(isoDate: string, days: number): string {
 function revalidateReconciliationPaths() {
   revalidatePath("/dashboard/accounts");
   revalidatePath("/dashboard/reconciliation");
+}
+
+// I match "confermati" dal calcolo puro sono sicuri per definizione (tolleranza
+// stretta su importo e data): li si scrive subito sul movimento, sia al primo
+// import sia ogni volta che la riconciliazione viene ricalcolata (es. dopo aver
+// collegato un codice a un fornitore, cosa che puo' sbloccare altri movimenti
+// con lo stesso codice), cosi' che il collegamento sia sempre reale e non solo
+// mostrato a schermo.
+async function persistAutoConfirmedMatches(supabase: any, userId: string, reconciled: ReconciledLine[]) {
+  const toConfirm = reconciled.filter((r) => r.status === "confirmed" && r.candidateExpense && !r.line.matched_expense_id);
+  for (const r of toConfirm) {
+    const { error } = await supabase
+      .from("bank_statement_lines")
+      .update({ matched_expense_id: r.candidateExpense!.id })
+      .eq("id", r.line.id)
+      .eq("user_id", userId);
+    if (error) throw new Error(error.message);
+  }
 }
 
 export async function importBankStatement(formData: { account_id: string; file_name: string; csv_text: string }) {
@@ -93,16 +111,7 @@ export async function importBankStatement(formData: { account_id: string; file_n
     if (suppliersError) throw new Error(suppliersError.message);
 
     const reconciled = reconcileStatementLines(insertedLines || [], expenses || [], supplierCodes || [], suppliers || []);
-
-    const autoConfirmed = reconciled.filter((r) => r.status === "confirmed" && r.candidateExpense && !r.line.matched_expense_id);
-    for (const r of autoConfirmed) {
-      const { error } = await supabase
-        .from("bank_statement_lines")
-        .update({ matched_expense_id: r.candidateExpense!.id })
-        .eq("id", r.line.id)
-        .eq("user_id", user.id);
-      if (error) throw new Error(error.message);
-    }
+    await persistAutoConfirmedMatches(supabase, user.id, reconciled);
 
     const summary = reconciled.reduce(
       (acc, r) => {
@@ -172,8 +181,13 @@ export async function getReconciliationForImport(importId: string) {
     if (suppliersError) throw new Error(suppliersError.message);
 
     const reconciled = reconcileStatementLines(lines || [], expenses || [], supplierCodes || [], suppliers || []);
+    await persistAutoConfirmedMatches(supabase, user.id, reconciled);
 
-    const matchedExpenseIds = new Set((lines || []).map((l: any) => l.matched_expense_id).filter(Boolean));
+    // Il set usa "reconciled" (non le righe grezze) cosi' da includere anche i match
+    // appena confermati dalla riga sopra, senza dover rileggere le righe dal DB.
+    const matchedExpenseIds = new Set(
+      reconciled.filter((r) => r.status === "confirmed" && r.candidateExpense).map((r) => r.candidateExpense!.id)
+    );
     const unmatchedExpenses = (expenses || []).filter(
       (e: any) => e.date >= importRow.period_start && e.date <= importRow.period_end && !matchedExpenseIds.has(e.id)
     );
@@ -352,6 +366,17 @@ export async function createExpenseFromStatementLine(
       .eq("user_id", user.id);
     if (updateError) throw new Error(updateError.message);
 
+    // Se il movimento aveva un codice mai visto prima, la scelta appena fatta (con o
+    // senza fornitore) vale anche per la prossima volta che ricompare: eventuali
+    // conflitti (codice gia' noto) sono normali e vengono ignorati.
+    if (line.detected_code) {
+      await supabase.from("supplier_account_codes").insert({
+        user_id: user.id,
+        supplier_id: formData.supplier_id || null,
+        code: line.detected_code,
+      });
+    }
+
     revalidatePath("/dashboard/expenses");
     revalidateReconciliationPaths();
     return { success: true, data: expense };
@@ -386,6 +411,32 @@ export async function linkSupplierAccountCode(formData: { supplier_id: string; c
 
     revalidateReconciliationPaths();
     return { success: true, data };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// Segna un codice come "riconosciuto ma non e' un fornitore da tracciare" (es.
+// un bonifico personale): i prossimi movimenti con lo stesso codice non verranno
+// piu' proposti come "nuovo codice", ma comunque confrontati con le spese registrate.
+export async function markCodeWithoutSupplier(code: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { error } = await supabase.from("supplier_account_codes").insert({
+      user_id: user.id,
+      supplier_id: null,
+      code,
+    });
+    if (error) {
+      if (error.code === "23505") throw new Error("Questo codice è già stato registrato.");
+      throw new Error(error.message);
+    }
+
+    revalidateReconciliationPaths();
+    return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
