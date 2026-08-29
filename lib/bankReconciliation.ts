@@ -13,13 +13,14 @@
 
 import { type BankStatementLine, type Expense, type Supplier, type SupplierAccountCode } from "@/lib/types/database";
 
-export type ReconciliationStatus = "confirmed" | "review" | "missing" | "new_code" | "autobook" | "ignored";
+export type ReconciliationStatus = "confirmed" | "grouped" | "review" | "missing" | "new_code" | "autobook" | "ignored";
 
 export interface ReconciledLine {
   line: BankStatementLine;
   status: ReconciliationStatus;
   supplierId: string | null; // fornitore risolto dal codice rilevato, se noto
   candidateExpense: Expense | null; // spesa proposta per il confronto/conferma (non ancora salvata come match, salvo status "confirmed")
+  groupExpenses: Expense[] | null; // per lo status "grouped": le spese gia' raggruppate su questo movimento
   suggestedSupplier: Supplier | null; // per i codici nuovi: fornitore con un nome simile a quello nella descrizione
   amountDiff: number | null;
   dateDiffDays: number | null;
@@ -72,26 +73,45 @@ function namesOverlap(a: string, b: string): boolean {
 }
 
 function emptyResult(line: BankStatementLine, status: ReconciliationStatus, supplierId: string | null = null): ReconciledLine {
-  return { line, status, supplierId, candidateExpense: null, suggestedSupplier: null, amountDiff: null, dateDiffDays: null };
+  return { line, status, supplierId, candidateExpense: null, groupExpenses: null, suggestedSupplier: null, amountDiff: null, dateDiffDays: null };
 }
 
 export function reconcileStatementLines(
   lines: BankStatementLine[],
   expenses: Expense[],
   supplierAccountCodes: SupplierAccountCode[],
-  suppliers: Supplier[]
+  suppliers: Supplier[],
+  groupedExpensesByLine: Record<string, Expense[]> = {}
 ): ReconciledLine[] {
   const codeToSupplier = new Map(supplierAccountCodes.map((c) => [c.code, c.supplier_id] as const));
 
-  // Le spese gia' collegate a un movimento (di questo import o di importazioni precedenti)
-  // non vanno riproposte come candidate per un secondo movimento.
+  // Le spese gia' collegate a un movimento (di questo import o di importazioni precedenti),
+  // singolarmente o in un raggruppamento, non vanno riproposte come candidate per un
+  // secondo movimento.
   const usedExpenseIds = new Set(lines.map((l) => l.matched_expense_id).filter((id): id is string => !!id));
+  Object.values(groupedExpensesByLine).forEach((group) => group.forEach((e) => usedExpenseIds.add(e.id)));
 
   const results: ReconciledLine[] = [];
 
   for (const line of lines) {
     if (line.is_ignored) {
       results.push(emptyResult(line, "ignored"));
+      continue;
+    }
+
+    const group = groupedExpensesByLine[line.id];
+    if (group && group.length > 0) {
+      const groupTotal = group.reduce((sum, e) => sum + Number(e.amount), 0);
+      results.push({
+        line,
+        status: "grouped",
+        supplierId: null,
+        candidateExpense: null,
+        groupExpenses: group,
+        suggestedSupplier: null,
+        amountDiff: Math.abs(groupTotal - Math.abs(Number(line.amount))),
+        dateDiffDays: null,
+      });
       continue;
     }
 
@@ -102,6 +122,7 @@ export function reconcileStatementLines(
         status: "confirmed",
         supplierId: matched?.supplier_id ?? null,
         candidateExpense: matched,
+        groupExpenses: null,
         suggestedSupplier: null,
         amountDiff: matched ? Math.abs(Math.abs(Number(matched.amount)) - Math.abs(Number(line.amount))) : null,
         dateDiffDays: matched ? daysBetween(matched.date, line.value_date) : null,
@@ -165,6 +186,7 @@ export function reconcileStatementLines(
         status: "new_code",
         supplierId: null,
         candidateExpense: plausible ? best : null,
+        groupExpenses: null,
         suggestedSupplier,
         amountDiff: plausible ? bestAmountDiff : null,
         dateDiffDays: plausible ? bestDateDiff : null,
@@ -184,6 +206,7 @@ export function reconcileStatementLines(
         status: "confirmed",
         supplierId,
         candidateExpense: best,
+        groupExpenses: null,
         suggestedSupplier: null,
         amountDiff: bestAmountDiff,
         dateDiffDays: bestDateDiff,
@@ -197,6 +220,7 @@ export function reconcileStatementLines(
         status: "review",
         supplierId,
         candidateExpense: best,
+        groupExpenses: null,
         suggestedSupplier: null,
         amountDiff: bestAmountDiff,
         dateDiffDays: bestDateDiff,

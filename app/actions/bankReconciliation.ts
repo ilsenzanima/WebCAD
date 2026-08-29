@@ -194,13 +194,43 @@ export async function getReconciliationForImport(importId: string) {
     if (codesError) throw new Error(codesError.message);
     if (suppliersError) throw new Error(suppliersError.message);
 
-    const reconciled = reconcileStatementLines(lines || [], expenses || [], supplierCodes || [], suppliers || []);
+    // Raggruppamenti "molte spese = un movimento": le spese coinvolte non sono
+    // necessariamente nella finestra dei giorni intorno al periodo (es. una
+    // scadenza segnata con largo anticipo), quindi si recuperano a parte.
+    const lineIds = (lines || []).map((l: any) => l.id);
+    let lineGroups: any[] = [];
+    if (lineIds.length > 0) {
+      const { data, error } = await supabase.from("bank_statement_line_expenses").select("*").eq("user_id", user.id).in("line_id", lineIds);
+      if (error) throw new Error(error.message);
+      lineGroups = data || [];
+    }
+    const groupExpenseIds = Array.from(new Set(lineGroups.map((g: any) => g.expense_id)));
+    let groupExpenseRows: any[] = [];
+    if (groupExpenseIds.length > 0) {
+      const { data, error } = await supabase.from("expenses").select("*").eq("user_id", user.id).in("id", groupExpenseIds);
+      if (error) throw new Error(error.message);
+      groupExpenseRows = data || [];
+    }
+    const expensesById = new Map<string, any>();
+    (expenses || []).forEach((e: any) => expensesById.set(e.id, e));
+    groupExpenseRows.forEach((e: any) => expensesById.set(e.id, e));
+    const groupedExpensesByLine: Record<string, any[]> = {};
+    lineGroups.forEach((g: any) => {
+      const expense = expensesById.get(g.expense_id);
+      if (expense) (groupedExpensesByLine[g.line_id] ||= []).push(expense);
+    });
+
+    const reconciled = reconcileStatementLines(lines || [], expenses || [], supplierCodes || [], suppliers || [], groupedExpensesByLine);
     await persistAutoConfirmedMatches(supabase, user.id, reconciled);
 
     // Il set usa "reconciled" (non le righe grezze) cosi' da includere anche i match
     // appena confermati dalla riga sopra, senza dover rileggere le righe dal DB.
     const matchedExpenseIds = new Set(
-      reconciled.filter((r) => r.status === "confirmed" && r.candidateExpense).map((r) => r.candidateExpense!.id)
+      reconciled.flatMap((r) => {
+        if (r.status === "confirmed" && r.candidateExpense) return [r.candidateExpense.id];
+        if (r.status === "grouped" && r.groupExpenses) return r.groupExpenses.map((e) => e.id);
+        return [];
+      })
     );
     const unmatchedExpenses = (expenses || []).filter(
       (e: any) => e.date >= importRow.period_start && e.date <= importRow.period_end && !matchedExpenseIds.has(e.id)
@@ -361,6 +391,50 @@ export async function splitReviewDifferenceAsFee(lineId: string, expenseId: stri
     await rememberDetectedCode(supabase, user.id, line.detected_code, expense.supplier_id ?? null);
 
     revalidatePath("/dashboard/expenses");
+    revalidateReconciliationPaths();
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// Collega piu' spese/scadenze gia' registrate a un unico movimento, per i casi
+// in cui la banca le accorpa in un solo addebito (es. due rate di un
+// finanziamento SDD, o piu' acquisti ravvicinati). A differenza di
+// confirmLineMatch (un movimento = una spesa), qui il movimento risulta
+// coperto dalla somma delle spese selezionate.
+export async function groupMatchLine(lineId: string, expenseIds: string[]) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+    if (expenseIds.length === 0) throw new Error("Seleziona almeno una spesa da raggruppare.");
+
+    const { error } = await supabase
+      .from("bank_statement_line_expenses")
+      .insert(expenseIds.map((expenseId) => ({ user_id: user.id, line_id: lineId, expense_id: expenseId })));
+    if (error) {
+      if (error.code === "23505") throw new Error("Una di queste spese è già collegata a un altro movimento o raggruppamento.");
+      throw new Error(error.message);
+    }
+
+    revalidatePath("/dashboard/expenses");
+    revalidateReconciliationPaths();
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function ungroupLine(lineId: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { error } = await supabase.from("bank_statement_line_expenses").delete().eq("line_id", lineId).eq("user_id", user.id);
+    if (error) throw new Error(error.message);
+
     revalidateReconciliationPaths();
     return { success: true };
   } catch (err: any) {

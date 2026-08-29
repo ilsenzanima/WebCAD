@@ -16,6 +16,8 @@ import {
   createExpenseFromStatementLine,
   linkSupplierAccountCode,
   markCodeWithoutSupplier,
+  groupMatchLine,
+  ungroupLine,
   deleteBankStatementImport,
 } from "@/app/actions/bankReconciliation";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -35,6 +37,7 @@ interface ReconciliationData {
 
 const STATUS_META: Record<ReconciliationStatus, { label: string; badge: string; dot: string }> = {
   confirmed: { label: "Confermato", badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", dot: "bg-emerald-400" },
+  grouped: { label: "Raggruppato", badge: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", dot: "bg-emerald-400" },
   review: { label: "Da verificare", badge: "bg-amber-500/10 text-amber-400 border-amber-500/20", dot: "bg-amber-400" },
   missing: { label: "Non trovato", badge: "bg-rose-500/10 text-rose-400 border-rose-500/20", dot: "bg-rose-400" },
   new_code: { label: "Nuovo codice", badge: "bg-sky-500/10 text-sky-400 border-sky-500/20", dot: "bg-sky-400" },
@@ -58,6 +61,7 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
   const [tab, setTab] = useState<"all" | "confirmed" | "attention">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expenseFormLineId, setExpenseFormLineId] = useState<string | null>(null);
+  const [groupFormLineId, setGroupFormLineId] = useState<string | null>(null);
   const [linkFormLineId, setLinkFormLineId] = useState<string | null>(null);
   const [confirmSupplierByLine, setConfirmSupplierByLine] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -140,7 +144,7 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
   const visibleLines = useMemo(() => {
     if (!data) return [];
     if (tab === "all") return data.reconciled;
-    if (tab === "confirmed") return data.reconciled.filter((r) => r.status === "confirmed");
+    if (tab === "confirmed") return data.reconciled.filter((r) => r.status === "confirmed" || r.status === "grouped");
     return data.reconciled.filter((r) => ["review", "missing", "new_code", "autobook"].includes(r.status));
   }, [data, tab]);
 
@@ -226,7 +230,9 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {(["confirmed", "review", "missing", "new_code"] as ReconciliationStatus[]).map((status) => (
               <div key={status} className="rounded-2xl p-4 border bg-zinc-950/40 border-zinc-800/60">
-                <span className="text-2xl font-black tracking-tight text-white block">{summary[status] || 0}</span>
+                <span className="text-2xl font-black tracking-tight text-white block">
+                  {(summary[status] || 0) + (status === "confirmed" ? summary.grouped || 0 : 0)}
+                </span>
                 <span className="text-[11px] text-slate-400">{STATUS_META[status].label}</span>
               </div>
             ))}
@@ -235,7 +241,7 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
           <div className="flex gap-1 border-b border-zinc-800">
             {[
               { key: "all" as const, label: "Tutti", count: data.reconciled.length },
-              { key: "confirmed" as const, label: "Confermati", count: summary.confirmed || 0 },
+              { key: "confirmed" as const, label: "Confermati", count: (summary.confirmed || 0) + (summary.grouped || 0) },
               { key: "attention" as const, label: "Da rivedere", count: (summary.review || 0) + (summary.missing || 0) + (summary.new_code || 0) + (summary.autobook || 0) },
             ].map((t) => (
               <button
@@ -254,7 +260,7 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
             {visibleLines.map((r) => {
               const meta = STATUS_META[r.status];
               const isOpen = expandedId === r.line.id;
-              const canExpand = r.status !== "confirmed" || !!r.candidateExpense;
+              const canExpand = r.status === "grouped" || r.status !== "confirmed" || !!r.candidateExpense;
               return (
                 <div key={r.line.id} className="rounded-xl border bg-zinc-950/40 border-zinc-800/60 overflow-hidden">
                   <button
@@ -296,6 +302,23 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                             className="text-[11px] font-bold text-slate-400 hover:text-white"
                           >
                             Annulla abbinamento
+                          </button>
+                        </>
+                      )}
+
+                      {r.status === "grouped" && r.groupExpenses && (
+                        <>
+                          <div className="space-y-2">
+                            {r.groupExpenses.map((e) => (
+                              <ExpenseCandidateCard key={e.id} label="Spesa raggruppata" expense={e} amountDiff={null} suppliersById={suppliersById} />
+                            ))}
+                          </div>
+                          <p className="text-[11px] text-slate-400">
+                            Totale: {formatCurrency(r.groupExpenses.reduce((sum, e) => sum + Number(e.amount), 0))}
+                            {r.amountDiff && r.amountDiff >= 0.01 ? ` · differenza di ${formatCurrency(r.amountDiff)}` : ""}
+                          </p>
+                          <button type="button" onClick={() => withReload(() => ungroupLine(r.line.id))} className="text-[11px] font-bold text-slate-400 hover:text-white">
+                            Annulla raggruppamento
                           </button>
                         </>
                       )}
@@ -365,13 +388,30 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                             <button type="button" onClick={() => setExpenseFormLineId(r.line.id)} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-300 bg-zinc-800 hover:bg-zinc-700">
                               Crea nuova spesa
                             </button>
+                            <button type="button" onClick={() => setGroupFormLineId(r.line.id)} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-300 bg-zinc-800 hover:bg-zinc-700">
+                              Combina più spese
+                            </button>
                             <button type="button" onClick={() => withReload(() => ignoreStatementLine(r.line.id))} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-400 hover:text-white">
                               Ignora
                             </button>
                           </div>
                           <p className="text-[10px] text-slate-500">
-                            "Correggi importo" per un tuo errore di battitura nella spesa · "È una commissione" se è la banca ad aver applicato una maggiorazione (es. Amazon/PayPal): la spesa resta invariata e la differenza diventa una voce separata.
+                            "Correggi importo" per un tuo errore di battitura nella spesa · "È una commissione" se è la banca ad aver applicato una maggiorazione (es. Amazon/PayPal): la spesa resta invariata e la differenza diventa una voce separata · "Combina più spese" se questo movimento in realtà accorpa più spese già registrate.
                           </p>
+                          {groupFormLineId === r.line.id && (
+                            <GroupMatchForm
+                              lineAmount={Math.abs(Number(r.line.amount))}
+                              unmatchedExpenses={data.unmatchedExpenses}
+                              onCancel={() => setGroupFormLineId(null)}
+                              onSubmit={(expenseIds) =>
+                                withReload(async () => {
+                                  const res = await groupMatchLine(r.line.id, expenseIds);
+                                  if (res.success) setGroupFormLineId(null);
+                                  return res;
+                                })
+                              }
+                            />
+                          )}
                         </>
                       )}
 
@@ -382,10 +422,30 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                             <button type="button" onClick={() => setExpenseFormLineId(r.line.id)} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-sky-600 hover:bg-sky-500">
                               Crea spesa da questo movimento
                             </button>
+                            <button type="button" onClick={() => setGroupFormLineId(r.line.id)} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-300 bg-zinc-800 hover:bg-zinc-700">
+                              Combina più spese registrate
+                            </button>
                             <button type="button" onClick={() => withReload(() => ignoreStatementLine(r.line.id))} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-400 hover:text-white">
                               Ignora
                             </button>
                           </div>
+                          <p className="text-[10px] text-slate-500">
+                            Usa "Combina più spese registrate" se questo movimento accorpa piu' spese/scadenze che hai gia' segnato separatamente (es. piu' rate di un finanziamento, o piu' acquisti ravvicinati).
+                          </p>
+                          {groupFormLineId === r.line.id && (
+                            <GroupMatchForm
+                              lineAmount={Math.abs(Number(r.line.amount))}
+                              unmatchedExpenses={data.unmatchedExpenses}
+                              onCancel={() => setGroupFormLineId(null)}
+                              onSubmit={(expenseIds) =>
+                                withReload(async () => {
+                                  const res = await groupMatchLine(r.line.id, expenseIds);
+                                  if (res.success) setGroupFormLineId(null);
+                                  return res;
+                                })
+                              }
+                            />
+                          )}
                         </>
                       )}
 
@@ -662,6 +722,69 @@ function LinkSupplierForm({ suppliers, onCancel, onSubmit }: { suppliers: Suppli
       </select>
       <button type="button" onClick={() => supplierId && onSubmit(supplierId)} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-sky-600 hover:bg-sky-500">Collega</button>
       <button type="button" onClick={onCancel} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-400 hover:text-white">Annulla</button>
+    </div>
+  );
+}
+
+function GroupMatchForm({
+  lineAmount,
+  unmatchedExpenses,
+  onCancel,
+  onSubmit,
+}: {
+  lineAmount: number;
+  unmatchedExpenses: Expense[];
+  onCancel: () => void;
+  onSubmit: (expenseIds: string[]) => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const toggle = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectedExpenses = unmatchedExpenses.filter((e) => selected.has(e.id));
+  const total = selectedExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  const diff = Math.abs(total - lineAmount);
+
+  return (
+    <div className="rounded-lg p-3 bg-zinc-900/60 border border-zinc-800 space-y-2">
+      {unmatchedExpenses.length === 0 ? (
+        <p className="text-[11px] text-slate-500">Nessuna spesa senza riscontro tra cui scegliere in questo periodo.</p>
+      ) : (
+        <div className="space-y-1 max-h-48 overflow-y-auto">
+          {unmatchedExpenses.map((e) => (
+            <label key={e.id} className="flex items-center gap-2 text-[11px] text-slate-300 px-2 py-1.5 rounded hover:bg-zinc-800/60 cursor-pointer">
+              <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggle(e.id)} />
+              <span className="flex-1 truncate">
+                {e.description || e.category} <span className="text-slate-500">· {formatDate(e.date)}</span>
+              </span>
+              <span className="font-semibold text-white whitespace-nowrap">{formatCurrency(Number(e.amount))}</span>
+            </label>
+          ))}
+        </div>
+      )}
+      {selected.size > 0 && (
+        <p className={`text-[11px] font-bold ${diff < 0.01 ? "text-emerald-400" : "text-amber-400"}`}>
+          Totale selezionato: {formatCurrency(total)} (differenza {formatCurrency(diff)})
+        </p>
+      )}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={selected.size === 0}
+          onClick={() => onSubmit(Array.from(selected))}
+          className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-white bg-sky-600 hover:bg-sky-500 disabled:opacity-40"
+        >
+          Conferma raggruppamento
+        </button>
+        <button type="button" onClick={onCancel} className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-slate-400 hover:text-white">Annulla</button>
+      </div>
     </div>
   );
 }

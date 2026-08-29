@@ -351,6 +351,14 @@ export interface BankStatementLine {
   created_at: string;
 }
 
+export interface BankStatementLineExpense {
+  id: string;
+  user_id: string;
+  line_id: string; // FK -> bank_statement_lines.id
+  expense_id: string; // FK -> expenses.id
+  created_at: string;
+}
+
 export interface SupplierDocument {
   id: string;
   user_id: string;
