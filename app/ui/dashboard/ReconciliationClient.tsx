@@ -284,14 +284,11 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
 
                   {isOpen && (
                     <div className="px-4 pb-4 pt-1 border-t border-zinc-800/60 space-y-3">
+                      <p className="text-[11px] text-slate-400 break-words">{r.line.description}</p>
+
                       {r.status === "confirmed" && r.candidateExpense && (
                         <>
-                          <p className="text-[11px] text-slate-400">
-                            Collegato a "{r.candidateExpense.description || r.candidateExpense.category}" del {formatDate(r.candidateExpense.date)}
-                            {r.candidateExpense.supplier_id && suppliersById.get(r.candidateExpense.supplier_id) && (
-                              <> · {suppliersById.get(r.candidateExpense.supplier_id)!.name}</>
-                            )}
-                          </p>
+                          <ExpenseCandidateCard label="Collegato a" expense={r.candidateExpense} amountDiff={null} suppliersById={suppliersById} />
                           <button
                             type="button"
                             onClick={() => withReload(() => unmatchLine(r.line.id))}
@@ -331,11 +328,7 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                               <div className="text-xs text-white">{formatCurrency(Math.abs(Number(r.line.amount)))}</div>
                               <div className="text-[10px] text-slate-500">{formatDate(r.line.value_date)}</div>
                             </div>
-                            <div className="rounded-lg p-3 bg-zinc-900/60 border border-zinc-800">
-                              <div className="text-[9px] font-bold uppercase tracking-wide text-slate-500 mb-1">Registrato</div>
-                              <div className="text-xs text-amber-400">{formatCurrency(Math.abs(Number(r.candidateExpense.amount)))}</div>
-                              <div className="text-[10px] text-slate-500">{formatDate(r.candidateExpense.date)}</div>
-                            </div>
+                            <ExpenseCandidateCard label="Registrato" expense={r.candidateExpense} amountDiff={r.amountDiff} suppliersById={suppliersById} />
                           </div>
                           <p className="text-[11px] text-amber-400">
                             Differenza di {formatCurrency(r.amountDiff || 0)}
@@ -407,13 +400,7 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
                                   <div className="text-xs text-white">{formatCurrency(Math.abs(Number(r.line.amount)))}</div>
                                   <div className="text-[10px] text-slate-500">{formatDate(r.line.value_date)}</div>
                                 </div>
-                                <div className="rounded-lg p-3 bg-zinc-900/60 border border-zinc-800">
-                                  <div className="text-[9px] font-bold uppercase tracking-wide text-slate-500 mb-1">Potrebbe essere</div>
-                                  <div className="text-xs text-white truncate">{r.candidateExpense.description || r.candidateExpense.category}</div>
-                                  <div className={`text-[10px] ${r.amountDiff ? "text-amber-400" : "text-slate-500"}`}>
-                                    {formatCurrency(Math.abs(Number(r.candidateExpense.amount)))} · {formatDate(r.candidateExpense.date)}
-                                  </div>
-                                </div>
+                                <ExpenseCandidateCard label="Potrebbe essere" expense={r.candidateExpense} amountDiff={r.amountDiff} suppliersById={suppliersById} />
                               </div>
                               <div className="flex gap-2 flex-wrap">
                                 <button
@@ -558,6 +545,31 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function ExpenseCandidateCard({
+  label,
+  expense,
+  amountDiff,
+  suppliersById,
+}: {
+  label: string;
+  expense: Expense;
+  amountDiff: number | null;
+  suppliersById: Map<string, Supplier>;
+}) {
+  const supplier = expense.supplier_id ? suppliersById.get(expense.supplier_id) : null;
+  return (
+    <div className="rounded-lg p-3 bg-zinc-900/60 border border-zinc-800 space-y-1">
+      <div className="text-[9px] font-bold uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="text-xs text-white font-semibold">{expense.category}</div>
+      <div className="text-[11px] text-slate-400">Fornitore: {supplier ? supplier.name : "nessuno"}</div>
+      <div className="text-[11px] text-slate-400 break-words">{expense.description || "(nessuna nota)"}</div>
+      <div className={`text-[10px] pt-1 ${amountDiff ? "text-amber-400" : "text-slate-500"}`}>
+        {formatCurrency(Math.abs(Number(expense.amount)))} · {formatDate(expense.date)}
+      </div>
     </div>
   );
 }
