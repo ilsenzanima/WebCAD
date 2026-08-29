@@ -227,6 +227,26 @@ export async function unmatchLine(lineId: string) {
   }
 }
 
+export async function restoreStatementLine(lineId: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { error } = await supabase
+      .from("bank_statement_lines")
+      .update({ is_ignored: false })
+      .eq("id", lineId)
+      .eq("user_id", user.id);
+    if (error) throw new Error(error.message);
+
+    revalidateReconciliationPaths();
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function ignoreStatementLine(lineId: string) {
   try {
     const supabase = (await createClient()) as any;
