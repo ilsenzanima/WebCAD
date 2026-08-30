@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { expenseRowToCalendarInput } from "@/lib/gcalendar";
+import { autoSyncExpenseToCalendar, autoDeleteExpenseCalendarEvent } from "@/app/actions/google";
 
 export async function getExpenses() {
   try {
@@ -64,6 +66,8 @@ export async function createExpense(formData: {
 
     if (error) throw new Error(error.message);
 
+    await autoSyncExpenseToCalendar(supabase, user.id, expenseRowToCalendarInput(data));
+
     revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/budget");
@@ -96,7 +100,7 @@ export async function updateExpense(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Non autenticato");
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("expenses")
       .update({
         amount: formData.amount,
@@ -114,9 +118,13 @@ export async function updateExpense(
         account_id: formData.account_id || null,
       })
       .eq("id", id)
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .select("*, expense_categories(name, color), suppliers(name)")
+      .single();
 
     if (error) throw new Error(error.message);
+
+    await autoSyncExpenseToCalendar(supabase, user.id, expenseRowToCalendarInput(data));
 
     revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
@@ -133,6 +141,13 @@ export async function deleteExpense(id: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Non autenticato");
 
+    const { data: existing } = await supabase
+      .from("expenses")
+      .select("google_event_id")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
     const { error } = await supabase
       .from("expenses")
       .delete()
@@ -140,6 +155,8 @@ export async function deleteExpense(id: string) {
       .eq("user_id", user.id);
 
     if (error) throw new Error(error.message);
+
+    await autoDeleteExpenseCalendarEvent(supabase, user.id, existing?.google_event_id);
 
     revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");

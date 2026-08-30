@@ -3,6 +3,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { getNextDueDate, isRecurrenceEnded } from "@/lib/recurrence";
+import { scheduleRowToCalendarInput, expenseRowToCalendarInput } from "@/lib/gcalendar";
+import {
+  autoSyncScheduleToCalendar,
+  autoDeleteScheduleCalendarEvent,
+  autoSyncExpenseToCalendar,
+  autoDeleteExpenseCalendarEvent,
+} from "@/app/actions/google";
 
 type RecurrenceType = "one-time" | "weekly" | "monthly" | "bimonthly" | "quarterly" | "semiannual" | "yearly";
 
@@ -64,6 +71,8 @@ export async function createSchedule(formData: {
 
     if (error) throw new Error(error.message);
 
+    await autoSyncScheduleToCalendar(supabase, user.id, scheduleRowToCalendarInput(data));
+
     revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/schedules");
     revalidatePath("/dashboard/budget");
@@ -114,6 +123,8 @@ export async function updateSchedule(id: string, formData: {
 
     if (error) throw new Error(error.message);
 
+    await autoSyncScheduleToCalendar(supabase, user.id, scheduleRowToCalendarInput(data));
+
     revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/schedules");
@@ -144,6 +155,8 @@ export async function rescheduleSchedule(id: string, newDueDate: string) {
 
     if (error) throw new Error(error.message);
 
+    await autoSyncScheduleToCalendar(supabase, user.id, scheduleRowToCalendarInput(data));
+
     revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
     revalidatePath("/dashboard/schedules");
@@ -161,6 +174,13 @@ export async function deleteSchedule(id: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("Non autenticato");
 
+    const { data: existing } = await supabase
+      .from("payment_schedules")
+      .select("google_event_id")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .maybeSingle();
+
     const { error } = await supabase
       .from("payment_schedules")
       .delete()
@@ -168,6 +188,8 @@ export async function deleteSchedule(id: string) {
       .eq("user_id", user.id);
 
     if (error) throw new Error(error.message);
+
+    await autoDeleteScheduleCalendarEvent(supabase, user.id, existing?.google_event_id);
 
     revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/schedules");
@@ -234,9 +256,11 @@ export async function paySchedule(
         ? `Entrata programmata: ${schedule.description || "Nessuna descrizione"}`
         : `Pagamento programmato: ${schedule.description || "Nessuna descrizione"}`,
       date: today,
-    }).select().single();
+    }).select("*, suppliers(name)").single();
 
     if (expenseError) throw new Error(expenseError.message);
+
+    await autoSyncExpenseToCalendar(supabase, user.id, expenseRowToCalendarInput(newExpense));
 
     // 3. Segna SEMPRE il record corrente come pagato (is_paid = true)
     const { error: updateError } = await supabase
@@ -244,6 +268,8 @@ export async function paySchedule(
       .update({ is_paid: true })
       .eq("id", id);
     if (updateError) throw new Error(updateError.message);
+
+    await autoSyncScheduleToCalendar(supabase, user.id, scheduleRowToCalendarInput({ ...schedule, is_paid: true }));
 
     // 4. Se è ricorrente e non ha superato la sua eventuale data di fine (es. ultima rata di
     // un finanziamento), crea una nuova scadenza per il ciclo successivo con is_paid = false
@@ -276,6 +302,7 @@ export async function paySchedule(
 
         if (insertNextError) throw new Error(insertNextError.message);
         nextSchedule = insertedNext;
+        await autoSyncScheduleToCalendar(supabase, user.id, scheduleRowToCalendarInput(nextSchedule));
       }
     }
 
@@ -316,14 +343,18 @@ export async function unpaySchedule(id: string) {
       .delete()
       .eq("schedule_id", id)
       .eq("user_id", user.id)
-      .select("id");
+      .select("id, google_event_id");
     if (deleteExpenseError) throw new Error(deleteExpenseError.message);
+
+    for (const deletedExpense of deletedExpenses || []) {
+      await autoDeleteExpenseCalendarEvent(supabase, user.id, deletedExpense.google_event_id);
+    }
 
     // 2. Se il saldo aveva generato l'occorrenza successiva e nessuno l'ha ancora saldata,
     // rimuovila: altrimenti resterebbe un doppione dopo aver riaperto questa.
     const { data: nextOccurrence } = await supabase
       .from("payment_schedules")
-      .select("id, is_paid")
+      .select("id, is_paid, google_event_id")
       .eq("generated_from_schedule_id", id)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -335,6 +366,8 @@ export async function unpaySchedule(id: string) {
         .eq("id", nextOccurrence.id)
         .eq("user_id", user.id);
       if (deleteNextError) throw new Error(deleteNextError.message);
+
+      await autoDeleteScheduleCalendarEvent(supabase, user.id, nextOccurrence.google_event_id);
     }
 
     // 3. Riporta la scadenza a non saldata
@@ -346,6 +379,8 @@ export async function unpaySchedule(id: string) {
       .select("*, expense_categories(name, color), suppliers(name)")
       .single();
     if (updateError) throw new Error(updateError.message);
+
+    await autoSyncScheduleToCalendar(supabase, user.id, scheduleRowToCalendarInput(data));
 
     revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");
@@ -409,6 +444,8 @@ export async function splitScheduleIntoInstallments(id: string, installments: { 
 
     if (updateError) throw new Error(updateError.message);
 
+    await autoSyncScheduleToCalendar(supabase, user.id, scheduleRowToCalendarInput(firstInstallment));
+
     const restRows = installments.slice(1).map((inst, idx) => ({
       user_id: user.id,
       amount: inst.amount,
@@ -429,6 +466,10 @@ export async function splitScheduleIntoInstallments(id: string, installments: { 
       .select("*, expense_categories(name, color), suppliers(name)");
 
     if (insertError) throw new Error(insertError.message);
+
+    for (const installmentRow of restInstallments || []) {
+      await autoSyncScheduleToCalendar(supabase, user.id, scheduleRowToCalendarInput(installmentRow));
+    }
 
     revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/expenses");

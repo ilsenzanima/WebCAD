@@ -259,6 +259,7 @@ export interface Expense {
   is_income: boolean;
   is_emergency: boolean; // segnata come imprevisto al momento della registrazione, a prescindere dal tipo della categoria
   is_refund: boolean; // entrata che rimborsa una spesa presso il fornitore collegato (supplier_id), per far quadrare i conti del fornitore
+  google_event_id: string | null; // evento collegato sul Calendario Google Dedicato, se sincronizzata
   created_at: string;
   updated_at: string;
 }

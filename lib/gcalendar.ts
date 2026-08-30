@@ -126,3 +126,127 @@ export async function syncScheduleToGoogleCalendar({
 
   return await response.json();
 }
+
+/**
+ * Inserisce o aggiorna sul Calendario Google Dedicato l'evento collegato a una spesa o
+ * entrata gia' registrata (a differenza di una scadenza, qui il movimento e' gia' avvenuto).
+ */
+export async function syncExpenseToGoogleCalendar({
+  expense,
+  accessToken,
+  calendarId,
+  eventId,
+}: {
+  expense: {
+    id: string;
+    amount: number;
+    description?: string | null;
+    date: string;
+    category?: string;
+    supplier_name?: string;
+    is_income?: boolean;
+  };
+  accessToken: string;
+  calendarId: string;
+  eventId?: string | null;
+}) {
+  if (!accessToken || !calendarId) return null;
+
+  const formattedAmount = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(expense.amount);
+  const statusPrefix = expense.is_income ? "💰 ENTRATA: " : "💶 SPESA: ";
+  const supplierInfo = expense.supplier_name ? ` (${expense.supplier_name})` : "";
+  const title = `${statusPrefix}${expense.description || expense.category || "Movimento"}${supplierInfo} - ${formattedAmount}`;
+
+  const eventDate = expense.date; // AAAA-MM-DD
+
+  const eventPayload = {
+    summary: title,
+    description: `Movimento registrato nel Gestionale Spese.\nImporto: ${formattedAmount}\nTipo: ${expense.is_income ? "Entrata" : "Spesa"}`,
+    start: {
+      date: eventDate,
+    },
+    end: {
+      date: eventDate,
+    },
+    colorId: expense.is_income ? "10" : "11", // Verde per le entrate, Rosso/Pomodoro per le spese gia' effettuate
+  };
+
+  const url = eventId
+    ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`
+    : `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
+
+  const response = await fetch(url, {
+    method: eventId ? "PATCH" : "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(eventPayload),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    console.warn("Errore sincronizzazione evento Google Calendar (spesa):", err);
+    return null;
+  }
+
+  return await response.json();
+}
+
+/**
+ * Elimina un evento dal Calendario Google Dedicato (usato quando la scadenza o la spesa
+ * collegata viene eliminata, o quando un saldo viene annullato).
+ */
+export async function deleteGoogleCalendarEvent({
+  accessToken,
+  calendarId,
+  eventId,
+}: {
+  accessToken: string;
+  calendarId: string;
+  eventId: string;
+}) {
+  if (!accessToken || !calendarId || !eventId) return;
+
+  const response = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  );
+
+  // 404/410 = l'evento non esiste piu' (es. rimosso a mano su Google): va bene cosi'.
+  if (!response.ok && response.status !== 404 && response.status !== 410) {
+    const err = await response.text();
+    console.warn("Errore eliminazione evento Google Calendar:", err);
+  }
+}
+
+/** Converte una riga payment_schedules (con eventuali join) nell'input atteso dalla sync. */
+export function scheduleRowToCalendarInput(row: any) {
+  return {
+    id: row.id,
+    amount: row.amount,
+    description: row.description,
+    due_date: row.due_date,
+    category: row.expense_categories?.name || row.category,
+    supplier_name: row.suppliers?.name,
+    is_paid: row.is_paid,
+    google_event_id: row.google_event_id ?? null,
+  };
+}
+
+/** Converte una riga expenses (con eventuali join) nell'input atteso dalla sync. */
+export function expenseRowToCalendarInput(row: any) {
+  return {
+    id: row.id,
+    amount: row.amount,
+    description: row.description,
+    date: row.date,
+    category: row.expense_categories?.name || row.category,
+    supplier_name: row.suppliers?.name,
+    is_income: row.is_income,
+    google_event_id: row.google_event_id ?? null,
+  };
+}
