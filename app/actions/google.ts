@@ -10,7 +10,12 @@ import {
   moveFileToFolder,
   GOOGLE_CONFIG,
 } from "@/lib/gdrive";
-import { getOrCreateDedicatedGoogleCalendar, syncScheduleToGoogleCalendar } from "@/lib/gcalendar";
+import {
+  getOrCreateDedicatedGoogleCalendar,
+  syncScheduleToGoogleCalendar,
+  syncExpenseToGoogleCalendar,
+  deleteGoogleCalendarEvent,
+} from "@/lib/gcalendar";
 import { createDocumentWithFinancials } from "@/app/actions/documents";
 
 const EXPIRY_SAFETY_BUFFER_MS = 60 * 1000;
@@ -237,6 +242,126 @@ export async function assignScansioneDocument({
     return { success: true, data: docRes.data };
   } catch (err: any) {
     return { success: false, error: err.message || "Errore durante l'assegnazione del documento" };
+  }
+}
+
+/**
+ * Recupera access token + id del calendario dedicato se l'utente ha collegato Google.
+ * Restituisce null (senza sollevare errori) se non e' collegato o se Google non risponde,
+ * cosi' le sincronizzazioni automatiche non bloccano mai il salvataggio di scadenze/spese.
+ */
+async function getDedicatedCalendarContext(supabase: any, userId: string) {
+  try {
+    const accessToken = await getValidAccessToken(supabase, userId);
+    const calendarId = await getOrCreateDedicatedGoogleCalendar(accessToken);
+    return { accessToken, calendarId };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Sincronizza in automatico una scadenza sul Calendario Google Dedicato, in modo "best-effort":
+ * se Google non e' collegato o la richiesta fallisce non solleva errori, cosi' da non bloccare
+ * mai il salvataggio della scadenza nel Gestionale.
+ */
+export async function autoSyncScheduleToCalendar(
+  supabase: any,
+  userId: string,
+  schedule: {
+    id: string;
+    amount: number;
+    description?: string | null;
+    due_date: string;
+    category?: string;
+    supplier_name?: string;
+    is_paid?: boolean;
+    google_event_id?: string | null;
+  }
+) {
+  const ctx = await getDedicatedCalendarContext(supabase, userId);
+  if (!ctx) return;
+
+  try {
+    const event = await syncScheduleToGoogleCalendar({
+      schedule,
+      accessToken: ctx.accessToken,
+      calendarId: ctx.calendarId,
+      eventId: schedule.google_event_id,
+    });
+    if (event?.id && event.id !== schedule.google_event_id) {
+      await supabase
+        .from("payment_schedules")
+        .update({ google_event_id: event.id })
+        .eq("id", schedule.id)
+        .eq("user_id", userId);
+    }
+  } catch (err) {
+    console.warn("Sincronizzazione automatica scadenza->Google Calendar fallita:", err);
+  }
+}
+
+/** Elimina (best-effort) l'evento Google Calendar collegato a una scadenza. */
+export async function autoDeleteScheduleCalendarEvent(supabase: any, userId: string, googleEventId?: string | null) {
+  if (!googleEventId) return;
+  const ctx = await getDedicatedCalendarContext(supabase, userId);
+  if (!ctx) return;
+  try {
+    await deleteGoogleCalendarEvent({ accessToken: ctx.accessToken, calendarId: ctx.calendarId, eventId: googleEventId });
+  } catch (err) {
+    console.warn("Eliminazione automatica evento scadenza su Google Calendar fallita:", err);
+  }
+}
+
+/**
+ * Sincronizza in automatico una spesa/entrata registrata sul Calendario Google Dedicato
+ * (best-effort, come autoSyncScheduleToCalendar).
+ */
+export async function autoSyncExpenseToCalendar(
+  supabase: any,
+  userId: string,
+  expense: {
+    id: string;
+    amount: number;
+    description?: string | null;
+    date: string;
+    category?: string;
+    supplier_name?: string;
+    is_income?: boolean;
+    google_event_id?: string | null;
+  }
+) {
+  const ctx = await getDedicatedCalendarContext(supabase, userId);
+  if (!ctx) return;
+
+  try {
+    const event = await syncExpenseToGoogleCalendar({
+      expense,
+      accessToken: ctx.accessToken,
+      calendarId: ctx.calendarId,
+      eventId: expense.google_event_id,
+    });
+    if (event?.id && event.id !== expense.google_event_id) {
+      await supabase
+        .from("expenses")
+        .update({ google_event_id: event.id })
+        .eq("id", expense.id)
+        .eq("user_id", userId);
+    }
+  } catch (err) {
+    console.warn("Sincronizzazione automatica spesa->Google Calendar fallita:", err);
+  }
+}
+
+/** Elimina (best-effort) l'evento Google Calendar collegato a una spesa/entrata. */
+export async function autoDeleteExpenseCalendarEvent(supabase: any, userId: string, googleEventId?: string | null) {
+  if (!googleEventId) return;
+  const ctx = await getDedicatedCalendarContext(supabase, userId);
+  if (!ctx) return;
+  try {
+    await deleteGoogleCalendarEvent({ accessToken: ctx.accessToken, calendarId: ctx.calendarId, eventId: googleEventId });
+  } catch (err) {
+    console.warn("Eliminazione automatica evento spesa su Google Calendar fallita:", err);
   }
 }
 
