@@ -389,27 +389,41 @@ export async function splitReviewDifferenceAsFee(lineId: string, expenseId: stri
     const diff = Math.abs(Number(line.amount)) - Math.abs(Number(expense.amount));
     if (Math.abs(diff) < 0.005) throw new Error("Gli importi coincidono già: non c'è una differenza da separare.");
 
-    const { error: feeError } = await supabase.from("expenses").insert({
-      user_id: user.id,
-      amount: Math.abs(diff),
-      category: "Commissioni",
-      supplier_id: expense.supplier_id || null,
-      description: "Commissione applicata dalla banca",
-      date: line.value_date,
-      account_id: line.account_id,
-      is_income: diff > 0 ? expense.is_income : !expense.is_income,
-    });
+    const { data: feeExpense, error: feeError } = await supabase
+      .from("expenses")
+      .insert({
+        user_id: user.id,
+        amount: Math.abs(diff),
+        category: "Commissioni",
+        supplier_id: expense.supplier_id || null,
+        description: "Commissione applicata dalla banca",
+        date: line.value_date,
+        account_id: line.account_id,
+        is_income: diff > 0 ? expense.is_income : !expense.is_income,
+      })
+      .select()
+      .single();
     if (feeError) throw new Error(feeError.message);
 
-    const { error: matchError } = await supabase
-      .from("bank_statement_lines")
-      .update({ matched_expense_id: expenseId, is_ignored: false })
-      .eq("id", lineId)
-      .eq("user_id", user.id);
+    // La spesa originale e quella di commissione insieme coprono l'intero
+    // movimento: si collegano entrambe come raggruppamento (invece di lasciare
+    // la commissione senza alcun collegamento), altrimenti ricomparirebbe tra
+    // le "spese senza riscontro" pur essendo gia' spiegata da questo movimento.
+    const { error: matchError } = await supabase.from("bank_statement_line_expenses").insert([
+      { user_id: user.id, line_id: lineId, expense_id: expenseId },
+      { user_id: user.id, line_id: lineId, expense_id: feeExpense.id },
+    ]);
     if (matchError) {
-      if (matchError.code === "23505") throw new Error("Questa spesa è già collegata a un altro movimento.");
+      if (matchError.code === "23505") throw new Error("Questa spesa è già collegata a un altro movimento o raggruppamento.");
       throw new Error(matchError.message);
     }
+
+    const { error: unmatchError } = await supabase
+      .from("bank_statement_lines")
+      .update({ matched_expense_id: null, is_ignored: false })
+      .eq("id", lineId)
+      .eq("user_id", user.id);
+    if (unmatchError) throw new Error(unmatchError.message);
 
     await rememberDetectedCode(supabase, user.id, line.detected_code, expense.supplier_id ?? null);
 
