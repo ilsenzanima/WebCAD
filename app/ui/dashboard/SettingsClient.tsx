@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { type ExpenseCategory, type FamilyMember } from "@/lib/types/database";
 import { createCategory, updateCategory, deleteCategory } from "@/app/actions/categories";
 import { changePassword } from "@/app/actions/auth";
-import { disconnectGoogleDrive } from "@/app/actions/google";
+import { disconnectGoogleDrive, getGoogleCalendarsForSelection, saveSelectedGoogleCalendars } from "@/app/actions/google";
 import { setFontPreference } from "@/app/actions/preferences";
 import { createFamilyMember, removeFamilyMember } from "@/app/actions/family";
 import { FONT_OPTIONS } from "@/lib/fonts";
@@ -89,8 +89,56 @@ export default function SettingsClient({ categories: initialCategories, googleCo
           return;
         }
         setGoogleConnected(false);
+        setGoogleCalendars([]);
+        setCalendarsLoaded(false);
       } catch (err: any) {
         alert(err.message || "Errore durante lo scollegamento");
+      }
+    });
+  };
+
+  // Calendari Google secondari da mostrare in sola lettura nel Calendario Finanziario
+  // (oltre a quello dedicato del Gestionale, che resta gestito a parte).
+  const [googleCalendars, setGoogleCalendars] = useState<
+    { id: string; summary: string; backgroundColor?: string; primary?: boolean; selected: boolean }[]
+  >([]);
+  const [calendarsLoaded, setCalendarsLoaded] = useState(false);
+  const [isLoadingCalendars, setIsLoadingCalendars] = useState(false);
+  const [isSavingCalendars, setIsSavingCalendars] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== "connections" || !googleConnected || calendarsLoaded) return;
+    setIsLoadingCalendars(true);
+    getGoogleCalendarsForSelection()
+      .then((res) => {
+        if (res.success) setGoogleCalendars(res.calendars);
+        setCalendarsLoaded(true);
+      })
+      .catch(() => setCalendarsLoaded(true))
+      .finally(() => setIsLoadingCalendars(false));
+  }, [activeTab, googleConnected, calendarsLoaded]);
+
+  const toggleCalendarSelection = (id: string) => {
+    setGoogleCalendars((prev) => prev.map((cal) => (cal.id === id ? { ...cal, selected: !cal.selected } : cal)));
+  };
+
+  const handleSaveCalendarSelection = () => {
+    setIsSavingCalendars(true);
+    startTransition(async () => {
+      try {
+        const selected = googleCalendars
+          .filter((cal) => cal.selected)
+          .map(({ id, summary, backgroundColor }) => ({ id, summary, backgroundColor }));
+        const res = await saveSelectedGoogleCalendars(selected);
+        if (!res.success) {
+          alert(res.error || "Errore durante il salvataggio della selezione");
+          return;
+        }
+        alert("Selezione calendari salvata.");
+      } catch (err: any) {
+        alert(err.message || "Errore durante il salvataggio della selezione");
+      } finally {
+        setIsSavingCalendars(false);
       }
     });
   };
@@ -617,6 +665,54 @@ export default function SettingsClient({ categories: initialCategories, googleCo
                 >
                   {isPending ? "Scollegamento..." : "Scollega Account Google"}
                 </button>
+
+                <div className="pt-4 mt-4 border-t border-zinc-800/60 space-y-3">
+                  <h3 className="text-xs font-extrabold text-white">📅 Calendari Google da visualizzare (sola lettura)</h3>
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Scegli quali altri calendari del tuo account Google mostrare nel Calendario Finanziario, accanto a spese e scadenze. Vengono solo letti: il Gestionale non li modifica mai.
+                  </p>
+
+                  {isLoadingCalendars ? (
+                    <p className="text-[10px] text-zinc-500 py-2">Caricamento calendari…</p>
+                  ) : googleCalendars.length === 0 ? (
+                    <p className="text-[10px] text-zinc-500 py-2">
+                      {calendarsLoaded ? "Nessun altro calendario trovato sul tuo account Google." : "Apri questa scheda per caricare i tuoi calendari Google."}
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                      {googleCalendars.map((cal) => (
+                        <label
+                          key={cal.id}
+                          className="flex items-center gap-2.5 p-2.5 rounded-xl border border-zinc-800/70 bg-zinc-950/40 cursor-pointer hover:border-zinc-700 transition-all"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={cal.selected}
+                            onChange={() => toggleCalendarSelection(cal.id)}
+                            className="accent-indigo-500"
+                          />
+                          <span
+                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                            style={{ background: cal.backgroundColor || "#6366f1" }}
+                          />
+                          <span className="text-[11px] font-semibold text-white truncate">
+                            {cal.summary}{cal.primary ? " (principale)" : ""}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {googleCalendars.length > 0 && (
+                    <button
+                      onClick={handleSaveCalendarSelection}
+                      disabled={isSavingCalendars}
+                      className="w-full py-2.5 rounded-xl text-[11px] font-extrabold text-white bg-indigo-600 hover:bg-indigo-500 transition-all disabled:opacity-50"
+                    >
+                      {isSavingCalendars ? "Salvataggio…" : "Salva selezione"}
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="space-y-3">
