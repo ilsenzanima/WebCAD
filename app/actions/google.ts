@@ -15,6 +15,8 @@ import {
   syncScheduleToGoogleCalendar,
   syncExpenseToGoogleCalendar,
   deleteGoogleCalendarEvent,
+  listGoogleCalendars,
+  fetchGoogleCalendarEvents,
 } from "@/lib/gcalendar";
 import { createDocumentWithFinancials } from "@/app/actions/documents";
 
@@ -362,6 +364,106 @@ export async function autoDeleteExpenseCalendarEvent(supabase: any, userId: stri
     await deleteGoogleCalendarEvent({ accessToken: ctx.accessToken, calendarId: ctx.calendarId, eventId: googleEventId });
   } catch (err) {
     console.warn("Eliminazione automatica evento spesa su Google Calendar fallita:", err);
+  }
+}
+
+/**
+ * Elenca i calendari Google dell'utente (per la selezione in Impostazioni), marcando quelli
+ * gia' scelti per la visualizzazione in sola lettura nel Calendario Finanziario.
+ */
+export async function getGoogleCalendarsForSelection() {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const accessToken = await getValidAccessToken(supabase, user.id);
+    const calendars = await listGoogleCalendars(accessToken);
+
+    const { data: tokenRow } = await supabase
+      .from("user_google_tokens")
+      .select("selected_calendars")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const selectedIds = new Set((tokenRow?.selected_calendars || []).map((c: any) => c.id));
+
+    return {
+      success: true,
+      calendars: calendars.map((cal) => ({ ...cal, selected: selectedIds.has(cal.id) })),
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message, calendars: [] };
+  }
+}
+
+/**
+ * Salva quali calendari Google secondari mostrare, in sola lettura, nel Calendario
+ * Finanziario (non vengono mai scritti: solo letti per essere mostrati accanto a spese e
+ * scadenze).
+ */
+export async function saveSelectedGoogleCalendars(
+  calendars: { id: string; summary: string; backgroundColor?: string }[]
+) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("Non autenticato");
+
+    const { error } = await supabase
+      .from("user_google_tokens")
+      .update({ selected_calendars: calendars })
+      .eq("user_id", user.id);
+    if (error) throw new Error(error.message);
+
+    revalidatePath("/dashboard/calendar");
+    revalidatePath("/dashboard/settings");
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Legge (best-effort, sola lettura) gli eventi dei calendari Google selezionati in
+ * Impostazioni, in un intervallo di date. Non solleva mai errori: se Google non e'
+ * collegato, nessun calendario e' selezionato o la richiesta fallisce, il Calendario
+ * Finanziario continua a funzionare semplicemente senza eventi Google.
+ */
+export async function getSelectedGoogleCalendarEvents(timeMin: string, timeMax: string) {
+  try {
+    const supabase = (await createClient()) as any;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: true, events: [] };
+
+    const { data: tokenRow } = await supabase
+      .from("user_google_tokens")
+      .select("selected_calendars")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    const selectedCalendars: { id: string; summary: string; backgroundColor?: string }[] =
+      tokenRow?.selected_calendars || [];
+    if (selectedCalendars.length === 0) return { success: true, events: [] };
+
+    const accessToken = await getValidAccessToken(supabase, user.id);
+
+    const results = await Promise.all(
+      selectedCalendars.map((cal) =>
+        fetchGoogleCalendarEvents({
+          accessToken,
+          calendarId: cal.id,
+          calendarName: cal.summary,
+          calendarColor: cal.backgroundColor,
+          timeMin,
+          timeMax,
+        })
+      )
+    );
+
+    return { success: true, events: results.flat() };
+  } catch {
+    return { success: true, events: [] };
   }
 }
 

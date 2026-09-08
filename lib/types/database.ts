@@ -773,6 +773,9 @@ export interface Database {
           access_token: string;
           refresh_token: string | null;
           expires_at: string;
+          // Calendari Google secondari scelti in Impostazioni per la visualizzazione in
+          // sola lettura nel Calendario Finanziario (id, summary, backgroundColor).
+          selected_calendars: { id: string; summary: string; backgroundColor?: string }[];
           created_at: string;
           updated_at: string;
         };
@@ -781,6 +784,7 @@ export interface Database {
           access_token: string;
           refresh_token?: string | null;
           expires_at: string;
+          selected_calendars?: { id: string; summary: string; backgroundColor?: string }[];
           created_at?: string;
           updated_at?: string;
         };
@@ -789,6 +793,7 @@ export interface Database {
           access_token?: string;
           refresh_token?: string | null;
           expires_at?: string;
+          selected_calendars?: { id: string; summary: string; backgroundColor?: string }[];
           created_at?: string;
           updated_at?: string;
         };

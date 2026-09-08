@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition, useMemo, Fragment } from "react";
+import { useState, useTransition, useMemo, useEffect, Fragment } from "react";
 import { type Expense, type PaymentSchedule, type Supplier, type SupplierDocument } from "@/lib/types/database";
 import { deleteExpense } from "@/app/actions/expenses";
 import { deleteSchedule, paySchedule, unpaySchedule } from "@/app/actions/schedules";
+import { getSelectedGoogleCalendarEvents } from "@/app/actions/google";
 import { uploadAndLinkDocument, utilityMissingTags } from "@/lib/uploadDocument";
 import { monthInputToDate, syncPeriodEnd } from "@/lib/period";
 import { formatCurrency, toLocalDateStr } from "@/lib/format";
@@ -77,6 +78,37 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
+
+  // Eventi in sola lettura dai calendari Google secondari scelti in Impostazioni: caricati
+  // per il mese visualizzato (con un margine per coprire i giorni del mese prima/dopo che
+  // spuntano nella griglia). Non vengono mai scritti, solo mostrati accanto a spese e
+  // scadenze.
+  const [googleEvents, setGoogleEvents] = useState<
+    { id: string; date: string; time: string | null; title: string; calendarName: string; calendarColor?: string }[]
+  >([]);
+
+  useEffect(() => {
+    if (!googleConnected) {
+      setGoogleEvents([]);
+      return;
+    }
+    const startBoundary = new Date(year, month, 1);
+    startBoundary.setDate(startBoundary.getDate() - 7);
+    const endBoundary = new Date(year, month + 1, 0);
+    endBoundary.setDate(endBoundary.getDate() + 8);
+
+    let cancelled = false;
+    getSelectedGoogleCalendarEvents(startBoundary.toISOString(), endBoundary.toISOString())
+      .then((res) => {
+        if (!cancelled) setGoogleEvents(res.success ? res.events : []);
+      })
+      .catch(() => {
+        if (!cancelled) setGoogleEvents([]);
+      });
+    return () => { cancelled = true; };
+  }, [year, month, googleConnected]);
+
+  const getGoogleEventsForDate = (dateStr: string) => googleEvents.filter(e => e.date === dateStr);
 
   const monthNames = [
     "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
@@ -333,6 +365,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
 
   const selectedDateExpenses = selectedDate ? getExpensesForDate(selectedDate) : [];
   const selectedDateSchedules = selectedDate ? getSchedulesForDate(selectedDate) : [];
+  const selectedDateGoogleEvents = selectedDate ? getGoogleEventsForDate(selectedDate) : [];
 
   return (
     <div className="p-4 md:p-8 space-y-8 max-w-[100rem] mx-auto">
@@ -399,6 +432,7 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
               const totalIn = dayExpenses.filter(e => e.is_income).reduce((sum, e) => sum + Number(e.amount), 0);
               const pendingCount = daySchedules.filter(s => !s.is_paid).length;
               const paidCount = daySchedules.filter(s => s.is_paid).length;
+              const dayGoogleEvents = getGoogleEventsForDate(cell.dateStr);
 
               const todayStr = toLocalDateStr();
               const isToday = cell.dateStr === todayStr;
@@ -458,6 +492,14 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                         title={`${paidCount} scadenza/e saldata/e`}
                       >
                         ✓{paidCount}
+                      </span>
+                    )}
+                    {dayGoogleEvents.length > 0 && (
+                      <span
+                        className="inline-flex items-center px-1.5 py-[1px] rounded-full text-[8px] md:text-[9px] font-extrabold bg-sky-500/25 text-sky-300 border border-sky-500/40"
+                        title={`${dayGoogleEvents.length} evento/i da Google Calendar`}
+                      >
+                        📅{dayGoogleEvents.length}
                       </span>
                     )}
                   </div>
@@ -756,6 +798,43 @@ export default function CalendarClient({ expenses: initialExpenses, schedules: i
                 </div>
               )}
             </div>
+
+            {/* SEZIONE 3: Eventi Google (sola lettura, dai calendari scelti in Impostazioni) */}
+            {googleConnected && (
+              <div className="space-y-4 mt-6">
+                <h4 className="text-[10px] font-bold text-sky-400 uppercase tracking-widest flex items-center gap-1.5 border-b border-zinc-800 pb-2">
+                  📅 Eventi Google ({selectedDateGoogleEvents.length})
+                </h4>
+
+                {selectedDateGoogleEvents.length === 0 ? (
+                  <p className="text-[10px] text-zinc-500 py-1 font-medium">Nessun evento Google in questo giorno.</p>
+                ) : (
+                  <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                    {selectedDateGoogleEvents.map((ev) => (
+                      <div
+                        key={ev.id}
+                        className="flex items-center gap-2.5 p-2.5 rounded-xl border"
+                        style={{
+                          background: "hsl(240 10% 12% / 0.6)",
+                          borderColor: "hsl(240 5% 18% / 0.5)",
+                        }}
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ background: ev.calendarColor || "#38bdf8" }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <h5 className="text-xs font-bold text-white truncate">{ev.title}</h5>
+                          <p className="text-[9px] text-slate-400 truncate">
+                            {ev.time ? `${ev.time} · ` : "Tutto il giorno · "}{ev.calendarName}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

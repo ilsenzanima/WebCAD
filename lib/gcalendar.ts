@@ -223,6 +223,104 @@ export async function deleteGoogleCalendarEvent({
   }
 }
 
+export type GoogleCalendarListItem = {
+  id: string;
+  summary: string;
+  backgroundColor?: string;
+  primary?: boolean;
+};
+
+/**
+ * Elenca tutti i calendari Google dell'utente (per la selezione in Impostazioni), escluso
+ * quello dedicato del Gestionale che e' gia' gestito a parte.
+ */
+export async function listGoogleCalendars(accessToken: string): Promise<GoogleCalendarListItem[]> {
+  if (!accessToken) return [];
+
+  const res = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Impossibile elencare i calendari Google: ${err}`);
+  }
+
+  const data = await res.json();
+  return (data.items || [])
+    .filter((item: any) => item.summary !== DEDICATED_CALENDAR_NAME)
+    .map((item: any) => ({
+      id: item.id,
+      summary: item.summary,
+      backgroundColor: item.backgroundColor,
+      primary: !!item.primary,
+    }));
+}
+
+export type GoogleCalendarEvent = {
+  id: string;
+  calendarId: string;
+  calendarName: string;
+  calendarColor?: string;
+  title: string;
+  date: string; // AAAA-MM-DD
+  time: string | null; // HH:MM, oppure null per un evento a giornata intera
+};
+
+/**
+ * Legge (in sola lettura) gli eventi di un calendario Google in un intervallo di date.
+ * Non scrive mai nulla: usata solo per mostrare gli eventi nel Calendario Finanziario.
+ */
+export async function fetchGoogleCalendarEvents({
+  accessToken,
+  calendarId,
+  calendarName,
+  calendarColor,
+  timeMin,
+  timeMax,
+}: {
+  accessToken: string;
+  calendarId: string;
+  calendarName: string;
+  calendarColor?: string;
+  timeMin: string;
+  timeMax: string;
+}): Promise<GoogleCalendarEvent[]> {
+  const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`);
+  url.searchParams.set("timeMin", timeMin);
+  url.searchParams.set("timeMax", timeMax);
+  url.searchParams.set("singleEvents", "true");
+  url.searchParams.set("orderBy", "startTime");
+  url.searchParams.set("maxResults", "250");
+
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.warn(`Errore lettura eventi calendario Google "${calendarName}":`, err);
+    return [];
+  }
+
+  const data = await res.json();
+  return (data.items || [])
+    .filter((event: any) => event.status !== "cancelled")
+    .map((event: any) => {
+      const allDay = !!event.start?.date;
+      return {
+        id: event.id,
+        calendarId,
+        calendarName,
+        calendarColor,
+        title: event.summary || "(Senza titolo)",
+        date: allDay ? event.start.date : event.start?.dateTime?.slice(0, 10),
+        time: allDay ? null : event.start?.dateTime?.slice(11, 16) ?? null,
+      };
+    })
+    .filter((event: GoogleCalendarEvent) => !!event.date);
+}
+
 /** Converte una riga payment_schedules (con eventuali join) nell'input atteso dalla sync. */
 export function scheduleRowToCalendarInput(row: any) {
   return {
