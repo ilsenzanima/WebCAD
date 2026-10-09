@@ -24,6 +24,8 @@ const HEADER_ALIASES: Record<string, string[]> = {
   transactionDate: ["data", "data contabile", "data operazione"],
   valueDate: ["valuta", "data valuta"],
   amount: ["importo", "importo (eur)", "importo eur", "importo (€)"],
+  dare: ["dare"], // alcune banche usano due colonne (dare/avere) invece di un unico importo con segno
+  avere: ["avere"],
   type: ["tipologia", "categoria"],
   description: ["descrizione", "causale", "descrizione operazione"],
 };
@@ -66,7 +68,7 @@ function detectDelimiter(headerLine: string): string {
 }
 
 function normalizeHeader(cell: string): string {
-  return cell.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  return cell.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/_/g, " ").trim();
 }
 
 function parseItalianDate(raw: string): string | null {
@@ -125,6 +127,16 @@ export function looksLikePreAuthorization(description: string): boolean {
   return PRE_AUTHORIZATION_KEYWORDS.some((k) => haystack.includes(k));
 }
 
+// Righe di riepilogo (saldo iniziale/contabile/liquido, disponibilita') che alcune
+// banche aggiungono in coda al file: non sono movimenti, vanno scartate oppure
+// comparirebbero come spese/entrate false con importi duplicati.
+const BALANCE_SUMMARY_PREFIXES = ["saldo iniziale", "saldo contabile", "saldo liquido", "disponibilita"];
+
+function looksLikeBalanceSummaryRow(description: string): boolean {
+  const normalized = description.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+  return BALANCE_SUMMARY_PREFIXES.some((p) => normalized.startsWith(p));
+}
+
 // Nome del commerciante/beneficiario, per suggerire un fornitore gia' noto quando
 // il codice rilevato non e' ancora collegato a nessuno.
 export function extractMerchantName(description: string): string | null {
@@ -148,7 +160,8 @@ export function parseBankStatementCsv(csvText: string): ParseResult {
     const cells = splitCsvLine(lines[i], d).map(normalizeHeader);
     const hasDate = cells.some((c) => HEADER_ALIASES.transactionDate.includes(c));
     const hasAmount = cells.some((c) => HEADER_ALIASES.amount.includes(c));
-    if (hasDate && hasAmount) {
+    const hasDareOrAvere = cells.some((c) => HEADER_ALIASES.dare.includes(c) || HEADER_ALIASES.avere.includes(c));
+    if (hasDate && (hasAmount || hasDareOrAvere)) {
       headerIndex = i;
       delimiter = d;
       const map: Record<string, number> = {};
@@ -162,7 +175,7 @@ export function parseBankStatementCsv(csvText: string): ParseResult {
   }
 
   if (headerIndex === -1) {
-    return { rows: [], errors: ["Intestazione non riconosciuta: il file deve contenere almeno le colonne Data e Importo."] };
+    return { rows: [], errors: ["Intestazione non riconosciuta: il file deve contenere almeno le colonne Data e Importo (o Dare/Avere)."] };
   }
 
   const rows: ParsedStatementRow[] = [];
@@ -173,11 +186,23 @@ export function parseBankStatementCsv(csvText: string): ParseResult {
     const rawDate = columnIndex.transactionDate !== undefined ? cells[columnIndex.transactionDate] : undefined;
     const rawValue = columnIndex.valueDate !== undefined ? cells[columnIndex.valueDate] : undefined;
     const rawAmount = columnIndex.amount !== undefined ? cells[columnIndex.amount] : undefined;
+    const rawDare = columnIndex.dare !== undefined ? cells[columnIndex.dare] : undefined;
+    const rawAvere = columnIndex.avere !== undefined ? cells[columnIndex.avere] : undefined;
     const rawType = columnIndex.type !== undefined ? cells[columnIndex.type] : undefined;
     const rawDescription = columnIndex.description !== undefined ? cells[columnIndex.description] : undefined;
 
     const transactionDate = rawDate ? parseItalianDate(rawDate) : null;
-    const amount = rawAmount ? parseItalianAmount(rawAmount) : null;
+
+    let amount: number | null = null;
+    if (rawAmount) {
+      amount = parseItalianAmount(rawAmount);
+    } else if (rawDare && rawDare.trim()) {
+      const parsed = parseItalianAmount(rawDare);
+      amount = parsed === null ? null : -Math.abs(parsed);
+    } else if (rawAvere && rawAvere.trim()) {
+      const parsed = parseItalianAmount(rawAvere);
+      amount = parsed === null ? null : Math.abs(parsed);
+    }
 
     if (!transactionDate || amount === null) {
       errors.push(`Riga ${i + 1} ignorata: data o importo non leggibili ("${lines[i]}").`);
@@ -186,6 +211,8 @@ export function parseBankStatementCsv(csvText: string): ParseResult {
 
     const valueDate = (rawValue && parseItalianDate(rawValue)) || transactionDate;
     const description = (rawDescription || "").trim();
+
+    if (looksLikeBalanceSummaryRow(description)) continue;
 
     rows.push({
       transactionDate,
