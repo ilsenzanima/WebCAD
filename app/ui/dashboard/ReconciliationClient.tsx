@@ -104,6 +104,9 @@ export default function ReconciliationClient({ initialAccounts, suppliers, categ
         alert(res.error || "Errore durante l'importazione");
         return;
       }
+      if (res.data.skippedDuplicates > 0) {
+        alert(`Importati ${res.data.rowCount} movimenti. Ne ho saltati ${res.data.skippedDuplicates} perche' gia' presenti su questo conto.`);
+      }
       const refreshedImports = await getBankStatementImports();
       setImports(refreshedImports);
       await loadReconciliation(res.data.importId);

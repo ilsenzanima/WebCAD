@@ -130,7 +130,7 @@ export function looksLikePreAuthorization(description: string): boolean {
 // Righe di riepilogo (saldo iniziale/contabile/liquido, disponibilita') che alcune
 // banche aggiungono in coda al file: non sono movimenti, vanno scartate oppure
 // comparirebbero come spese/entrate false con importi duplicati.
-const BALANCE_SUMMARY_PREFIXES = ["saldo iniziale", "saldo contabile", "saldo liquido", "disponibilita"];
+const BALANCE_SUMMARY_PREFIXES = ["saldo iniziale", "saldo contabile", "saldo liquido", "disponibilit"];
 
 function looksLikeBalanceSummaryRow(description: string): boolean {
   const normalized = description.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();

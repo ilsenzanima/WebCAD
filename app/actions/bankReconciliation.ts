@@ -86,9 +86,45 @@ export async function importBankStatement(formData: { account_id: string; file_n
       .single();
     if (accountError || !account) throw new Error("Conto non trovato");
 
-    const { rows, errors } = parseBankStatementCsv(formData.csv_text);
-    if (rows.length === 0) {
+    const parsed = parseBankStatementCsv(formData.csv_text);
+    const errors = parsed.errors;
+    if (parsed.rows.length === 0) {
       throw new Error(errors[0] || "Nessun movimento leggibile nel file.");
+    }
+
+    // Estratti con periodi sovrapposti (es. due export scaricati in date diverse)
+    // contengono gli stessi movimenti: quelli gia' importati sul conto vengono
+    // saltati. Il confronto conta le occorrenze, perche' nello stesso file possono
+    // esistere righe davvero identiche (stessa data, importo e descrizione).
+    const lineKey = (date: string, valueDate: string, amount: number | string, description: string) =>
+      `${date}|${valueDate}|${Number(amount).toFixed(2)}|${description}`;
+    const parsedDates = parsed.rows.map((r) => r.transactionDate).sort();
+    const { data: existingLines, error: existingError } = await supabase
+      .from("bank_statement_lines")
+      .select("transaction_date, value_date, amount, description")
+      .eq("user_id", user.id)
+      .eq("account_id", formData.account_id)
+      .gte("transaction_date", parsedDates[0])
+      .lte("transaction_date", parsedDates[parsedDates.length - 1]);
+    if (existingError) throw new Error(existingError.message);
+
+    const existingCounts = new Map<string, number>();
+    for (const l of existingLines || []) {
+      const key = lineKey(l.transaction_date, l.value_date, l.amount, l.description || "");
+      existingCounts.set(key, (existingCounts.get(key) || 0) + 1);
+    }
+    const rows = parsed.rows.filter((r) => {
+      const key = lineKey(r.transactionDate, r.valueDate, r.amount, r.description);
+      const remaining = existingCounts.get(key) || 0;
+      if (remaining > 0) {
+        existingCounts.set(key, remaining - 1);
+        return false;
+      }
+      return true;
+    });
+    const skippedDuplicates = parsed.rows.length - rows.length;
+    if (rows.length === 0) {
+      throw new Error(`Tutti i ${skippedDuplicates} movimenti del file sono gia' stati importati su questo conto.`);
     }
 
     const periodStart = rows.reduce((min, r) => (r.valueDate < min ? r.valueDate : min), rows[0].valueDate);
@@ -158,7 +194,7 @@ export async function importBankStatement(formData: { account_id: string; file_n
     );
 
     revalidateReconciliationPaths();
-    return { success: true, data: { importId: importRow.id, rowCount: rows.length, parseErrors: errors, summary } };
+    return { success: true, data: { importId: importRow.id, rowCount: rows.length, skippedDuplicates, parseErrors: errors, summary } };
   } catch (err: any) {
     return { success: false, error: err.message };
   }
