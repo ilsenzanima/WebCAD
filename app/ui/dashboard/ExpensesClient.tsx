@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition, useMemo, useEffect, Fragment } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useTransition, useMemo, useEffect, useRef, Fragment } from "react";
+import { useSearchParams } from "next/navigation";
 import { type Expense, type ExpenseCategory, type Supplier, type SupplierDocument, type Account } from "@/lib/types/database";
 import { createExpense, updateExpense, deleteExpense } from "@/app/actions/expenses";
 import { createBudget } from "@/app/actions/budget";
@@ -12,6 +12,7 @@ import { uploadAndLinkDocument as uploadAndLinkDocumentShared, utilityMissingTag
 import { monthInputToDate, dateToMonthInput, syncPeriodEnd } from "@/lib/period";
 import { formatCurrency, formatFileSize, formatDate, toLocalDateStr } from "@/lib/format";
 import SchedulesClient from "./SchedulesClient";
+import PaginationControls from "./PaginationControls";
 import { EditIcon, DeleteIcon, ExpensesIcon } from "./icons";
 import { getCategoryBadgeStyle } from "@/lib/categoryColors";
 
@@ -37,6 +38,14 @@ interface ExpensesClientProps {
 }
 
 type MainTab = "uscite" | "entrate" | "scadenze";
+type ExpenseSortKey = "date" | "supplier" | "category" | "amount";
+
+const PAGE_SIZE = 50;
+
+function SortArrow({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
+  if (!active) return <span className="opacity-30">↕</span>;
+  return <span>{dir === "asc" ? "↑" : "↓"}</span>;
+}
 
 export default function ExpensesClient({
   initialExpenses,
@@ -47,7 +56,6 @@ export default function ExpensesClient({
   initialAccounts,
   googleConnected,
 }: ExpensesClientProps) {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const [expenses, setExpenses] = useState<ExpenseWithRelations[]>(initialExpenses);
@@ -68,7 +76,6 @@ export default function ExpensesClient({
 
   const setMainTab = (t: MainTab) => {
     setMainTabState(t);
-    router.replace(`/dashboard/expenses?tab=${t}`);
   };
 
   const isIncomeMode = mainTab === "entrate";
@@ -122,8 +129,22 @@ export default function ExpensesClient({
   }, [suppliersList, supplierId]);
 
   // Filtri ricerca
-  const [filterCategoryId, setFilterCategoryId] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
+  // Filtri, ordinamento e pagina partono dall'indirizzo (?q=&cat=&sup=&sort=&dir=&page=)
+  const [filterCategoryId, setFilterCategoryId] = useState(searchParams.get("cat") || "all");
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
+  const [filterSupplierId, setFilterSupplierId] = useState(searchParams.get("sup") || "all");
+  const [sortKey, setSortKey] = useState<ExpenseSortKey>(() => {
+    const s = searchParams.get("sort");
+    return s === "supplier" || s === "category" || s === "amount" ? s : "date";
+  });
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(() => {
+    const d = searchParams.get("dir");
+    if (d === "asc" || d === "desc") return d;
+    const s = searchParams.get("sort");
+    return s === "supplier" || s === "category" ? "asc" : "desc";
+  });
+  const [page, setPage] = useState(() => Math.max(1, parseInt(searchParams.get("page") || "1") || 1));
+  const skipPageReset = useRef(true);
 
   // Allegati: pannello espanso per una singola registrazione alla volta
   const [expandedExpenseId, setExpandedExpenseId] = useState<string | null>(null);
@@ -455,9 +476,87 @@ export default function ExpensesClient({
       const matchSearch = exp.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           exp.expense_categories?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           exp.suppliers?.name.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchType && matchCategory && matchSearch;
+      const matchSupplier = filterSupplierId === "all" || exp.supplier_id === filterSupplierId;
+      return matchType && matchCategory && matchSupplier && matchSearch;
     });
-  }, [expenses, isIncomeMode, filterCategoryId, searchQuery]);
+  }, [expenses, isIncomeMode, filterCategoryId, filterSupplierId, searchQuery]);
+
+  // Ordinamento scelto dalle intestazioni; a parita' vale sempre la data piu' recente
+  const sortedList = useMemo(() => {
+    const factor = sortDir === "asc" ? 1 : -1;
+    const keyOf = (e: ExpenseWithRelations): string | number => {
+      if (sortKey === "amount") return Number(e.amount);
+      if (sortKey === "supplier") return (e.suppliers?.name || "").toLowerCase();
+      if (sortKey === "category") return (e.expense_categories?.name || e.category || "").toLowerCase();
+      return e.date || "";
+    };
+    return [...filteredList].sort((a, b) => {
+      const ka = keyOf(a);
+      const kb = keyOf(b);
+      if (ka < kb) return -1 * factor;
+      if (ka > kb) return 1 * factor;
+      return (b.date || "").localeCompare(a.date || "");
+    });
+  }, [filteredList, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedList.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedList = useMemo(
+    () => sortedList.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [sortedList, currentPage]
+  );
+
+  // Con un filtro, una ricerca o un cambio di scheda si riparte dalla prima pagina
+  useEffect(() => {
+    if (skipPageReset.current) {
+      skipPageReset.current = false;
+      return;
+    }
+    setPage(1);
+  }, [isIncomeMode, filterCategoryId, filterSupplierId, searchQuery, sortKey, sortDir]);
+
+  // Riporta scheda, filtri, ordinamento e pagina nell'indirizzo (solo valori diversi dal default)
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set("tab", mainTab);
+    if (mainTab !== "scadenze") {
+      if (searchQuery) params.set("q", searchQuery);
+      if (filterCategoryId !== "all") params.set("cat", filterCategoryId);
+      if (filterSupplierId !== "all") params.set("sup", filterSupplierId);
+      if (sortKey !== "date") params.set("sort", sortKey);
+      if (sortDir !== (sortKey === "date" || sortKey === "amount" ? "desc" : "asc")) params.set("dir", sortDir);
+      if (currentPage > 1) params.set("page", String(currentPage));
+    }
+    const qs = params.toString();
+    if (qs !== window.location.search.replace(/^\?/, "")) {
+      window.history.replaceState(null, "", `${window.location.pathname}?${qs}`);
+    }
+  }, [mainTab, searchQuery, filterCategoryId, filterSupplierId, sortKey, sortDir, currentPage]);
+
+  const hasActiveFilters = filterCategoryId !== "all" || filterSupplierId !== "all" || searchQuery !== "";
+  const resetFilters = () => {
+    setFilterCategoryId("all");
+    setFilterSupplierId("all");
+    setSearchQuery("");
+  };
+  const toggleSort = (key: ExpenseSortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir(key === "date" || key === "amount" ? "desc" : "asc");
+    }
+  };
+
+  // Fornitori che compaiono davvero nel registro del tab attivo (per il filtro nell'intestazione)
+  const supplierFilterOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    expenses.forEach((e) => {
+      if ((isIncomeMode ? e.is_income : !e.is_income) && e.supplier_id && e.suppliers?.name) {
+        seen.set(e.supplier_id, e.suppliers.name);
+      }
+    });
+    return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [expenses, isIncomeMode]);
 
 
   return (
@@ -1055,23 +1154,14 @@ export default function ExpensesClient({
                   />
                 </div>
 
-                {!isIncomeMode && (
-                  <select
-                    value={filterCategoryId}
-                    onChange={(e) => setFilterCategoryId(e.target.value)}
-                    className="px-4 py-3 rounded-xl text-xs text-white focus:outline-none border"
-                    style={{
-                      background: "hsl(240 10% 4% / 0.6)",
-                      borderColor: "hsl(240 5% 15% / 0.8)",
-                    }}
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="px-4 py-3 rounded-xl text-xs font-bold text-zinc-300 border border-white/10 hover:bg-white/5 transition-all whitespace-nowrap"
                   >
-                    <option value="all">Tutte le Categorie</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id} style={{ background: "hsl(240 10% 10%)" }}>
-                        {cat.name}
-                      </option>
-                    ))}
-                  </select>
+                    ✕ Azzera filtri
+                  </button>
                 )}
               </div>
 
@@ -1086,19 +1176,63 @@ export default function ExpensesClient({
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="border-b" style={{ borderColor: "hsl(240 5% 18% / 0.7)" }}>
-                        <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Data</th>
-                        <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">
-                          {isIncomeMode ? "Descrizione Entrata" : "Fornitore & Note"}
+                        <th className="pb-3.5 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px]">
+                          <button type="button" onClick={() => toggleSort("date")} className="inline-flex items-center gap-1 uppercase hover:text-white transition-colors">
+                            Data <SortArrow active={sortKey === "date"} dir={sortDir} />
+                          </button>
+                        </th>
+                        <th className="pb-3.5 pr-3 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px]">
+                          <div className="flex flex-col gap-1.5 items-start">
+                            <button type="button" onClick={() => toggleSort("supplier")} className="inline-flex items-center gap-1 uppercase hover:text-white transition-colors">
+                              {isIncomeMode ? "Descrizione Entrata" : "Fornitore & Note"} <SortArrow active={sortKey === "supplier"} dir={sortDir} />
+                            </button>
+                            {supplierFilterOptions.length > 0 && (
+                              <select
+                                value={filterSupplierId}
+                                onChange={(e) => setFilterSupplierId(e.target.value)}
+                                aria-label="Filtra per fornitore"
+                                className="max-w-[170px] px-2 py-1 rounded-lg text-[10px] font-semibold normal-case tracking-normal text-white focus:outline-none border"
+                                style={{ background: "hsl(240 10% 4% / 0.6)", borderColor: filterSupplierId === "all" ? "hsl(240 5% 15% / 0.8)" : "hsl(240 5% 45%)" }}
+                              >
+                                <option value="all">Tutti i fornitori</option>
+                                {supplierFilterOptions.map((s) => (
+                                  <option key={s.id} value={s.id} style={{ background: "hsl(240 10% 10%)" }}>{s.name}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
                         </th>
                         {!isIncomeMode && (
-                          <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Categoria</th>
+                          <th className="pb-3.5 pr-3 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px]">
+                            <div className="flex flex-col gap-1.5 items-start">
+                              <button type="button" onClick={() => toggleSort("category")} className="inline-flex items-center gap-1 uppercase hover:text-white transition-colors">
+                                Categoria <SortArrow active={sortKey === "category"} dir={sortDir} />
+                              </button>
+                              <select
+                                value={filterCategoryId}
+                                onChange={(e) => setFilterCategoryId(e.target.value)}
+                                aria-label="Filtra per categoria"
+                                className="max-w-[170px] px-2 py-1 rounded-lg text-[10px] font-semibold normal-case tracking-normal text-white focus:outline-none border"
+                                style={{ background: "hsl(240 10% 4% / 0.6)", borderColor: filterCategoryId === "all" ? "hsl(240 5% 15% / 0.8)" : "hsl(240 5% 45%)" }}
+                              >
+                                <option value="all">Tutte le categorie</option>
+                                {categories.map((cat) => (
+                                  <option key={cat.id} value={cat.id} style={{ background: "hsl(240 10% 10%)" }}>{cat.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </th>
                         )}
-                        <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Importo</th>
-                        <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-center">Azioni</th>
+                        <th className="pb-3.5 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">
+                          <button type="button" onClick={() => toggleSort("amount")} className="inline-flex items-center gap-1 uppercase hover:text-white transition-colors">
+                            Importo <SortArrow active={sortKey === "amount"} dir={sortDir} />
+                          </button>
+                        </th>
+                        <th className="pb-3.5 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px] text-center">Azioni</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y" style={{ borderColor: "hsl(240 5% 18% / 0.3)" }}>
-                      {filteredList.map((exp, index) => {
+                      {pagedList.map((exp, index) => {
                         const catName = exp.expense_categories?.name || exp.category;
                         const catColor = exp.expense_categories?.color || "slate";
                         const badge = getCategoryBadgeStyle(catColor);
@@ -1108,7 +1242,8 @@ export default function ExpensesClient({
                         const { missingConsumption, missingDocument } = exp.is_income
                           ? { missingConsumption: false, missingDocument: false }
                           : utilityMissingTags(expSupplier, exp.consumption_value, attachments.length);
-                        const isMonthBoundary = index > 0 && exp.date?.slice(0, 7) !== filteredList[index - 1].date?.slice(0, 7);
+                        // La linea di separazione tra i mesi ha senso solo ordinando per data
+                        const isMonthBoundary = sortKey === "date" && index > 0 && exp.date?.slice(0, 7) !== pagedList[index - 1].date?.slice(0, 7);
 
                         return (
                           <Fragment key={exp.id}>
@@ -1298,6 +1433,14 @@ export default function ExpensesClient({
                   </table>
                 )}
               </div>
+
+              <PaginationControls
+                page={currentPage}
+                totalPages={totalPages}
+                onPageChange={setPage}
+                totalItems={sortedList.length}
+                itemLabel={isIncomeMode ? "entrate" : "spese"}
+              />
             </div>
         </>
       )}
