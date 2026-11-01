@@ -1,50 +1,53 @@
 import type { Metadata } from "next";
-import { Inter, Manrope, Plus_Jakarta_Sans, Geist, Sora, Lexend, Atkinson_Hyperlegible } from "next/font/google";
 import localFont from "next/font/local";
 import { cookies } from "next/headers";
 import { QueryProvider } from "@/lib/providers/query-provider";
 import { DEFAULT_FONT_ID, isValidFontId } from "@/lib/fonts";
 import "./globals.css";
 
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
+// Font auto-ospitati (subset latino, scaricati da Google Fonts, licenza OFL): il build non
+// dipende piu' dal download da fonts.googleapis.com, che su Vercel falliva a intermittenza.
+const inter = localFont({
+  src: "./fonts/inter/Inter-Variable.woff2",
+  weight: "400 900",
   variable: "--font-inter",
 });
 
-const manrope = Manrope({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+const manrope = localFont({
+  src: "./fonts/manrope/Manrope-Variable.woff2",
+  weight: "400 800",
   variable: "--font-manrope",
 });
 
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+const jakarta = localFont({
+  src: "./fonts/jakarta/PlusJakartaSans-Variable.woff2",
+  weight: "400 800",
   variable: "--font-jakarta",
 });
 
-const geist = Geist({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
+const geist = localFont({
+  src: "./fonts/geist/Geist-Variable.woff2",
+  weight: "400 900",
   variable: "--font-geist",
 });
 
-const sora = Sora({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+const sora = localFont({
+  src: "./fonts/sora/Sora-Variable.woff2",
+  weight: "400 800",
   variable: "--font-sora",
 });
 
-const lexend = Lexend({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
+const lexend = localFont({
+  src: "./fonts/lexend/Lexend-Variable.woff2",
+  weight: "400 800",
   variable: "--font-lexend",
 });
 
-const atkinson = Atkinson_Hyperlegible({
-  subsets: ["latin"],
-  weight: ["400", "700"],
+const atkinson = localFont({
+  src: [
+    { path: "./fonts/atkinson/AtkinsonHyperlegible-Regular.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/atkinson/AtkinsonHyperlegible-Bold.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-atkinson",
 });
 

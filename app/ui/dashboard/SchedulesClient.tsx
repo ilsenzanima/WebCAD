@@ -663,7 +663,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
     return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
   }, [schedules]);
 
-  const hasColumnFilters = filterCategoryId !== "all" || filterSupplierId !== "all";
+  const hasColumnFilters = filterPaid !== "pending" || filterCategoryId !== "all" || filterSupplierId !== "all";
   const toggleSort = (key: ScheduleSortKey) => {
     if (sortKey === key) setSortDir(d => (d === "asc" ? "desc" : "asc"));
     else {
@@ -1050,51 +1050,6 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           </h3>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {/* Filtro Stato */}
-            <div className="flex gap-2 p-1 bg-zinc-950/80 border border-white/10 rounded-xl text-[10px] font-bold">
-              <button
-                type="button"
-                onClick={() => setFilterPaid("pending")}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  filterPaid === "pending" ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "text-zinc-500"
-                }`}
-              >
-                Da Saldare
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterPaid("paid")}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  filterPaid === "paid" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "text-zinc-500"
-                }`}
-              >
-                Saldate
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterPaid("reschedule")}
-                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
-                  filterPaid === "reschedule" ? "bg-rose-500/20 text-rose-300 border border-rose-500/30" : "text-zinc-500"
-                }`}
-              >
-                Da Ripianificare
-                {rescheduleCount > 0 && (
-                  <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] bg-rose-500/30 text-rose-200">
-                    {rescheduleCount}
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterPaid("all")}
-                className={`px-3 py-1.5 rounded-lg transition-all ${
-                  filterPaid === "all" ? "bg-zinc-800 text-white" : "text-zinc-500"
-                }`}
-              >
-                Tutte
-              </button>
-            </div>
-
             <button
               type="button"
               onClick={openNewForm}
@@ -1112,6 +1067,15 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
             {sortedSchedules.length === 0 ? (
               <div className="text-center py-16 text-slate-500">
                 <p className="text-xs">Nessuna scadenza trovata per il filtro selezionato.</p>
+                {hasColumnFilters && (
+                  <button
+                    type="button"
+                    onClick={() => { setFilterPaid("pending"); setFilterCategoryId("all"); setFilterSupplierId("all"); }}
+                    className="mt-3 px-3 py-1.5 rounded-lg text-[10px] font-bold text-zinc-300 border border-white/10 hover:bg-white/5 transition-all"
+                  >
+                    ✕ Azzera filtri
+                  </button>
+                )}
               </div>
             ) : (
               <table className="w-full text-left text-xs border-collapse">
@@ -1162,6 +1126,23 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                         </select>
                       </div>
                     </th>
+                    <th className="pr-3 pb-3.5 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px]">
+                      <div className="flex flex-col gap-1.5 items-start">
+                        <span>Stato</span>
+                        <select
+                          value={filterPaid}
+                          onChange={(e) => setFilterPaid(e.target.value as typeof filterPaid)}
+                          aria-label="Filtra per stato"
+                          className="max-w-[170px] px-2 py-1 rounded-lg text-[10px] font-semibold normal-case tracking-normal text-white focus:outline-none border"
+                          style={{ background: "hsl(240 10% 4% / 0.6)", borderColor: filterPaid === "pending" ? "hsl(240 5% 15% / 0.8)" : "hsl(240 5% 45%)" }}
+                        >
+                          <option value="pending" style={{ background: "hsl(240 10% 10%)" }}>Da saldare</option>
+                          <option value="paid" style={{ background: "hsl(240 10% 10%)" }}>Saldate</option>
+                          <option value="reschedule" style={{ background: "hsl(240 10% 10%)" }}>Da ripianificare{rescheduleCount > 0 ? ` (${rescheduleCount})` : ""}</option>
+                          <option value="all" style={{ background: "hsl(240 10% 10%)" }}>Tutte</option>
+                        </select>
+                      </div>
+                    </th>
                     <th className="pb-3.5 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">
                       <button type="button" onClick={() => toggleSort("amount")} className="inline-flex items-center gap-1 uppercase hover:text-white transition-colors">
                         Importo <SortArrow active={sortKey === "amount"} dir={sortDir} />
@@ -1171,7 +1152,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                       {hasColumnFilters ? (
                         <button
                           type="button"
-                          onClick={() => { setFilterCategoryId("all"); setFilterSupplierId("all"); }}
+                          onClick={() => { setFilterPaid("pending"); setFilterCategoryId("all"); setFilterSupplierId("all"); }}
                           className="px-2 py-1 rounded-lg text-[10px] font-bold normal-case tracking-normal text-zinc-300 border border-white/10 hover:bg-white/5 transition-all whitespace-nowrap"
                         >
                           ✕ Azzera filtri
@@ -1242,6 +1223,21 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                           >
                             {catName}
                           </span>
+                        </td>
+                        <td className="py-4 pr-3">
+                          {item.is_paid ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold border bg-emerald-500/10 text-emerald-300 border-emerald-500/20">
+                              ✓ Saldata
+                            </span>
+                          ) : isOverdue(item) ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold border bg-rose-500/10 text-rose-300 border-rose-500/30">
+                              Da ripianificare
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold border bg-amber-500/10 text-amber-300 border-amber-500/30">
+                              Da saldare
+                            </span>
+                          )}
                         </td>
                         <td className={`py-4 text-right font-black text-sm whitespace-nowrap ${item.is_income ? "text-emerald-400" : item.is_paid ? "text-emerald-400" : "text-amber-400"}`}>
                           {item.is_income ? "+" : ""}{formatCurrency(item.amount)}
@@ -1331,7 +1327,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                       </tr>
                       {payingId === item.id && (
                         <tr className="bg-white/[0.02]">
-                          <td colSpan={5} className="py-4 px-1">
+                          <td colSpan={6} className="py-4 px-1">
                             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.03] p-4 space-y-3 animate-fade-in">
                               <div className="flex items-center justify-between">
                                 <h4 className="text-[11px] font-extrabold text-emerald-300">
@@ -1452,7 +1448,7 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
                       )}
                       {splittingId === item.id && (
                         <tr className="bg-white/[0.02]">
-                          <td colSpan={5} className="py-4 px-1">
+                          <td colSpan={6} className="py-4 px-1">
                             <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.03] p-4 space-y-3 animate-fade-in">
                               <div className="flex items-center justify-between">
                                 <h4 className="text-[11px] font-extrabold text-amber-300">
