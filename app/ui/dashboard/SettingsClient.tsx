@@ -349,7 +349,7 @@ export default function SettingsClient({ categories: initialCategories, googleCo
   const catPreviewStyle = getCategoryBadgeStyle(catPreviewColor);
 
   return (
-    <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 space-y-8 w-full">
       {/* Header */}
       <div className="animate-fade-in flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

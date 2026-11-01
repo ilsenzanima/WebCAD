@@ -214,7 +214,7 @@ export default function AccountsClient({ initialAccounts, expenses, initialAdjus
   );
 
   return (
-    <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 space-y-8 w-full">
       {/* Header */}
       <div className="animate-fade-in flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

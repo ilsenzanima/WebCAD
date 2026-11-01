@@ -141,7 +141,7 @@ export default function ShoppingCatalogClient({ initialProducts, stores }: Shopp
   }, {});
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 space-y-6 w-full">
       {/* Header */}
       <div className="animate-fade-in flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>

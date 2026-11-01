@@ -208,7 +208,7 @@ export default function SuppliersClient({ initialSuppliers, expenses, stores }: 
   );
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-8 space-y-6 w-full">
       {/* Header */}
       <div className="animate-fade-in flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

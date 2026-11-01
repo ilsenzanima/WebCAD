@@ -207,7 +207,7 @@ export default function ScansioniClient({
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto space-y-6 animate-fade-in">
+    <div className="p-4 md:p-8 w-full space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-lg font-extrabold text-white flex items-center gap-2">

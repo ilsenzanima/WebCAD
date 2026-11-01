@@ -37,7 +37,8 @@ interface ExpensesClientProps {
   googleConnected: boolean;
 }
 
-type MainTab = "uscite" | "entrate" | "scadenze";
+type MainTab = "registro" | "scadenze";
+type TypeFilter = "all" | "uscite" | "entrate";
 type ExpenseSortKey = "date" | "supplier" | "category" | "amount";
 
 const PAGE_SIZE = 50;
@@ -63,22 +64,26 @@ export default function ExpensesClient({
   const [suppliersList, setSuppliersList] = useState<Supplier[]>(suppliers);
   const [isPending, startTransition] = useTransition();
 
-  // Tab principale: "uscite" | "entrate" | "scadenze"
+  // Scheda principale: "registro" (entrate e uscite insieme) | "scadenze".
+  // I vecchi indirizzi ?tab=uscite / ?tab=entrate aprono il registro con il filtro Tipo gia' impostato.
   const tabParam = searchParams.get("tab");
-  const [mainTab, setMainTabState] = useState<MainTab>(
-    tabParam === "scadenze" || tabParam === "entrate" ? tabParam : "uscite"
-  );
+  const [mainTab, setMainTabState] = useState<MainTab>(tabParam === "scadenze" ? "scadenze" : "registro");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>(() => {
+    const t = searchParams.get("tipo") || tabParam;
+    return t === "uscite" || t === "entrate" ? t : "all";
+  });
 
   useEffect(() => {
     const t = searchParams.get("tab");
-    if (t === "scadenze" || t === "entrate" || t === "uscite") setMainTabState(t);
+    if (t === "scadenze" || t === "registro") setMainTabState(t);
   }, [searchParams]);
 
   const setMainTab = (t: MainTab) => {
     setMainTabState(t);
   };
 
-  const isIncomeMode = mainTab === "entrate";
+  // Tipo di registrazione che si sta inserendo/modificando nel modulo (non il filtro della tabella)
+  const [isIncomeMode, setIsIncomeMode] = useState(false);
 
   // Form states
   const [amount, setAmount] = useState("");
@@ -193,8 +198,9 @@ export default function ExpensesClient({
     setIsFormOpen(false);
   };
 
-  const openNewForm = () => {
+  const openNewForm = (income: boolean) => {
     resetForm();
+    setIsIncomeMode(income);
     setIsFormOpen(true);
   };
 
@@ -359,7 +365,7 @@ export default function ExpensesClient({
   };
 
   const handleEdit = (exp: ExpenseWithRelations) => {
-    setMainTab(exp.is_income ? "entrate" : "uscite");
+    setIsIncomeMode(exp.is_income);
     setIsFormOpen(true);
     setEditingId(exp.id);
     setAmount(exp.amount.toString());
@@ -454,24 +460,26 @@ export default function ExpensesClient({
   };
 
   // Calcolo Totali del mese per il tab attivo
-  const monthlyTotal = useMemo(() => {
+  const monthlyTotals = useMemo(() => {
     const now = new Date();
     const curYear = now.getFullYear();
     const curMonth = now.getMonth();
 
-    return expenses
-      .filter(exp => {
-        const eDate = new Date(exp.date);
-        const isCurMonth = eDate.getFullYear() === curYear && eDate.getMonth() === curMonth;
-        return isCurMonth && (isIncomeMode ? exp.is_income : !exp.is_income);
-      })
-      .reduce((sum, exp) => sum + Number(exp.amount), 0);
-  }, [expenses, isIncomeMode]);
+    let income = 0;
+    let outcome = 0;
+    expenses.forEach(exp => {
+      const eDate = new Date(exp.date);
+      if (eDate.getFullYear() !== curYear || eDate.getMonth() !== curMonth) return;
+      if (exp.is_income) income += Number(exp.amount);
+      else outcome += Number(exp.amount);
+    });
+    return { income, outcome };
+  }, [expenses]);
 
-  // Lista filtrata separata per il tab attivo
+  // Lista filtrata del registro (entrate e uscite insieme, separabili con il filtro Tipo)
   const filteredList = useMemo(() => {
     return expenses.filter(exp => {
-      const matchType = isIncomeMode ? exp.is_income : !exp.is_income;
+      const matchType = typeFilter === "all" || (typeFilter === "entrate" ? exp.is_income : !exp.is_income);
       const matchCategory = filterCategoryId === "all" || exp.category_id === filterCategoryId;
       const matchSearch = exp.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           exp.expense_categories?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -479,7 +487,7 @@ export default function ExpensesClient({
       const matchSupplier = filterSupplierId === "all" || exp.supplier_id === filterSupplierId;
       return matchType && matchCategory && matchSupplier && matchSearch;
     });
-  }, [expenses, isIncomeMode, filterCategoryId, filterSupplierId, searchQuery]);
+  }, [expenses, typeFilter, filterCategoryId, filterSupplierId, searchQuery]);
 
   // Ordinamento scelto dalle intestazioni; a parita' vale sempre la data piu' recente
   const sortedList = useMemo(() => {
@@ -513,13 +521,14 @@ export default function ExpensesClient({
       return;
     }
     setPage(1);
-  }, [isIncomeMode, filterCategoryId, filterSupplierId, searchQuery, sortKey, sortDir]);
+  }, [typeFilter, filterCategoryId, filterSupplierId, searchQuery, sortKey, sortDir]);
 
   // Riporta scheda, filtri, ordinamento e pagina nell'indirizzo (solo valori diversi dal default)
   useEffect(() => {
     const params = new URLSearchParams();
     params.set("tab", mainTab);
     if (mainTab !== "scadenze") {
+      if (typeFilter !== "all") params.set("tipo", typeFilter);
       if (searchQuery) params.set("q", searchQuery);
       if (filterCategoryId !== "all") params.set("cat", filterCategoryId);
       if (filterSupplierId !== "all") params.set("sup", filterSupplierId);
@@ -531,10 +540,11 @@ export default function ExpensesClient({
     if (qs !== window.location.search.replace(/^\?/, "")) {
       window.history.replaceState(null, "", `${window.location.pathname}?${qs}`);
     }
-  }, [mainTab, searchQuery, filterCategoryId, filterSupplierId, sortKey, sortDir, currentPage]);
+  }, [mainTab, typeFilter, searchQuery, filterCategoryId, filterSupplierId, sortKey, sortDir, currentPage]);
 
-  const hasActiveFilters = filterCategoryId !== "all" || filterSupplierId !== "all" || searchQuery !== "";
+  const hasActiveFilters = typeFilter !== "all" || filterCategoryId !== "all" || filterSupplierId !== "all" || searchQuery !== "";
   const resetFilters = () => {
+    setTypeFilter("all");
     setFilterCategoryId("all");
     setFilterSupplierId("all");
     setSearchQuery("");
@@ -551,17 +561,17 @@ export default function ExpensesClient({
   const supplierFilterOptions = useMemo(() => {
     const seen = new Map<string, string>();
     expenses.forEach((e) => {
-      if ((isIncomeMode ? e.is_income : !e.is_income) && e.supplier_id && e.suppliers?.name) {
+      const matchType = typeFilter === "all" || (typeFilter === "entrate" ? e.is_income : !e.is_income);
+      if (matchType && e.supplier_id && e.suppliers?.name) {
         seen.set(e.supplier_id, e.suppliers.name);
       }
     });
     return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [expenses, isIncomeMode]);
-
+  }, [expenses, typeFilter]);
 
   return (
-    <div className="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
-      {/* Header con i 3 tab principali */}
+    <div className="p-4 md:p-8 space-y-8 w-full">
+      {/* Header con le 2 schede principali */}
       <div className="animate-fade-in flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
@@ -574,25 +584,14 @@ export default function ExpensesClient({
         <div className="flex gap-2 p-1.5 bg-zinc-950/80 border border-white/10 rounded-2xl w-fit shadow-xl">
           <button
             type="button"
-            onClick={() => setMainTab("uscite")}
+            onClick={() => setMainTab("registro")}
             className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 ${
-              mainTab === "uscite"
-                ? "bg-rose-500/20 text-rose-400 border border-rose-500/30 shadow-[0_0_20px_rgba(244,63,94,0.25)]"
+              mainTab === "registro"
+                ? "bg-sky-500/20 text-sky-300 border border-sky-500/30 shadow-[0_0_20px_rgba(14,165,233,0.25)]"
                 : "text-zinc-400 hover:text-white hover:bg-white/5"
             }`}
           >
-            <span>💸</span> Uscite
-          </button>
-          <button
-            type="button"
-            onClick={() => setMainTab("entrate")}
-            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 ${
-              mainTab === "entrate"
-                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.25)]"
-                : "text-zinc-400 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            <span>💰</span> Entrate
+            <span>📋</span> Entrate e Uscite
           </button>
           <button
             type="button"
@@ -620,31 +619,26 @@ export default function ExpensesClient({
         />
       ) : (
         <>
-          {/* KPI Card Risorse per il tab attivo */}
-          <div
-            className="rounded-2xl p-5 border relative overflow-hidden group backdrop-blur-xl animate-fade-in"
-            style={{
-              background: isIncomeMode
-                ? "linear-gradient(135deg, hsla(150, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))"
-                : "linear-gradient(135deg, hsla(350, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))",
-              borderColor: isIncomeMode
-                ? "hsla(150, 60%, 50%, 0.15)"
-                : "hsla(350, 60%, 50%, 0.15)",
-            }}
-          >
-            <div className="flex justify-between items-center relative z-10">
-              <div>
-                <h4 className={`text-[10px] font-bold uppercase tracking-widest ${isIncomeMode ? "text-emerald-400" : "text-rose-400"}`}>
-                  {isIncomeMode ? "Totale Entrate Questo Mese" : "Totale Uscite Questo Mese"}
-                </h4>
-                <p className="text-3xl font-black text-white mt-1">{formatCurrency(monthlyTotal)}</p>
+          {/* KPI del mese corrente: entrate e uscite */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {([
+              { label: "Totale Entrate Questo Mese", value: monthlyTotals.income, icon: "📈", text: "text-emerald-400", box: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20", bg: "linear-gradient(135deg, hsla(150, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))", border: "hsla(150, 60%, 50%, 0.15)" },
+              { label: "Totale Uscite Questo Mese", value: monthlyTotals.outcome, icon: "📉", text: "text-rose-400", box: "bg-rose-500/10 text-rose-400 border border-rose-500/20", bg: "linear-gradient(135deg, hsla(350, 60%, 15%, 0.08), hsla(240, 10%, 10%, 0.7))", border: "hsla(350, 60%, 50%, 0.15)" },
+            ]).map((k) => (
+              <div
+                key={k.label}
+                className="rounded-2xl p-5 border relative overflow-hidden group backdrop-blur-xl animate-fade-in"
+                style={{ background: k.bg, borderColor: k.border }}
+              >
+                <div className="flex justify-between items-center relative z-10">
+                  <div>
+                    <h4 className={`text-[10px] font-bold uppercase tracking-widest ${k.text}`}>{k.label}</h4>
+                    <p className="text-3xl font-black text-white mt-1">{formatCurrency(k.value)}</p>
+                  </div>
+                  <div className={`p-3.5 rounded-2xl text-xl font-bold ${k.box}`}>{k.icon}</div>
+                </div>
               </div>
-              <div className={`p-3.5 rounded-2xl text-xl font-bold ${
-                isIncomeMode ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-              }`}>
-                {isIncomeMode ? "📈" : "📉"}
-              </div>
-            </div>
+            ))}
           </div>
 
           {isFormOpen && (
@@ -1119,21 +1113,25 @@ export default function ExpensesClient({
 
             {/* Titolo + Nuova registrazione */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10">
-              <h3 className="text-sm font-extrabold text-white tracking-wide">
-                {isIncomeMode ? "📋 Registro Entrate" : "📋 Registro Spese"}
-              </h3>
-              <button
-                type="button"
-                onClick={openNewForm}
-                className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white transition-all shadow-lg active:scale-98 flex items-center gap-2"
-                style={{
-                  background: isIncomeMode
-                    ? "linear-gradient(135deg, hsl(142 70% 45%), hsl(150 60% 35%))"
-                    : "linear-gradient(135deg, hsl(350 85% 55%), hsl(340 75% 45%))",
-                }}
-              >
-                <span>＋</span> {isIncomeMode ? "Nuova Entrata" : "Nuova Spesa"}
-              </button>
+              <h3 className="text-sm font-extrabold text-white tracking-wide">📋 Registro Entrate e Uscite</h3>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => openNewForm(false)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white transition-all shadow-lg active:scale-98 flex items-center gap-2"
+                  style={{ background: "linear-gradient(135deg, hsl(350 85% 55%), hsl(340 75% 45%))" }}
+                >
+                  <span>＋</span> Nuova Spesa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openNewForm(true)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white transition-all shadow-lg active:scale-98 flex items-center gap-2"
+                  style={{ background: "linear-gradient(135deg, hsl(142 70% 45%), hsl(150 60% 35%))" }}
+                >
+                  <span>＋</span> Nuova Entrata
+                </button>
+              </div>
             </div>
 
               {/* Filtri */}
@@ -1143,7 +1141,7 @@ export default function ExpensesClient({
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={isIncomeMode ? "Cerca entrate..." : "Cerca per note o fornitore..."}
+                    placeholder="Cerca per note, fornitore o categoria..."
                     className="w-full pl-4 pr-10 py-3 rounded-xl text-xs text-white focus:outline-none border transition-all"
                     style={{
                       background: "hsl(240 10% 4% / 0.6)",
@@ -1169,8 +1167,8 @@ export default function ExpensesClient({
               <div className="flex-1 overflow-x-auto pr-1 relative z-10">
                 {filteredList.length === 0 ? (
                   <div className="text-center py-16 text-slate-500 flex flex-col items-center justify-center">
-                    <span className="text-3xl mb-2">{isIncomeMode ? "💰" : "💸"}</span>
-                    <p className="text-xs">{isIncomeMode ? "Nessuna entrata registrata." : "Nessuna spesa trovata."}</p>
+                    <span className="text-3xl mb-2">{typeFilter === "entrate" ? "💰" : "💸"}</span>
+                    <p className="text-xs">Nessun movimento trovato.</p>
                   </div>
                 ) : (
                   <table className="w-full text-left text-xs border-collapse">
@@ -1183,8 +1181,24 @@ export default function ExpensesClient({
                         </th>
                         <th className="pb-3.5 pr-3 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px]">
                           <div className="flex flex-col gap-1.5 items-start">
+                            <span>Tipo</span>
+                            <select
+                              value={typeFilter}
+                              onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+                              aria-label="Filtra per tipo"
+                              className="px-2 py-1 rounded-lg text-[10px] font-semibold normal-case tracking-normal text-white focus:outline-none border"
+                              style={{ background: "hsl(240 10% 4% / 0.6)", borderColor: typeFilter === "all" ? "hsl(240 5% 15% / 0.8)" : "hsl(240 5% 45%)" }}
+                            >
+                              <option value="all">Tutti</option>
+                              <option value="uscite" style={{ background: "hsl(240 10% 10%)" }}>Uscite</option>
+                              <option value="entrate" style={{ background: "hsl(240 10% 10%)" }}>Entrate</option>
+                            </select>
+                          </div>
+                        </th>
+                        <th className="pb-3.5 pr-3 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px]">
+                          <div className="flex flex-col gap-1.5 items-start">
                             <button type="button" onClick={() => toggleSort("supplier")} className="inline-flex items-center gap-1 uppercase hover:text-white transition-colors">
-                              {isIncomeMode ? "Descrizione Entrata" : "Fornitore & Note"} <SortArrow active={sortKey === "supplier"} dir={sortDir} />
+                              Fornitore &amp; Note <SortArrow active={sortKey === "supplier"} dir={sortDir} />
                             </button>
                             {supplierFilterOptions.length > 0 && (
                               <select
@@ -1202,7 +1216,6 @@ export default function ExpensesClient({
                             )}
                           </div>
                         </th>
-                        {!isIncomeMode && (
                           <th className="pb-3.5 pr-3 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px]">
                             <div className="flex flex-col gap-1.5 items-start">
                               <button type="button" onClick={() => toggleSort("category")} className="inline-flex items-center gap-1 uppercase hover:text-white transition-colors">
@@ -1222,7 +1235,6 @@ export default function ExpensesClient({
                               </select>
                             </div>
                           </th>
-                        )}
                         <th className="pb-3.5 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">
                           <button type="button" onClick={() => toggleSort("amount")} className="inline-flex items-center gap-1 uppercase hover:text-white transition-colors">
                             Importo <SortArrow active={sortKey === "amount"} dir={sortDir} />
@@ -1252,7 +1264,7 @@ export default function ExpensesClient({
                               style={{
                                 animationDelay: `${index * 15}ms`,
                                 ...(isMonthBoundary
-                                  ? { borderTopWidth: "2px", borderTopColor: isIncomeMode ? "hsl(142 70% 45% / 0.5)" : "hsl(350 85% 55% / 0.5)" }
+                                  ? { borderTopWidth: "2px", borderTopColor: "hsl(240 5% 45% / 0.5)" }
                                   : {}),
                               }}
                             >
@@ -1260,7 +1272,18 @@ export default function ExpensesClient({
                                 {formatDate(exp.date)}
                               </td>
                               <td className="py-4 pr-3 align-top">
-                                {isIncomeMode ? (
+                                <span
+                                  className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold border ${
+                                    exp.is_income
+                                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                      : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                                  }`}
+                                >
+                                  {exp.is_income ? "Entrata" : "Uscita"}
+                                </span>
+                              </td>
+                              <td className="py-4 pr-3 align-top">
+                                {exp.is_income ? (
                                   <>
                                     <div className="text-white font-bold">{exp.description || "Entrata Senza Descrizione"}</div>
                                     {exp.is_refund && (
@@ -1306,8 +1329,10 @@ export default function ExpensesClient({
                                   </div>
                                 )}
                               </td>
-                              {!isIncomeMode && (
-                                <td className="py-4 align-top">
+                              <td className="py-4 align-top">
+                                {exp.is_income ? (
+                                  <span className="text-slate-600">—</span>
+                                ) : (
                                   <span
                                     className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border transition-transform duration-300 group-hover:scale-102"
                                     style={{
@@ -1318,10 +1343,10 @@ export default function ExpensesClient({
                                   >
                                     {catName}
                                   </span>
-                                </td>
-                              )}
-                              <td className={`py-4 text-right font-black text-sm whitespace-nowrap align-top ${isIncomeMode ? "text-emerald-400" : "text-rose-400"}`}>
-                                {isIncomeMode ? "+" : "-"}{formatCurrency(exp.amount)}
+                                )}
+                              </td>
+                              <td className={`py-4 text-right font-black text-sm whitespace-nowrap align-top ${exp.is_income ? "text-emerald-400" : "text-rose-400"}`}>
+                                {exp.is_income ? "+" : "-"}{formatCurrency(exp.amount)}
                               </td>
                               <td className="py-4 text-center align-top">
                                 <div className="flex items-center justify-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
@@ -1358,7 +1383,7 @@ export default function ExpensesClient({
                             </tr>
                             {isExpanded && (
                               <tr>
-                                <td colSpan={isIncomeMode ? 4 : 5} className="pb-4">
+                                <td colSpan={6} className="pb-4">
                                   <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80 space-y-3">
                                     {attachments.length > 0 && (
                                       <div className="space-y-1.5">
@@ -1439,7 +1464,7 @@ export default function ExpensesClient({
                 totalPages={totalPages}
                 onPageChange={setPage}
                 totalItems={sortedList.length}
-                itemLabel={isIncomeMode ? "entrate" : "spese"}
+                itemLabel="movimenti"
               />
             </div>
         </>

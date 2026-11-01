@@ -46,7 +46,7 @@ export default function ProjectsClient({ initialProjects }: ProjectsClientProps)
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-8 space-y-6 w-full">
       {/* Header */}
       <div className="animate-fade-in">
         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
