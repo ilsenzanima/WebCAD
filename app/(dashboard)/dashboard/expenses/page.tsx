@@ -14,7 +14,10 @@ export const metadata = {
   description: "Registra spese, entrate e scadenze e allega le bollette",
 };
 
-export default async function ExpensesPage() {
+export default async function ExpensesPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  // Le scadenze hanno di nuovo la loro pagina: i vecchi link ?tab=scadenze continuano a funzionare
+  if ((await searchParams).tab === "scadenze") redirect("/dashboard/schedules");
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");

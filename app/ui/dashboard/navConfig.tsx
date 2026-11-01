@@ -8,6 +8,7 @@ import {
   SupplierIcon,
   WalletIcon,
   InboxIcon,
+  SchedulesIcon,
 } from "./icons";
 
 export interface NavLink {
@@ -52,7 +53,8 @@ export const navItems: NavEntry[] = [
       { type: "link", href: "/dashboard/overview", icon: <OverviewIcon size={14} />, label: "Panoramica" },
       { type: "link", href: "/dashboard/accounts", icon: <WalletIcon size={14} />, label: "Conti" },
       { type: "link", href: "/dashboard/reconciliation", icon: <span style={{ fontSize: 13 }}>🏦</span>, label: "Riscontro Bancario" },
-      { type: "link", href: "/dashboard/expenses", icon: <ExpensesIcon size={14} />, label: "Spese, Entrate e Scadenze" },
+      { type: "link", href: "/dashboard/expenses", icon: <ExpensesIcon size={14} />, label: "Entrate e Uscite" },
+      { type: "link", href: "/dashboard/schedules", icon: <SchedulesIcon size={14} />, label: "Scadenze" },
       { type: "link", href: "/dashboard/budget", icon: <TagIcon size={14} />, label: "Budget" },
       { type: "link", href: "/dashboard/suppliers", icon: <SupplierIcon size={14} />, label: "Fornitori" },
       { type: "link", href: "/dashboard/scansioni", icon: <InboxIcon size={14} />, label: "Smistamento Scansioni" },

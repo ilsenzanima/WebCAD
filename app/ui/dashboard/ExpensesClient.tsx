@@ -11,7 +11,8 @@ import { createSupplier } from "@/app/actions/suppliers";
 import { uploadAndLinkDocument as uploadAndLinkDocumentShared, utilityMissingTags } from "@/lib/uploadDocument";
 import { monthInputToDate, dateToMonthInput, syncPeriodEnd } from "@/lib/period";
 import { formatCurrency, formatFileSize, formatDate, toLocalDateStr } from "@/lib/format";
-import SchedulesClient from "./SchedulesClient";
+import Link from "next/link";
+import { paySchedule } from "@/app/actions/schedules";
 import PaginationControls from "./PaginationControls";
 import { EditIcon, DeleteIcon, ExpensesIcon } from "./icons";
 import { getCategoryBadgeStyle } from "@/lib/categoryColors";
@@ -37,8 +38,7 @@ interface ExpensesClientProps {
   googleConnected: boolean;
 }
 
-type MainTab = "registro" | "scadenze";
-type TypeFilter = "all" | "uscite" | "entrate";
+type TypeFilter = "all" | "uscite" | "entrate" | "scadenze";
 type ExpenseSortKey = "date" | "supplier" | "category" | "amount";
 
 const PAGE_SIZE = 50;
@@ -60,27 +60,16 @@ export default function ExpensesClient({
   const searchParams = useSearchParams();
 
   const [expenses, setExpenses] = useState<ExpenseWithRelations[]>(initialExpenses);
+  const [schedules, setSchedules] = useState<any[]>(initialSchedules);
   const [documents, setDocuments] = useState<SupplierDocument[]>(initialDocuments);
   const [suppliersList, setSuppliersList] = useState<Supplier[]>(suppliers);
   const [isPending, startTransition] = useTransition();
 
-  // Scheda principale: "registro" (entrate e uscite insieme) | "scadenze".
-  // I vecchi indirizzi ?tab=uscite / ?tab=entrate aprono il registro con il filtro Tipo gia' impostato.
-  const tabParam = searchParams.get("tab");
-  const [mainTab, setMainTabState] = useState<MainTab>(tabParam === "scadenze" ? "scadenze" : "registro");
+  // Filtro Tipo del registro; i vecchi indirizzi ?tab=uscite / ?tab=entrate lo impostano gia'
   const [typeFilter, setTypeFilter] = useState<TypeFilter>(() => {
-    const t = searchParams.get("tipo") || tabParam;
-    return t === "uscite" || t === "entrate" ? t : "all";
+    const t = searchParams.get("tipo") || searchParams.get("tab");
+    return t === "uscite" || t === "entrate" || t === "scadenze" ? t : "all";
   });
-
-  useEffect(() => {
-    const t = searchParams.get("tab");
-    if (t === "scadenze" || t === "registro") setMainTabState(t);
-  }, [searchParams]);
-
-  const setMainTab = (t: MainTab) => {
-    setMainTabState(t);
-  };
 
   // Tipo di registrazione che si sta inserendo/modificando nel modulo (non il filtro della tabella)
   const [isIncomeMode, setIsIncomeMode] = useState(false);
@@ -459,6 +448,49 @@ export default function ExpensesClient({
     });
   };
 
+  // Saldo di una scadenza direttamente dal registro: conferma l'importo reale (e il consumo per le utenze)
+  const [payingSchedule, setPayingSchedule] = useState<any | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payConsumption, setPayConsumption] = useState("");
+
+  const startPaySchedule = (sch: any) => {
+    setPayingSchedule(sch);
+    setPayAmount(String(sch.amount));
+    setPayConsumption("");
+  };
+
+  const confirmPaySchedule = () => {
+    if (!payingSchedule) return;
+    const sch = payingSchedule;
+    const value = Number(payAmount);
+    if (!payAmount.trim() || isNaN(value) || value <= 0) {
+      alert("Inserisci un importo reale valido");
+      return;
+    }
+    const consumption = payConsumption.trim() ? Number(payConsumption) : null;
+    if (payConsumption.trim() && (isNaN(consumption as number) || (consumption as number) < 0)) {
+      alert("Inserisci un consumo valido");
+      return;
+    }
+    startTransition(async () => {
+      try {
+        const res = await paySchedule(sch.id, value, consumption, null, null);
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore nel contrassegnare come pagato");
+          return;
+        }
+        setExpenses(prev => [{ ...res.data, expense_categories: sch.expense_categories, suppliers: sch.suppliers }, ...prev]);
+        setSchedules(prev => {
+          const updated = prev.map(x => (x.id === sch.id ? { ...x, is_paid: true } : x));
+          return res.nextSchedule ? [...updated, res.nextSchedule] : updated;
+        });
+        setPayingSchedule(null);
+      } catch (err: any) {
+        alert(err.message || "Errore durante il salvataggio");
+      }
+    });
+  };
+
   // Calcolo Totali del mese per il tab attivo
   const monthlyTotals = useMemo(() => {
     const now = new Date();
@@ -476,10 +508,36 @@ export default function ExpensesClient({
     return { income, outcome };
   }, [expenses]);
 
-  // Lista filtrata del registro (entrate e uscite insieme, separabili con il filtro Tipo)
+  // Le scadenze non ancora pagate compaiono nel registro come segnaposto della voce che le sostituira'
+  const placeholderRows = useMemo(
+    () =>
+      schedules
+        .filter((s) => !s.is_paid)
+        .map((s) => ({
+          id: `sch-${s.id}`,
+          date: s.due_date,
+          amount: Number(s.amount),
+          is_income: !!s.is_income,
+          description: s.description,
+          category: s.category,
+          category_id: s.category_id,
+          supplier_id: s.supplier_id,
+          suppliers: s.suppliers,
+          expense_categories: s.expense_categories,
+          _schedule: s,
+        })) as unknown as ExpenseWithRelations[],
+    [schedules]
+  );
+  const registerRows = useMemo(() => [...expenses, ...placeholderRows], [expenses, placeholderRows]);
+
+  // Lista filtrata del registro (entrate, uscite e scadenze in attesa, separabili con il filtro Tipo)
   const filteredList = useMemo(() => {
-    return expenses.filter(exp => {
-      const matchType = typeFilter === "all" || (typeFilter === "entrate" ? exp.is_income : !exp.is_income);
+    return registerRows.filter(exp => {
+      const isPlaceholder = !!(exp as any)._schedule;
+      const matchType =
+        typeFilter === "all" ||
+        (typeFilter === "scadenze" ? isPlaceholder
+          : !isPlaceholder && (typeFilter === "entrate" ? exp.is_income : !exp.is_income));
       const matchCategory = filterCategoryId === "all" || exp.category_id === filterCategoryId;
       const matchSearch = exp.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           exp.expense_categories?.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -487,7 +545,7 @@ export default function ExpensesClient({
       const matchSupplier = filterSupplierId === "all" || exp.supplier_id === filterSupplierId;
       return matchType && matchCategory && matchSupplier && matchSearch;
     });
-  }, [expenses, typeFilter, filterCategoryId, filterSupplierId, searchQuery]);
+  }, [registerRows, typeFilter, filterCategoryId, filterSupplierId, searchQuery]);
 
   // Ordinamento scelto dalle intestazioni; a parita' vale sempre la data piu' recente
   const sortedList = useMemo(() => {
@@ -523,25 +581,23 @@ export default function ExpensesClient({
     setPage(1);
   }, [typeFilter, filterCategoryId, filterSupplierId, searchQuery, sortKey, sortDir]);
 
-  // Riporta scheda, filtri, ordinamento e pagina nell'indirizzo (solo valori diversi dal default)
+  // Riporta filtri, ordinamento e pagina nell'indirizzo (solo valori diversi dal default)
   useEffect(() => {
     const params = new URLSearchParams();
-    params.set("tab", mainTab);
-    if (mainTab !== "scadenze") {
-      if (typeFilter !== "all") params.set("tipo", typeFilter);
-      if (searchQuery) params.set("q", searchQuery);
-      if (filterCategoryId !== "all") params.set("cat", filterCategoryId);
-      if (filterSupplierId !== "all") params.set("sup", filterSupplierId);
-      if (sortKey !== "date") params.set("sort", sortKey);
-      if (sortDir !== (sortKey === "date" || sortKey === "amount" ? "desc" : "asc")) params.set("dir", sortDir);
-      if (currentPage > 1) params.set("page", String(currentPage));
-    }
+    if (typeFilter !== "all") params.set("tipo", typeFilter);
+    if (searchQuery) params.set("q", searchQuery);
+    if (filterCategoryId !== "all") params.set("cat", filterCategoryId);
+    if (filterSupplierId !== "all") params.set("sup", filterSupplierId);
+    if (sortKey !== "date") params.set("sort", sortKey);
+    if (sortDir !== (sortKey === "date" || sortKey === "amount" ? "desc" : "asc")) params.set("dir", sortDir);
+    if (currentPage > 1) params.set("page", String(currentPage));
     const qs = params.toString();
     if (qs !== window.location.search.replace(/^\?/, "")) {
-      window.history.replaceState(null, "", `${window.location.pathname}?${qs}`);
+      window.history.replaceState(null, "", qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
     }
-  }, [mainTab, typeFilter, searchQuery, filterCategoryId, filterSupplierId, sortKey, sortDir, currentPage]);
+  }, [typeFilter, searchQuery, filterCategoryId, filterSupplierId, sortKey, sortDir, currentPage]);
 
+  const todayStr = toLocalDateStr();
   const hasActiveFilters = typeFilter !== "all" || filterCategoryId !== "all" || filterSupplierId !== "all" || searchQuery !== "";
   const resetFilters = () => {
     setTypeFilter("all");
@@ -560,65 +616,29 @@ export default function ExpensesClient({
   // Fornitori che compaiono davvero nel registro del tab attivo (per il filtro nell'intestazione)
   const supplierFilterOptions = useMemo(() => {
     const seen = new Map<string, string>();
-    expenses.forEach((e) => {
-      const matchType = typeFilter === "all" || (typeFilter === "entrate" ? e.is_income : !e.is_income);
+    registerRows.forEach((e) => {
+      const isPlaceholder = !!(e as any)._schedule;
+      const matchType =
+        typeFilter === "all" ||
+        (typeFilter === "scadenze" ? isPlaceholder
+          : !isPlaceholder && (typeFilter === "entrate" ? e.is_income : !e.is_income));
       if (matchType && e.supplier_id && e.suppliers?.name) {
         seen.set(e.supplier_id, e.suppliers.name);
       }
     });
     return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
-  }, [expenses, typeFilter]);
+  }, [registerRows, typeFilter]);
 
   return (
     <div className="p-4 md:p-8 space-y-8 w-full">
-      {/* Header con le 2 schede principali */}
-      <div className="animate-fade-in flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
-            Spese, Entrate e Scadenze
-          </h1>
-          <p className="text-sm text-slate-400 mt-1">Registra i movimenti reali, allega le bollette e tieni traccia delle scadenze.</p>
-        </div>
-
-        {/* Tab Switcher con Neon Glow */}
-        <div className="flex gap-2 p-1.5 bg-zinc-950/80 border border-white/10 rounded-2xl w-fit shadow-xl">
-          <button
-            type="button"
-            onClick={() => setMainTab("registro")}
-            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 ${
-              mainTab === "registro"
-                ? "bg-sky-500/20 text-sky-300 border border-sky-500/30 shadow-[0_0_20px_rgba(14,165,233,0.25)]"
-                : "text-zinc-400 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            <span>📋</span> Entrate e Uscite
-          </button>
-          <button
-            type="button"
-            onClick={() => setMainTab("scadenze")}
-            className={`px-4 py-2.5 rounded-xl text-xs font-extrabold transition-all flex items-center gap-2 ${
-              mainTab === "scadenze"
-                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.25)]"
-                : "text-zinc-400 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            <span>📅</span> Scadenze
-          </button>
-        </div>
+      {/* Intestazione */}
+      <div className="animate-fade-in">
+        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-transparent">
+          Entrate e Uscite
+        </h1>
+        <p className="text-sm text-slate-400 mt-1">Registra i movimenti reali, allega le bollette e vedi le scadenze in attesa di essere pagate.</p>
       </div>
 
-      {mainTab === "scadenze" ? (
-        <SchedulesClient
-          initialSchedules={initialSchedules}
-          categories={categories}
-          suppliers={suppliersList}
-          googleConnected={googleConnected}
-          onExpenseCreated={(exp) => setExpenses(prev => [exp, ...prev])}
-          onExpenseDeleted={(ids) => setExpenses(prev => prev.filter(e => !ids.includes(e.id)))}
-          onSupplierCreated={(sup) => setSuppliersList(prev => [...prev, sup].sort((a, b) => a.name.localeCompare(b.name)))}
-        />
-      ) : (
-        <>
           {/* KPI del mese corrente: entrate e uscite */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {([
@@ -640,6 +660,76 @@ export default function ExpensesClient({
               </div>
             ))}
           </div>
+
+          {payingSchedule && (
+            <div
+              className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 animate-fade-in"
+              onClick={() => setPayingSchedule(null)}
+            >
+              <div
+                className="w-full max-w-sm rounded-2xl p-6 border shadow-2xl backdrop-blur-xl space-y-4"
+                style={{
+                  background: "linear-gradient(135deg, hsla(40, 80%, 20%, 0.1), hsla(240, 10%, 10%, 0.97))",
+                  borderColor: "hsla(40, 90%, 50%, 0.25)",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div>
+                  <h3 className="text-sm font-extrabold text-white">
+                    {payingSchedule.is_income ? "Incassa" : "Paga"}: {payingSchedule.suppliers?.name || payingSchedule.description || "Scadenza"}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Scadenza del {formatDate(payingSchedule.due_date)}. Conferma l&apos;importo reale: il segnaposto verrà sostituito dalla voce registrata oggi.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Importo reale (€)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    autoFocus
+                    className="w-full px-4 py-3 rounded-xl text-sm text-white focus:outline-none border"
+                    style={{ background: "hsl(240 10% 4% / 0.6)", borderColor: "hsl(240 5% 15% / 0.8)" }}
+                  />
+                </div>
+                {suppliersList.find(s => s.id === payingSchedule.supplier_id)?.is_utility && (
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Consumo del periodo (facoltativo)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={payConsumption}
+                      onChange={(e) => setPayConsumption(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl text-sm text-white focus:outline-none border"
+                      style={{ background: "hsl(240 10% 4% / 0.6)", borderColor: "hsl(240 5% 15% / 0.8)" }}
+                    />
+                  </div>
+                )}
+                <div className="flex gap-2 justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setPayingSchedule(null)}
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold text-zinc-300 border border-white/10 hover:bg-white/5 transition-all"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmPaySchedule}
+                    disabled={isPending}
+                    className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white transition-all disabled:opacity-50"
+                    style={{ background: "linear-gradient(135deg, hsl(40 90% 45%), hsl(30 85% 40%))" }}
+                  >
+                    {isPending ? "Salvataggio..." : "Conferma"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {isFormOpen && (
             <div
@@ -1192,6 +1282,7 @@ export default function ExpensesClient({
                               <option value="all">Tutti</option>
                               <option value="uscite" style={{ background: "hsl(240 10% 10%)" }}>Uscite</option>
                               <option value="entrate" style={{ background: "hsl(240 10% 10%)" }}>Entrate</option>
+                              <option value="scadenze" style={{ background: "hsl(240 10% 10%)" }}>Scadenze in attesa</option>
                             </select>
                           </div>
                         </th>
@@ -1256,6 +1347,86 @@ export default function ExpensesClient({
                           : utilityMissingTags(expSupplier, exp.consumption_value, attachments.length);
                         // La linea di separazione tra i mesi ha senso solo ordinando per data
                         const isMonthBoundary = sortKey === "date" && index > 0 && exp.date?.slice(0, 7) !== pagedList[index - 1].date?.slice(0, 7);
+
+                        // Scadenza non ancora pagata: segnaposto della voce che la sostituira' dopo il saldo
+                        const sch = (exp as any)._schedule;
+                        if (sch) {
+                          const overdue = sch.due_date < todayStr;
+                          return (
+                            <tr
+                              key={exp.id}
+                              className="hover:bg-white/2 transition-all duration-150 animate-fade-in"
+                              style={{
+                                animationDelay: `${index * 15}ms`,
+                                background: "hsla(40, 90%, 50%, 0.04)",
+                                boxShadow: `inset 3px 0 0 ${overdue ? "hsl(350 85% 55%)" : "hsl(40 90% 50% / 0.7)"}`,
+                                ...(isMonthBoundary
+                                  ? { borderTopWidth: "2px", borderTopColor: "hsl(240 5% 45% / 0.5)" }
+                                  : {}),
+                              }}
+                            >
+                              <td className="py-4 pl-3 text-slate-300 font-semibold whitespace-nowrap align-top">
+                                {formatDate(exp.date)}
+                              </td>
+                              <td className="py-4 pr-3 align-top">
+                                <span
+                                  className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold border ${
+                                    overdue
+                                      ? "bg-rose-500/10 text-rose-300 border-rose-500/30"
+                                      : "bg-amber-500/10 text-amber-300 border-amber-500/30"
+                                  }`}
+                                >
+                                  📅 {overdue ? "Scaduta" : "Scadenza"}
+                                </span>
+                              </td>
+                              <td className="py-4 pr-3 align-top">
+                                <div className="text-white font-bold max-w-[200px] truncate">
+                                  {exp.suppliers?.name || exp.description || "Scadenza"}
+                                </div>
+                                {exp.suppliers?.name && exp.description && (
+                                  <div className="text-[10px] text-slate-400 mt-0.5 max-w-[200px] truncate font-medium">{exp.description}</div>
+                                )}
+                                <div className="text-[8px] text-amber-500/80 font-bold uppercase tracking-wider mt-0.5">
+                                  In attesa di pagamento{sch.recurrence && sch.recurrence !== "one-time" ? " · ricorrente" : ""}
+                                </div>
+                              </td>
+                              <td className="py-4 align-top">
+                                {exp.is_income ? (
+                                  <span className="text-slate-600">—</span>
+                                ) : (
+                                  <span
+                                    className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border"
+                                    style={{ backgroundColor: badge.bg, color: badge.text, borderColor: badge.border }}
+                                  >
+                                    {catName}
+                                  </span>
+                                )}
+                              </td>
+                              <td className={`py-4 text-right font-black text-sm whitespace-nowrap align-top ${exp.is_income ? "text-emerald-400/70" : "text-rose-400/70"}`}>
+                                ~{exp.is_income ? "+" : "-"}{formatCurrency(exp.amount)}
+                              </td>
+                              <td className="py-4 text-center align-top">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => startPaySchedule(sch)}
+                                    className="px-3 py-1.5 rounded-lg text-[10px] font-extrabold text-amber-300 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 transition-all"
+                                    title="Registra il pagamento e sostituisci il segnaposto"
+                                  >
+                                    {exp.is_income ? "Incassa" : "Paga"}
+                                  </button>
+                                  <Link
+                                    href="/dashboard/schedules"
+                                    className="w-7 h-7 rounded-lg text-xs border border-transparent hover:bg-white/5 flex items-center justify-center transition-all"
+                                    title="Apri la pagina Scadenze"
+                                  >
+                                    ↗
+                                  </Link>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
 
                         return (
                           <Fragment key={exp.id}>
@@ -1467,8 +1638,6 @@ export default function ExpensesClient({
                 itemLabel="movimenti"
               />
             </div>
-        </>
-      )}
     </div>
   );
 }

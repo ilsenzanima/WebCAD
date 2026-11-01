@@ -12,6 +12,15 @@ import { monthInputToDate, syncPeriodEnd } from "@/lib/period";
 import { formatCurrency, formatDate, toLocalDateStr } from "@/lib/format";
 import { DeleteIcon, EditIcon, CheckIcon, SchedulesIcon } from "./icons";
 import { getCategoryBadgeStyle } from "@/lib/categoryColors";
+import PaginationControls from "./PaginationControls";
+
+type ScheduleSortKey = "due_date" | "supplier" | "category" | "amount";
+const PAGE_SIZE = 50;
+
+function SortArrow({ active, dir }: { active: boolean; dir: "asc" | "desc" }) {
+  if (!active) return <span className="opacity-30">↕</span>;
+  return <span>{dir === "asc" ? "↑" : "↓"}</span>;
+}
 
 interface ScheduleWithRelations extends Omit<PaymentSchedule, "amount"> {
   amount: number;
@@ -87,6 +96,13 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   const [filterPaid, setFilterPaid] = useState<"all" | "pending" | "paid" | "reschedule">("pending");
+
+  // Ordinamento, filtri nelle intestazioni e pagina (gli stessi del registro Entrate e Uscite)
+  const [sortKey, setSortKey] = useState<ScheduleSortKey>("due_date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [filterCategoryId, setFilterCategoryId] = useState("all");
+  const [filterSupplierId, setFilterSupplierId] = useState("all");
+  const [page, setPage] = useState(1);
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false);
 
   // Ripianificazione rapida (nuova data) per le scadenze non saldate e gia' scadute
@@ -607,6 +623,55 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
 
   const rescheduleCount = schedules.filter(isOverdue).length;
 
+  const visibleSchedules = filteredSchedules.filter(s =>
+    (filterCategoryId === "all" || s.category_id === filterCategoryId) &&
+    (filterSupplierId === "all" || s.supplier_id === filterSupplierId)
+  );
+
+  // A parita' vale sempre la scadenza piu' vicina
+  const sortedSchedules = useMemo(() => {
+    const factor = sortDir === "asc" ? 1 : -1;
+    const keyOf = (s: ScheduleWithRelations): string | number => {
+      if (sortKey === "amount") return Number(s.amount);
+      if (sortKey === "supplier") return (s.suppliers?.name || "").toLowerCase();
+      if (sortKey === "category") return (s.expense_categories?.name || s.category || "").toLowerCase();
+      return s.due_date || "";
+    };
+    return [...visibleSchedules].sort((a, b) => {
+      const ka = keyOf(a);
+      const kb = keyOf(b);
+      if (ka < kb) return -1 * factor;
+      if (ka > kb) return 1 * factor;
+      return (a.due_date || "").localeCompare(b.due_date || "");
+    });
+  }, [visibleSchedules, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedSchedules.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedSchedules = sortedSchedules.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // Con un filtro o un cambio di ordinamento si riparte dalla prima pagina
+  useEffect(() => {
+    setPage(1);
+  }, [filterPaid, filterCategoryId, filterSupplierId, sortKey, sortDir]);
+
+  const supplierFilterOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    schedules.forEach(s => {
+      if (s.supplier_id && s.suppliers?.name) seen.set(s.supplier_id, s.suppliers.name);
+    });
+    return Array.from(seen, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [schedules]);
+
+  const hasColumnFilters = filterCategoryId !== "all" || filterSupplierId !== "all";
+  const toggleSort = (key: ScheduleSortKey) => {
+    if (sortKey === key) setSortDir(d => (d === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir(key === "amount" ? "desc" : "asc");
+    }
+  };
+
   return (
     <div className="p-4 md:p-8 space-y-8 w-full">
       {/* Header */}
@@ -1043,8 +1108,8 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
           </div>
         </div>
 
-          <div className="flex-1 overflow-x-auto pr-1 relative z-10 max-h-[450px] overflow-y-auto">
-            {filteredSchedules.length === 0 ? (
+          <div className="flex-1 overflow-x-auto pr-1 relative z-10 ">
+            {sortedSchedules.length === 0 ? (
               <div className="text-center py-16 text-slate-500">
                 <p className="text-xs">Nessuna scadenza trovata per il filtro selezionato.</p>
               </div>
@@ -1052,19 +1117,75 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="border-b" style={{ borderColor: "hsl(240 5% 18% / 0.7)" }}>
-                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Data Scadenza</th>
-                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Fornitore & Note</th>
-                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px]">Categoria</th>
-                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">Importo</th>
-                    <th className="pb-3.5 font-bold text-slate-400 uppercase tracking-wider text-[9px] text-center">Azioni</th>
+                    <th className="pb-3.5 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px]">
+                      <button type="button" onClick={() => toggleSort("due_date")} className="inline-flex items-center gap-1 uppercase hover:text-white transition-colors">
+                        Data Scadenza <SortArrow active={sortKey === "due_date"} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th className="pr-3 pb-3.5 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px]">
+                      <div className="flex flex-col gap-1.5 items-start">
+                        <button type="button" onClick={() => toggleSort("supplier")} className="inline-flex items-center gap-1 uppercase hover:text-white transition-colors">
+                          Fornitore &amp; Note <SortArrow active={sortKey === "supplier"} dir={sortDir} />
+                        </button>
+                        {supplierFilterOptions.length > 0 && (
+                          <select
+                            value={filterSupplierId}
+                            onChange={(e) => setFilterSupplierId(e.target.value)}
+                            aria-label="Filtra per fornitore"
+                            className="max-w-[170px] px-2 py-1 rounded-lg text-[10px] font-semibold normal-case tracking-normal text-white focus:outline-none border"
+                            style={{ background: "hsl(240 10% 4% / 0.6)", borderColor: filterSupplierId === "all" ? "hsl(240 5% 15% / 0.8)" : "hsl(240 5% 45%)" }}
+                          >
+                            <option value="all">Tutti i fornitori</option>
+                            {supplierFilterOptions.map((s) => (
+                              <option key={s.id} value={s.id} style={{ background: "hsl(240 10% 10%)" }}>{s.name}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    </th>
+                    <th className="pr-3 pb-3.5 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px]">
+                      <div className="flex flex-col gap-1.5 items-start">
+                        <button type="button" onClick={() => toggleSort("category")} className="inline-flex items-center gap-1 uppercase hover:text-white transition-colors">
+                          Categoria <SortArrow active={sortKey === "category"} dir={sortDir} />
+                        </button>
+                        <select
+                          value={filterCategoryId}
+                          onChange={(e) => setFilterCategoryId(e.target.value)}
+                          aria-label="Filtra per categoria"
+                          className="max-w-[170px] px-2 py-1 rounded-lg text-[10px] font-semibold normal-case tracking-normal text-white focus:outline-none border"
+                          style={{ background: "hsl(240 10% 4% / 0.6)", borderColor: filterCategoryId === "all" ? "hsl(240 5% 15% / 0.8)" : "hsl(240 5% 45%)" }}
+                        >
+                          <option value="all">Tutte le categorie</option>
+                          {categories.map((cat) => (
+                            <option key={cat.id} value={cat.id} style={{ background: "hsl(240 10% 10%)" }}>{cat.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </th>
+                    <th className="pb-3.5 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px] text-right">
+                      <button type="button" onClick={() => toggleSort("amount")} className="inline-flex items-center gap-1 uppercase hover:text-white transition-colors">
+                        Importo <SortArrow active={sortKey === "amount"} dir={sortDir} />
+                      </button>
+                    </th>
+                    <th className="pb-3.5 align-top font-bold text-slate-400 uppercase tracking-wider text-[9px] text-center">
+                      {hasColumnFilters ? (
+                        <button
+                          type="button"
+                          onClick={() => { setFilterCategoryId("all"); setFilterSupplierId("all"); }}
+                          className="px-2 py-1 rounded-lg text-[10px] font-bold normal-case tracking-normal text-zinc-300 border border-white/10 hover:bg-white/5 transition-all whitespace-nowrap"
+                        >
+                          ✕ Azzera filtri
+                        </button>
+                      ) : "Azioni"}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y" style={{ borderColor: "hsl(240 5% 18% / 0.3)" }}>
-                  {filteredSchedules.map((item, index) => {
+                  {pagedSchedules.map((item, index) => {
                     const catName = item.expense_categories?.name || item.category;
                     const catColor = item.expense_categories?.color || "slate";
                     const badge = getCategoryBadgeStyle(catColor);
-                    const isMonthBoundary = index > 0 && item.due_date?.slice(0, 7) !== filteredSchedules[index - 1].due_date?.slice(0, 7);
+                    const isMonthBoundary = sortKey === "due_date" && index > 0 && item.due_date?.slice(0, 7) !== pagedSchedules[index - 1].due_date?.slice(0, 7);
 
                     return (
                       <Fragment key={item.id}>
@@ -1432,6 +1553,14 @@ export default function SchedulesClient({ initialSchedules, categories, supplier
               </table>
             )}
           </div>
+
+          <PaginationControls
+            page={currentPage}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            totalItems={sortedSchedules.length}
+            itemLabel="scadenze"
+          />
         </div>
     </div>
   );
