@@ -578,6 +578,30 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
   }, [expenses, selectedYear, selectedMonth]);
   const historyMax = Math.max(1, ...history.map(h => Math.max(h.income, h.outgoings)));
 
+  // Riepilogo in parole semplici del mese selezionato: quanto e' entrato, quanto e' uscito,
+  // quanto c'e' ancora da pagare in scadenza e quanto resta.
+  const upcomingDueTotal = useMemo(
+    () => scheduledItemsList.filter((s: any) => !s.is_paid).reduce((sum, s: any) => sum + Number(s.amount), 0),
+    [scheduledItemsList]
+  );
+  const summaryIncome = Math.max(realIncomeTotal, totals.income);
+  const summaryLeft = summaryIncome - realOutgoingsTotal - upcomingDueTotal;
+
+  // Righe della tabella "Dove sono andati i soldi": solo categorie con spesa o previsto
+  const spendingRows = useMemo(
+    () => categoryBudgetComparison
+      .filter(i => i.realAmt > 0 || i.targetAmt > 0)
+      .map(i => {
+        const base = i.budgetAmt + i.scheduledAmt;
+        const basis = i.percentTarget != null || i.manualCap != null
+          ? "limite impostato"
+          : i.averageAmt > base ? `media ultimi ${priorMonths.length} mesi` : "scadenze del mese";
+        return { ...i, basis };
+      })
+      .sort((a, b) => b.realAmt - a.realAmt || b.targetAmt - a.targetAmt),
+    [categoryBudgetComparison, priorMonths]
+  );
+
   // Base per le percentuali reali del grafico ad allocazione: se non ci sono ancora entrate
   // registrate questo mese si usa la stima come base, come gia' fa ruleAnalysis.realBase.
   const realIncomeBase = realIncomeTotal > 0 ? realIncomeTotal : totals.income;
@@ -625,6 +649,97 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
           )}
         </div>
       </div>
+
+      {/* Riepilogo in parole semplici */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
+        <div className="rounded-2xl p-4 border" style={{ background: "hsla(150, 60%, 15%, 0.06)", borderColor: "hsla(150, 60%, 50%, 0.15)" }}>
+          <h4 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">Entrate</h4>
+          <p className="text-2xl font-black text-white mt-1.5">{formatCurrency(realIncomeTotal)}</p>
+          <p className="text-[10px] text-slate-500 mt-1">incassate{totals.income > 0 ? `, su ${formatCurrency(totals.income)} previste` : ""}</p>
+        </div>
+        <div className="rounded-2xl p-4 border" style={{ background: "hsla(350, 60%, 15%, 0.06)", borderColor: "hsla(350, 60%, 50%, 0.15)" }}>
+          <h4 className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Speso</h4>
+          <p className="text-2xl font-black text-white mt-1.5">{formatCurrency(realOutgoingsTotal)}</p>
+          <p className="text-[10px] text-slate-500 mt-1">uscite registrate nel mese</p>
+        </div>
+        <div className="rounded-2xl p-4 border" style={{ background: "hsla(38, 90%, 50%, 0.06)", borderColor: "hsla(38, 90%, 50%, 0.15)" }}>
+          <h4 className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Ancora da pagare</h4>
+          <p className="text-2xl font-black text-white mt-1.5">{formatCurrency(upcomingDueTotal)}</p>
+          <p className="text-[10px] text-slate-500 mt-1">scadenze del mese non ancora saldate</p>
+        </div>
+        <div className="rounded-2xl p-4 border" style={{ background: "hsla(200, 60%, 15%, 0.06)", borderColor: "hsla(200, 60%, 50%, 0.15)" }}>
+          <h4 className="text-[10px] font-bold text-sky-400 uppercase tracking-widest">Ti restano</h4>
+          <p className={`text-2xl font-black mt-1.5 ${summaryLeft >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{formatCurrency(summaryLeft)}</p>
+          <p className="text-[10px] text-slate-500 mt-1">entrate − speso − ancora da pagare</p>
+        </div>
+      </div>
+
+      {/* Dove sono andati i soldi */}
+      <div
+        className="rounded-2xl p-6 border shadow-2xl animate-fade-in"
+        style={{ background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))", borderColor: "hsla(240, 5%, 18%, 0.7)" }}
+      >
+        <h3 className="text-sm font-extrabold text-white tracking-wide">🧾 Dove sono andati i soldi</h3>
+        <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
+          <b className="text-zinc-300">Speso</b> = quello che hai realmente pagato nel mese. <b className="text-zinc-300">Previsto</b> = quanto contavi di spendere (il limite che hai impostato, altrimenti la media dei mesi scorsi o le scadenze). <b className="text-zinc-300">Rimane</b> = previsto − speso: se è rosso hai speso più del previsto.
+        </p>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-zinc-800 text-[9px] uppercase tracking-wider text-slate-400">
+                <th className="pb-2.5 font-bold">Categoria</th>
+                <th className="pb-2.5 font-bold text-right">Speso</th>
+                <th className="pb-2.5 font-bold text-right">Previsto</th>
+                <th className="pb-2.5 font-bold text-right">Rimane</th>
+                <th className="pb-2.5 font-bold hidden md:table-cell pl-4">Previsto calcolato su</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/60">
+              {spendingRows.map(r => {
+                const badge = getCategoryBadgeStyle(r.color);
+                const left = r.targetAmt - r.realAmt;
+                const pct = r.targetAmt > 0 ? Math.min((r.realAmt / r.targetAmt) * 100, 100) : r.realAmt > 0 ? 100 : 0;
+                return (
+                  <tr key={r.categoryId}>
+                    <td className="py-2.5 pr-3">
+                      <span className="px-2 py-0.5 rounded border text-[10px] font-extrabold" style={{ backgroundColor: badge.bg, color: badge.text, borderColor: badge.border }}>
+                        {r.categoryName}
+                      </span>
+                      <div className="mt-1.5 h-1 w-full max-w-[160px] bg-zinc-950 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${left < 0 ? "bg-rose-500" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </td>
+                    <td className="py-2.5 text-right font-black text-white whitespace-nowrap">{formatCurrency(r.realAmt)}</td>
+                    <td className="py-2.5 text-right text-slate-300 whitespace-nowrap">{r.targetAmt > 0 ? formatCurrency(r.targetAmt) : "—"}</td>
+                    <td className={`py-2.5 text-right font-bold whitespace-nowrap ${r.targetAmt <= 0 ? "text-zinc-600" : left < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                      {r.targetAmt > 0 ? formatCurrency(left) : "—"}
+                    </td>
+                    <td className="py-2.5 pl-4 text-[10px] text-zinc-500 hidden md:table-cell">{r.targetAmt > 0 ? r.basis : "nessun previsto"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-zinc-700">
+                <td className="pt-3 font-extrabold text-white">Totale</td>
+                <td className="pt-3 text-right font-black text-white whitespace-nowrap">{formatCurrency(realOutgoingsTotal)}</td>
+                <td className="pt-3 text-right font-bold text-slate-300 whitespace-nowrap">{formatCurrency(totals.totalOutgoings)}</td>
+                <td className={`pt-3 text-right font-black whitespace-nowrap ${totals.totalOutgoings - realOutgoingsTotal < 0 ? "text-rose-400" : "text-emerald-400"}`}>
+                  {formatCurrency(totals.totalOutgoings - realOutgoingsTotal)}
+                </td>
+                <td className="hidden md:table-cell" />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* Analisi avanzata: tutto il resto, chiuso di default */}
+      <details className="group rounded-2xl border border-zinc-800 bg-zinc-950/40">
+        <summary className="cursor-pointer select-none px-5 py-4 text-sm font-extrabold text-white tracking-wide">
+          📊 Analisi avanzata (previsione mesi, 50/30/20, limiti per categoria, storico)
+        </summary>
+        <div className="space-y-8 p-4 md:p-6 pt-2">
 
       {/* Panoramica Prossimi Mesi (previsione multi-mese + spostamento pagamenti) */}
       <BudgetForecast
@@ -1094,6 +1209,9 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
           ))}
         </div>
       </div>
+
+        </div>
+      </details>
 
     </div>
   );
