@@ -86,6 +86,7 @@ export default function ExpensesClient({
   const defaultAccountId = initialAccounts.find((a) => a.is_default)?.id || "";
   const [accountId, setAccountId] = useState(defaultAccountId);
   const [isEmergency, setIsEmergency] = useState(false);
+  const [isExtraordinary, setIsExtraordinary] = useState(false);
   const [isRefund, setIsRefund] = useState(false);
 
   const handlePeriodStartChange = (value: string) => {
@@ -173,6 +174,7 @@ export default function ExpensesClient({
     setPeriodEndInput("");
     setAccountId(defaultAccountId);
     setIsEmergency(false);
+    setIsExtraordinary(false);
     setIsRefund(false);
     setEditingId(null);
     setNewDocFile(null);
@@ -300,6 +302,7 @@ export default function ExpensesClient({
           date,
           is_income: isIncomeMode,
           is_emergency: !isIncomeMode && isEmergency,
+          is_extraordinary: isExtraordinary,
           is_refund: isIncomeMode && isRefund,
           consumption_value: (!isIncomeMode && selectedSupplier?.is_utility && consumptionValue)
             ? Number(consumptionValue)
@@ -367,6 +370,7 @@ export default function ExpensesClient({
     setPeriodEndInput(dateToMonthInput((exp as any).period_end));
     setAccountId(exp.account_id || "");
     setIsEmergency((exp as any).is_emergency || false);
+    setIsExtraordinary((exp as any).is_extraordinary || false);
     setIsRefund(exp.is_refund || false);
     setNewDocFile(null);
   };
@@ -1008,6 +1012,24 @@ export default function ExpensesClient({
                   </label>
                 )}
 
+                {/* Straordinario: giroconto o importo una tantum, escluso da medie e confronti del Budget */}
+                <label
+                  className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider cursor-pointer p-3 rounded-xl border"
+                  style={{
+                    background: isExtraordinary ? "hsla(200, 80%, 50%, 0.08)" : "hsl(240 10% 4% / 0.8)",
+                    borderColor: isExtraordinary ? "hsla(200, 80%, 50%, 0.4)" : "hsl(240 5% 18%)",
+                    color: isExtraordinary ? "hsl(200 80% 70%)" : "hsl(240 5% 65%)",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isExtraordinary}
+                    onChange={(e) => setIsExtraordinary(e.target.checked)}
+                    className="accent-sky-500"
+                  />
+                  🔁 Straordinario / giroconto (fuori da medie e Budget)
+                </label>
+
                 {/* Data */}
                 <div className="space-y-1.5">
                   <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Data registrata</label>
@@ -1478,6 +1500,11 @@ export default function ExpensesClient({
                                 {exp.schedule_id && (
                                   <div className="text-[8px] text-amber-500/80 font-bold uppercase tracking-wider mt-0.5">
                                     📅 Da scadenza pagata
+                                  </div>
+                                )}
+                                {(exp as any).is_extraordinary && (
+                                  <div className="text-[8px] text-sky-400/90 font-bold uppercase tracking-wider mt-0.5">
+                                    🔁 Straordinario
                                   </div>
                                 )}
                                 {(exp as any).is_emergency && (

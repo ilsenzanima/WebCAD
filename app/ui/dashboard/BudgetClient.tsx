@@ -30,6 +30,8 @@ interface BudgetClientProps {
 
 // Movimenti minimi perche' un mese passato conti come "tracciato" nel riporto per categoria
 const MIN_TRACKED_MOVEMENTS = 10;
+// Mesi passati considerati per riporto e media di una categoria
+const HISTORY_MONTHS = 6;
 
 const MONTH_LABELS = [
   "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
@@ -39,7 +41,9 @@ const MONTH_LABELS = [
 export default function BudgetClient({ initialBudgets, categories: initialCategories, initialExpenses, initialOverrides, initialSchedules }: BudgetClientProps) {
   const [budgets] = useState<BudgetWithRelations[]>(initialBudgets);
   const [overrides] = useState<BudgetOverride[]>(initialOverrides);
-  const [expenses] = useState<any[]>(initialExpenses);
+  const [allExpenses] = useState<any[]>(initialExpenses);
+  // Giroconti e importi straordinari restano nel registro ma non entrano in medie, riporto e confronti
+  const expenses = useMemo(() => allExpenses.filter((e: any) => !e.is_extraordinary), [allExpenses]);
   const [categories, setCategories] = useState<ExpenseCategory[]>(initialCategories);
   const [schedules] = useState<any[]>(initialSchedules);
   const [, startTransition] = useTransition();
@@ -292,16 +296,17 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
   // sono il minimo certo; se la categoria ha un limite (percentuale delle entrate oppure
   // importo fisso) il previsto e' il limite, che copre anche la spesa variabile non
   // schedulata (alimentari, carburante...). Se le scadenze superano il limite vale il maggiore.
-  const plannedForCategory = (cat: ExpenseCategory | undefined, baseAmt: number, income: number) => {
+  const plannedForCategory = (cat: ExpenseCategory | undefined, baseAmt: number, income: number, averageAmt = 0) => {
     const cap = cat?.budget_percent != null
       ? (income * Number(cat.budget_percent)) / 100
       : cat?.monthly_budget != null
         ? Number(cat.monthly_budget)
         : null;
-    return cap != null ? Math.max(cap, baseAmt) : baseAmt;
+    // Senza limite, la spesa variabile e' stimata con la media dei mesi tracciati precedenti
+    return cap != null ? Math.max(cap, baseAmt) : Math.max(baseAmt, averageAmt);
   };
 
-  // Mesi "tracciati" prima del mese selezionato, contigui all'indietro (max 12): un mese conta
+  // Mesi "tracciati" prima del mese selezionato, contigui all'indietro (max HISTORY_MONTHS): un mese conta
   // solo se ha abbastanza movimenti registrati, cosi' i mesi vuoti o con un solo movimento
   // isolato non generano un riporto fittizio. I mesi futuri non hanno ancora un consuntivo,
   // quindi si parte dall'ultimo mese concluso.
@@ -318,7 +323,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     let m = selectedMonth;
     if (y > cy || (y === cy && m > cm)) { y = cy; m = cm; }
     const months: { year: number; month: number }[] = [];
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < HISTORY_MONTHS; i++) {
       m -= 1;
       if (m < 1) { m = 12; y -= 1; }
       if ((counts[`${y}-${m}`] || 0) < MIN_TRACKED_MOVEMENTS) break;
@@ -368,6 +373,36 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     return map;
   }, [priorMonths, expenses, schedules, budgets, overrides, categories]);
 
+  // Media mensile reale per categoria sui mesi tracciati precedenti (max HISTORY_MONTHS)
+  const categoryAverage = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (priorMonths.length === 0) return map;
+    expenses.forEach((e: any) => {
+      if (e.is_income) return;
+      const d = new Date(e.date);
+      if (!priorMonths.some(p => p.year === d.getFullYear() && p.month === d.getMonth() + 1)) return;
+      const catId = e.category_id || "unassigned";
+      map[catId] = (map[catId] || 0) + Number(e.amount);
+    });
+    Object.keys(map).forEach(k => { map[k] = map[k] / priorMonths.length; });
+    return map;
+  }, [priorMonths, expenses]);
+
+  const applyAverageAsLimit = (cat: ExpenseCategory, average: number) => {
+    startTransition(async () => {
+      try {
+        const res = await updateCategoryBudget(cat.id, Math.round(average));
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore durante il salvataggio del budget per categoria");
+          return;
+        }
+        setCategories(prev => prev.map(c => c.id === cat.id ? res.data : c));
+      } catch (err: any) {
+        alert(err.message || "Errore durante il salvataggio del budget per categoria");
+      }
+    });
+  };
+
   // Confronto per categoria: il "target" con cui confrontare il reale e' il previsto della
   // categoria (limite se impostato, altrimenti scadenze + eventuali vecchie voci di budget).
   const categoryBudgetComparison = useMemo(() => {
@@ -375,6 +410,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
       categoryId: string; categoryName: string; color: string;
       budgetAmt: number; scheduledAmt: number; scheduledItems: { label: string; amount: number }[];
       realAmt: number; rollover: number; manualCap: number | null; percentTarget: number | null;
+      averageAmt: number;
     }> = {};
 
     const ensure = (catId: string) => {
@@ -392,6 +428,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
         rollover: categoryRollover[catId] || 0,
         manualCap: catObj ? catObj.monthly_budget : null,
         percentTarget: catObj ? catObj.budget_percent : null,
+        averageAmt: categoryAverage[catId] || 0,
       };
       return map[catId];
     };
@@ -410,10 +447,10 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     return Object.values(map)
       .map(item => ({
         ...item,
-        targetAmt: plannedForCategory(categories.find(c => c.id === item.categoryId), item.budgetAmt + item.scheduledAmt, plannedIncome),
+        targetAmt: plannedForCategory(categories.find(c => c.id === item.categoryId), item.budgetAmt + item.scheduledAmt, plannedIncome, item.averageAmt),
       }))
       .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
-  }, [budgets, overrides, realExpensesByCategory, categories, categoryRollover, scheduledByCategory, plannedIncome, selectedYear, selectedMonth]);
+  }, [budgets, overrides, realExpensesByCategory, categories, categoryRollover, categoryAverage, scheduledByCategory, plannedIncome, selectedYear, selectedMonth]);
 
   // Previsto del mese ripartito tra Bisogno/Desiderio/Imprevisto con il tipo impostato sulla
   // categoria (default Bisogno), anche per il dettaglio "Previsto" del grafico ad allocazione.
@@ -496,6 +533,51 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
   );
   const outgoingsPercent = totals.totalOutgoings > 0 ? (realOutgoingsTotal / totals.totalOutgoings) * 100 : 0;
 
+  // Proiezione di fine mese (solo mese corrente): le uscite gia' pagate da scadenze e le scadenze
+  // ancora da pagare restano com'e', la spesa variabile (senza scadenza) si proietta a ritmo
+  // giornaliero sul numero di giorni del mese.
+  const monthProjection = useMemo(() => {
+    if (!isCurrentMonth) return null;
+    const daysInMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+    const elapsed = Math.max(1, now.getDate());
+    const outgoings = currentMonthTransactions.filter((t: any) => !t.is_income);
+    const fromSchedules = outgoings.filter((t: any) => t.schedule_id).reduce((sum, t: any) => sum + Number(t.amount), 0);
+    const variable = outgoings.filter((t: any) => !t.schedule_id).reduce((sum, t: any) => sum + Number(t.amount), 0);
+    const upcoming = scheduledItemsList.filter((s: any) => !s.is_paid).reduce((sum, s: any) => sum + Number(s.amount), 0);
+    return fromSchedules + upcoming + (variable / elapsed) * daysInMonth;
+  }, [isCurrentMonth, currentMonthTransactions, scheduledItemsList, selectedYear, selectedMonth]);
+
+  // Avvisi sulle categorie con un limite esplicito che hanno raggiunto l'80% (o superato il 100%)
+  const limitAlerts = useMemo(() => {
+    if (!isCurrentMonth) return [];
+    return categoryBudgetComparison
+      .filter(i => (i.manualCap != null || i.percentTarget != null) && i.targetAmt > 0 && i.realAmt / i.targetAmt >= 0.8)
+      .map(i => ({ id: i.categoryId, name: i.categoryName, real: i.realAmt, target: i.targetAmt, ratio: i.realAmt / i.targetAmt }))
+      .sort((a, b) => b.ratio - a.ratio);
+  }, [isCurrentMonth, categoryBudgetComparison]);
+
+  // Storico reale degli ultimi mesi, fino al mese selezionato incluso
+  const history = useMemo(() => {
+    const months: { key: string; label: string; income: number; outgoings: number }[] = [];
+    let y = selectedYear;
+    let m = selectedMonth;
+    for (let i = 0; i < HISTORY_MONTHS; i++) {
+      let income = 0;
+      let outgoings = 0;
+      expenses.forEach((e: any) => {
+        const d = new Date(e.date);
+        if (d.getFullYear() !== y || d.getMonth() + 1 !== m) return;
+        if (e.is_income) income += Number(e.amount);
+        else outgoings += Number(e.amount);
+      });
+      months.unshift({ key: `${y}-${m}`, label: MONTH_LABELS[m - 1].slice(0, 3), income, outgoings });
+      m -= 1;
+      if (m < 1) { m = 12; y -= 1; }
+    }
+    return months;
+  }, [expenses, selectedYear, selectedMonth]);
+  const historyMax = Math.max(1, ...history.map(h => Math.max(h.income, h.outgoings)));
+
   // Base per le percentuali reali del grafico ad allocazione: se non ci sono ancora entrate
   // registrate questo mese si usa la stima come base, come gia' fa ruleAnalysis.realBase.
   const realIncomeBase = realIncomeTotal > 0 ? realIncomeTotal : totals.income;
@@ -555,6 +637,22 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
         selectedYear={selectedYear}
         selectedMonth={selectedMonth}
       />
+
+      {/* Avvisi limiti categoria */}
+      {limitAlerts.length > 0 && (
+        <div className="rounded-2xl p-4 border border-amber-500/20 bg-amber-500/5 space-y-1.5 animate-fade-in">
+          <h4 className="text-[10px] font-bold text-amber-300 uppercase tracking-widest">Limiti di categoria</h4>
+          {limitAlerts.map(a => (
+            <div key={a.id} className="flex justify-between items-center text-[11px] gap-3">
+              <span className="text-zinc-300 truncate">{a.name}</span>
+              <span className={`font-bold whitespace-nowrap ${a.ratio > 1 ? "text-rose-400" : "text-amber-400"}`}>
+                {formatCurrency(a.real)} / {formatCurrency(a.target)} ({Math.round(a.ratio * 100)}%)
+                {a.ratio > 1 ? " · sforato" : ""}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* KPI Cards (Design Premium Neon) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-fade-in">
@@ -732,6 +830,15 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
               </span>
             </div>
           </div>
+
+          {monthProjection != null && (
+            <div className="mt-4 relative z-10 pt-3 border-t border-zinc-800 flex justify-between items-baseline text-[10px] font-bold">
+              <span className="text-zinc-400">📈 Proiezione a fine mese</span>
+              <span className={monthProjection <= totals.totalOutgoings ? "text-emerald-400" : "text-rose-400"}>
+                {formatCurrency(monthProjection)} <span className="text-zinc-600">/</span> <span className="text-zinc-500">{formatCurrency(totals.totalOutgoings)}</span>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Confronto Budget vs Spese Reali (2 Colonne) */}
@@ -855,8 +962,21 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
                               ) : item.manualCap != null ? (
                                 <span className="text-zinc-300">Limite categoria: {formatCurrency(item.manualCap)}</span>
                               ) : (
-                                <span className="text-zinc-500">Previsto: {formatCurrency(item.targetAmt)} (imposta un limite)</span>
+                                <span className="text-zinc-500">
+                                  Previsto: {formatCurrency(item.targetAmt)}
+                                  {item.averageAmt > item.budgetAmt + item.scheduledAmt ? ` (media ultimi ${priorMonths.length} mesi)` : " (imposta un limite)"}
+                                </span>
                               )}
+                            </button>
+                          )}
+                          {!isEditingCap && item.percentTarget == null && item.manualCap == null && item.averageAmt > 0 && catObj && (
+                            <button
+                              type="button"
+                              onClick={() => applyAverageAsLimit(catObj, item.averageAmt)}
+                              className="text-indigo-400 hover:text-indigo-300 text-[9px] font-bold"
+                              title="Imposta come limite mensile la media reale dei mesi precedenti"
+                            >
+                              Usa la media ({formatCurrency(Math.round(item.averageAmt))}) come limite
                             </button>
                           )}
                         </div>
@@ -943,6 +1063,36 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
           </div>
         </div>
 
+      </div>
+
+      {/* Storico reale ultimi mesi */}
+      <div
+        className="rounded-2xl p-6 border shadow-2xl relative overflow-hidden backdrop-blur-xl animate-fade-in"
+        style={{
+          background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))",
+          borderColor: "hsla(240, 5%, 18%, 0.7)",
+        }}
+      >
+        <h3 className="text-sm font-extrabold text-white tracking-wide">📅 Storico ultimi {HISTORY_MONTHS} mesi</h3>
+        <p className="text-[10px] text-zinc-500 mt-1">Entrate e uscite reali fino al mese selezionato (giroconti e importi straordinari esclusi).</p>
+        <div className="mt-5 grid grid-cols-3 sm:grid-cols-6 gap-4">
+          {history.map(h => (
+            <button
+              key={h.key}
+              type="button"
+              onClick={() => { const [y, m] = h.key.split("-").map(Number); setSelectedYear(y); setSelectedMonth(m); }}
+              className="flex flex-col items-center gap-2 group"
+            >
+              <div className="flex items-end gap-1.5 h-24">
+                <div className="w-4 rounded-t bg-emerald-500/70 group-hover:bg-emerald-400 transition-colors" style={{ height: `${(h.income / historyMax) * 100}%`, minHeight: h.income > 0 ? 2 : 0 }} title={`Entrate ${formatCurrency(h.income)}`} />
+                <div className="w-4 rounded-t bg-rose-500/70 group-hover:bg-rose-400 transition-colors" style={{ height: `${(h.outgoings / historyMax) * 100}%`, minHeight: h.outgoings > 0 ? 2 : 0 }} title={`Uscite ${formatCurrency(h.outgoings)}`} />
+              </div>
+              <span className="text-[10px] font-bold text-zinc-400">{h.label}</span>
+              <span className="text-[9px] text-emerald-400">{formatCurrency(h.income)}</span>
+              <span className="text-[9px] text-rose-400">{formatCurrency(h.outgoings)}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
     </div>
