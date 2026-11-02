@@ -3,9 +3,10 @@
 import { useState, useTransition, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { type Supplier, type SupplierDocument, type ExpenseCategory } from "@/lib/types/database";
+import { type Supplier, type SupplierDocument, type SupplierLocation, type ExpenseCategory } from "@/lib/types/database";
 import { createDocumentWithFinancials, deleteSupplierDocument } from "@/app/actions/documents";
 import { updateSupplier } from "@/app/actions/suppliers";
+import { createSupplierLocation, deleteSupplierLocation } from "@/app/actions/supplierLocations";
 import { uploadSupplierDocumentToDrive } from "@/app/actions/google";
 import { formatCurrency, formatFileSize, formatDate, toLocalDateStr } from "@/lib/format";
 import { monthInputToDate, syncPeriodEnd } from "@/lib/period";
@@ -16,6 +17,7 @@ interface SupplierDetailClientProps {
   expenses: any[];
   schedules: any[];
   documents: SupplierDocument[];
+  locations: SupplierLocation[];
   categories: ExpenseCategory[];
   googleConnected: boolean;
 }
@@ -25,11 +27,65 @@ export default function SupplierDetailClient({
   expenses,
   schedules,
   documents: initialDocuments,
+  locations: initialLocations,
   categories,
   googleConnected,
 }: SupplierDetailClientProps) {
   const [documents, setDocuments] = useState<SupplierDocument[]>(initialDocuments);
   const [supplierState, setSupplierState] = useState<Supplier>(supplier);
+
+  // Sedi del fornitore (es. piu' negozi della stessa catena)
+  const [locations, setLocations] = useState<SupplierLocation[]>(initialLocations);
+  const [locName, setLocName] = useState("");
+  const [locAddress, setLocAddress] = useState("");
+  const [locCity, setLocCity] = useState("");
+
+  const locationStats = useMemo(() => {
+    const map: Record<string, { total: number; count: number }> = {};
+    expenses.forEach((e: any) => {
+      if (!e.location_id || e.is_income) return;
+      const cur = map[e.location_id] || { total: 0, count: 0 };
+      cur.total += Number(e.amount);
+      cur.count += 1;
+      map[e.location_id] = cur;
+    });
+    return map;
+  }, [expenses]);
+
+  const handleAddLocation = (e: React.FormEvent) => {
+    e.preventDefault();
+    startTransition(async () => {
+      try {
+        const res = await createSupplierLocation({ supplier_id: supplierState.id, name: locName, address: locAddress, city: locCity });
+        if (!res.success || !res.data) {
+          alert(res.error || "Errore durante il salvataggio della sede");
+          return;
+        }
+        setLocations(prev => [...prev, res.data]);
+        setLocName("");
+        setLocAddress("");
+        setLocCity("");
+      } catch (err: any) {
+        alert(err.message || "Errore durante il salvataggio della sede");
+      }
+    });
+  };
+
+  const handleDeleteLocation = (id: string) => {
+    if (!confirm("Eliminare questa sede? I movimenti collegati restano, senza sede.")) return;
+    startTransition(async () => {
+      try {
+        const res = await deleteSupplierLocation(id);
+        if (!res.success) {
+          alert(res.error || "Errore durante l'eliminazione della sede");
+          return;
+        }
+        setLocations(prev => prev.filter(l => l.id !== id));
+      } catch (err: any) {
+        alert(err.message || "Errore durante l'eliminazione della sede");
+      }
+    });
+  };
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -404,6 +460,39 @@ export default function SupplierDetailClient({
           </div>
         )}
 
+      </div>
+
+      {/* Sedi del fornitore */}
+      <div
+        className="rounded-2xl p-6 border shadow-2xl animate-fade-in"
+        style={{ background: "linear-gradient(135deg, hsla(240, 10%, 12%, 0.5), hsla(240, 10%, 10%, 0.8))", borderColor: "hsla(240, 5%, 18%, 0.7)" }}
+      >
+        <h3 className="text-sm font-extrabold text-white tracking-wide">📍 Sedi</h3>
+        <p className="text-[10px] text-zinc-500 mt-1">Se il fornitore ha più punti vendita (es. più LIDL), aggiungili qui: nel movimento potrai scegliere in quale hai pagato.</p>
+        {locations.length > 0 && (
+          <ul className="mt-4 divide-y divide-zinc-800/60">
+            {locations.map(l => (
+              <li key={l.id} className="py-2.5 flex items-center justify-between gap-3 text-xs">
+                <div className="min-w-0">
+                  <div className="text-white font-bold truncate">{l.name || l.city || l.address}</div>
+                  <div className="text-[10px] text-slate-400 truncate">{[l.address, l.city].filter(Boolean).join(", ")}</div>
+                </div>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                  <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                    {locationStats[l.id] ? `${locationStats[l.id].count} acquisti · ${formatCurrency(locationStats[l.id].total)}` : "nessun acquisto"}
+                  </span>
+                  <button type="button" onClick={() => handleDeleteLocation(l.id)} className="text-zinc-500 hover:text-rose-400 text-[11px] font-bold" title="Elimina sede">✕</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        <form onSubmit={handleAddLocation} className="mt-4 grid grid-cols-1 sm:grid-cols-4 gap-2">
+          <input value={locName} onChange={(e) => setLocName(e.target.value)} placeholder="Nome (es. LIDL Ronchi)" className="px-3 py-2 rounded-xl text-xs text-white border bg-zinc-950/60 border-zinc-800 focus:outline-none" />
+          <input value={locAddress} onChange={(e) => setLocAddress(e.target.value)} placeholder="Indirizzo" className="px-3 py-2 rounded-xl text-xs text-white border bg-zinc-950/60 border-zinc-800 focus:outline-none" />
+          <input value={locCity} onChange={(e) => setLocCity(e.target.value)} placeholder="Città" className="px-3 py-2 rounded-xl text-xs text-white border bg-zinc-950/60 border-zinc-800 focus:outline-none" />
+          <button type="submit" disabled={isPending} className="px-3 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600/80 hover:bg-indigo-500 transition-colors disabled:opacity-50">Aggiungi sede</button>
+        </form>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

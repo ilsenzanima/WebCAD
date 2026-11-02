@@ -35,6 +35,7 @@ export async function createExpense(formData: {
   is_income?: boolean;
   is_emergency?: boolean;
   is_extraordinary?: boolean;
+  location_id?: string | null;
   is_refund?: boolean;
   consumption_value?: number | null;
   period_start?: string | null;
@@ -58,6 +59,7 @@ export async function createExpense(formData: {
       is_income: formData.is_income ?? false,
       is_emergency: formData.is_emergency ?? false,
       is_extraordinary: formData.is_extraordinary ?? false,
+      location_id: formData.location_id || null,
       is_refund: formData.is_refund ?? false,
       consumption_value: formData.consumption_value ?? null,
       period_start: formData.period_start || null,
@@ -91,6 +93,7 @@ export async function updateExpense(
     is_income?: boolean;
     is_emergency?: boolean;
     is_extraordinary?: boolean;
+    location_id?: string | null;
     is_refund?: boolean;
     consumption_value?: number | null;
     period_start?: string | null;
@@ -115,6 +118,7 @@ export async function updateExpense(
         is_income: formData.is_income ?? false,
         is_emergency: formData.is_emergency ?? false,
         is_extraordinary: formData.is_extraordinary ?? false,
+        location_id: formData.location_id || null,
         is_refund: formData.is_refund ?? false,
         consumption_value: formData.consumption_value ?? null,
         period_start: formData.period_start || null,

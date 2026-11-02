@@ -40,6 +40,7 @@ export default async function SupplierDetailPage({ params }: SupplierDetailPageP
       expenses={data.expenses}
       schedules={data.schedules}
       documents={data.documents}
+      locations={data.locations}
       categories={categories}
       googleConnected={googleConnected}
     />

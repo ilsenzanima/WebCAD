@@ -7,6 +7,7 @@ import { getSchedules } from "@/app/actions/schedules";
 import { getExpenseDocuments } from "@/app/actions/documents";
 import { getGoogleConnectionStatus } from "@/app/actions/google";
 import { getAccounts } from "@/app/actions/accounts";
+import { getSupplierLocations } from "@/app/actions/supplierLocations";
 import ExpensesClient from "@/app/ui/dashboard/ExpensesClient";
 
 export const metadata = {
@@ -23,13 +24,14 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
   if (!user) redirect("/login");
 
   // Caricamento in parallelo per la massima velocità
-  const [expenses, categories, suppliers, schedules, documents, accounts, { connected: googleConnected }] = await Promise.all([
+  const [expenses, categories, suppliers, schedules, documents, accounts, locations, { connected: googleConnected }] = await Promise.all([
     getExpenses().catch(() => []),
     getCategories().catch(() => []),
     getSuppliers().catch(() => []),
     getSchedules().catch(() => []),
     getExpenseDocuments().catch(() => []),
     getAccounts().catch(() => []),
+    getSupplierLocations(),
     getGoogleConnectionStatus(),
   ]);
 
@@ -41,6 +43,7 @@ export default async function ExpensesPage({ searchParams }: { searchParams: Pro
       initialSchedules={schedules}
       initialDocuments={documents}
       initialAccounts={accounts}
+      initialLocations={locations}
       googleConnected={googleConnected}
     />
   );

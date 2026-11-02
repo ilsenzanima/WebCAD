@@ -63,11 +63,20 @@ export async function getSupplierDetail(supplierId: string) {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
+    // Preleva sedi del fornitore
+    const { data: locations } = await supabase
+      .from("supplier_locations")
+      .select("*")
+      .eq("supplier_id", supplierId)
+      .eq("user_id", user.id)
+      .order("city", { ascending: true });
+
     return {
       supplier,
       expenses: expenses || [],
       schedules: schedules || [],
       documents: documents || [],
+      locations: locations || [],
     };
   } catch (err: any) {
     console.error("Errore getSupplierDetail:", err.message);

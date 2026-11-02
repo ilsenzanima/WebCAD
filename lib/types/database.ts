@@ -257,6 +257,7 @@ export interface Expense {
   period_start: string | null; // primo giorno del mese di inizio del periodo di copertura della bolletta
   period_end: string | null; // primo giorno del mese di fine (= period_start per un singolo mese)
   is_income: boolean;
+  location_id: string | null; // sede del fornitore in cui e stato fatto l'acquisto
   is_extraordinary: boolean; // giroconto o importo una tantum: resta nel registro ma non entra in medie, riporto e confronto del Budget
   is_emergency: boolean; // segnata come imprevisto al momento della registrazione, a prescindere dal tipo della categoria
   is_refund: boolean; // entrata che rimborsa una spesa presso il fornitore collegato (supplier_id), per far quadrare i conti del fornitore
@@ -361,6 +362,16 @@ export interface BankStatementLineExpense {
   created_at: string;
 }
 
+export interface SupplierLocation {
+  id: string;
+  user_id: string;
+  supplier_id: string;
+  name: string | null;
+  address: string | null;
+  city: string | null;
+  created_at: string;
+}
+
 export interface SupplierDocument {
   id: string;
   user_id: string;
@@ -452,6 +463,7 @@ export interface Database {
           is_income?: boolean;
           is_emergency?: boolean;
           is_extraordinary?: boolean;
+          location_id?: string | null;
           is_refund?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -474,6 +486,7 @@ export interface Database {
           is_income?: boolean;
           is_emergency?: boolean;
           is_extraordinary?: boolean;
+          location_id?: string | null;
           is_refund?: boolean;
           created_at?: string;
           updated_at?: string;

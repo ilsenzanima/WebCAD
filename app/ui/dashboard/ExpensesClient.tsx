@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useMemo, useEffect, useRef, Fragment } from "react";
 import { useSearchParams } from "next/navigation";
-import { type Expense, type ExpenseCategory, type Supplier, type SupplierDocument, type Account } from "@/lib/types/database";
+import { type Expense, type ExpenseCategory, type Supplier, type SupplierDocument, type SupplierLocation, type Account } from "@/lib/types/database";
 import { createExpense, updateExpense, deleteExpense } from "@/app/actions/expenses";
 import { createBudget } from "@/app/actions/budget";
 import { BUDGET_PERIODS } from "@/lib/budgetCalc";
@@ -35,6 +35,7 @@ interface ExpensesClientProps {
   initialSchedules: any[];
   initialDocuments: SupplierDocument[];
   initialAccounts: Account[];
+  initialLocations: SupplierLocation[];
   googleConnected: boolean;
 }
 
@@ -55,6 +56,7 @@ export default function ExpensesClient({
   initialSchedules,
   initialDocuments,
   initialAccounts,
+  initialLocations,
   googleConnected,
 }: ExpensesClientProps) {
   const searchParams = useSearchParams();
@@ -87,6 +89,7 @@ export default function ExpensesClient({
   const [accountId, setAccountId] = useState(defaultAccountId);
   const [isEmergency, setIsEmergency] = useState(false);
   const [isExtraordinary, setIsExtraordinary] = useState(false);
+  const [locationId, setLocationId] = useState("");
   const [isRefund, setIsRefund] = useState(false);
 
   const handlePeriodStartChange = (value: string) => {
@@ -109,6 +112,11 @@ export default function ExpensesClient({
   const [isCreatingSupplier, setIsCreatingSupplier] = useState(false);
 
   const selectedSupplier = suppliersList.find(s => s.id === supplierId) || null;
+  const locationsOfSupplier = useMemo(() => initialLocations.filter(l => l.supplier_id === supplierId), [initialLocations, supplierId]);
+  const locationLabels = useMemo(
+    () => Object.fromEntries(initialLocations.map(l => [l.id, [l.name, l.city].filter(Boolean).join(" · ") || l.address || ""])) as Record<string, string>,
+    [initialLocations]
+  );
 
   // Nel menu di scelta si mostrano solo i fornitori attivi (i chiusi restano visibili
   // in Smistamento Scansioni per archiviare vecchi documenti, ma non vanno riproposti
@@ -175,6 +183,7 @@ export default function ExpensesClient({
     setAccountId(defaultAccountId);
     setIsEmergency(false);
     setIsExtraordinary(false);
+    setLocationId("");
     setIsRefund(false);
     setEditingId(null);
     setNewDocFile(null);
@@ -303,6 +312,7 @@ export default function ExpensesClient({
           is_income: isIncomeMode,
           is_emergency: !isIncomeMode && isEmergency,
           is_extraordinary: isExtraordinary,
+          location_id: linksSupplier ? (locationId || null) : null,
           is_refund: isIncomeMode && isRefund,
           consumption_value: (!isIncomeMode && selectedSupplier?.is_utility && consumptionValue)
             ? Number(consumptionValue)
@@ -371,6 +381,7 @@ export default function ExpensesClient({
     setAccountId(exp.account_id || "");
     setIsEmergency((exp as any).is_emergency || false);
     setIsExtraordinary((exp as any).is_extraordinary || false);
+    setLocationId((exp as any).location_id || "");
     setIsRefund(exp.is_refund || false);
     setNewDocFile(null);
   };
@@ -866,6 +877,7 @@ export default function ExpensesClient({
                             return;
                           }
                           setSupplierId(e.target.value);
+                          setLocationId("");
                         }}
                         className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
                         style={{
@@ -989,6 +1001,26 @@ export default function ExpensesClient({
                       />
                     </div>
                     <p className="text-[8px] text-zinc-600">Dal — al (lascia "al" uguale a "dal" per un solo mese)</p>
+                  </div>
+                )}
+
+                {/* Sede del fornitore (solo se ne ha di registrate) */}
+                {!isIncomeMode && supplierId && locationsOfSupplier.length > 0 && (
+                  <div className="space-y-1.5 animate-fade-in">
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Sede</label>
+                    <select
+                      value={locationId}
+                      onChange={(e) => setLocationId(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl text-xs text-white focus:outline-none border select-custom transition-all"
+                      style={{ background: "hsl(240 10% 4% / 0.8)", borderColor: "hsl(240 5% 18%)" }}
+                    >
+                      <option value="" style={{ background: "hsl(240 10% 10%)" }}>Non specificata</option>
+                      {locationsOfSupplier.map((l) => (
+                        <option key={l.id} value={l.id} style={{ background: "hsl(240 10% 10%)" }}>
+                          {[l.name, l.address, l.city].filter(Boolean).join(" — ")}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
 
@@ -1490,6 +1522,9 @@ export default function ExpensesClient({
                                     <div className="text-white font-bold max-w-[200px] truncate">
                                       {exp.suppliers?.name || "Nessun Fornitore"}
                                     </div>
+                                    {exp.location_id && locationLabels[exp.location_id] && (
+                                      <div className="text-[9px] text-sky-400/80 font-semibold mt-0.5 max-w-[200px] truncate">📍 {locationLabels[exp.location_id]}</div>
+                                    )}
                                     {exp.description && (
                                       <div className="text-[10px] text-slate-400 mt-0.5 max-w-[200px] truncate font-medium">
                                         {exp.description}
