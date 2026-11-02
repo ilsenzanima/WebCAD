@@ -28,6 +28,9 @@ interface BudgetClientProps {
   initialSchedules: any[];
 }
 
+// Movimenti minimi perche' un mese passato conti come "tracciato" nel riporto per categoria
+const MIN_TRACKED_MOVEMENTS = 10;
+
 const MONTH_LABELS = [
   "Gennaio", "Febbraio", "Marzo", "Aprile", "Maggio", "Giugno",
   "Luglio", "Agosto", "Settembre", "Ottobre", "Novembre", "Dicembre",
@@ -264,51 +267,184 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
     return map;
   }, [scheduledItemsList]);
 
-  // Ripartisce le scadenze del mese tra Bisogno/Desiderio/Imprevisto usando il tipo impostato
-  // sulla loro categoria (Confronto Uscite per Categoria); se la categoria non ha un tipo
-  // impostato, di default conta come Bisogno.
-  const scheduledByType = useMemo(() => {
-    let need = 0, want = 0, emergency = 0;
-    Object.entries(scheduledByCategory).forEach(([catId, data]) => {
-      const type = categories.find(c => c.id === catId)?.budget_type || "need";
-      if (type === "want") want += data.amount;
-      else if (type === "emergency") emergency += data.amount;
-      else need += data.amount;
+  // Entrate previste di un mese: scadenze di tipo entrata piu' eventuali vecchie voci di budget
+  // di tipo entrata non ancora migrate.
+  const plannedIncomeFor = (year: number, month: number) => {
+    let income = schedules
+      .filter((s: any) => {
+        if (!s.is_income) return false;
+        const d = new Date(s.due_date);
+        return d.getFullYear() === year && d.getMonth() + 1 === month;
+      })
+      .reduce((sum: number, s: any) => sum + Number(s.amount), 0);
+    budgets.forEach(b => {
+      if (b.type === "income") income += getEffectiveAmount(b, year, month);
     });
-    return { need, want, emergency };
-  }, [scheduledByCategory, categories]);
+    return income;
+  };
 
-  // Stessa classificazione di scheduledByType, ma raggruppata per categoria: alimenta il
-  // dettaglio "Previsto" del grafico ad allocazione (quali scadenze compongono ogni fetta).
-  const scheduledSpendingBreakdown = useMemo(() => {
+  const plannedIncome = useMemo(
+    () => plannedIncomeFor(selectedYear, selectedMonth),
+    [schedules, budgets, overrides, selectedYear, selectedMonth]
+  );
+
+  // Previsto di una categoria in un mese: le scadenze (e le eventuali vecchie voci di budget)
+  // sono il minimo certo; se la categoria ha un limite (percentuale delle entrate oppure
+  // importo fisso) il previsto e' il limite, che copre anche la spesa variabile non
+  // schedulata (alimentari, carburante...). Se le scadenze superano il limite vale il maggiore.
+  const plannedForCategory = (cat: ExpenseCategory | undefined, baseAmt: number, income: number) => {
+    const cap = cat?.budget_percent != null
+      ? (income * Number(cat.budget_percent)) / 100
+      : cat?.monthly_budget != null
+        ? Number(cat.monthly_budget)
+        : null;
+    return cap != null ? Math.max(cap, baseAmt) : baseAmt;
+  };
+
+  // Mesi "tracciati" prima del mese selezionato, contigui all'indietro (max 12): un mese conta
+  // solo se ha abbastanza movimenti registrati, cosi' i mesi vuoti o con un solo movimento
+  // isolato non generano un riporto fittizio. I mesi futuri non hanno ancora un consuntivo,
+  // quindi si parte dall'ultimo mese concluso.
+  const priorMonths = useMemo(() => {
+    const counts: Record<string, number> = {};
+    expenses.forEach((e: any) => {
+      const d = new Date(e.date);
+      const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    const cy = now.getFullYear();
+    const cm = now.getMonth() + 1;
+    let y = selectedYear;
+    let m = selectedMonth;
+    if (y > cy || (y === cy && m > cm)) { y = cy; m = cm; }
+    const months: { year: number; month: number }[] = [];
+    for (let i = 0; i < 12; i++) {
+      m -= 1;
+      if (m < 1) { m = 12; y -= 1; }
+      if ((counts[`${y}-${m}`] || 0) < MIN_TRACKED_MOVEMENTS) break;
+      months.push({ year: y, month: m });
+    }
+    return months;
+  }, [expenses, selectedYear, selectedMonth]);
+
+  // Riporto per categoria con un limite: somma di (previsto - reale) dei mesi precedenti
+  // tracciati, per sapere quanto e' davvero disponibile questo mese oltre al limite base.
+  // Le categorie senza limite non hanno un budget da riportare.
+  const categoryRollover = useMemo(() => {
+    const map: Record<string, number> = {};
+
+    priorMonths.forEach(({ year, month }) => {
+      const income = plannedIncomeFor(year, month);
+      const actualByCat: Record<string, number> = {};
+      expenses.forEach((e: any) => {
+        if (e.is_income) return;
+        const eDate = new Date(e.date);
+        if (eDate.getFullYear() !== year || eDate.getMonth() + 1 !== month) return;
+        const catId = e.category_id || "unassigned";
+        actualByCat[catId] = (actualByCat[catId] || 0) + Number(e.amount);
+      });
+
+      const baseByCat: Record<string, number> = {};
+      schedules.forEach((s: any) => {
+        if (s.is_income) return;
+        const d = new Date(s.due_date);
+        if (d.getFullYear() !== year || d.getMonth() + 1 !== month) return;
+        const catId = s.category_id || "unassigned";
+        baseByCat[catId] = (baseByCat[catId] || 0) + Number(s.amount);
+      });
+      budgets.forEach(b => {
+        if (b.type === "income") return;
+        const catId = b.category_id || "unassigned";
+        baseByCat[catId] = (baseByCat[catId] || 0) + getEffectiveAmount(b, year, month);
+      });
+
+      categories.forEach(cat => {
+        if (cat.budget_percent == null && cat.monthly_budget == null) return;
+        const planned = plannedForCategory(cat, baseByCat[cat.id] || 0, income);
+        map[cat.id] = (map[cat.id] || 0) + (planned - (actualByCat[cat.id] || 0));
+      });
+    });
+
+    return map;
+  }, [priorMonths, expenses, schedules, budgets, overrides, categories]);
+
+  // Confronto per categoria: il "target" con cui confrontare il reale e' il previsto della
+  // categoria (limite se impostato, altrimenti scadenze + eventuali vecchie voci di budget).
+  const categoryBudgetComparison = useMemo(() => {
+    const map: Record<string, {
+      categoryId: string; categoryName: string; color: string;
+      budgetAmt: number; scheduledAmt: number; scheduledItems: { label: string; amount: number }[];
+      realAmt: number; rollover: number; manualCap: number | null; percentTarget: number | null;
+    }> = {};
+
+    const ensure = (catId: string) => {
+      if (map[catId]) return map[catId];
+      const catObj = categories.find(c => c.id === catId);
+      const scheduled = scheduledByCategory[catId];
+      map[catId] = {
+        categoryId: catId,
+        categoryName: catObj ? catObj.name : "Generica / Altro",
+        color: catObj ? catObj.color : "slate",
+        budgetAmt: 0,
+        scheduledAmt: scheduled?.amount || 0,
+        scheduledItems: scheduled?.items || [],
+        realAmt: realExpensesByCategory[catId] || 0,
+        rollover: categoryRollover[catId] || 0,
+        manualCap: catObj ? catObj.monthly_budget : null,
+        percentTarget: catObj ? catObj.budget_percent : null,
+      };
+      return map[catId];
+    };
+
+    budgets.forEach(b => {
+      if (b.type === "income") return;
+      const catId = b.category_id || "unassigned";
+      ensure(catId).budgetAmt += getEffectiveAmount(b, selectedYear, selectedMonth);
+    });
+
+    // Tutte le categorie sono sempre elencate (vista completa), non solo quelle con dati questo mese.
+    categories.forEach(cat => ensure(cat.id));
+    Object.keys(realExpensesByCategory).forEach(catId => ensure(catId));
+    Object.keys(scheduledByCategory).forEach(catId => ensure(catId));
+
+    return Object.values(map)
+      .map(item => ({
+        ...item,
+        targetAmt: plannedForCategory(categories.find(c => c.id === item.categoryId), item.budgetAmt + item.scheduledAmt, plannedIncome),
+      }))
+      .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
+  }, [budgets, overrides, realExpensesByCategory, categories, categoryRollover, scheduledByCategory, plannedIncome, selectedYear, selectedMonth]);
+
+  // Previsto del mese ripartito tra Bisogno/Desiderio/Imprevisto con il tipo impostato sulla
+  // categoria (default Bisogno), anche per il dettaglio "Previsto" del grafico ad allocazione.
+  const plannedByType = useMemo(() => {
+    const totalsByType = { need: 0, want: 0, emergency: 0 };
     const buckets: Record<"need" | "want" | "emergency", Record<string, number>> = { need: {}, want: {}, emergency: {} };
-    Object.entries(scheduledByCategory).forEach(([catId, data]) => {
-      const type = (categories.find(c => c.id === catId)?.budget_type || "need") as "need" | "want" | "emergency";
-      const catName = categories.find(c => c.id === catId)?.name || "Generica / Altro";
-      buckets[type][catName] = (buckets[type][catName] || 0) + data.amount;
+    categoryBudgetComparison.forEach(item => {
+      if (item.targetAmt <= 0) return;
+      const type = (categories.find(c => c.id === item.categoryId)?.budget_type || "need") as "need" | "want" | "emergency";
+      totalsByType[type] += item.targetAmt;
+      buckets[type][item.categoryName] = (buckets[type][item.categoryName] || 0) + item.targetAmt;
     });
     const toList = (rec: Record<string, number>) =>
       Object.entries(rec).map(([label, amount]) => ({ label, amount })).sort((a, b) => b.amount - a.amount);
-    return { need: toList(buckets.need), want: toList(buckets.want), emergency: toList(buckets.emergency) };
-  }, [scheduledByCategory, categories]);
+    return {
+      ...totalsByType,
+      breakdown: { need: toList(buckets.need), want: toList(buckets.want), emergency: toList(buckets.emergency) },
+    };
+  }, [categoryBudgetComparison, categories]);
 
-  // Calcoli Totali per il mese selezionato: le entrate vengono dalle Scadenze di tipo entrata
-  // (es. stipendio) piu' le eventuali vecchie voci di budget di tipo entrata non ancora
-  // migrate, le uscite (Bisogno/Desiderio/Imprevisto) dalle Scadenze del mese classificate per
-  // tipo di categoria.
+  // Calcoli Totali per il mese selezionato: entrate dalle Scadenze di tipo entrata, uscite
+  // (Bisogno/Desiderio/Imprevisto) dal previsto per categoria (scadenze + limiti).
   const totals = useMemo(() => {
-    let income = scheduledIncomeTotal;
-    budgets.forEach(b => {
-      if (b.type === "income") income += getEffectiveAmount(b, selectedYear, selectedMonth);
-    });
-
-    const { need, want, emergency } = scheduledByType;
+    const income = plannedIncome;
+    const { need, want, emergency } = plannedByType;
     const totalOutgoings = need + want + emergency;
     const powerOfSpending = income - need; // Entrate - Bisogni
     const remainingBudget = income - totalOutgoings;
 
     return { income, need, want, emergency, totalOutgoings, powerOfSpending, remainingBudget };
-  }, [budgets, overrides, selectedYear, selectedMonth, scheduledByType, scheduledIncomeTotal]);
+  }, [plannedIncome, plannedByType]);
 
   // Analisi Regola 50/30/20 (Bisogni, Desideri, Risparmio/Imprevisti)
   const ruleAnalysis = useMemo(() => {
@@ -348,120 +484,6 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
       unclassified: realSpendingByType.unclassified,
     };
   }, [totals, realIncomeTotal, realSpendingByType]);
-
-  // Mese/anno piu' vecchio da cui esistono dati (spese o voci di budget), per calcolare il riporto
-  const earliestPeriod = useMemo(() => {
-    const dates: Date[] = [];
-    expenses.forEach((e: any) => dates.push(new Date(e.date)));
-    budgets.forEach(b => dates.push(new Date(b.created_at)));
-    if (dates.length === 0) return null;
-    const earliest = dates.reduce((min, d) => (d < min ? d : min), dates[0]);
-    return { year: earliest.getFullYear(), month: earliest.getMonth() + 1 };
-  }, [expenses, budgets]);
-
-  // Elenco dei mesi precedenti al mese selezionato, dal piu' vecchio dato disponibile (max 36 mesi)
-  const priorMonths = useMemo(() => {
-    if (!earliestPeriod) return [];
-    const months: { year: number; month: number }[] = [];
-    let y = earliestPeriod.year;
-    let m = earliestPeriod.month;
-    let guard = 0;
-    while ((y < selectedYear || (y === selectedYear && m < selectedMonth)) && guard < 36) {
-      months.push({ year: y, month: m });
-      m += 1;
-      if (m > 12) { m = 1; y += 1; }
-      guard += 1;
-    }
-    return months;
-  }, [earliestPeriod, selectedYear, selectedMonth]);
-
-  // Riporto per categoria: somma di (previsto - reale) di tutti i mesi precedenti,
-  // per sapere quanto e' davvero disponibile questo mese oltre alla stima base.
-  const categoryRollover = useMemo(() => {
-    const map: Record<string, number> = {};
-
-    priorMonths.forEach(({ year, month }) => {
-      const actualByCat: Record<string, number> = {};
-      expenses.forEach((e: any) => {
-        if (e.is_income) return;
-        const eDate = new Date(e.date);
-        if (eDate.getFullYear() !== year || eDate.getMonth() + 1 !== month) return;
-        const catId = e.category_id || "unassigned";
-        actualByCat[catId] = (actualByCat[catId] || 0) + Number(e.amount);
-      });
-
-      const plannedByCat: Record<string, number> = {};
-      budgets.forEach(b => {
-        if (b.type === "income") return;
-        const catId = b.category_id || "unassigned";
-        plannedByCat[catId] = (plannedByCat[catId] || 0) + getEffectiveAmount(b, year, month);
-      });
-
-      const catIds = new Set([...Object.keys(plannedByCat), ...Object.keys(actualByCat)]);
-      catIds.forEach(catId => {
-        const delta = (plannedByCat[catId] || 0) - (actualByCat[catId] || 0);
-        map[catId] = (map[catId] || 0) + delta;
-      });
-    });
-
-    return map;
-  }, [priorMonths, expenses, budgets, overrides]);
-
-  // Consolidamento budget per categoria. Il "target" con cui confrontare il reale e', in ordine di priorita':
-  // - una percentuale delle entrate previste del mese (categories.budget_percent), se impostata
-  // - altrimenti il limite fisso impostato manualmente (categories.monthly_budget), se presente
-  //   (es. "Utenze: 300€ di media" a prescindere da quante singole voci/fornitori la compongono)
-  // - altrimenti, in mancanza di un limite esplicito, la somma delle voci di budget pianificate
-  //   in quella categoria + le eventuali scadenze non pianificate in arrivo quel mese
-  const categoryBudgetComparison = useMemo(() => {
-    const map: Record<string, {
-      categoryId: string; categoryName: string; color: string;
-      budgetAmt: number; scheduledAmt: number; scheduledItems: { label: string; amount: number }[];
-      realAmt: number; rollover: number; manualCap: number | null; percentTarget: number | null;
-    }> = {};
-
-    const ensure = (catId: string) => {
-      if (map[catId]) return map[catId];
-      const catObj = categories.find(c => c.id === catId);
-      const scheduled = scheduledByCategory[catId];
-      map[catId] = {
-        categoryId: catId,
-        categoryName: catObj ? catObj.name : "Generica / Altro",
-        color: catObj ? catObj.color : "slate",
-        budgetAmt: 0,
-        scheduledAmt: scheduled?.amount || 0,
-        scheduledItems: scheduled?.items || [],
-        realAmt: realExpensesByCategory[catId] || 0,
-        rollover: categoryRollover[catId] || 0,
-        manualCap: catObj ? catObj.monthly_budget : null,
-        percentTarget: catObj ? catObj.budget_percent : null,
-      };
-      return map[catId];
-    };
-
-    budgets.forEach(b => {
-      if (b.type === "income") return;
-      const catId = b.category_id || "unassigned";
-      const monthlyAmt = getEffectiveAmount(b, selectedYear, selectedMonth);
-      ensure(catId).budgetAmt += monthlyAmt;
-    });
-
-    // Tutte le categorie sono sempre elencate (vista completa), non solo quelle con dati questo mese.
-    categories.forEach(cat => ensure(cat.id));
-    Object.keys(realExpensesByCategory).forEach(catId => ensure(catId));
-    Object.keys(scheduledByCategory).forEach(catId => ensure(catId));
-
-    return Object.values(map)
-      .map(item => ({
-        ...item,
-        targetAmt: item.percentTarget != null
-          ? (totals.income * item.percentTarget) / 100
-          : item.manualCap != null
-            ? item.manualCap
-            : item.budgetAmt + item.scheduledAmt,
-      }))
-      .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
-  }, [budgets, overrides, realExpensesByCategory, categories, categoryRollover, scheduledByCategory, totals.income, selectedYear, selectedMonth]);
 
   // Percentuale realizzazione entrate
   const incomePercent = totals.income > 0 ? (realIncomeTotal / totals.income) * 100 : 0;
@@ -563,8 +585,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
           <h4 className="text-[10px] font-bold text-rose-400 uppercase tracking-widest">Bisogni (Essenziali)</h4>
           <p className="text-2xl font-black text-white mt-2">{formatCurrency(totals.need)}</p>
           <div className="text-[9px] text-slate-500 mt-1 font-semibold">
-            Spese fisse e variabili obbligatorie
-            {scheduledByType.need > 0 && ` (incluse ${formatCurrency(scheduledByType.need)} di scadenze non pianificate)`}
+            Scadenze e limiti delle categorie essenziali
           </div>
         </div>
 
@@ -625,7 +646,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
             </p>
 
             <BudgetAllocationDonut
-              previsto={{ need: totals.need, want: totals.want, emergency: totals.emergency, income: totals.income, breakdown: scheduledSpendingBreakdown }}
+              previsto={{ need: totals.need, want: totals.want, emergency: totals.emergency, income: totals.income, breakdown: plannedByType.breakdown }}
               reale={{ need: ruleAnalysis.realNeed, want: ruleAnalysis.realWant, emergency: ruleAnalysis.realEmergency, income: realIncomeBase, breakdown: realSpendingBreakdown }}
             />
 
@@ -905,7 +926,7 @@ export default function BudgetClient({ initialBudgets, categories: initialCatego
 
                         {item.scheduledItems.length > 0 && (
                           <div className="text-[9px] pt-1 border-t border-zinc-800/30">
-                            <span className="text-zinc-500 font-semibold">Scadenze non pianificate incluse: </span>
+                            <span className="text-zinc-500 font-semibold">Scadenze del mese incluse: </span>
                             {item.scheduledItems.map((s, i) => (
                               <span key={i} className="text-amber-400">
                                 {s.label} ({formatCurrency(s.amount)}){i < item.scheduledItems.length - 1 ? ", " : ""}
